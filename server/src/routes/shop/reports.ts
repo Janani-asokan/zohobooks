@@ -1,0 +1,160 @@
+import { Router } from 'express';
+import { perm, todayISO } from '../../auth';
+import { audit } from '../../audit';
+import { many, one } from '../../db';
+import { badRequest } from '../../http';
+import { platformConfig } from '../../services/common';
+import { buildGstr1, buildGstr3b, hsnSummary } from '../../services/gstReturns';
+import { fyLabel } from '../../../../shared/fy';
+import { allowed, T } from './ctx';
+
+export const reportsRouter = Router();
+
+const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Home dashboard numbers — available to every role (no cost data). */
+reportsRouter.get(
+  '/dashboard',
+  T(async (db, _req, c) => {
+    const cfg = await platformConfig(db);
+    const fy = fyLabel(todayISO(), cfg.fyStartMonth);
+    const k = await one(
+      db,
+      `SELECT
+         coalesce(sum(GREATEST(total - amount_paid - amount_credited, 0)) FILTER (WHERE status = 'Issued'), 0) AS receivable,
+         coalesce(sum(GREATEST(total - amount_paid - amount_credited, 0)) FILTER (WHERE status = 'Issued' AND due_date < current_date), 0) AS overdue,
+         count(*) FILTER (WHERE status = 'Issued' AND due_date < current_date AND total - amount_paid - amount_credited > 0) AS overdue_count,
+         count(*) FILTER (WHERE status = 'Issued' AND total - amount_paid - amount_credited > 0) AS open_count,
+         coalesce(sum(total - amount_credited) FILTER (WHERE status = 'Issued' AND fy = $2), 0) AS fy_sales,
+         coalesce(sum(total) FILTER (WHERE status = 'Issued' AND date = current_date), 0) AS today_sales
+       FROM invoices WHERE shop_id = $1`,
+      [c.shopId, fy],
+    );
+    const monthly = await many(
+      db,
+      `SELECT to_char(m, 'YYYY-MM') AS month,
+              coalesce((SELECT sum(total) FROM invoices i WHERE i.shop_id = $1 AND i.status = 'Issued' AND date_trunc('month', i.date) = m), 0) AS invoiced,
+              coalesce((SELECT sum(amount) FROM payments p WHERE p.shop_id = $1 AND date_trunc('month', p.date) = m), 0) AS collected
+         FROM generate_series(date_trunc('month', current_date) - interval '5 months', date_trunc('month', current_date), interval '1 month') m ORDER BY m`,
+      [c.shopId],
+    );
+    const top = await many(
+      db,
+      `SELECT l->>'name' AS name, sum((l->>'amount')::numeric) AS amount FROM invoices i, jsonb_array_elements(i.lines) l
+        WHERE i.shop_id = $1 AND i.status = 'Issued' AND i.fy = $2 GROUP BY 1 ORDER BY 2 DESC LIMIT 5`,
+      [c.shopId, fy],
+    );
+    const low = await one(db, "SELECT count(*)::int AS n FROM (SELECT i.id FROM items i LEFT JOIN item_stock s ON s.item_id = i.id WHERE i.shop_id = $1 AND i.type = 'Goods' AND NOT i.archived GROUP BY i.id HAVING coalesce(sum(s.qty),0) <= max(i.reorder_level)) x", [c.shopId]);
+    return {
+      fy,
+      receivable: Number(k.receivable),
+      overdue: Number(k.overdue),
+      overdueCount: Number(k.overdue_count),
+      openCount: Number(k.open_count),
+      fySales: Number(k.fy_sales),
+      todaySales: Number(k.today_sales),
+      lowStock: low.n,
+      monthly: monthly.map((m) => ({ month: m.month, invoiced: Number(m.invoiced), collected: Number(m.collected) })),
+      topItems: top.map((t) => ({ name: t.name, amount: Number(t.amount) })),
+    };
+  }),
+);
+
+reportsRouter.get(
+  '/reports/sales',
+  perm('reports.read'),
+  T(async (db, req, c) => {
+    const fy = String(req.query.fy ?? '');
+    if (!/^\d{4}-\d{2}$/.test(fy)) throw badRequest('Choose a financial year');
+    const showCost = allowed(c, 'items.cost');
+    const monthly = await many(
+      db,
+      `SELECT to_char(date_trunc('month', date), 'YYYY-MM') AS month, count(*) AS count, sum(sub_total) AS net, sum(tax_total) AS tax, sum(total) AS total
+         FROM invoices WHERE shop_id = $1 AND status = 'Issued' AND fy = $2 GROUP BY 1 ORDER BY 1`,
+      [c.shopId, fy],
+    );
+    const byCustomer = await many(
+      db,
+      `SELECT coalesce(customer_id::text, 'walk-in') AS id, max(customer->>'companyName') AS company, max(customer->>'name') AS name, max(customer->>'customId') AS custom_id,
+              max(customer->>'type') AS type, count(*) AS count, sum(total) AS total
+         FROM invoices WHERE shop_id = $1 AND status = 'Issued' AND fy = $2 GROUP BY 1 ORDER BY total DESC`,
+      [c.shopId, fy],
+    );
+    const byItem = await many(
+      db,
+      `SELECT l->>'itemId' AS item_id, max(l->>'name') AS name, sum((l->>'qty')::numeric) AS qty, sum((l->>'amount')::numeric) AS amount,
+              sum((l->>'qty')::numeric * coalesce(it.cost, 0)) AS cost
+         FROM invoices i CROSS JOIN jsonb_array_elements(i.lines) l LEFT JOIN items it ON it.id = (l->>'itemId')::uuid
+        WHERE i.shop_id = $1 AND i.status = 'Issued' AND i.fy = $2 GROUP BY 1 ORDER BY amount DESC`,
+      [c.shopId, fy],
+    );
+    const aging = await one(
+      db,
+      `SELECT
+         coalesce(sum(b) FILTER (WHERE d <= 0), 0) AS current, count(*) FILTER (WHERE d <= 0) AS current_n,
+         coalesce(sum(b) FILTER (WHERE d BETWEEN 1 AND 15), 0) AS d15, count(*) FILTER (WHERE d BETWEEN 1 AND 15) AS d15_n,
+         coalesce(sum(b) FILTER (WHERE d BETWEEN 16 AND 30), 0) AS d30, count(*) FILTER (WHERE d BETWEEN 16 AND 30) AS d30_n,
+         coalesce(sum(b) FILTER (WHERE d BETWEEN 31 AND 45), 0) AS d45, count(*) FILTER (WHERE d BETWEEN 31 AND 45) AS d45_n,
+         coalesce(sum(b) FILTER (WHERE d > 45), 0) AS older, count(*) FILTER (WHERE d > 45) AS older_n
+       FROM (SELECT total - amount_paid - amount_credited AS b, current_date - due_date AS d FROM invoices
+              WHERE shop_id = $1 AND status = 'Issued' AND total - amount_paid - amount_credited > 0) x`,
+      [c.shopId],
+    );
+    return {
+      monthly: monthly.map((m) => ({ month: m.month, count: Number(m.count), net: Number(m.net), tax: Number(m.tax), total: Number(m.total) })),
+      byCustomer: byCustomer.map((r) => ({ id: r.id, name: r.company || r.name, customId: r.custom_id, type: r.type, count: Number(r.count), total: Number(r.total) })),
+      byItem: byItem.map((r) => ({ itemId: r.item_id, name: r.name, qty: Number(r.qty), amount: Number(r.amount), cost: showCost ? Number(r.cost) : null })),
+      aging: [
+        { label: 'Current', amount: Number(aging.current), count: Number(aging.current_n) },
+        { label: '1–15 days', amount: Number(aging.d15), count: Number(aging.d15_n) },
+        { label: '16–30 days', amount: Number(aging.d30), count: Number(aging.d30_n) },
+        { label: '31–45 days', amount: Number(aging.d45), count: Number(aging.d45_n) },
+        { label: '> 45 days', amount: Number(aging.older), count: Number(aging.older_n) },
+      ],
+    };
+  }),
+);
+
+reportsRouter.get(
+  '/gst/gstr1',
+  perm('reports.read'),
+  T(async (db, req, c, res) => {
+    const period = String(req.query.period ?? '');
+    if (!PERIOD.test(period)) throw badRequest('Choose a month (YYYY-MM)');
+    const out = await buildGstr1(db, c.shopId, period);
+    if (req.query.download) {
+      await audit(db, req, c.shopId, 'export_gstr1', 'gst', period);
+      res.setHeader('Content-Disposition', `attachment; filename="GSTR1_${out.json.gstin || 'NOGSTIN'}_${out.json.fp}.json"`);
+      return res.json(out.json);
+    }
+    return out.summary;
+  }),
+);
+
+reportsRouter.get(
+  '/gst/gstr3b',
+  perm('reports.read'),
+  T(async (db, req, c, res) => {
+    const period = String(req.query.period ?? '');
+    if (!PERIOD.test(period)) throw badRequest('Choose a month (YYYY-MM)');
+    const out = await buildGstr3b(db, c.shopId, period);
+    if (req.query.download) {
+      await audit(db, req, c.shopId, 'export_gstr3b', 'gst', period);
+      res.setHeader('Content-Disposition', `attachment; filename="GSTR3B_${out.gstin || 'NOGSTIN'}_${period}.json"`);
+      return res.json(out);
+    }
+    return out;
+  }),
+);
+
+reportsRouter.get(
+  '/gst/hsn',
+  perm('reports.read'),
+  T(async (db, req, c) => {
+    const from = String(req.query.from ?? '');
+    const to = String(req.query.to ?? '');
+    if (!ISO.test(from) || !ISO.test(to)) throw badRequest('Choose a date range');
+    return hsnSummary(db, c.shopId, from, to);
+  }),
+);
