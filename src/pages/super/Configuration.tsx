@@ -1,17 +1,31 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Hash, CalendarRange, Percent, Plus, Trash2, Save, Info, RotateCcw, Lock } from 'lucide-react';
-import { usePlatform } from '@/context/StoreContext';
-import { useToast } from '@/context/ToastContext';
+import { api } from '@/api/client';
+import { useMut, usePlatformConfig } from '@/api/hooks';
+import type { PlatformConfig, TaxSlab } from '@/api/types';
 import { Field, PageHeader, Toggle, Badge } from '@/components/ui';
+import { useToast } from '@/context/ToastContext';
+import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { fyLabel, fyRange } from '@/lib/fy';
-import { fmtDate, uid } from '@/lib/format';
-import type { TaxSlab } from '@/lib/types';
+import { fmtDate } from '@/lib/format';
 
 const PREFIX_RE = /^[A-Z]{2,5}$/;
 
 export default function Configuration() {
-  const { config, updateConfig } = usePlatform();
+  const { data } = usePlatformConfig();
+  if (!data) return <FullPageSpinner />;
+  return <ConfigForm config={data} />;
+}
+
+type Slab = TaxSlab & { isNew?: boolean };
+
+function ConfigForm({ config }: { config: PlatformConfig }) {
+  const keys = [['platform']];
+  const saveConfig = useMut((b: Partial<PlatformConfig>) => api.put('/platform/config', b), keys);
+  const saveSlabs = useMut((slabs: Slab[]) => api.put<TaxSlab[]>('/platform/tax-slabs', { slabs: slabs.map(({ isNew, id, ...s }) => (isNew ? s : { id, ...s })) }), keys, { success: 'Tax slabs updated for all shops' });
+
   const toast = useToast();
+  const toastSaved = (m: string) => toast('success', 'Changes saved', m);
 
   // Section 1 — ID generation
   const [prefix, setPrefix] = useState(config.customerIdPrefix);
@@ -26,7 +40,8 @@ export default function Configuration() {
   const nextFy = fyLabel(new Date(end.getTime() + 86400000), config.fyStartMonth);
 
   // Section 3 — Tax Lab
-  const [slabs, setSlabs] = useState<TaxSlab[]>(config.taxSlabs);
+  const [slabs, setSlabs] = useState<Slab[]>(config.taxSlabs);
+  useEffect(() => setSlabs(config.taxSlabs), [config.taxSlabs]);
   const [newName, setNewName] = useState('');
   const [newRate, setNewRate] = useState('');
   const [taxTouched, setTaxTouched] = useState(false);
@@ -37,7 +52,7 @@ export default function Configuration() {
   const addSlab = () => {
     setTaxTouched(true);
     if (rateErr) return;
-    setSlabs((s) => [...s, { id: uid('tax_'), name: newName.trim() || `GST ${rateNum}%`, rate: rateNum, active: true }].sort((a, b) => a.rate - b.rate));
+    setSlabs((s) => [...s, { id: `new_${rateNum}`, isNew: true, name: newName.trim() || `GST ${rateNum}%`, rate: rateNum, active: true }].sort((a, b) => a.rate - b.rate));
     setNewName('');
     setNewRate('');
     setTaxTouched(false);
@@ -81,10 +96,7 @@ export default function Configuration() {
             <button
               className="btn btn-primary"
               disabled={!prefixDirty || !!prefixErr}
-              onClick={() => {
-                updateConfig({ customerIdPrefix: prefix });
-                toast('success', 'Changes saved', `New customers will be numbered ${prefix}-XXXX.`);
-              }}
+              onClick={() => saveConfig.mutate({ customerIdPrefix: prefix }, { onSuccess: () => toastSaved(`New customers will be numbered ${prefix}-XXXX.`) })}
             >
               <Save size={15} /> Save Changes
             </button>
@@ -156,10 +168,7 @@ export default function Configuration() {
             <button
               className="btn btn-primary"
               disabled={!fyDirty}
-              onClick={() => {
-                updateConfig({ autoResetInvoiceNumbering: autoReset });
-                toast('success', 'Changes saved', autoReset ? 'Invoice numbering will reset every 1 April.' : 'Invoice numbering will continue across years.');
-              }}
+              onClick={() => saveConfig.mutate({ autoResetInvoiceNumbering: autoReset }, { onSuccess: () => toastSaved(autoReset ? 'Invoice numbering will reset every 1 April.' : 'Invoice numbering will continue across years.') })}
             >
               <Save size={15} /> Save Changes
             </button>
@@ -201,7 +210,7 @@ export default function Configuration() {
                       <Toggle size="sm" checked={s.active} onChange={(v) => setSlabs((all) => all.map((x) => (x.id === s.id ? { ...x, active: v } : x)))} label={<span className="small">{s.active ? 'Enabled' : 'Disabled'}</span>} />
                     </td>
                     <td className="num">
-                      <button className="icon-btn danger" title="Remove slab" onClick={() => setSlabs((all) => all.filter((x) => x.id !== s.id))} disabled={s.id === 'tax_0'}>
+                      <button className="icon-btn danger" title="Remove slab" onClick={() => setSlabs((all) => all.filter((x) => x.id !== s.id))} disabled={s.rate === 0}>
                         <Trash2 size={15} />
                       </button>
                     </td>
@@ -222,17 +231,14 @@ export default function Configuration() {
                 <Plus size={15} /> Add slab
               </button>
             </div>
-            <p className="small muted" style={{ marginTop: 10 }}>Removing a slab doesn’t change existing invoices — their tax is stored on each line.</p>
+            <p className="small muted" style={{ marginTop: 10 }}>Removing a slab doesn’t change existing invoices — their tax is stored on each line. Slabs still used by items are disabled instead of deleted.</p>
           </div>
           <div className="card-footer">
             <button className="btn btn-ghost" disabled={!taxDirty} onClick={() => setSlabs(config.taxSlabs)}>Discard</button>
             <button
               className="btn btn-primary"
-              disabled={!taxDirty}
-              onClick={() => {
-                updateConfig({ taxSlabs: slabs });
-                toast('success', 'Changes saved', 'Tax slabs updated for all shops.');
-              }}
+              disabled={!taxDirty || saveSlabs.isPending}
+              onClick={() => saveSlabs.mutate(slabs)}
             >
               <Save size={15} /> Save Changes
             </button>

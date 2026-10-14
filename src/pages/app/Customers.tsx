@@ -1,31 +1,48 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Users, Building2, UserRound, Pencil, Trash2, Lock, Mail, Phone, FileText } from 'lucide-react';
-import { useTenant } from '@/context/TenantContext';
+import { Plus, Users, Building2, UserRound, Pencil, Trash2, Lock, Mail, Phone, FileText, Download, Upload, Loader2 } from 'lucide-react';
+import { api, download, fieldErrors } from '@/api/client';
+import { useCustomers, useMut, useNextCustomerId, useOrg } from '@/api/hooks';
+import { TIER_LABEL, type Customer, type PriceTier } from '@/api/types';
+import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, Pagination, SearchInput, usePagination } from '@/components/ui';
-import { EMAIL_RE, GSTIN_RE, initials, money, uid } from '@/lib/format';
-import { docTotals, effectiveStatus, INDIAN_STATES } from '@/lib/invoice';
-import { TIER_LABEL, type Customer, type PriceTier } from '@/lib/types';
+import { CsvImport } from '@/components/CsvImport';
+import { EMAIL_RE, initials, money } from '@/lib/format';
+import { GSTIN_RE, INDIAN_STATES, gstinMatchesState } from '../../../shared/gst';
 
-type Draft = Omit<Customer, 'id' | 'customId' | 'createdAt'>;
+type Draft = Pick<Customer, 'type' | 'name' | 'companyName' | 'gstin' | 'email' | 'phone' | 'state' | 'address' | 'tier'>;
 const blank = (state: string): Draft => ({ type: 'Individual', name: '', companyName: '', gstin: '', email: '', phone: '', state, address: '', tier: 'SP1' });
+const CUSTOMER_TEMPLATE = 'Type,Name,Company,GSTIN,Phone,Email,State,Address,Tier\r\nIndividual,Ravi Kumar,,,9876543210,ravi@example.com,Tamil Nadu,Adyar Chennai 600020,SP1\r\nBusiness,Priya Raman,Nila Textiles,33AAFCN5678K1Z2,9444011223,accounts@nila.in,Tamil Nadu,T. Nagar Chennai 600017,SP2\r\n';
 
 export default function Customers() {
-  const { tenant, mutate, nextCustomerId, platform } = useTenant();
+  const me = useShopUser();
+  const canWrite = me.can('customers.write');
+  const org = useOrg();
+  const orgState = org.data?.state ?? 'Tamil Nadu';
+  const { data: customers = [], isLoading } = useCustomers();
   const toast = useToast();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState(params.get('q') ?? '');
   const [type, setType] = useState<'all' | Customer['type']>('all');
   const [modal, setModal] = useState<{ mode: 'new' | 'edit'; c?: Customer } | null>(null);
-  const [draft, setDraft] = useState<Draft>(blank(tenant.org.state));
+  const [draft, setDraft] = useState<Draft>(blank(orgState));
   const [touched, setTouched] = useState(false);
+  const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const [del, setDel] = useState<Customer | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const nextId = useNextCustomerId(modal?.mode === 'new');
+
+  const keys = [['customers'], ['nextCustomerId']];
+  const create = useMut((b: Draft) => api.post<Customer>('/shop/customers', b), keys, { silentError: true });
+  const update = useMut((v: { id: string; body: Draft }) => api.put<Customer>(`/shop/customers/${v.id}`, v.body), keys, { silentError: true });
+  const remove = useMut((id: string) => api.del(`/shop/customers/${id}`), keys, { success: 'Customer deleted' });
 
   const openNew = () => {
-    setDraft(blank(tenant.org.state));
+    setDraft(blank(orgState));
     setTouched(false);
+    setServerErr({});
     setModal({ mode: 'new' });
   };
   useEffect(() => {
@@ -36,54 +53,35 @@ export default function Customers() {
     }
   }, []);
 
-  const stats = useMemo(() => {
-    const m = new Map<string, { billed: number; due: number; count: number }>();
-    for (const inv of tenant.invoices) {
-      const t = docTotals(tenant, inv).total;
-      const s = m.get(inv.customerId) ?? { billed: 0, due: 0, count: 0 };
-      s.billed += t;
-      s.count += 1;
-      const st = effectiveStatus(inv);
-      if (st === 'Unpaid' || st === 'Overdue') s.due += t;
-      m.set(inv.customerId, s);
-    }
-    return m;
-  }, [tenant]);
-
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return tenant.customers
+    return customers
       .filter((c) => type === 'all' || c.type === type)
       .filter((c) => !s || [c.name, c.companyName, c.customId, c.email, c.phone, c.gstin].some((v) => v.toLowerCase().includes(s)))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [tenant.customers, q, type]);
+  }, [customers, q, type]);
   const pg = usePagination(rows, 8);
 
   const errs = {
     name: !draft.name.trim() ? 'Contact name is required' : '',
     companyName: draft.type === 'Business' && !draft.companyName.trim() ? 'Company name is required' : '',
-    gstin: draft.type === 'Business' ? (!draft.gstin ? 'GST number is required for business customers' : !GSTIN_RE.test(draft.gstin) ? 'Invalid GSTIN (e.g. 33AABCA1234F1Z5)' : '') : '',
+    gstin: draft.type === 'Business' ? (!draft.gstin ? 'GST number is required for business customers' : !GSTIN_RE.test(draft.gstin) ? 'Invalid GSTIN (e.g. 33AABCA1234F1Z5)' : !gstinMatchesState(draft.gstin, draft.state) ? 'GSTIN state code doesn’t match the selected state' : '') : '',
     email: draft.email && !EMAIL_RE.test(draft.email) ? 'Enter a valid email' : '',
     phone: !draft.phone ? 'Phone is required' : draft.phone.replace(/\D/g, '').length < 10 ? 'Enter a valid phone number' : '',
   };
-  const e = (k: keyof typeof errs) => (touched ? errs[k] : '');
+  const e = (k: keyof typeof errs) => (touched ? errs[k] : '') || serverErr[k] || '';
 
   const save = () => {
     setTouched(true);
+    setServerErr({});
     if (Object.values(errs).some(Boolean)) return;
     const clean: Draft = { ...draft, name: draft.name.trim(), companyName: draft.type === 'Business' ? draft.companyName.trim() : '', gstin: draft.type === 'Business' ? draft.gstin : '' };
+    const onError = (err: Error) => { const f = fieldErrors(err); setServerErr(f); toast('error', Object.keys(f).length ? 'Please fix the highlighted fields' : err.message); };
     if (modal?.mode === 'edit' && modal.c) {
-      mutate((t) => void Object.assign(t.customers.find((x) => x.id === modal.c!.id)!, clean));
-      toast('success', 'Customer updated', clean.companyName || clean.name);
+      update.mutate({ id: modal.c.id, body: clean }, { onSuccess: (c) => { toast('success', 'Customer updated', c.companyName || c.name); setModal(null); }, onError });
     } else {
-      const customId = nextCustomerId();
-      mutate((t) => {
-        t.counters.customer += 1;
-        t.customers.unshift({ ...clean, id: uid('cu_'), customId, createdAt: new Date().toISOString() });
-      });
-      toast('success', 'Customer added', `${clean.companyName || clean.name} · ${customId}`);
+      create.mutate(clean, { onSuccess: (c) => { toast('success', 'Customer added', `${c.companyName || c.name} · ${c.customId}`); setModal(null); }, onError });
     }
-    setModal(null);
   };
 
   const gstStateCode = draft.gstin.slice(0, 2);
@@ -94,7 +92,13 @@ export default function Customers() {
         title="Customers"
         subtitle="Everyone you sell to — each gets a unique customer ID automatically."
         crumbs={<>Sales <span>/</span> Customers</>}
-        actions={<button className="btn btn-primary" onClick={openNew}><Plus size={16} /> New Customer</button>}
+        actions={
+          <>
+            <button className="btn btn-secondary" onClick={() => download('/shop/customers/export.csv', 'customers.csv').catch((err) => toast('error', err.message))}><Download size={15} /> Export</button>
+            {canWrite && <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={15} /> Import</button>}
+            {canWrite && <button className="btn btn-primary" onClick={openNew} title="Alt C"><Plus size={16} /> New Customer</button>}
+          </>
+        }
       />
 
       <div className="card">
@@ -109,11 +113,11 @@ export default function Customers() {
               ))}
             </div>
           </div>
-          <div className="toolbar-right small muted">{tenant.customers.length} customers</div>
+          <div className="toolbar-right small muted">{customers.length} customers</div>
         </div>
         <div className="table-wrap">
-          {rows.length === 0 ? (
-            <EmptyState icon={Users} title={tenant.customers.length ? 'No customers match' : 'No customers yet'} text="Add individuals or GST-registered businesses." action={<button className="btn btn-primary" onClick={openNew}><Plus size={15} /> New Customer</button>} />
+          {isLoading ? <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 200 }} /></div> : rows.length === 0 ? (
+            <EmptyState icon={Users} title={customers.length ? 'No customers match' : 'No customers yet'} text="Add individuals or GST-registered businesses, or import them from a spreadsheet." action={canWrite && <button className="btn btn-primary" onClick={openNew}><Plus size={15} /> New Customer</button>} />
           ) : (
             <table className="table">
               <thead>
@@ -129,7 +133,6 @@ export default function Customers() {
               </thead>
               <tbody>
                 {pg.slice.map((c) => {
-                  const s = stats.get(c.id);
                   return (
                     <tr key={c.id}>
                       <td>
@@ -149,13 +152,13 @@ export default function Customers() {
                       </td>
                       <td><span className="chip">{c.tier} · {TIER_LABEL[c.tier]}</span></td>
                       <td className="num">
-                        <div className="strong">{money(s?.due ?? 0)}</div>
-                        <div className="muted">{s?.count ?? 0} invoices</div>
+                        <div className="strong">{money(c.due)}</div>
+                        <div className="muted">{c.invoiceCount} invoices</div>
                       </td>
                       <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                        <button className="icon-btn" title="New invoice" onClick={() => navigate(`/app/sales/invoices/new?customer=${c.id}`)}><FileText size={15} /></button>
-                        <button className="icon-btn" title="Edit" onClick={() => { setDraft({ ...c }); setTouched(false); setModal({ mode: 'edit', c }); }}><Pencil size={15} /></button>
-                        <button className="icon-btn danger" title="Delete" disabled={!!s?.count} onClick={() => setDel(c)}><Trash2 size={15} /></button>
+                        {me.can('sales.write') && <button className="icon-btn" title="New invoice" onClick={() => navigate(`/app/sales/invoices/new?customer=${c.id}`)}><FileText size={15} /></button>}
+                        {canWrite && <button className="icon-btn" title="Edit" onClick={() => { setDraft({ type: c.type, name: c.name, companyName: c.companyName, gstin: c.gstin, email: c.email, phone: c.phone, state: c.state, address: c.address, tier: c.tier }); setTouched(false); setServerErr({}); setModal({ mode: 'edit', c }); }}><Pencil size={15} /></button>}
+                        {canWrite && <button className="icon-btn danger" title={c.invoiceCount ? 'Customers with invoices can’t be deleted' : 'Delete'} disabled={c.invoiceCount > 0} onClick={() => setDel(c)}><Trash2 size={15} /></button>}
                       </td>
                     </tr>
                   );
@@ -175,15 +178,15 @@ export default function Customers() {
         footer={
           <>
             <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancel</button>
-            <button className="btn btn-primary" onClick={save}>{modal?.mode === 'edit' ? 'Save changes' : 'Save customer'}</button>
+            <button className="btn btn-primary" onClick={save} disabled={create.isPending || update.isPending}>{(create.isPending || update.isPending) && <Loader2 size={15} className="spin" />} {modal?.mode === 'edit' ? 'Save changes' : 'Save customer'}</button>
           </>
         }
       >
         <div className="form-grid">
-          <Field label="Customer ID" hint={modal?.mode === 'edit' ? 'IDs are permanent' : `Auto-assigned using the “${platform.customerIdPrefix}” prefix`}>
+          <Field label="Customer ID" hint={modal?.mode === 'edit' ? 'IDs are permanent' : `Auto-assigned using the “${me.platform.customerIdPrefix}” prefix`}>
             <div className="input-group">
               <span className="lead"><Lock size={14} /></span>
-              <input className="input" readOnly value={modal?.mode === 'edit' ? modal.c!.customId : nextCustomerId()} style={{ fontWeight: 700, fontFamily: 'ui-monospace, Menlo, monospace' }} />
+              <input className="input" readOnly value={modal?.mode === 'edit' ? modal.c!.customId : nextId.data?.customId ?? '…'} style={{ fontWeight: 700, fontFamily: 'ui-monospace, Menlo, monospace' }} />
             </div>
           </Field>
           <Field label="Default price tier" hint="Applied automatically on invoices">
@@ -230,7 +233,7 @@ export default function Customers() {
           <Field label="Email" error={e('email')}>
             <input className={`input ${e('email') ? 'invalid' : ''}`} value={draft.email} onChange={(ev) => setDraft({ ...draft, email: ev.target.value })} placeholder="name@example.com" />
           </Field>
-          <Field label="State (place of supply)" hint={draft.state && draft.state !== tenant.org.state ? 'Inter-state → IGST applies' : 'Intra-state → CGST + SGST'}>
+          <Field label="State (place of supply)" hint={draft.state && draft.state !== orgState ? 'Inter-state → IGST applies' : 'Intra-state → CGST + SGST'}>
             <select className="select" value={draft.state} onChange={(ev) => setDraft({ ...draft, state: ev.target.value })}>
               {INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}
             </select>
@@ -246,11 +249,9 @@ export default function Customers() {
         onClose={() => setDel(null)}
         title="Delete customer?"
         text={<>{del?.companyName || del?.name} ({del?.customId}) will be removed. Their ID won’t be reused.</>}
-        onConfirm={() => {
-          mutate((t) => void (t.customers = t.customers.filter((x) => x.id !== del!.id)));
-          toast('success', 'Customer deleted');
-        }}
+        onConfirm={() => remove.mutate(del!.id)}
       />
+      <CsvImport open={importOpen} onClose={() => setImportOpen(false)} endpoint="/shop/customers/import" title="Import customers" template={CUSTOMER_TEMPLATE} invalidate={['customers', 'nextCustomerId']} />
     </div>
   );
 }

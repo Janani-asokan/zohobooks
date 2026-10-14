@@ -19,6 +19,7 @@ export function Sidebar({
   mobileOpen,
   onNavigate,
   footer,
+  collapseLabel = 'Collapse',
 }: {
   items: NavItem[];
   brand: { title: string; sub: string; mark: string };
@@ -28,6 +29,7 @@ export function Sidebar({
   mobileOpen: boolean;
   onNavigate: () => void;
   footer?: ReactNode;
+  collapseLabel?: string;
 }) {
   const { pathname } = useLocation();
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -98,7 +100,7 @@ export function Sidebar({
       <div className="sidebar-foot desktop-only">
         <button className="nav-link" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
           {collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
-          <span className="nav-text sidebar-foot-text">Collapse</span>
+          <span className="nav-text sidebar-foot-text">{collapseLabel}</span>
         </button>
       </div>
     </aside>

@@ -1,20 +1,24 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Menu, Settings2, ShieldCheck, Bell } from 'lucide-react';
+import { LayoutDashboard, LogOut, Menu, Settings2, ShieldCheck, Layers, History } from 'lucide-react';
 import { Sidebar, useSidebarState, type NavItem } from './Sidebar';
 import { ProfileMenu } from './ProfileMenu';
+import { PrefsMenu } from './PrefsMenu';
 import { useAuth } from '@/context/AuthContext';
-
-const NAV: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, to: '/super-admin', end: true },
-  { label: 'Configuration', icon: Settings2, to: '/super-admin/configuration' },
-];
+import { usePrefs } from '@/context/PrefsContext';
 
 export default function SuperAdminLayout() {
-  const { session, logout } = useAuth();
+  const { me, logout } = useAuth();
+  const { t } = usePrefs();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const sb = useSidebarState('ledgerly.sa.sidebar');
-  const title = pathname.includes('configuration') ? 'Platform Configuration' : 'SaaS Overview';
+  const NAV: NavItem[] = [
+    { label: t('nav.dashboard'), icon: LayoutDashboard, to: '/super-admin', end: true },
+    { label: t('nav.configuration'), icon: Settings2, to: '/super-admin/configuration' },
+    { label: 'Plans & limits', icon: Layers, to: '/super-admin/plans' },
+    { label: 'Activity & backups', icon: History, to: '/super-admin/activity' },
+  ];
+  const title = pathname.includes('configuration') ? 'Platform Configuration' : pathname.includes('plans') ? 'Plans & limits' : pathname.includes('activity') ? 'Activity & backups' : 'SaaS Overview';
 
   return (
     <div className="shell">
@@ -26,12 +30,13 @@ export default function SuperAdminLayout() {
         onToggle={sb.toggle}
         mobileOpen={sb.mobileOpen}
         onNavigate={() => sb.setMobileOpen(false)}
+        collapseLabel={t('nav.collapse')}
         footer={
           <div className="sidebar-card">
             <strong className="row" style={{ gap: 6 }}>
               <ShieldCheck size={15} /> Privacy by design
             </strong>
-            Shop financials, pricing and customer data are isolated per tenant and never visible from this console.
+            Shop financials, pricing and customer data are isolated per tenant in the database and never visible from this console.
           </div>
         }
       />
@@ -47,18 +52,17 @@ export default function SuperAdminLayout() {
           </div>
           <div className="topbar-actions">
             <span className="badge badge-violet desktop-only">Super Admin</span>
-            <button className="icon-btn" aria-label="Notifications">
-              <Bell size={18} />
-            </button>
-            <ProfileMenu name={session!.name} sub="Platform owner" email={session!.email}>
+            <ProfileMenu name={me!.user.name} sub="Platform owner" email={me!.user.email}>
               {(close) => (
                 <>
                   <button className="dropdown-item" onClick={() => { close(); navigate('/super-admin/configuration'); }}>
-                    <Settings2 size={16} /> Configuration
+                    <Settings2 size={16} /> {t('nav.configuration')}
                   </button>
                   <div className="dropdown-sep" />
-                  <button className="dropdown-item danger" onClick={() => { logout(); navigate('/login'); }}>
-                    <LogOut size={16} /> Sign out
+                  <PrefsMenu />
+                  <div className="dropdown-sep" />
+                  <button className="dropdown-item danger" onClick={async () => { await logout(); navigate('/login'); }}>
+                    <LogOut size={16} /> {t('shell.signOut')}
                   </button>
                 </>
               )}

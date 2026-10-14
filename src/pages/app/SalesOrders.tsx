@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ClipboardList, LayoutGrid, List, ArrowRight, FileText, Pencil, Trash2, Send, CheckCircle2, FilePen } from 'lucide-react';
-import { useTenant } from '@/context/TenantContext';
-import { useToast } from '@/context/ToastContext';
+import { api } from '@/api/client';
+import { useCustomers, useMut, useOrg, useSalesOrders } from '@/api/hooks';
+import type { SalesOrder } from '@/api/types';
+import { useShopUser } from '@/context/AuthContext';
 import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, SearchInput, Segmented } from '@/components/ui';
-import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine } from '@/components/LineItems';
-import { addDays, fmtDate, money, todayISO, uid } from '@/lib/format';
-import { docTotals, isInterState } from '@/lib/invoice';
-import type { LineItem, SalesOrder, SalesOrderStatus } from '@/lib/types';
+import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type DraftLine } from '@/components/LineItems';
+import { addDays, fmtDate, money, todayISO } from '@/lib/format';
+import { isInterState } from '../../../shared/gst';
+
+type SalesOrderStatus = SalesOrder['status'];
 
 const STAGES: Array<{ status: SalesOrderStatus; icon: typeof FilePen; tone: string; hint: string }> = [
   { status: 'Draft', icon: FilePen, tone: 'gray', hint: 'Being prepared' },
@@ -16,8 +19,11 @@ const STAGES: Array<{ status: SalesOrderStatus; icon: typeof FilePen; tone: stri
 ];
 
 export default function SalesOrders() {
-  const { tenant, mutate } = useTenant();
-  const toast = useToast();
+  const me = useShopUser();
+  const canWrite = me.can('sales.write');
+  const { data: orders = [], isLoading } = useSalesOrders();
+  const { data: customerList = [] } = useCustomers();
+  const org = useOrg().data;
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [view, setView] = useState<'board' | 'list'>('board');
@@ -30,17 +36,23 @@ export default function SalesOrders() {
   const [date, setDate] = useState(todayISO());
   const [expiry, setExpiry] = useState(addDays(todayISO(), 30));
   const [withGst, setWithGst] = useState(true);
-  const [lines, setLines] = useState<LineItem[]>([emptyLine('SP1')]);
+  const [lines, setLines] = useState<DraftLine[]>([emptyLine('SP1')]);
   const [notes, setNotes] = useState('');
   const [touched, setTouched] = useState(false);
-  const customer = tenant.customers.find((c) => c.id === customerId);
+  const customer = customerList.find((c) => c.id === customerId);
+  const calc = useCalcLines(lines);
+  const keys = [['salesOrders']];
+  const createSO = useMut((b: Record<string, unknown>) => api.post<SalesOrder>('/shop/sales-orders', b), keys, { success: (r) => (r.status === 'Sent' ? `${r.number} saved as sent` : `${r.number} saved as draft`) });
+  const updateSO = useMut((v: { id: string; b: Record<string, unknown> }) => api.put<SalesOrder>(`/shop/sales-orders/${v.id}`, v.b), keys, { success: 'Sales order updated' });
+  const moveSO = useMut((v: { id: string; status: SalesOrderStatus }) => api.patch<SalesOrder>(`/shop/sales-orders/${v.id}/status`, { status: v.status }), keys, { success: (r) => `${r.number} moved to ${r.status}` });
+  const removeSO = useMut((id: string) => api.del(`/shop/sales-orders/${id}`), keys, { success: 'Sales order deleted' });
 
   const open = (so?: SalesOrder) => {
     setCustomerId(so?.customerId ?? '');
     setDate(so?.date ?? todayISO());
     setExpiry(so?.expiryDate ?? addDays(todayISO(), 30));
     setWithGst(so?.withGst ?? true);
-    setLines(so ? so.lines.map((l) => ({ ...l })) : [emptyLine('SP1')]);
+    setLines(so ? so.lines.map(toDraft) : [emptyLine('SP1')]);
     setNotes(so?.notes ?? '');
     setTouched(false);
     setModal({ id: so?.id });
@@ -59,32 +71,19 @@ export default function SalesOrders() {
   const save = (status: SalesOrderStatus) => {
     setTouched(true);
     if (errs.customer || errs.lines) return;
-    if (modal?.id) {
-      mutate((t) => void Object.assign(t.salesOrders.find((s) => s.id === modal.id)!, { customerId, date, expiryDate: expiry, withGst, lines: filled, notes, status }));
-      toast('success', 'Sales order updated');
-    } else {
-      let number = '';
-      mutate((t) => {
-        t.counters.salesOrder += 1;
-        number = `SO-${String(t.counters.salesOrder).padStart(4, '0')}`;
-        t.salesOrders.unshift({ id: uid('so_'), number, customerId, date, expiryDate: expiry, withGst, lines: filled, notes, status });
-      });
-      toast('success', status === 'Sent' ? 'Quote sent' : 'Draft saved', `SO-${String(tenant.counters.salesOrder + 1).padStart(4, '0')}`);
-    }
-    setModal(null);
+    const b = { customerId, date, expiryDate: expiry, withGst, lines: toInput(lines), notes, status };
+    if (modal?.id) updateSO.mutate({ id: modal.id, b }, { onSuccess: () => setModal(null) });
+    else createSO.mutate(b, { onSuccess: () => setModal(null) });
   };
 
-  const move = (so: SalesOrder, status: SalesOrderStatus) => {
-    mutate((t) => void (t.salesOrders.find((s) => s.id === so.id)!.status = status));
-    toast('success', `Moved to ${status}`, so.number);
-  };
+  const move = (so: SalesOrder, status: SalesOrderStatus) => moveSO.mutate({ id: so.id, status });
 
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return tenant.salesOrders
-      .map((so) => ({ so, c: tenant.customers.find((c) => c.id === so.customerId), total: docTotals(tenant, so).total, invoiced: tenant.invoices.some((i) => i.salesOrderId === so.id) }))
+    return orders
+      .map((so) => ({ so, c: customerList.find((c) => c.id === so.customerId), total: so.total, invoiced: !!so.invoiceId }))
       .filter((r) => !s || [r.so.number, r.c?.name ?? '', r.c?.companyName ?? ''].some((v) => v.toLowerCase().includes(s)));
-  }, [tenant, q]);
+  }, [orders, customerList, q]);
 
   const card = (r: (typeof rows)[number]) => {
     const idx = STAGES.findIndex((s) => s.status === r.so.status);
@@ -101,15 +100,15 @@ export default function SalesOrders() {
           {r.so.withGst ? <Badge tone="green" plain>GST</Badge> : <Badge tone="amber" plain>Net</Badge>}
         </div>
         <div className="row" style={{ marginTop: 12, gap: 6, borderTop: '1px solid var(--ink-150)', paddingTop: 10 }}>
-          <button className="icon-btn sm" title="Edit" onClick={() => open(r.so)}><Pencil size={14} /></button>
-          <button className="icon-btn sm danger" title="Delete" onClick={() => setDel(r.so)}><Trash2 size={14} /></button>
+          {canWrite && !r.invoiced && <button className="icon-btn sm" title="Edit" onClick={() => open(r.so)}><Pencil size={14} /></button>}
+          {canWrite && !r.invoiced && <button className="icon-btn sm danger" title="Delete" onClick={() => setDel(r.so)}><Trash2 size={14} /></button>}
           <span style={{ marginLeft: 'auto' }} />
-          {idx < STAGES.length - 1 ? (
+          {!canWrite ? null : idx < STAGES.length - 1 ? (
             <button className="btn btn-secondary btn-sm" onClick={() => move(r.so, STAGES[idx + 1]!.status)}>
               Mark {STAGES[idx + 1]!.status} <ArrowRight size={13} />
             </button>
           ) : r.invoiced ? (
-            <Badge tone="green" plain>Invoiced</Badge>
+            <Link to={`/app/sales/invoices/${r.so.invoiceId}`}><Badge tone="green" plain>Invoiced →</Badge></Link>
           ) : (
             <button className="btn btn-primary btn-sm" onClick={() => navigate(`/app/sales/invoices/new?fromSO=${r.so.id}`)}>
               <FileText size={13} /> Convert to invoice
@@ -126,7 +125,7 @@ export default function SalesOrders() {
         title="Sales Orders"
         crumbs={<>Sales <span>/</span> Sales Orders</>}
         subtitle="Draft quotes, share them with customers and convert accepted ones into invoices."
-        actions={<button className="btn btn-primary" onClick={() => open()}><Plus size={16} /> New Sales Order</button>}
+        actions={canWrite && <button className="btn btn-primary" onClick={() => open()}><Plus size={16} /> New Sales Order</button>}
       />
 
       <div className="row between" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
@@ -134,7 +133,7 @@ export default function SalesOrders() {
         <Segmented value={view} onChange={setView} options={[{ value: 'board', label: 'Pipeline', icon: LayoutGrid }, { value: 'list', label: 'List', icon: List }]} />
       </div>
 
-      {tenant.salesOrders.length === 0 ? (
+      {isLoading ? <div className="skeleton" style={{ height: 240 }} /> : orders.length === 0 ? (
         <div className="card">
           <EmptyState icon={ClipboardList} title="No sales orders yet" text="Create a quote to send to your customer." action={<button className="btn btn-primary" onClick={() => open()}><Plus size={15} /> New Sales Order</button>} />
         </div>
@@ -178,15 +177,15 @@ export default function SalesOrders() {
                     <td className="strong" style={{ color: 'var(--brand-600)' }}>{r.so.number}</td>
                     <td>{r.c?.companyName || r.c?.name}</td>
                     <td>
-                      <select className="select" style={{ height: 32, width: 130 }} value={r.so.status} onChange={(e) => move(r.so, e.target.value as SalesOrderStatus)}>
+                      <select className="select" style={{ height: 32, width: 130 }} value={r.so.status} disabled={!canWrite || r.invoiced} onChange={(e) => move(r.so, e.target.value as SalesOrderStatus)}>
                         {STAGES.map((s) => <option key={s.status}>{s.status}</option>)}
                       </select>
                     </td>
                     <td className="muted">{fmtDate(r.so.expiryDate)}</td>
                     <td className="num strong">{money(r.total)}</td>
                     <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                      <button className="icon-btn" title="Edit" onClick={() => open(r.so)}><Pencil size={15} /></button>
-                      {r.so.status === 'Accepted' && !r.invoiced && <button className="icon-btn" title="Convert to invoice" onClick={() => navigate(`/app/sales/invoices/new?fromSO=${r.so.id}`)}><FileText size={15} /></button>}
+                      {canWrite && !r.invoiced && <button className="icon-btn" title="Edit" onClick={() => open(r.so)}><Pencil size={15} /></button>}
+                      {canWrite && r.so.status === 'Accepted' && !r.invoiced && <button className="icon-btn" title="Convert to invoice" onClick={() => navigate(`/app/sales/invoices/new?fromSO=${r.so.id}`)}><FileText size={15} /></button>}
                     </td>
                   </tr>
                 ))}
@@ -205,29 +204,29 @@ export default function SalesOrders() {
         footer={
           <>
             <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancel</button>
-            <button className="btn btn-secondary" onClick={() => save('Draft')}>Save as Draft</button>
-            <button className="btn btn-primary" onClick={() => save('Sent')}><Send size={15} /> Save &amp; mark Sent</button>
+            <button className="btn btn-secondary" disabled={createSO.isPending || updateSO.isPending} onClick={() => save('Draft')}>Save as Draft</button>
+            <button className="btn btn-primary" disabled={createSO.isPending || updateSO.isPending} onClick={() => save('Sent')}><Send size={15} /> Save &amp; mark Sent</button>
           </>
         }
       >
         <div className="form-grid cols-3">
           <Field label="Customer" required error={touched ? errs.customer : ''}>
-            <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => { setCustomerId(e.target.value); const c = tenant.customers.find((x) => x.id === e.target.value); if (c?.type === 'Business') setWithGst(true); }}>
+            <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => { setCustomerId(e.target.value); const c = customerList.find((x) => x.id === e.target.value); if (c?.type === 'Business' && org?.gstin && !org.compositionScheme) setWithGst(true); }}>
               <option value="">Select customer…</option>
-              {tenant.customers.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}
+              {customerList.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}
             </select>
           </Field>
           <Field label="Order date"><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
           <Field label="Valid till"><input className="input" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></Field>
         </div>
         <div style={{ margin: '18px 0 14px' }}>
-          <TaxModeToggle withGst={withGst} onChange={setWithGst} />
+          <TaxModeToggle withGst={withGst} onChange={setWithGst} disabled={org?.compositionScheme ? 'Composition scheme' : org && !org.gstin ? 'Add GSTIN in Organization profile' : undefined} />
         </div>
         <LineItemsEditor lines={lines} onChange={setLines} defaultTier={customer?.tier ?? 'SP1'} withGst={withGst} />
         {touched && errs.lines && <div className="field-error" style={{ marginTop: 8 }}>{errs.lines}</div>}
         <div className="grid-2 mt-16" style={{ alignItems: 'start' }}>
           <Field label="Notes"><textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
-          <TotalsPanel lines={filled} withGst={withGst} interState={customerId ? isInterState(tenant, customerId) : false} />
+          <TotalsPanel lines={calc} withGst={withGst} interState={!!org && !!customer && isInterState(org.state, customer.state || org.state)} />
         </div>
       </Modal>
 
@@ -236,10 +235,7 @@ export default function SalesOrders() {
         onClose={() => setDel(null)}
         title="Delete sales order?"
         text={`${del?.number} will be permanently removed.`}
-        onConfirm={() => {
-          mutate((t) => void (t.salesOrders = t.salesOrders.filter((s) => s.id !== del!.id)));
-          toast('success', 'Sales order deleted');
-        }}
+        onConfirm={() => removeSO.mutate(del!.id)}
       />
     </div>
   );

@@ -1,84 +1,133 @@
 # Ledgerly Books
 
-A multi-tenant GST billing and accounting SaaS. Its menus and workflow follow **Zoho Books**, and its look follows **Billbook**: white workspaces, soft shadows, subtle gray borders and Plus Jakarta Sans.
+A multi-tenant GST billing, inventory and accounting SaaS for Indian businesses. Its menus and workflow follow **Zoho Books**; its look follows **Billbook** (clean white workspaces, soft shadows, Plus Jakarta Sans), with a full dark mode.
 
-Stack: React 18 + TypeScript + Vite + React Router 6 + Immer + lucide-react. This is a frontend-only build. All data lives in `localStorage` behind a single store (`src/context/StoreContext.tsx`), so a backend API can replace it later.
-
-```bash
-npm install
-npm run dev        # http://localhost:5173
-npm run build      # typecheck + production build
-```
-
-### Demo accounts
-
-| Role | Email | Password |
-|---|---|---|
-| Customer Admin (shop owner) | owner@shop.com | owner123 |
-| Super Admin (SaaS owner) | admin@ledgerly.in | admin123 |
-
-To reset the demo data, clear the site's local storage.
+| Layer | Stack |
+|---|---|
+| Web app | React 18, TypeScript, Vite, React Router 6, TanStack Query, lucide-react |
+| API | Node 20+, Express 4, TypeScript, zod validation, bcrypt, helmet |
+| Database | PostgreSQL 16 with **row-level security** per shop |
+| Shared | `shared/`: tax maths, financial year, GST codes, permissions, CSV (used by both sides) |
+| Tests | Vitest unit + API integration tests (supertest), Playwright smoke script |
 
 ---
 
-## Routing & auth
+## Quick start
 
-| Route | Access |
+```bash
+# 1. PostgreSQL (once)
+sudo -u postgres psql -c "CREATE ROLE ledgerly LOGIN PASSWORD 'ledgerly' CREATEDB;"
+sudo -u postgres createdb -O ledgerly ledgerly
+sudo -u postgres createdb -O ledgerly ledgerly_test     # for npm test
+
+# 2. App
+npm install
+npm run db:seed     # creates the schema + demo data (wipes the database!)
+npm run dev         # API on :4000, web on http://localhost:5173 (proxied)
+```
+
+| Demo account | Email | Password |
+|---|---|---|
+| Shop owner | owner@shop.com | owner123 |
+| Super admin | admin@ledgerly.in | admin123 |
+| Manager / Sales staff / Accountant | manager@ / sales@ / accounts@shop.com | manager123 / sales123 / accounts123 |
+
+There's no role picker on the login page: the server works out who you are from your account.
+
+### Production
+
+```bash
+npm run build                      # typecheck + web build (dist/) + API bundle (server/dist)
+NODE_ENV=production DATABASE_URL=postgres://… APP_URL=https://books.example.com npm start
+```
+In production the API serves the built web app too, so you deploy one process. Migrations run automatically on start.
+
+| Env var | Purpose |
 |---|---|
-| `/login` | Public. Split-screen page with a form, validation and a role selector used for testing. |
-| `/super-admin`, `/super-admin/configuration` | `SuperAdmin` only |
-| `/app/**` | `CustomerAdmin` only |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `APP_URL` | Public URL, used in reset links, shared invoice links and emails |
+| `ALLOWED_ORIGINS` | Comma-separated origins allowed to make write requests |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Sends password-reset, reminder and license emails. Without these, emails are only logged |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | Lets shop owners renew their license online |
+| `BACKUPS_ENABLED=1`, `BACKUP_DIR`, `BACKUP_KEEP` | Daily `pg_dump` backups (on by default in production) |
+| `EINVOICE_API_URL`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | Reserved for direct GSP/IRP filing and the WhatsApp Business API (see below) |
 
-`AuthContext` checks the credentials against the user directory and works out the real role. The role chosen on the login page must match that role. Shop owners whose workspace is **deactivated** or whose **license has expired** cannot log in. `ProtectedRoute` sends signed-out users to `/login` and sends users with the wrong role to their own home page.
+---
 
-## Requirements → implementation
+## Security & multi-tenancy
 
-### Super Admin (SaaS operations, `src/pages/super`)
-- **Dashboard**
-  - Cards: Total Active Shops, New Customers This Month, Total Revenue (Subscriptions), Expiring Licenses (≤30 days).
-  - Subscription-revenue chart and license-mix breakdown.
-  - Shop-owner table with search, status filters, pagination and an **activate/deactivate toggle**.
-- **Create shop owner**: sets up the login and an empty, isolated workspace, and assigns a **license plan** (Trial, 1, 2 or 3 years). **Renew** extends the expiry date.
-- **Configuration**: three cards, each with *Save Changes* and a toast.
-  1. **Customer ID prefix**, e.g. `ACS` → `XYZ`. New IDs use the new prefix; existing IDs keep theirs.
-  2. **Financial year**: 1 April – 31 March, with the **Auto-Reset Invoice Numbering** master toggle.
-  3. **Tax Lab**: create, rename, enable/disable and remove GST slabs (0/5/12/18/28 plus custom ones).
-- **Privacy**: `usePlatform()` exposes only shop metadata and platform config. The console never reads tenant data such as invoices, prices or customers.
+- **Two locks on shop data.** Every shop query filters by `shop_id`, and PostgreSQL row-level security (`FORCE ROW LEVEL SECURITY`) hides other shops' rows even if a query forgets that filter. Each request runs in a transaction that sets `app.shop_id`.
+- **The Super Admin console can't reach shop data.** Platform routes never set a shop context, so the database itself returns nothing from shop tables. Tests check this.
+- **Passwords:** stored only as bcrypt hashes. The policy is at least 8 characters with a letter and a number. New owners and staff must change their temporary password on first sign-in.
+- **Sessions:** random tokens in `httpOnly`, `SameSite=Lax` cookies; only a SHA-256 of each token is stored. "Keep me signed in" lasts 7 days, otherwise until the browser closes. A password reset or change signs out other sessions.
+- **Lock-out:** 5 failed attempts lock the account for 15 minutes. Login, forgot-password and reset are rate-limited. Unknown emails get the same error and response time as wrong passwords, so attackers can't discover accounts.
+- **CSRF:** write requests must carry an `X-Requested-With` header and come from an allowed origin.
+- **Invoice numbering is atomic:** the counter is incremented under a row lock, so simultaneous invoices never share a number. Drafts get no number. Issued invoices can't be deleted, only cancelled (the number stays in the series) or corrected with a credit note.
+- **Audit log** of every change, per shop and for the platform. **Backups** with `pg_dump`. They can't be downloaded from the console because they hold every shop's data.
 
-### Customer Admin (shop owner, `src/pages/app`)
-- **Layout**
-  - Top bar: shop logo and company name, global search (Ctrl K) across items, customers and invoices, license pill, and profile menu.
-  - Sidebar (collapsible): **Home · Items · Sales (Customers, Sales Orders, Invoices) · Purchases · Banking · Reports**.
-  - The sidebar has **no Configuration tab**.
-- **Items**
-  - Goods/Services tabs and a **New Item** form with an **autofocused barcode field**. USB scanners type the code and press Enter; a camera option uses `BarcodeDetector` where the browser supports it.
-  - Fields: name, SKU, HSN/SAC, unit, tax slab, **Base Cost**, and mandatory **SP1 (Standard) / SP2 (Loyal) / SP3 (New)** with a live margin and a warning when a price is below cost.
-  - Filterable table with **inline editing**: click a value, then Enter saves and Esc cancels.
-  - Quick scan: scanning a barcode looks up the item, or starts a new item if none matches.
-- **Customers**
-  - Each customer gets an automatic **Custom ID** (`<prefix>-<sequence>`, e.g. `ACS-1582`).
-  - Individual or Business. Business requires a **GSTIN**, which is format-validated.
-  - Each customer has a default price tier, and their state decides CGST+SGST vs IGST.
-- **Sales Orders**: Draft → Sent → Accepted pipeline (board or list), editing, and **Convert to invoice**.
-- **Invoices**
-  - The line-item table picks from your Items. You can also add items by barcode or SKU, and set the price tier, discount and quantity per line.
-  - A global toggle switches between **Calculate Net Price (No Tax)** and **Calculate with GST**.
-  - Invoices can be saved as Draft, Unpaid or Paid. Saving a non-draft invoice reduces stock.
-  - **Printable A4 invoice** with the shop's logo, company name and GSTIN, a CGST/SGST or IGST breakup, the amount in words, and a signature block. Use *Print / PDF*.
-- **Invoice numbering**: `INV-<FY>-0001`. When auto-reset is on, the sequence **restarts at 0001 every 1 April**. When it is off, numbering continues across years.
-- **Purchases** (vendors, bills), **Banking** (accounts, transactions, balances), **Reports** (sales summary, GST summary, sales by customer and item, receivables aging).
-- **Profile menu**:
-  - **Organization profile**: logo upload and invoice details.
-  - **Staff, roles & branches**: invite staff, assign Manager/Accountant/Sales/Viewer roles, view the permission matrix, and manage multiple branches. Each invoice records its branch.
+## Features
+
+**Super Admin:** dashboard (active shops, new this month, subscription revenue, expiring licenses), creating shops with a temporary password, activate/deactivate (ends sessions immediately), license renewals with payment records, owner password-reset links, **plans & limits** (users, branches, invoices per month, enforced by the server), **configuration** (customer-ID prefix, FY auto-reset, **Tax Lab**), audit log, subscription payments, backups.
+
+**Shop: billing and GST**
+- Invoices with server-side totals. CGST+SGST or IGST is chosen from the place of supply.
+- **Net (no tax) / GST toggle**, **Bill of Supply** for composition dealers and exempt sales, **reverse charge**, **TCS**.
+- Partial payments with **TDS**, and credit notes that can restock returned goods.
+- Printable A4 invoices in **3 templates** with a **UPI QR** for the exact balance, bank details, and the amount in words.
+- **GSTR-1 JSON** in the GSTN offline-tool layout (B2B, B2CL, B2CS, CDNR, nil-rated, HSN, documents issued), **GSTR-3B** with input credit from purchase bills, and an **HSN summary**.
+- **E-invoice JSON** (NIC v1.1) and **e-way bill JSON** (bulk upload format).
+
+**Shop: selling**
+- **POS counter billing:** scan, then cart, then Cash/UPI/Card, with change calculation, an 80 mm thermal receipt and WhatsApp bills.
+- **Share on WhatsApp** (wa.me), email from your own mail app, copy a public link.
+- **Payment reminders:** WhatsApp, email on demand, or automatic email reminders.
+- **Recurring invoices**, generated hourly. **Sales orders** move Draft → Sent → Accepted and convert to an invoice.
+
+**Shop: inventory**
+- Items with SP1/SP2/SP3 price tiers, barcode scanning (USB scanner or camera), inline editing, and bulk tax-slab changes or archiving.
+- **Stock per branch** with adjustments, **transfers between branches** and full movement history.
+- **Batches & expiry** with first-expiry-first-out on sale, reorder-level alerts, and expiring-batch alerts.
+- **Barcode label sheets** (A4, 24 per page).
+- **CSV import/export** for items and customers (Excel → Save as CSV).
+
+**Shop: team**
+- **Staff logins** with the roles Manager, Accountant, Sales Staff and Viewer. **Permissions are enforced on the server**, and Sales Staff can't see cost prices.
+- Multiple branches and an activity log.
+- License renewal, through Razorpay when configured.
+
+**Polish**
+- Dark / light / system theme.
+- **English, हिन्दी, தமிழ்** for navigation, the shell, the dashboard and login. Longer help text is still English.
+- Keyboard shortcuts: press `?` to see them.
+- Bulk actions, **saved filter views**, skeleton loading states.
+- Installable **PWA** with a read-only **offline mode**: shop data you've already viewed stays readable; changes need a connection.
+
+### What needs your accounts
+- **Direct e-invoice IRN / e-way bill generation** needs a GSP or ASP licence and credentials. Until then the app produces the official JSON for upload on the government portals.
+- **Automatic WhatsApp messages** need the WhatsApp Business API. Until then sharing uses `wa.me` links, which open WhatsApp with the message ready to send.
+- **SMS** isn't implemented. **Email** needs SMTP settings. **Online license payments** need Razorpay keys.
+
+## Testing
+
+```bash
+npm test            # shared unit tests + API integration tests (uses the ledgerly_test database)
+npm run test:e2e    # Playwright smoke test against a running `npm run dev`
+npm run typecheck
+```
+The API tests cover login and lock-out, CSRF, password reset, forced password change, role permissions, **shop isolation (including database-level row-level security)**, concurrent invoice numbering, FY reset, tax treatment, stock deduction and restock, payments with TDS, credit-note limits, POS sales, plan limits, recurring generation, public links, GSTR-1/3B, HSN, and e-invoice/e-way bill payloads.
 
 ## Project layout
 
 ```
-src/
-  lib/          types, seed data, financial-year, tax totals, formatting
-  context/      Store (persistence), Auth, Tenant (scoped data), Toasts
-  components/   UI kit, charts, barcode input, line-item editor
-  layouts/      Super Admin shell, Customer Admin shell, sidebar
-  pages/        Login, super/*, app/*
-  styles/       global.css (tokens & components), layout.css (shells, login, A4 print)
+shared/            tax maths, financial year, GST state codes, permissions, CSV, status
+server/
+  migrations/      SQL schema (with row-level security policies)
+  src/             app, auth, db, jobs (recurring, reminders, license emails, backups), seed
+  src/routes/      auth, platform (super admin), public links, shop/* (catalog, sales, money, reports, core)
+  src/services/    documents (invoices, payments, credit notes), stock, GST returns, provisioning, backups
+  src/integrations razorpay, GSTN JSON builders
+  test/            API integration tests
+src/               web app (api client + hooks, contexts, components, layouts, pages)
+public/            PWA manifest, service worker, icons
+e2e/               Playwright smoke test
 ```

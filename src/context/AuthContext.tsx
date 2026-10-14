@@ -1,72 +1,83 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import type { Role, Session } from '@/lib/types';
-import { useStore } from './StoreContext';
-import { daysUntil } from '@/lib/fy';
-
-const SESSION_KEY = 'ledgerly.session';
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { api, ApiError } from '@/api/client';
+import type { Me } from '@/api/types';
+import type { Permission } from '../../shared/permissions';
 
 interface AuthValue {
-  session: Session | null;
-  login: (email: string, password: string, role: Role, remember?: boolean) => { ok: true; redirect: string } | { ok: false; error: string };
-  logout: () => void;
+  me: Me | null;
+  loading: boolean;
+  login: (email: string, password: string, remember: boolean) => Promise<Me>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<unknown>;
+  can: (p: Permission) => boolean;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
 
-function readSession(): Session | null {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as Session) : null;
-  } catch {
-    return null;
-  }
-}
+/**
+ * Forget everything cached for the previous account, but keep the ['me'] query itself:
+ * clearing it would detach the auth observer and leave the app thinking nobody is signed in.
+ */
+const dropDataCache = (qc: QueryClient) => qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' });
 
-export const homeFor = (role: Role) => (role === 'SuperAdmin' ? '/super-admin' : '/app');
+export const homeFor = (me: Me) => (me.kind === 'super' ? '/super-admin' : '/app');
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { db } = useStore();
-  const [session, setSession] = useState<Session | null>(readSession);
-
-  const persist = (s: Session | null, remember = true) => {
-    try {
-      localStorage.removeItem(SESSION_KEY);
-      sessionStorage.removeItem(SESSION_KEY);
-      if (s) (remember ? localStorage : sessionStorage).setItem(SESSION_KEY, JSON.stringify(s));
-    } catch {
-      /* ignore */
-    }
-    setSession(s);
-  };
-
-  /**
-   * Intercepts credentials and resolves the actual role from the user directory.
-   * The role dropdown on the login page is a testing aid: it must match the account's real role.
-   */
-  const login = useCallback<AuthValue['login']>(
-    (email, password, role, remember = true) => {
-      const e = email.trim().toLowerCase();
-      if (db.superAdmin.email.toLowerCase() === e) {
-        if (db.superAdmin.password !== password) return { ok: false, error: 'Incorrect password. Please try again.' };
-        if (role !== 'SuperAdmin') return { ok: false, error: 'This account is a Super Admin. Switch the role to “Super Admin”.' };
-        persist({ role: 'SuperAdmin', name: db.superAdmin.name, email: db.superAdmin.email }, remember);
-        return { ok: true, redirect: '/super-admin' };
+  const qc = useQueryClient();
+  const { data, isLoading, refetch } = useQuery<Me | null>({
+    queryKey: ['me'],
+    queryFn: async () => {
+      try {
+        return await api.get<Me>('/auth/me');
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) return null;
+        throw e;
       }
-      const shop = db.shops.find((s) => s.email.toLowerCase() === e);
-      if (!shop) return { ok: false, error: 'No account found with this email address.' };
-      if (shop.password !== password) return { ok: false, error: 'Incorrect password. Please try again.' };
-      if (role !== 'CustomerAdmin') return { ok: false, error: 'This account is a Shop Owner. Switch the role to “Customer Admin”.' };
-      if (!shop.active) return { ok: false, error: 'This workspace has been deactivated. Contact your service provider.' };
-      if (daysUntil(shop.licenseEnd) < 0) return { ok: false, error: 'Your software license has expired. Please renew to continue.' };
-      persist({ role: 'CustomerAdmin', name: shop.ownerName, email: shop.email, shopId: shop.id }, remember);
-      return { ok: true, redirect: '/app' };
     },
-    [db.superAdmin, db.shops],
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
+  // Any 401 / license / forced-password response from the API refreshes who we are.
+  useEffect(() => {
+    const onAuth = (ev: Event) => {
+      const err = (ev as CustomEvent<ApiError>).detail;
+      if (err.status === 401) qc.setQueryData(['me'], null);
+      else refetch();
+    };
+    window.addEventListener('api:auth', onAuth);
+    return () => window.removeEventListener('api:auth', onAuth);
+  }, [qc, refetch]);
+
+  const login = useCallback(
+    async (email: string, password: string, remember: boolean) => {
+      const me = await api.post<Me>('/auth/login', { email, password, remember });
+      dropDataCache(qc);
+      qc.setQueryData(['me'], me);
+      return me;
+    },
+    [qc],
   );
 
-  const logout = useCallback(() => persist(null), []);
+  const logout = useCallback(async () => {
+    await api.post('/auth/logout').catch(() => {});
+    navigator.serviceWorker?.controller?.postMessage('clear-data');
+    dropDataCache(qc);
+    qc.setQueryData(['me'], null);
+  }, [qc]);
 
-  const value = useMemo(() => ({ session, login, logout }), [session, login, logout]);
+  const value = useMemo<AuthValue>(
+    () => ({
+      me: data ?? null,
+      loading: isLoading,
+      login,
+      logout,
+      refresh: refetch,
+      can: (p) => data?.kind === 'user' && data.permissions.includes(p),
+    }),
+    [data, isLoading, login, logout, refetch],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
@@ -74,4 +85,11 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
+}
+
+/** Shop-user session (throws if used outside the /app shell). */
+export function useShopUser() {
+  const { me, can } = useAuth();
+  if (me?.kind !== 'user') throw new Error('Not a shop user');
+  return { ...me, can };
 }

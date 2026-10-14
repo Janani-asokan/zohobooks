@@ -131,7 +131,6 @@ const STATUS_TONE: Record<string, string> = {
   Paid: 'green',
   Accepted: 'green',
   Sent: 'blue',
-  Unpaid: 'amber',
   Open: 'amber',
   Draft: 'gray',
   Overdue: 'red',
@@ -139,6 +138,10 @@ const STATUS_TONE: Record<string, string> = {
   Inactive: 'gray',
   Expiring: 'amber',
   Trial: 'violet',
+  'Partially Paid': 'blue',
+  Issued: 'blue',
+  Cancelled: 'gray',
+  Unpaid: 'amber',
 };
 
 export function Badge({ children, tone, plain }: { children: ReactNode; tone?: string; plain?: boolean }) {

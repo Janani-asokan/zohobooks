@@ -44,6 +44,7 @@ export async function seed({ quiet = false } = {}) {
     const s = await provisionShop(null, { shopName: name, ownerName: owner, email, phone: `+91 98${String(41000000 + i * 1234567).slice(0, 8)}`, city, planId: plan, years: 1, password: 'welcome123', mustChangePassword: true, licenseStart: day(start) });
     if (name === 'Annapoorna Sweets') await query('UPDATE shops SET active = false WHERE id = $1', [s.id]);
   }
+  await query('UPDATE shops SET created_at = license_start::timestamptz');
   // SaaS revenue history
   const shops = await query("SELECT id, plan_id, license_start FROM shops WHERE plan_id <> 'trial'");
   for (const s of shops)

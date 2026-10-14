@@ -1,23 +1,40 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
-import { StoreProvider } from './context/StoreContext';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { PrefsProvider } from './context/PrefsContext';
+import { ApiError } from './api/client';
+import { registerServiceWorker } from './pwa';
 import './styles/global.css';
 import './styles/layout.css';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: true,
+      retry: (count, e) => !(e instanceof ApiError && e.status >= 400 && e.status < 500) && count < 2,
+    },
+  },
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <StoreProvider>
-        <AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <PrefsProvider>
           <ToastProvider>
-            <App />
+            <AuthProvider>
+              <App />
+            </AuthProvider>
           </ToastProvider>
-        </AuthProvider>
-      </StoreProvider>
+        </PrefsProvider>
+      </QueryClientProvider>
     </BrowserRouter>
   </React.StrictMode>,
 );
+
+registerServiceWorker();

@@ -1,60 +1,86 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { ProtectedRoute } from './components/ProtectedRoute';
+import { FullPageSpinner, ProtectedRoute } from './components/ProtectedRoute';
 import { homeFor, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import SuperAdminLayout from './layouts/SuperAdminLayout';
 import AppLayout from './layouts/AppLayout';
-import SuperDashboard from './pages/super/Dashboard';
-import Configuration from './pages/super/Configuration';
-import Home from './pages/app/Home';
-import Items from './pages/app/Items';
-import Customers from './pages/app/Customers';
-import SalesOrders from './pages/app/SalesOrders';
-import Invoices from './pages/app/Invoices';
-import InvoiceForm from './pages/app/InvoiceForm';
-import InvoiceView from './pages/app/InvoiceView';
-import Purchases from './pages/app/Purchases';
-import Banking from './pages/app/Banking';
-import Reports from './pages/app/Reports';
-import Organization from './pages/app/Organization';
-import Team from './pages/app/Team';
+
+// Route-level code splitting keeps the first load small.
+const PublicInvoice = lazy(() => import('./pages/PublicInvoice'));
+const SuperDashboard = lazy(() => import('./pages/super/Dashboard'));
+const Configuration = lazy(() => import('./pages/super/Configuration'));
+const Plans = lazy(() => import('./pages/super/Plans'));
+const Activity = lazy(() => import('./pages/super/Activity'));
+const Home = lazy(() => import('./pages/app/Home'));
+const Pos = lazy(() => import('./pages/app/Pos'));
+const Items = lazy(() => import('./pages/app/Items'));
+const Customers = lazy(() => import('./pages/app/Customers'));
+const SalesOrders = lazy(() => import('./pages/app/SalesOrders'));
+const Invoices = lazy(() => import('./pages/app/Invoices'));
+const InvoiceForm = lazy(() => import('./pages/app/InvoiceForm'));
+const InvoiceView = lazy(() => import('./pages/app/InvoiceView'));
+const PaymentsReceived = lazy(() => import('./pages/app/PaymentsReceived'));
+const CreditNotes = lazy(() => import('./pages/app/CreditNotes'));
+const Recurring = lazy(() => import('./pages/app/Recurring'));
+const Purchases = lazy(() => import('./pages/app/Purchases'));
+const Banking = lazy(() => import('./pages/app/Banking'));
+const Reports = lazy(() => import('./pages/app/Reports'));
+const Organization = lazy(() => import('./pages/app/Organization'));
+const Team = lazy(() => import('./pages/app/Team'));
+const Billing = lazy(() => import('./pages/app/Billing'));
+const BarcodeLabels = lazy(() => import('./pages/app/BarcodeLabels'));
 
 function RootRedirect() {
-  const { session } = useAuth();
-  return <Navigate to={session ? homeFor(session.role) : '/login'} replace />;
+  const { me, loading } = useAuth();
+  if (loading) return <FullPageSpinner />;
+  return <Navigate to={me ? homeFor(me) : '/login'} replace />;
 }
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
+    <Suspense fallback={<FullPageSpinner />}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/share/:token" element={<PublicInvoice />} />
 
-      <Route element={<ProtectedRoute role="SuperAdmin" />}>
-        <Route path="/super-admin" element={<SuperAdminLayout />}>
-          <Route index element={<SuperDashboard />} />
-          <Route path="configuration" element={<Configuration />} />
+        <Route element={<ProtectedRoute kind="super" />}>
+          <Route path="/super-admin" element={<SuperAdminLayout />}>
+            <Route index element={<SuperDashboard />} />
+            <Route path="configuration" element={<Configuration />} />
+            <Route path="plans" element={<Plans />} />
+            <Route path="activity" element={<Activity />} />
+          </Route>
         </Route>
-      </Route>
 
-      <Route element={<ProtectedRoute role="CustomerAdmin" />}>
-        <Route path="/app" element={<AppLayout />}>
-          <Route index element={<Home />} />
-          <Route path="items" element={<Items />} />
-          <Route path="sales/customers" element={<Customers />} />
-          <Route path="sales/orders" element={<SalesOrders />} />
-          <Route path="sales/invoices" element={<Invoices />} />
-          <Route path="sales/invoices/new" element={<InvoiceForm />} />
-          <Route path="sales/invoices/:id" element={<InvoiceView />} />
-          <Route path="sales/invoices/:id/edit" element={<InvoiceForm />} />
-          <Route path="purchases" element={<Purchases />} />
-          <Route path="banking" element={<Banking />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="organization" element={<Organization />} />
-          <Route path="team" element={<Team />} />
+        <Route element={<ProtectedRoute kind="user" />}>
+          <Route path="/app/items/labels" element={<BarcodeLabels />} />
+          <Route path="/app" element={<AppLayout />}>
+            <Route index element={<Home />} />
+            <Route path="pos" element={<Pos />} />
+            <Route path="items" element={<Items />} />
+            <Route path="sales/customers" element={<Customers />} />
+            <Route path="sales/orders" element={<SalesOrders />} />
+            <Route path="sales/invoices" element={<Invoices />} />
+            <Route path="sales/invoices/new" element={<InvoiceForm />} />
+            <Route path="sales/invoices/:id" element={<InvoiceView />} />
+            <Route path="sales/invoices/:id/edit" element={<InvoiceForm />} />
+            <Route path="sales/payments" element={<PaymentsReceived />} />
+            <Route path="sales/credit-notes" element={<CreditNotes />} />
+            <Route path="sales/recurring" element={<Recurring />} />
+            <Route path="purchases" element={<Purchases />} />
+            <Route path="banking" element={<Banking />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="organization" element={<Organization />} />
+            <Route path="team" element={<Team />} />
+            <Route path="billing" element={<Billing />} />
+          </Route>
         </Route>
-      </Route>
 
-      <Route path="*" element={<RootRedirect />} />
-    </Routes>
+        <Route path="*" element={<RootRedirect />} />
+      </Routes>
+    </Suspense>
   );
 }
