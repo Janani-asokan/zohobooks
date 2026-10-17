@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { Home, Package, ShoppingCart, ShoppingBag, Landmark, BarChart3, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, UserRound, Boxes, ScanLine, CreditCard, Keyboard, WifiOff, ClipboardList, Wrench, Receipt, Wallet, Truck, LifeBuoy, RotateCcw, Repeat, IndianRupee, FileMinus } from 'lucide-react';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Home, Package, ShoppingCart, ShoppingBag, Landmark, BarChart3, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, UserRound, Boxes, ScanLine, CreditCard, Keyboard, WifiOff, ClipboardList, Wrench, Receipt, Wallet, Truck, LifeBuoy, Crown, RotateCcw, Repeat, IndianRupee, FileMinus } from 'lucide-react';
 import { CommandPalette, type PaletteAction } from './CommandPalette';
 import { resetHints } from '@/components/kit';
 import { Sidebar, useSidebarState, type NavItem } from './Sidebar';
@@ -224,12 +224,26 @@ export default function AppLayout() {
         collapseLabel={t('nav.collapse')}
         footer={
           <div className="sidebar-help">
-            <strong><LifeBuoy size={14} style={{ verticalAlign: -2, marginRight: 4 }} />Need a hand?</strong>
-            Press <b>Ctrl + K</b> to find anything, or <b>?</b> for shortcuts.
-            <div className="row" style={{ gap: 6 }}>
-              <button onClick={() => setPalette(true)}>Search</button>
-              <button onClick={() => { resetHints(); try { Object.keys(localStorage).filter((k) => k.startsWith('ledgerly.gs.')).forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ } navigate('/app'); window.location.reload(); }} title="Show the help tips and setup checklist again"><RotateCcw size={12} style={{ verticalAlign: -1 }} /> Show tips</button>
-            </div>
+            <span className="sh-icon">{me.can('admin') ? <Crown size={17} /> : <LifeBuoy size={17} />}</span>
+            {me.can('admin') ? (
+              <>
+                <strong>{me.shop.planName} plan</strong>
+                {days > 0 ? <>{days} days left on your licence. Upgrade for more users, branches &amp; invoices.</> : <>Your licence has expired — renew to keep billing.</>}
+                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  <button onClick={() => navigate('/app/billing')}>View plans</button>
+                  <button className="ghost" onClick={() => setPalette(true)} title="Ctrl + K"><Search size={12} /> Search</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <strong>Need a hand?</strong>
+                Press <b>Ctrl + K</b> to find anything, or <b>?</b> for shortcuts.
+                <div className="row" style={{ gap: 6 }}>
+                  <button onClick={() => setPalette(true)}>Search</button>
+                  <button className="ghost" onClick={() => { resetHints(); window.location.reload(); }} title="Show the help tips again"><RotateCcw size={12} /> Tips</button>
+                </div>
+              </>
+            )}
           </div>
         }
       />
@@ -280,6 +294,9 @@ export default function AppLayout() {
                       </button>
                     </>
                   )}
+                  <button className="dropdown-item" onClick={() => { close(); resetHints(); try { Object.keys(localStorage).filter((k) => k.startsWith('ledgerly.gs.')).forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ } window.location.reload(); }}>
+                    <RotateCcw size={16} /> Show help tips again
+                  </button>
                   <button className="dropdown-item" onClick={() => { close(); setShortcuts(true); }}>
                     <Keyboard size={16} /> {t('shell.shortcuts')} <span className="kbd" style={{ marginLeft: 'auto' }}>?</span>
                   </button>
@@ -297,6 +314,13 @@ export default function AppLayout() {
         <main>
           <Outlet />
         </main>
+        <nav className="bottom-nav no-print" aria-label="Quick navigation">
+          <NavLink to="/app" end><Home size={20} />Home</NavLink>
+          <NavLink to="/app/sales/invoices"><FileText size={20} />Invoices</NavLink>
+          {canSell ? <button onClick={() => navigate('/app/sales/invoices/new')} aria-label="New invoice"><span className="bn-fab"><Plus size={22} /></span></button> : <NavLink to="/app/sales/customers"><UserRound size={20} />Customers</NavLink>}
+          <NavLink to="/app/items"><Package size={20} />Items</NavLink>
+          <button onClick={() => sb.setMobileOpen(true)}><Menu size={20} />More</button>
+        </nav>
       </div>
       <ShortcutsModal open={shortcuts} onClose={() => setShortcuts(false)} />
       <CommandPalette open={palette} onClose={() => setPalette(false)} actions={actions} />

@@ -155,23 +155,35 @@ export function StatCard({
   icon: Icon,
   tone = 'blue',
   foot,
+  trend,
 }: {
   label: string;
   value: ReactNode;
   icon: LucideIcon;
   tone?: string;
   foot?: ReactNode;
+  /** Change vs. the previous period, in %. Positive is shown green unless `inverse`. */
+  trend?: { pct: number | null; label?: string; inverse?: boolean };
 }) {
+  const t = trend?.pct;
+  const good = t !== null && t !== undefined && (trend!.inverse ? t <= 0 : t >= 0);
   return (
     <div className="card stat-card">
       <div className="stat-top">
-        <span className="stat-label">{label}</span>
         <span className={`stat-icon tone-${tone}`}>
           <Icon size={19} />
         </span>
+        <span className="stat-label">{label}</span>
       </div>
       <div className="stat-value">{value}</div>
-      {foot && <div className="stat-foot">{foot}</div>}
+      {trend && t !== null && t !== undefined ? (
+        <div className="stat-foot">
+          <span className={`trend ${good ? 'up' : 'down'}`}>{t >= 0 ? '↑' : '↓'} {Math.abs(t)}%</span>
+          <span>{trend.label ?? 'from last month'}</span>
+        </div>
+      ) : (
+        foot && <div className="stat-foot">{foot}</div>
+      )}
     </div>
   );
 }

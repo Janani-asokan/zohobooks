@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 import SuperAdminLayout from './layouts/SuperAdminLayout';
 import AppLayout from './layouts/AppLayout';
+import SettingsLayout from './layouts/SettingsLayout';
 
 // Route-level code splitting keeps the first load small.
 const PublicInvoice = lazy(() => import('./pages/PublicInvoice'));
@@ -83,9 +84,11 @@ export default function App() {
             <Route path="purchases/expenses" element={<Expenses />} />
             <Route path="banking" element={<Banking />} />
             <Route path="reports" element={<Reports />} />
-            <Route path="organization" element={<Organization />} />
-            <Route path="team" element={<Team />} />
-            <Route path="billing" element={<Billing />} />
+            <Route element={<SettingsLayout />}>
+              <Route path="organization" element={<Organization />} />
+              <Route path="team" element={<Team />} />
+              <Route path="billing" element={<Billing />} />
+            </Route>
           </Route>
         </Route>
 

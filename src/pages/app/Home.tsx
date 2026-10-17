@@ -1,13 +1,17 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Check, X, Rocket, IndianRupee, Clock4, FileText, PackageX, Plus, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Check, X, Rocket, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays } from 'lucide-react';
 import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
 import { useLocalFlag } from '@/components/kit';
 import { useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { EmptyState, PageHeader, StatCard } from '@/components/ui';
 import { StatusBadge } from '@/components/StatusBadge';
-import { BarChart, MeterList } from '@/components/charts';
+import { AreaChart, Donut, MeterList } from '@/components/charts';
 import { fmtDate, money, moneyShort } from '@/lib/format';
+
+const pctChange = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : cur > 0 ? 100 : null);
+const STATUS_COLORS = { Paid: '#16a34a', 'Partially Paid': '#2563eb', Unpaid: '#d97706', Overdue: '#dc2626' } as const;
 
 export default function Home() {
   const me = useShopUser();
@@ -15,16 +19,48 @@ export default function Home() {
   const navigate = useNavigate();
   const dash = useDashboard();
   const invoices = useInvoices();
+  const customers = useCustomers();
+  const [range, setRange] = useState<'month' | 'six'>('six');
   const d = dash.data;
   const hour = new Date().getHours();
   const greet = t(hour < 12 ? 'home.goodMorning' : hour < 17 ? 'home.goodAfternoon' : 'home.goodEvening');
-  const recent = (invoices.data ?? []).filter((i) => i.status !== 'Draft').slice(0, 6);
+  const issued = (invoices.data ?? []).filter((i) => i.status === 'Issued');
+  const recent = issued.slice(0, 5);
   const canSell = me.can('sales.write');
 
+  const now = new Date();
+  const ym = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+  const thisM = ym(now);
+  const prevM = ym(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const inM = (iso: string, m: string) => iso.slice(0, 7) === m;
+  const monthly = d?.monthly ?? [];
+  const revCur = monthly.find((m) => m.month === thisM)?.invoiced ?? 0;
+  const revPrev = monthly.find((m) => m.month === prevM)?.invoiced ?? 0;
+  const invCur = issued.filter((i) => inM(i.date, thisM)).length;
+  const invPrev = issued.filter((i) => inM(i.date, prevM)).length;
+  const custList = customers.data ?? [];
+  const custCur = custList.filter((c) => inM(c.createdAt, thisM)).length;
+  const custPrev = custList.filter((c) => inM(c.createdAt, prevM)).length;
+
+  // Revenue overview: daily for this month, or monthly for the last six.
+  const chart = useMemo(() => {
+    if (range === 'six') return { labels: monthly.map((m) => new Date(m.month + '-01').toLocaleString('en-IN', { month: 'short' })), values: monthly.map((m) => m.invoiced) };
+    const days = now.getDate();
+    const vals = Array.from({ length: days }, (_, i) => issued.filter((inv) => inv.date === `${thisM}-${String(i + 1).padStart(2, '0')}`).reduce((s, inv) => s + inv.total, 0));
+    return { labels: vals.map((_, i) => String(i + 1)), values: vals };
+  }, [range, monthly, issued.length]);
+
+  const statusRows = (['Paid', 'Partially Paid', 'Unpaid', 'Overdue'] as const).map((st) => ({
+    label: st,
+    value: issued.filter((i) => i.paymentStatus === st).reduce((s, i) => s + (st === 'Paid' ? i.total : i.balance), 0),
+    color: STATUS_COLORS[st],
+  }));
+
   const quick = [
-    ...(canSell ? [{ label: t('shell.newInvoice'), icon: FileText, to: '/app/sales/invoices/new', tone: 'blue', key: 'Alt N' }, { label: t('nav.pos'), icon: ScanLine, to: '/app/pos', tone: 'teal', key: 'Alt P' }] : []),
-    ...(me.can('customers.write') ? [{ label: t('home.addCustomer'), icon: UserPlus, to: '/app/sales/customers?new=1', tone: 'green', key: 'Alt C' }] : []),
-    ...(me.can('items.write') ? [{ label: t('home.addItem'), icon: PackagePlus, to: '/app/items/new', tone: 'violet', key: 'Alt I' }] : []),
+    ...(canSell ? [{ label: 'Create Invoice', sub: 'Generate a new invoice', icon: FileText, to: '/app/sales/invoices/new', tone: 'blue' }] : []),
+    ...(me.can('items.write') ? [{ label: 'Add Product', sub: 'Add a new product', icon: PackagePlus, to: '/app/items/new', tone: 'green' }] : []),
+    ...(me.can('customers.write') ? [{ label: 'Add Customer', sub: 'Add a new customer', icon: UserPlus, to: '/app/sales/customers?new=1', tone: 'amber' }] : []),
+    ...(me.can('reports.read') ? [{ label: 'View Reports', sub: 'Analyse your business', icon: BarChart3, to: '/app/reports', tone: 'violet' }] : canSell ? [{ label: 'POS Billing', sub: 'Bill at the counter', icon: ScanLine, to: '/app/pos', tone: 'violet' }] : []),
   ];
 
   if (dash.isError) {
@@ -35,83 +71,110 @@ export default function Home() {
     );
   }
 
+  const fyStart = d ? `1 Apr ${d.fy.slice(0, 4)}` : '';
   return (
     <div className="page">
       <PageHeader
-        title={`${greet}, ${me.user.name.split(' ')[0]}`}
-        subtitle={`${me.shop.name} · Financial year ${d?.fy ?? '…'} (1 Apr – 31 Mar)`}
-        actions={canSell && <button className="btn btn-primary" onClick={() => navigate('/app/sales/invoices/new')}><Plus size={16} /> {t('shell.newInvoice')}</button>}
+        title={<>{greet}, {me.user.name.split(' ')[0]} <span className="greet-wave" aria-hidden>👋</span></>}
+        subtitle="Here’s what’s happening with your business today."
+        actions={<span className="date-pill"><CalendarDays size={15} /> {fyStart} – {now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
       />
 
       <GettingStarted />
 
       <div className="stat-grid">
-        <StatCard label={t('home.receivables')} value={d ? money(d.receivable) : '—'} icon={Wallet} tone="blue" foot={d && <>{d.openCount} invoices awaiting payment</>} />
-        <StatCard label={t('home.overdue')} value={d ? money(d.overdue) : '—'} icon={Clock4} tone="red" foot={d && <Link to="/app/sales/invoices?status=Overdue">{d.overdueCount} invoices past due →</Link>} />
-        <StatCard label={`${t('home.sales')} · FY ${d?.fy ?? ''}`} value={d ? moneyShort(d.fySales) : '—'} icon={IndianRupee} tone="green" foot={d && <>{t('home.today')}: {money(d.todaySales)}</>} />
-        <StatCard label={t('home.lowStock')} value={d ? d.lowStock : '—'} icon={PackageX} tone="amber" foot={<Link to="/app/items?tab=stock">At or below reorder level →</Link>} />
+        <StatCard label="Total Revenue" value={d ? money(d.fySales) : '—'} icon={IndianRupee} tone="green" trend={{ pct: pctChange(revCur, revPrev) }} foot={d && <>FY {d.fy}</>} />
+        <StatCard label="Total Invoices" value={invoices.data ? issued.length : '—'} icon={FileText} tone="blue" trend={{ pct: pctChange(invCur, invPrev) }} foot="Issued this FY" />
+        <StatCard label="Pending Payments" value={d ? money(d.receivable) : '—'} icon={Wallet} tone="amber" foot={d && (d.overdueCount ? <Link to="/app/sales/invoices?status=Overdue" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{d.overdueCount} overdue · {money(d.overdue)} →</Link> : <>{d.openCount} invoices awaiting payment</>)} />
+        <StatCard label="Total Customers" value={customers.data ? custList.length : '—'} icon={Users} tone="violet" trend={{ pct: pctChange(custCur, custPrev), label: 'new vs last month' }} foot={`${custCur} new this month`} />
+      </div>
+
+      <div className="dash-row mt-16">
+        <div className="card">
+          <div className="card-header">
+            <div><h3>Revenue Overview</h3><p>{range === 'six' ? 'Invoiced value, last 6 months' : `Daily invoiced value, ${now.toLocaleString('en-IN', { month: 'long' })}`}</p></div>
+            <div className="seg-sm" role="tablist">
+              <button className={range === 'month' ? 'active' : ''} onClick={() => setRange('month')}>This Month</button>
+              <button className={range === 'six' ? 'active' : ''} onClick={() => setRange('six')}>Last 6 Months</button>
+            </div>
+          </div>
+          <div className="card-body">{d && invoices.data ? <AreaChart name="Revenue" labels={chart.labels} values={chart.values} format={moneyShort} height={290} /> : <div className="skeleton" style={{ height: 230 }} />}</div>
+        </div>
+        <div className="card">
+          <div className="card-header">
+            <div><h3>Recent Invoices</h3><p>Latest billing activity</p></div>
+            <Link to="/app/sales/invoices" className="btn btn-ghost btn-sm">{t('home.viewAll')} <ArrowRight size={14} /></Link>
+          </div>
+          <div className="table-wrap">
+            {invoices.isLoading ? <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 200 }} /></div> : recent.length === 0 ? (
+              <EmptyState icon={FileText} title="No invoices yet" text="Create your first GST invoice in under a minute." action={canSell && <Link to="/app/sales/invoices/new" className="btn btn-primary">Create invoice</Link>} />
+            ) : (
+              <table className="table mini-table">
+                <thead><tr><th>Invoice No.</th><th>Customer</th><th className="num">Amount</th><th>Status</th></tr></thead>
+                <tbody>
+                  {recent.map((inv) => (
+                    <tr key={inv.id} className="clickable" onClick={() => navigate(`/app/sales/invoices/${inv.id}`)}>
+                      <td style={{ whiteSpace: 'nowrap' }}><span className="strong" style={{ color: 'var(--brand-600)' }}>{inv.number}</span><div className="muted small">{fmtDate(inv.date)}</div></td>
+                      <td>{inv.customer.companyName || inv.customer.name}</td>
+                      <td className="num strong">{money(inv.total)}</td>
+                      <td><StatusBadge status={inv.paymentStatus} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
       </div>
 
       {quick.length > 0 && (
-        <div className="card mt-16">
-          <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, padding: 14 }}>
+        <>
+          <h3 className="mt-24" style={{ fontSize: 15, marginBottom: 12 }}>Quick Actions</h3>
+          <div className="qa-grid">
             {quick.map((q) => (
-              <Link key={q.label} to={q.to} className="row" style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', color: 'var(--ink-800)', fontWeight: 600 }}>
-                <span className={`stat-icon tone-${q.tone}`} style={{ width: 34, height: 34 }}><q.icon size={17} /></span>
-                {q.label}
-                <span className="kbd desktop-only" style={{ marginLeft: 'auto' }}>{q.key}</span>
-                <ArrowRight size={15} className="muted mobile-only" style={{ marginLeft: 'auto' }} />
+              <Link key={q.label} to={q.to} className="qa-card">
+                <span className={`stat-icon tone-${q.tone}`}><q.icon size={18} /></span>
+                <div><strong>{q.label}</strong><span className="qa-sub">{q.sub}</span></div>
               </Link>
             ))}
+            <div className="gst-banner">
+              <svg className="ill" width="64" height="64" viewBox="0 0 64 64" aria-hidden>
+                <rect x="12" y="6" width="34" height="44" rx="5" fill="#fff" stroke="#9db8e6" />
+                <rect x="18" y="14" width="18" height="3" rx="1.5" fill="#2563eb" />
+                <rect x="18" y="22" width="22" height="2.5" rx="1.25" fill="#c7d6ef" />
+                <rect x="18" y="28" width="16" height="2.5" rx="1.25" fill="#c7d6ef" />
+                <rect x="18" y="34" width="20" height="2.5" rx="1.25" fill="#c7d6ef" />
+                <circle cx="46" cy="46" r="12" fill="#0d9488" />
+                <path d="M40.5 46.5l3.6 3.6 7-7.4" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div>
+                <strong>GST Ready</strong>
+                <p>Invoices, GSTR-1 &amp; GSTR-3B are prepared automatically from your data.</p>
+                <Link to={me.can('reports.read') ? '/app/reports' : '/app/sales/invoices'} className="btn btn-sm">Learn more <ArrowRight size={13} /></Link>
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
-      <div className="grid-3-1 mt-16">
+      <div className="grid-3 mt-16">
         <div className="card">
-          <div className="card-header"><div><h3>{t('home.salesCollections')}</h3><p>Invoiced vs. received, last 6 months</p></div></div>
-          <div className="card-body">
-            {d ? (
-              <BarChart
-                labels={d.monthly.map((m) => new Date(m.month + '-01').toLocaleString('en-IN', { month: 'short' }))}
-                series={[{ name: t('home.invoiced'), values: d.monthly.map((m) => m.invoiced) }, { name: t('home.collected'), values: d.monthly.map((m) => m.collected) }]}
-                format={moneyShort}
-              />
-            ) : <div className="skeleton" style={{ height: 240 }} />}
-          </div>
+          <div className="card-header"><div><h3>Payment Status</h3><p>Issued invoices this FY</p></div></div>
+          <div className="card-body">{invoices.data ? <Donut label="Payment status" rows={statusRows} format={moneyShort} /> : <div className="skeleton" style={{ height: 150 }} />}</div>
         </div>
         <div className="card">
           <div className="card-header"><div><h3>{t('home.topItems')}</h3><p>By invoiced value this FY</p></div></div>
           <div className="card-body">
-            {d?.topItems.length ? <MeterList rows={d.topItems.map((x) => ({ label: x.name, value: x.amount }))} format={moneyShort} /> : d ? <p className="muted small">No sales yet.</p> : <div className="skeleton" style={{ height: 200 }} />}
+            {d?.topItems.length ? <MeterList rows={d.topItems.map((x) => ({ label: x.name, value: x.amount }))} format={moneyShort} /> : d ? <p className="muted small">No sales yet.</p> : <div className="skeleton" style={{ height: 150 }} />}
           </div>
         </div>
-      </div>
-
-      <div className="card mt-16">
-        <div className="card-header">
-          <div><h3>{t('home.recent')}</h3><p>Latest billing activity across branches</p></div>
-          <Link to="/app/sales/invoices" className="btn btn-ghost btn-sm">{t('home.viewAll')} <ArrowRight size={14} /></Link>
-        </div>
-        <div className="table-wrap">
-          {invoices.isLoading ? <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 160 }} /></div> : recent.length === 0 ? (
-            <EmptyState icon={FileText} title="No invoices yet" text="Create your first GST invoice in under a minute." action={canSell && <Link to="/app/sales/invoices/new" className="btn btn-primary">Create invoice</Link>} />
-          ) : (
-            <table className="table">
-              <thead><tr><th>{t('common.date')}</th><th>Invoice #</th><th>{t('common.customer')}</th><th>{t('common.status')}</th><th className="num">{t('common.amount')}</th></tr></thead>
-              <tbody>
-                {recent.map((inv) => (
-                  <tr key={inv.id} className="clickable" onClick={() => navigate(`/app/sales/invoices/${inv.id}`)}>
-                    <td>{fmtDate(inv.date)}</td>
-                    <td className="strong" style={{ color: 'var(--brand-600)' }}>{inv.number}</td>
-                    <td>{inv.customer.companyName || inv.customer.name}</td>
-                    <td><StatusBadge status={inv.paymentStatus} /></td>
-                    <td className="num strong">{money(inv.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <div className="card">
+          <div className="card-header"><div><h3>Today at a glance</h3><p>{now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div></div>
+          <div className="card-body stack" style={{ gap: 12 }}>
+            <div className="glance"><span className="stat-icon tone-green"><IndianRupee size={16} /></span><div><span>Sales today</span><strong>{d ? money(d.todaySales) : '—'}</strong></div></div>
+            <Link to="/app/sales/invoices?status=Overdue" className="glance"><span className="stat-icon tone-red"><Clock4 size={16} /></span><div><span>Overdue invoices</span><strong>{d ? d.overdueCount : '—'}</strong></div><ArrowRight size={14} className="muted" /></Link>
+            <Link to="/app/items?tab=stock" className="glance"><span className="stat-icon tone-amber"><PackageX size={16} /></span><div><span>Low-stock items</span><strong>{d ? d.lowStock : '—'}</strong></div><ArrowRight size={14} className="muted" /></Link>
+          </div>
         </div>
       </div>
     </div>

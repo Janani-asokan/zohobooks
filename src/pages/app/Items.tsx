@@ -268,7 +268,7 @@ export default function Items() {
                   <thead>
                     <tr>
                       <th style={{ width: 36 }}><input type="checkbox" className="checkbox" checked={allOnPage} onChange={() => setSelected((s) => { const n = new Set(s); pg.slice.forEach((i) => (allOnPage ? n.delete(i.id) : n.add(i.id))); return n; })} aria-label="Select all on page" /></th>
-                      <th>Item</th><th>SKU</th>
+                      <th>Item</th>
                       {me.can('items.cost') && <th className="num">Base cost</th>}
                       <th className="num">SP1 · Standard</th><th className="num">SP2 · Loyal</th><th className="num">SP3 · New</th><th>Tax</th>
                       {tab === 'Goods' && <th className="num">Stock</th>}
@@ -286,11 +286,10 @@ export default function Items() {
                               <button className="thumb-btn" onClick={() => setOpenId(it.id)} title="Open item"><Thumb name={it.name} image={it.image} /></button>
                               <div>
                                 <div className="title">{cell(it, 'name')}</div>
-                                <div className="sub">{it.category && <span className="chip" style={{ marginRight: 6 }}>{it.category}</span>}{it.barcode ? <span className="row" style={{ gap: 4 }}><ScanBarcode size={12} /> {it.barcode}</span> : it.hsn ? `${it.type === 'Goods' ? 'HSN' : 'SAC'} ${it.hsn}` : 'No barcode'}{it.trackBatches && ' · batches'}</div>
+                                <div className="sub">{[it.sku, it.category, it.barcode || (it.hsn ? `${it.type === 'Goods' ? 'HSN' : 'SAC'} ${it.hsn}` : ''), it.trackBatches ? 'batches' : ''].filter(Boolean).join(' · ') || 'No barcode'}</div>
                               </div>
                             </div>
                           </td>
-                          <td>{cell(it, 'sku')}</td>
                           {me.can('items.cost') && <td className="num">{cell(it, 'cost', money)}</td>}
                           {(['sp1', 'sp2', 'sp3'] as const).map((k, i) => {
                             const m = margin(it[k], it.cost);
@@ -300,9 +299,10 @@ export default function Items() {
                           {tab === 'Goods' && (
                             <td className="num">
                               <button className="cell-edit" style={{ border: 'none', background: 'none', font: 'inherit', fontWeight: 600, color: 'var(--ink-900)' }} onClick={() => setStockItem(it)} title="Stock details">{st} <span className="muted" style={{ fontWeight: 400 }}>{it.unit}</span></button>
-                              <div>{st <= 0 ? <Badge tone="red">Out</Badge> : st <= it.reorderLevel ? <Badge tone="amber">Low</Badge> : null}</div>
+                              <div style={{ marginTop: 4 }}><span className={`status-pill ${st <= 0 ? 'out' : st <= it.reorderLevel ? 'low' : 'ok'}`}>{st <= 0 ? 'Out of Stock' : st <= it.reorderLevel ? 'Low Stock' : 'In Stock'}</span></div>
                             </td>
                           )}
+
                           <td className="num" style={{ whiteSpace: 'nowrap' }}>
                             {it.type === 'Goods' && <button className="icon-btn" title="Stock, batches & history" onClick={() => setStockItem(it)}><Boxes size={15} /></button>}
                             {canWrite && <button className="icon-btn" title="Edit" onClick={() => openEdit(it)}><Pencil size={15} /></button>}

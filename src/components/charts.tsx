@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export const SERIES = ['#4b45e6', '#f59e0b'] as const;
+export const SERIES = ['#2563eb', '#0d9488'] as const;
 
 interface Series {
   name: string;
@@ -179,6 +179,49 @@ export function MeterList({ rows, format }: { rows: Array<{ label: string; value
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Part-to-whole donut with a hover tooltip and a labelled legend (identity never relies on color alone). */
+export function Donut({ rows, format, center, label }: { rows: Array<{ label: string; value: number; color: string }>; format: (n: number) => string; center?: string; label: string }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const total = rows.reduce((s, r) => s + r.value, 0);
+  const R = 52;
+  const C = 2 * Math.PI * R;
+  const gap = total > 0 && rows.filter((r) => r.value > 0).length > 1 ? 2 : 0;
+  let acc = 0;
+  const h = hover !== null ? rows[hover] : null;
+  return (
+    <div className="donut-wrap">
+      <svg viewBox="0 0 140 140" width={150} height={150} role="img" aria-label={label}>
+        <circle cx="70" cy="70" r={R} fill="none" stroke="var(--ink-100)" strokeWidth="16" />
+        {total > 0 &&
+          rows.map((r, i) => {
+            const len = (r.value / total) * C;
+            const seg = (
+              <circle key={r.label} cx="70" cy="70" r={R} fill="none" stroke={r.color} strokeWidth={hover === i ? 19 : 16}
+                strokeDasharray={`${Math.max(0, len - gap)} ${C}`} strokeDashoffset={-acc} transform="rotate(-90 70 70)"
+                onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ transition: 'stroke-width .15s', cursor: 'default' }}>
+                <title>{`${r.label}: ${format(r.value)}`}</title>
+              </circle>
+            );
+            acc += len;
+            return r.value > 0 ? seg : null;
+          })}
+        <text x="70" y="66" textAnchor="middle" fontSize="18" fontWeight="800" fill="var(--ink-900)">{h ? `${total ? Math.round((h.value / total) * 100) : 0}%` : center ?? format(total)}</text>
+        <text x="70" y="84" textAnchor="middle" fontSize="10" fill="var(--ink-500)">{h ? h.label : 'Total'}</text>
+      </svg>
+      <div className="donut-legend">
+        {rows.map((r, i) => (
+          <div key={r.label} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+            <i style={{ background: r.color }} />
+            {r.label}
+            <b>{format(r.value)}</b>
+            <span className="pct">{total ? Math.round((r.value / total) * 100) : 0}%</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
