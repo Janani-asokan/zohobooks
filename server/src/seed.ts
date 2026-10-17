@@ -20,10 +20,13 @@ export async function resetDatabase() {
   await migrate(undefined, () => {});
 }
 
+/** Demo passwords — overridden by DEMO_PASSWORD so a public deployment never uses the well-known ones. */
+const pw = (fallback: string) => process.env.DEMO_PASSWORD || fallback;
+
 export async function seed({ quiet = false } = {}) {
   const log = quiet ? () => {} : console.log;
   await resetDatabase();
-  await query("INSERT INTO super_admins (name, email, password_hash) VALUES ('Platform Admin', 'admin@ledgerly.in', $1)", [await hashPassword('admin123')]);
+  await query("INSERT INTO super_admins (name, email, password_hash) VALUES ('Platform Admin', 'admin@ledgerly.in', $1)", [await hashPassword(pw('admin123'))]);
 
   const others: Array<[string, string, string, string, string, number]> = [
     ['Sri Balaji Textiles', 'Balaji Venkatesh', 'balaji@sbtextiles.in', 'Coimbatore', 'standard', -350],
@@ -38,10 +41,10 @@ export async function seed({ quiet = false } = {}) {
 
   const demo = await provisionShop(null, {
     shopName: 'Aravind Computer Store', ownerName: 'Aravind Kumar', email: 'owner@shop.com', phone: '+91 98400 12345', city: 'Chennai',
-    planId: 'premium', years: 1, password: 'owner123', mustChangePassword: false, licenseStart: day(-120),
+    planId: 'premium', years: 1, password: pw('owner123'), mustChangePassword: false, licenseStart: day(-120),
   });
   for (const [i, [name, owner, email, city, plan, start]] of others.entries()) {
-    const s = await provisionShop(null, { shopName: name, ownerName: owner, email, phone: `+91 98${String(41000000 + i * 1234567).slice(0, 8)}`, city, planId: plan, years: 1, password: 'welcome123', mustChangePassword: true, licenseStart: day(start) });
+    const s = await provisionShop(null, { shopName: name, ownerName: owner, email, phone: `+91 98${String(41000000 + i * 1234567).slice(0, 8)}`, city, planId: plan, years: 1, password: pw('welcome123'), mustChangePassword: true, licenseStart: day(start) });
     if (name === 'Annapoorna Sweets') await query('UPDATE shops SET active = false WHERE id = $1', [s.id]);
   }
   await query('UPDATE shops SET created_at = license_start::timestamptz');
@@ -177,7 +180,7 @@ export async function seed({ quiet = false } = {}) {
     await db.query(
       `INSERT INTO users (shop_id, name, email, password_hash, role, branch_id) VALUES
         ($1,'Meena Krishnan','manager@shop.com',$3,'Manager',$2), ($1,'Vignesh R','sales@shop.com',$4,'Sales Staff',$5), ($1,'Anitha S','accounts@shop.com',$6,'Accountant',$2)`,
-      [shopId, head, await hashPassword('manager123'), await hashPassword('sales123'), vel, await hashPassword('accounts123')],
+      [shopId, head, await hashPassword(pw('manager123')), await hashPassword(pw('sales123')), vel, await hashPassword(pw('accounts123'))],
     );
     await db.query(
       `INSERT INTO recurring_profiles (shop_id, name, customer_id, frequency, start_date, next_date, lines, with_gst, terms_days, branch_id, auto_issue)
@@ -187,9 +190,12 @@ export async function seed({ quiet = false } = {}) {
   });
   await tx(async (db) => db.query("INSERT INTO audit_log (shop_id, actor_type, actor_name, action, entity) VALUES (NULL,'system','System','seed','database')"));
   log(`[seed] done — today ${todayISO()}`);
-  log('  Super admin : admin@ledgerly.in / admin123');
-  log('  Shop owner  : owner@shop.com / owner123');
-  log('  Staff       : manager@shop.com / manager123 · sales@shop.com / sales123 · accounts@shop.com / accounts123');
+  if (process.env.DEMO_PASSWORD) log('  All demo accounts use the DEMO_PASSWORD value.');
+  else {
+    log('  Super admin : admin@ledgerly.in / admin123');
+    log('  Shop owner  : owner@shop.com / owner123');
+    log('  Staff       : manager@shop.com / manager123 · sales@shop.com / sales123 · accounts@shop.com / accounts123');
+  }
 }
 
 if (/seed\.(ts|js)$/.test(process.argv[1] ?? '')) {

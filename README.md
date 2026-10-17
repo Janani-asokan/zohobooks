@@ -34,6 +34,14 @@ npm run dev         # API on :4000, web on http://localhost:5173 (proxied)
 
 There's no role picker on the login page: the server works out who you are from your account.
 
+### Deploy to Render (free, one click)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Janani-asokan/zohobooks)
+
+The `render.yaml` blueprint creates a PostgreSQL database and the web service (built from the `Dockerfile`). On first start it loads the demo shops. **Every demo account uses the generated `DEMO_PASSWORD`**, which you can find under the service's *Environment* tab. The well-known demo passwords don't work on a public deployment. To start with an empty platform instead, remove `SEED_DEMO` and set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`.
+
+Free-tier notes: the service sleeps after 15 minutes without visitors (the first request then takes about 50 seconds), and Render's free PostgreSQL expires after 30 days. Use paid plans for real shops.
+
 ### Production
 
 ```bash

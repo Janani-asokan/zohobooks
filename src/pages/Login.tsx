@@ -12,6 +12,9 @@ import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { LANGS } from '@/i18n';
 import { AuthShell } from './AuthShell';
 
+/** The demo-account helper is shown in development only (or when VITE_SHOW_DEMO=1 at build time). */
+const SHOW_DEMO = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO === '1';
+
 const DEMO: Array<[string, string, string]> = [
   ['Shop owner', 'owner@shop.com', 'owner123'],
   ['Super admin', 'admin@ledgerly.in', 'admin123'],
@@ -124,6 +127,7 @@ export default function Login() {
         </button>
       </form>
 
+      {SHOW_DEMO && (
       <div className="demo-creds">
         <div style={{ fontWeight: 700, color: 'var(--ink-800)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
           <KeyRound size={14} /> Demo accounts
@@ -136,6 +140,7 @@ export default function Login() {
         ))}
         <div className="small" style={{ marginTop: 8, color: 'var(--ink-500)' }}>Your role is detected from your account — no need to pick one.</div>
       </div>
+      )}
 
       <Modal
         open={forgotOpen}

@@ -9,8 +9,12 @@ export const config = {
   port: Number(env.PORT ?? 4000),
   databaseUrl: env.DATABASE_URL ?? 'postgres://ledgerly:ledgerly@localhost:5432/ledgerly',
   /** Public base URL used in emails, reset links and shared invoice links. */
-  appUrl: (env.APP_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
-  allowedOrigins: (env.ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:4000,http://localhost:4173').split(',').map((s) => s.trim()),
+  /** Render sets RENDER_EXTERNAL_URL automatically. */
+  appUrl: (env.APP_URL ?? env.RENDER_EXTERNAL_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
+  allowedOrigins: [
+    ...(env.ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:4000,http://localhost:4173').split(',').map((s) => s.trim()),
+    ...[env.APP_URL, env.RENDER_EXTERNAL_URL].filter((v): v is string => !!v).map((v) => v.replace(/\/$/, '')),
+  ],
   cookieSecure: bool(env.COOKIE_SECURE, env.NODE_ENV === 'production'),
   sessionDays: Number(env.SESSION_DAYS ?? 7),
   /** In development, password-reset links are returned in the API response so the flow is testable without SMTP. */
