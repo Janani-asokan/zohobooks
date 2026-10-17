@@ -3,7 +3,7 @@ import { api, ApiError } from './client';
 import { useToast } from '@/context/ToastContext';
 import type {
   AuditEntry, BankAccount, BankTxn, Bill, Branch, CreditNote, Customer, Dashboard, Invoice, InvoiceDetail, Item, Notification, Organization,
-  PaymentRow, Plan, PlatformConfig, Recurring, SalesOrder, Shop, StaffUser, TaxSlab, Vendor,
+  ItemFacets, PaymentRow, Plan, PurchaseOrder, Expense, PlatformConfig, Recurring, SalesOrder, Shop, StaffUser, TaxSlab, Vendor,
 } from './types';
 
 const S = '/shop';
@@ -14,6 +14,9 @@ export const useOrg = () => useQuery(q<Organization>(['org'], `${S}/organization
 export const useTaxSlabs = () => useQuery({ ...q<TaxSlab[]>(['taxSlabs'], `${S}/tax-slabs`), staleTime: 5 * 60_000 });
 export const useBranches = () => useQuery(q<Branch[]>(['branches'], `${S}/branches`));
 export const useItems = () => useQuery(q<Item[]>(['items'], `${S}/items`));
+export const useItemFacets = () => useQuery(q<ItemFacets>(['itemFacets'], `${S}/items/facets`));
+export const usePurchaseOrders = (enabled = true) => useQuery(q<PurchaseOrder[]>(['purchaseOrders'], `${S}/purchase-orders`, enabled));
+export const useExpenses = (enabled = true) => useQuery(q<Expense[]>(['expenses'], `${S}/expenses`, enabled));
 export const useCustomers = () => useQuery(q<Customer[]>(['customers'], `${S}/customers`));
 export const useInvoices = () => useQuery(q<Invoice[]>(['invoices'], `${S}/invoices`));
 export const useInvoice = (id?: string) => useQuery(q<InvoiceDetail>(['invoice', id], `${S}/invoices/${id}`, !!id));

@@ -9,6 +9,7 @@ import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, SearchInput,
 import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type DraftLine } from '@/components/LineItems';
 import { addDays, fmtDate, money, todayISO } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
+import { Hint } from '@/components/kit';
 
 type SalesOrderStatus = SalesOrder['status'];
 
@@ -127,6 +128,9 @@ export default function SalesOrders() {
         subtitle="Draft quotes, share them with customers and convert accepted ones into invoices."
         actions={canWrite && <button className="btn btn-primary" onClick={() => open()}><Plus size={16} /> New Sales Order</button>}
       />
+      <Hint id="salesorders" title="Quotes before invoices">
+        <p>Use sales orders for quotations and advance bookings. Once the customer accepts, open the order and click <strong>Convert to invoice</strong> — nothing has to be typed twice. Sales orders don’t reduce stock.</p>
+      </Hint>
 
       <div className="row between" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <SearchInput value={q} onChange={setQ} placeholder="Search order # or customer…" />

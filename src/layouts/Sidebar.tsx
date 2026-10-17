@@ -8,6 +8,8 @@ export interface NavItem {
   to?: string;
   end?: boolean;
   children?: Array<{ label: string; to: string }>;
+  /** Caption rendered above this item to start a new group. */
+  section?: string;
 }
 
 export function Sidebar({
@@ -51,18 +53,23 @@ export function Sidebar({
       </div>
       <nav className="sidebar-nav" onMouseLeave={() => setFlyout(null)}>
         {items.map((it) => {
+          const caption = it.section ? <div className="nav-caption">{it.section}</div> : null;
           if (!it.children) {
             return (
+              <div key={it.label}>
+              {caption}
               <NavLink key={it.label} to={it.to!} end={it.end} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={onNavigate} title={collapsed ? it.label : undefined}>
                 <it.icon size={19} />
                 <span className="nav-text">{it.label}</span>
               </NavLink>
+              </div>
             );
           }
           const groupActive = it.children.some((c) => pathname.startsWith(c.to));
           const isOpen = open[it.label];
           return (
             <div key={it.label}>
+              {caption}
               <button
                 className={`nav-link ${isOpen ? 'open' : ''} ${groupActive ? (collapsed ? 'active' : 'parent-active') : ''}`}
                 onClick={() => setOpen((o) => ({ ...o, [it.label]: !o[it.label] }))}

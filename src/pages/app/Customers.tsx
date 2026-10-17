@@ -10,6 +10,7 @@ import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, Pagination, 
 import { CsvImport } from '@/components/CsvImport';
 import { EMAIL_RE, initials, money } from '@/lib/format';
 import { GSTIN_RE, INDIAN_STATES, gstinMatchesState } from '../../../shared/gst';
+import { Hint } from '@/components/kit';
 
 type Draft = Pick<Customer, 'type' | 'name' | 'companyName' | 'gstin' | 'email' | 'phone' | 'state' | 'address' | 'tier'>;
 const blank = (state: string): Draft => ({ type: 'Individual', name: '', companyName: '', gstin: '', email: '', phone: '', state, address: '', tier: 'SP1' });
@@ -100,6 +101,9 @@ export default function Customers() {
           </>
         }
       />
+      <Hint id="customers" title="Customers & price levels">
+        <p>Each customer gets an automatic ID (like ACS-1582). Business customers need a <strong>GSTIN</strong> for B2B tax invoices. Pick their <strong>price level</strong> (SP1 Standard, SP2 Loyal, SP3 New) once — invoices use it automatically. The “Due” column shows what they still owe you.</p>
+      </Hint>
 
       <div className="card">
         <div className="toolbar">

@@ -12,6 +12,7 @@ import { publicRouter } from './routes/public';
 import { catalogRouter } from './routes/shop/catalog';
 import { billingRouter, coreRouter } from './routes/shop/core';
 import { moneyRouter } from './routes/shop/money';
+import { purchasingRouter } from './routes/shop/purchasing';
 import { reportsRouter } from './routes/shop/reports';
 import { salesRouter } from './routes/shop/sales';
 
@@ -48,7 +49,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), coreRouter, catalogRouter, salesRouter, moneyRouter, reportsRouter);
+  app.use('/api/shop', requireShopUser(), coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

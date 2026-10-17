@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3, Percent, Users, Package, Clock4, Printer, Download, FileJson, Info, Landmark } from 'lucide-react';
+import { TrendingUp, BarChart3, Percent, Users, Package, Clock4, Printer, Download, FileJson, Info, Landmark } from 'lucide-react';
 import { api, download } from '@/api/client';
 import { useInvoices } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
@@ -10,8 +10,9 @@ import { PageHeader } from '@/components/ui';
 import { AreaChart, BarChart } from '@/components/charts';
 import { money, moneyShort } from '@/lib/format';
 import { fyLabel } from '@/lib/fy';
+import { Hint } from '@/components/kit';
 
-type Tab = 'sales' | 'gst' | 'customers' | 'items' | 'aging';
+type Tab = 'pnl' | 'sales' | 'gst' | 'customers' | 'items' | 'aging';
 
 interface SalesReport {
   monthly: Array<{ month: string; count: number; net: number; tax: number; total: number }>;
@@ -32,6 +33,11 @@ interface Gstr3b {
   payable: { iamt: number; camt: number; samt: number };
   note: string;
 }
+interface Pnl {
+  income: { sales: number; returns: number; net: number }; costOfGoods: number | null; grossProfit: number | null;
+  expenses: Array<{ category: string; amount: number }>; totalExpenses: number; netProfit: number | null;
+  monthly: Array<{ month: string; income: number; expenses: number; profit: number | null }>;
+}
 interface HsnRow { hsn: string; description: string; unit: string; rate: number; qty: number; taxable: number; igst: number; cgst: number; sgst: number }
 
 const monthName = (ym: string) => new Date(ym + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' });
@@ -41,7 +47,7 @@ export default function Reports() {
   const me = useShopUser();
   const { t } = usePrefs();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>('sales');
+  const [tab, setTab] = useState<Tab>('pnl');
   const invoices = useInvoices().data ?? [];
   const currentFy = fyLabel(new Date(), me.platform.fyStartMonth);
   const fys = [...new Set([currentFy, ...invoices.map((i) => i.fy)])].sort().reverse();
@@ -51,6 +57,7 @@ export default function Reports() {
   const [period, setPeriod] = useState(`${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`);
 
   const sales = useQuery({ queryKey: ['report', 'sales', fy], queryFn: () => api.get<SalesReport>(`/shop/reports/sales?fy=${fy}`) });
+  const pnl = useQuery({ queryKey: ['report', 'pnl', fy], queryFn: () => api.get<Pnl>(`/shop/reports/pnl?fy=${fy}`), enabled: tab === 'pnl' });
   const g1 = useQuery({ queryKey: ['report', 'gstr1', period], queryFn: () => api.get<Gstr1Summary>(`/shop/gst/gstr1?period=${period}`), enabled: tab === 'gst' });
   const g3 = useQuery({ queryKey: ['report', 'gstr3b', period], queryFn: () => api.get<Gstr3b>(`/shop/gst/gstr3b?period=${period}`), enabled: tab === 'gst' });
   const [y, m] = period.split('-').map(Number) as [number, number];
@@ -68,6 +75,7 @@ export default function Reports() {
   const periods = useMemo(() => Array.from({ length: 15 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }), []);
 
   const TABS: Array<{ id: Tab; label: string; icon: typeof BarChart3 }> = [
+    { id: 'pnl', label: 'Profit & loss', icon: TrendingUp },
     { id: 'sales', label: 'Sales summary', icon: BarChart3 },
     { id: 'gst', label: 'GST returns', icon: Percent },
     { id: 'customers', label: 'Sales by customer', icon: Users },
@@ -93,9 +101,51 @@ export default function Reports() {
           </>
         }
       />
+      <Hint id="reports" title="Reports & GST returns">
+        <p>Pick a date range and a report. <strong>GSTR-1</strong> and <strong>GSTR-3B</strong> are prepared from your invoices, credit notes, bills and expenses — download the JSON for the GST portal or Excel/CSV for your accountant.</p>
+      </Hint>
       <div className="tabs no-print">{TABS.map((x) => <button key={x.id} className={tab === x.id ? 'active' : ''} onClick={() => setTab(x.id)}><x.icon size={15} /> {x.label}</button>)}</div>
 
       <div className="print-area">
+        {tab === 'pnl' && (
+          pnl.isLoading || !pnl.data ? <div className="skeleton" style={{ height: 320 }} /> : (
+            <div className="stack">
+              <div className="stat-grid">
+                <div className="stat-card"><div className="stat-label">Net income</div><div className="stat-value">{moneyShort(pnl.data.income.net)}</div><div className="stat-foot">Sales {money(pnl.data.income.sales)} − returns {money(pnl.data.income.returns)}</div></div>
+                <div className="stat-card"><div className="stat-label">Cost of goods sold</div><div className="stat-value">{pnl.data.costOfGoods === null ? '—' : moneyShort(pnl.data.costOfGoods)}</div><div className="stat-foot">At current item cost</div></div>
+                <div className="stat-card"><div className="stat-label">Expenses</div><div className="stat-value">{moneyShort(pnl.data.totalExpenses)}</div><div className="stat-foot">{pnl.data.expenses.length} categories</div></div>
+                <div className="stat-card" style={{ background: pnl.data.netProfit !== null && pnl.data.netProfit < 0 ? 'var(--red-50)' : 'var(--green-50)' }}><div className="stat-label">Net profit</div><div className="stat-value" style={{ color: pnl.data.netProfit !== null && pnl.data.netProfit < 0 ? 'var(--red-600)' : 'var(--green-700)' }}>{pnl.data.netProfit === null ? '—' : moneyShort(pnl.data.netProfit)}</div><div className="stat-foot">{pnl.data.netProfit !== null && pnl.data.income.net > 0 ? `${Math.round((pnl.data.netProfit / pnl.data.income.net) * 100)}% net margin` : 'Income − costs − expenses'}</div></div>
+              </div>
+              <div className="grid-2" style={{ alignItems: 'start' }}>
+                <div className="card">
+                  <div className="card-header"><div><h3>Profit &amp; loss statement</h3><p>FY {fy} · amounts exclude GST · running costs come from Expenses</p></div></div>
+                  <table className="table pnl-table">
+                    <tbody>
+                      <tr className="grp"><td>Income</td><td /></tr>
+                      <tr><td>Sales</td><td className="num">{money(pnl.data.income.sales)}</td></tr>
+                      <tr><td>Less: sales returns (credit notes)</td><td className="num">− {money(pnl.data.income.returns)}</td></tr>
+                      <tr className="sub"><td>Net income</td><td className="num">{money(pnl.data.income.net)}</td></tr>
+                      {pnl.data.costOfGoods !== null && (<>
+                        <tr><td>Less: cost of goods sold</td><td className="num">− {money(pnl.data.costOfGoods)}</td></tr>
+                        <tr className="sub"><td>Gross profit</td><td className="num">{money(pnl.data.grossProfit ?? 0)}</td></tr>
+                      </>)}
+                      <tr className="grp"><td>Operating expenses</td><td /></tr>
+                      {pnl.data.expenses.length === 0 && <tr><td className="muted">No expenses recorded</td><td className="num">—</td></tr>}
+                      {pnl.data.expenses.map((e) => <tr key={e.category}><td>{e.category}</td><td className="num">{money(e.amount)}</td></tr>)}
+                      <tr className="sub"><td>Total expenses</td><td className="num">{money(pnl.data.totalExpenses)}</td></tr>
+                      {pnl.data.netProfit !== null && <tr className="total"><td>{pnl.data.netProfit < 0 ? 'Net loss' : 'Net profit'}</td><td className="num">{money(pnl.data.netProfit)}</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="card">
+                  <div className="card-header"><div><h3>Income vs. costs</h3><p>Month by month</p></div></div>
+                  <div className="card-body"><BarChart labels={pnl.data.monthly.map((m) => new Date(m.month + '-01').toLocaleString('en-IN', { month: 'short' }))} series={[{ name: 'Income', values: pnl.data.monthly.map((m) => m.income) }, { name: 'Costs & expenses', values: pnl.data.monthly.map((m) => m.expenses) }]} format={moneyShort} /></div>
+                </div>
+              </div>
+            </div>
+          )
+        )}
+
         {tab === 'sales' && (
           <div className="stack">
             <div className="card">

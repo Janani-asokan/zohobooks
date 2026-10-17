@@ -62,6 +62,12 @@ function Form({ existing }: { existing?: Invoice }) {
     }
   }, [fromSO, existing]);
   useEffect(() => { if (org?.compositionScheme) setWithGst(false); }, [org?.compositionScheme]);
+  // "Sell on invoice" from the item drawer pre-fills the first line.
+  const preItem = params.get('item');
+  useEffect(() => {
+    const it = preItem && !existing ? items.find((i) => i.id === preItem) : undefined;
+    if (it) setLines((ls) => (ls.length === 1 && !ls[0]!.itemId ? [{ ...ls[0]!, itemId: it.id, rate: it.sp1, tier: 'SP1' }] : ls));
+  }, [preItem, items, existing]);
 
   const calc = useCalcLines(lines);
   const interState = !!org && !!customer && isInterState(org.state, customer.state || org.state);

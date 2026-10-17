@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
-import { Home, Package, ShoppingCart, ShoppingBag, Landmark, BarChart3, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, UserRound, Boxes, ScanLine, CreditCard, Keyboard, WifiOff } from 'lucide-react';
+import { Home, Package, ShoppingCart, ShoppingBag, Landmark, BarChart3, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, UserRound, Boxes, ScanLine, CreditCard, Keyboard, WifiOff, ClipboardList, Wrench, Receipt, Wallet, Truck, LifeBuoy, RotateCcw, Repeat, IndianRupee, FileMinus } from 'lucide-react';
+import { CommandPalette, type PaletteAction } from './CommandPalette';
+import { resetHints } from '@/components/kit';
 import { Sidebar, useSidebarState, type NavItem } from './Sidebar';
 import { ProfileMenu } from './ProfileMenu';
 import { PrefsMenu } from './PrefsMenu';
 import { ShortcutsModal } from './ShortcutsModal';
 import { useAuth, useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
-import { useCustomers, useInvoices, useItems, useNotifications, useOrg } from '@/api/hooks';
+import { useNotifications, useOrg } from '@/api/hooks';
 import { useClickOutside } from '@/components/useClickOutside';
 import { useShortcuts } from '@/components/useShortcuts';
 import { useOnline } from '@/components/useOnline';
@@ -22,79 +24,54 @@ export function OrgLogo({ logo, name, size = 36 }: { logo?: string; name: string
   );
 }
 
-function GlobalSearch({ inputRef }: { inputRef: React.RefObject<HTMLInputElement> }) {
+function SearchTrigger({ onOpen }: { onOpen: () => void }) {
   const { t } = usePrefs();
+  return (
+    <button className="global-search search-trigger desktop-only" onClick={onOpen} aria-label={t('common.search')}>
+      <Search size={16} />
+      <span>{t('shell.search')}</span>
+      <kbd>Ctrl K</kbd>
+    </button>
+  );
+}
+
+function QuickCreate({ me }: { me: ReturnType<typeof useShopUser> }) {
   const navigate = useNavigate();
-  const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
-  const [hl, setHl] = useState(0);
   const close = useCallback(() => setOpen(false), []);
   const ref = useClickOutside<HTMLDivElement>(close, open);
-  // Uses the same cached lists as the Items/Customers/Invoices pages; results are computed only while searching.
-  const active = open && q.trim().length > 0;
-  const items = useItems();
-  const customers = useCustomers();
-  const invoices = useInvoices();
-
-  const results = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!active) return [];
-    return [
-      ...(items.data ?? [])
-        .filter((i) => [i.name, i.sku, i.barcode].some((v) => v.toLowerCase().includes(s)))
-        .slice(0, 5)
-        .map((i) => ({ group: t('nav.items'), icon: Boxes, label: i.name, meta: i.sku || i.type, to: `/app/items?q=${encodeURIComponent(i.name)}` })),
-      ...(customers.data ?? [])
-        .filter((c) => [c.name, c.companyName, c.customId, c.phone, c.email, c.gstin].some((v) => v.toLowerCase().includes(s)))
-        .slice(0, 5)
-        .map((c) => ({ group: t('nav.customers'), icon: UserRound, label: c.companyName || c.name, meta: c.customId, to: `/app/sales/customers?q=${encodeURIComponent(c.customId)}` })),
-      ...(invoices.data ?? [])
-        .filter((i) => (i.number ?? 'draft').toLowerCase().includes(s) || (i.customer.companyName || i.customer.name).toLowerCase().includes(s))
-        .slice(0, 5)
-        .map((i) => ({ group: t('nav.invoices'), icon: FileText, label: i.number ?? 'Draft', meta: i.customer.companyName || i.customer.name, to: `/app/sales/invoices/${i.id}` })),
-    ];
-  }, [q, active, items.data, customers.data, invoices.data, t]);
-
-  const go = (to: string) => {
-    navigate(to);
-    setQ('');
-    setOpen(false);
-    inputRef.current?.blur();
-  };
-
+  const cols = [
+    { title: 'Sales', links: [
+      me.can('sales.write') && { label: 'Invoice', icon: FileText, to: '/app/sales/invoices/new' },
+      me.can('sales.write') && { label: 'POS sale', icon: ScanLine, to: '/app/pos' },
+      me.can('sales.write') && { label: 'Sales order', icon: ClipboardList, to: '/app/sales/orders?new=1' },
+      me.can('customers.write') && { label: 'Customer', icon: UserRound, to: '/app/sales/customers?new=1' },
+    ] },
+    { title: 'Inventory', links: [
+      me.can('items.write') && { label: 'Item', icon: Boxes, to: '/app/items/new' },
+      me.can('items.write') && { label: 'Service', icon: Wrench, to: '/app/items/new?type=Services' },
+      me.can('purchases.write') && { label: 'Purchase order', icon: ClipboardList, to: '/app/purchases/orders?new=1' },
+    ] },
+    { title: 'Purchases', links: [
+      me.can('purchases.write') && { label: 'Bill', icon: Receipt, to: '/app/purchases/bills?new=1' },
+      me.can('purchases.write') && { label: 'Expense', icon: Wallet, to: '/app/purchases/expenses?new=1' },
+      me.can('purchases.write') && { label: 'Vendor', icon: Truck, to: '/app/purchases/vendors?new=1' },
+    ] },
+  ].map((c) => ({ ...c, links: c.links.filter(Boolean) as Array<{ label: string; icon: typeof FileText; to: string }> })).filter((c) => c.links.length);
+  if (!cols.length) return null;
   return (
-    <div className="global-search desktop-only" ref={ref}>
-      <Search size={16} />
-      <input
-        ref={inputRef}
-        className="input"
-        placeholder={t('shell.search')}
-        value={q}
-        aria-label={t('common.search')}
-        onChange={(e) => { setQ(e.target.value); setOpen(true); setHl(0); }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') setHl((h) => Math.min(h + 1, results.length - 1));
-          if (e.key === 'ArrowUp') setHl((h) => Math.max(h - 1, 0));
-          if (e.key === 'Enter' && results[hl]) go(results[hl]!.to);
-          if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur(); }
-        }}
-      />
-      {!q && <kbd>Ctrl K</kbd>}
-      {open && q && (
-        <div className="search-results">
-          {(items.isLoading || customers.isLoading || invoices.isLoading) && <div className="small muted" style={{ padding: 12 }}>{t('common.loading')}</div>}
-          {!items.isLoading && results.length === 0 && <div className="small muted" style={{ padding: 12 }}>No matches for “{q}”.</div>}
-          {results.map((r, i) => (
-            <div key={r.group + r.label + i}>
-              {(i === 0 || results[i - 1]!.group !== r.group) && <div className="group">{r.group}</div>}
-              <button className={i === hl ? 'hl' : ''} onMouseEnter={() => setHl(i)} onClick={() => go(r.to)}>
-                <r.icon size={15} className="muted" />
-                {r.label}
-                <span className="meta">{r.meta}</span>
-              </button>
-            </div>
-          ))}
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button className="qc-btn" aria-label="Quick create" title="Quick create" onClick={() => setOpen((o) => !o)} aria-expanded={open}><Plus size={18} /></button>
+      {open && (
+        <div className="dropdown" style={{ width: 'auto', right: 0 }}>
+          <div className="qc-grid" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>
+            {cols.map((c) => (
+              <div key={c.title} className="qc-col">
+                <h5>{c.title}</h5>
+                {c.links.map((l) => <button key={l.label} onClick={() => { close(); navigate(l.to); }}><l.icon size={15} /> {l.label}</button>)}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -139,7 +116,7 @@ export default function AppLayout() {
   const sb = useSidebarState('ledgerly.app.sidebar');
   const online = useOnline();
   const [shortcuts, setShortcuts] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const [palette, setPalette] = useState(false);
   const days = daysUntil(me.shop.licenseEnd);
   const canSell = me.can('sales.write');
 
@@ -148,7 +125,7 @@ export default function AppLayout() {
     () => [
       { label: t('nav.home'), icon: Home, to: '/app', end: true },
       ...(canSell ? [{ label: t('nav.pos'), icon: ScanLine, to: '/app/pos' }] : []),
-      { label: t('nav.items'), icon: Package, to: '/app/items' },
+      { label: t('nav.items'), icon: Package, to: '/app/items', section: t('nav.secBusiness') },
       {
         label: t('nav.sales'),
         icon: ShoppingCart,
@@ -161,21 +138,67 @@ export default function AppLayout() {
           ...(me.can('admin') ? [{ label: t('nav.recurring'), to: '/app/sales/recurring' }] : []),
         ],
       },
-      ...(me.can('purchases.read') ? [{ label: t('nav.purchases'), icon: ShoppingBag, to: '/app/purchases' }] : []),
-      ...(me.can('banking.read') ? [{ label: t('nav.banking'), icon: Landmark, to: '/app/banking' }] : []),
-      ...(me.can('reports.read') ? [{ label: t('nav.reports'), icon: BarChart3, to: '/app/reports' }] : []),
+      ...(me.can('purchases.read')
+        ? [{
+            label: t('nav.purchases'),
+            icon: ShoppingBag,
+            children: [
+              { label: t('nav.vendors'), to: '/app/purchases/vendors' },
+              { label: t('nav.purchaseOrders'), to: '/app/purchases/orders' },
+              { label: t('nav.bills'), to: '/app/purchases/bills' },
+              { label: t('nav.expenses'), to: '/app/purchases/expenses' },
+            ],
+          }]
+        : []),
+      ...(me.can('banking.read') ? [{ label: t('nav.banking'), icon: Landmark, to: '/app/banking', section: t('nav.secAccounts') }] : []),
+      ...(me.can('reports.read') ? [{ label: t('nav.reports'), icon: BarChart3, to: '/app/reports', ...(me.can('banking.read') ? {} : { section: t('nav.secAccounts') }) }] : []),
     ],
     [t, canSell, me],
   );
 
+  const actions: PaletteAction[] = useMemo(() => {
+    const A = (cond: boolean, group: string, label: string, icon: PaletteAction['icon'], to: string, keywords = '', meta?: string) => (cond ? [{ group, label, icon, to, keywords, meta }] : []);
+    const create = 'Create';
+    const goTo = 'Go to';
+    return [
+      ...A(canSell, create, 'New invoice', FileText, '/app/sales/invoices/new', 'bill sale gst', 'Alt N'),
+      ...A(canSell, create, 'New POS sale', ScanLine, '/app/pos', 'counter retail scan', 'Alt P'),
+      ...A(me.can('items.write'), create, 'New item', Boxes, '/app/items/new', 'product goods add', 'Alt I'),
+      ...A(me.can('customers.write'), create, 'New customer', UserRound, '/app/sales/customers?new=1', 'client party', 'Alt C'),
+      ...A(canSell, create, 'New sales order', ClipboardList, '/app/sales/orders?new=1', 'quote estimate quotation'),
+      ...A(me.can('purchases.write'), create, 'New purchase order', ClipboardList, '/app/purchases/orders?new=1', 'po restock order vendor'),
+      ...A(me.can('purchases.write'), create, 'New bill', Receipt, '/app/purchases/bills?new=1', 'purchase vendor payable'),
+      ...A(me.can('purchases.write'), create, 'Record expense', Wallet, '/app/purchases/expenses?new=1', 'rent salary electricity spend'),
+      ...A(me.can('purchases.write'), create, 'New vendor', Truck, '/app/purchases/vendors?new=1', 'supplier'),
+      ...A(true, goTo, 'Home dashboard', Home, '/app', 'overview'),
+      ...A(true, goTo, 'Items', Package, '/app/items', 'inventory products catalogue'),
+      ...A(true, goTo, 'Stock & alerts', Boxes, '/app/items?tab=stock', 'low stock reorder expiry batches'),
+      ...A(true, goTo, 'Customers', UserRound, '/app/sales/customers'),
+      ...A(true, goTo, 'Invoices', FileText, '/app/sales/invoices'),
+      ...A(true, goTo, 'Sales orders', ClipboardList, '/app/sales/orders', 'quotes estimates'),
+      ...A(true, goTo, 'Payments received', IndianRupee, '/app/sales/payments', 'collections receipts'),
+      ...A(true, goTo, 'Credit notes', FileMinus, '/app/sales/credit-notes', 'returns refund'),
+      ...A(me.can('admin'), goTo, 'Recurring invoices', Repeat, '/app/sales/recurring', 'subscription monthly'),
+      ...A(me.can('purchases.read'), goTo, 'Vendors', Truck, '/app/purchases/vendors', 'suppliers'),
+      ...A(me.can('purchases.read'), goTo, 'Purchase orders', ClipboardList, '/app/purchases/orders', 'po'),
+      ...A(me.can('purchases.read'), goTo, 'Bills', Receipt, '/app/purchases/bills', 'payables'),
+      ...A(me.can('purchases.read'), goTo, 'Expenses', Wallet, '/app/purchases/expenses'),
+      ...A(me.can('banking.read'), goTo, 'Banking', Landmark, '/app/banking', 'cash bank accounts reconcile'),
+      ...A(me.can('reports.read'), goTo, 'Reports', BarChart3, '/app/reports', 'gstr gstr-1 gstr-3b profit loss p&l sales tax hsn'),
+      ...A(me.can('admin'), 'Settings', 'Organization profile', Building2, '/app/organization', 'logo gstin upi address invoice template'),
+      ...A(me.can('admin'), 'Settings', 'Staff, roles & branches', Users, '/app/team', 'users team branch'),
+      ...A(me.can('admin'), 'Settings', 'Subscription & billing', CreditCard, '/app/billing', 'plan license renew'),
+    ];
+  }, [canSell, me]);
+
   useShortcuts({
-    'mod+k': () => searchRef.current?.focus(),
-    '/': () => searchRef.current?.focus(),
+    'mod+k': () => setPalette(true),
+    '/': () => setPalette(true),
     '?': () => setShortcuts(true),
     'alt+n': () => canSell && navigate('/app/sales/invoices/new'),
     'alt+p': () => canSell && navigate('/app/pos'),
     'alt+c': () => navigate('/app/sales/customers?new=1'),
-    'alt+i': () => me.can('items.write') && navigate('/app/items?new=1'),
+    'alt+i': () => me.can('items.write') && navigate('/app/items/new'),
     'g h': () => navigate('/app'),
     'g i': () => navigate('/app/sales/invoices'),
     'g c': () => navigate('/app/sales/customers'),
@@ -199,6 +222,16 @@ export default function AppLayout() {
         mobileOpen={sb.mobileOpen}
         onNavigate={() => sb.setMobileOpen(false)}
         collapseLabel={t('nav.collapse')}
+        footer={
+          <div className="sidebar-help">
+            <strong><LifeBuoy size={14} style={{ verticalAlign: -2, marginRight: 4 }} />Need a hand?</strong>
+            Press <b>Ctrl + K</b> to find anything, or <b>?</b> for shortcuts.
+            <div className="row" style={{ gap: 6 }}>
+              <button onClick={() => setPalette(true)}>Search</button>
+              <button onClick={() => { resetHints(); try { Object.keys(localStorage).filter((k) => k.startsWith('ledgerly.gs.')).forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ } navigate('/app'); window.location.reload(); }} title="Show the help tips and setup checklist again"><RotateCcw size={12} style={{ verticalAlign: -1 }} /> Show tips</button>
+            </div>
+          </div>
+        }
       />
       {sb.mobileOpen && <div className="scrim" onClick={() => sb.setMobileOpen(false)} />}
       <div className="shell-main">
@@ -218,7 +251,7 @@ export default function AppLayout() {
               <div className="org-sub">{org.data?.gstin ? `GSTIN ${org.data.gstin}` : 'GSTIN not added'}</div>
             </div>
           </div>
-          <GlobalSearch inputRef={searchRef} />
+          <SearchTrigger onOpen={() => setPalette(true)} />
           <div className="topbar-actions">
             <Link to={me.can('admin') ? '/app/billing' : '#'} className={`license-pill ${days <= 30 ? 'warn' : ''}`} title={`License valid till ${me.shop.licenseEnd}`}>
               {me.shop.planName} · {days}{t('shell.daysLeft')}
@@ -228,6 +261,8 @@ export default function AppLayout() {
                 <Plus size={15} /> {t('shell.newInvoice')}
               </button>
             )}
+            <button className="icon-btn mobile-only" onClick={() => setPalette(true)} aria-label="Search"><Search size={18} /></button>
+            <QuickCreate me={me} />
             <NotificationBell />
             <ProfileMenu name={me.user.name} sub={`${me.user.role} · ${me.shop.name}`} email={me.user.email}>
               {(close) => (
@@ -264,6 +299,7 @@ export default function AppLayout() {
         </main>
       </div>
       <ShortcutsModal open={shortcuts} onClose={() => setShortcuts(false)} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} actions={actions} />
     </div>
   );
 }

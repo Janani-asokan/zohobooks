@@ -116,6 +116,57 @@ reportsRouter.get(
   }),
 );
 
+/** Profit & loss for a financial year: sales − returns − cost of goods − expenses. */
+reportsRouter.get(
+  '/reports/pnl',
+  perm('reports.read'),
+  T(async (db, req, c) => {
+    const fy = String(req.query.fy ?? '');
+    if (!/^\d{4}-\d{2}$/.test(fy)) throw badRequest('Choose a financial year');
+    const cfg = await platformConfig(db);
+    const from = `${fy.slice(0, 4)}-${String(cfg.fyStartMonth ?? 4).padStart(2, '0')}-01`;
+    const showCost = allowed(c, 'items.cost');
+    const range = `date >= $2::date AND date < ($2::date + interval '1 year')`;
+    const sales = await many(db, `SELECT to_char(date_trunc('month', date), 'YYYY-MM') AS m, sum(sub_total) AS v FROM invoices WHERE shop_id = $1 AND status = 'Issued' AND ${range} GROUP BY 1`, [c.shopId, from]);
+    const returns = await many(db, `SELECT to_char(date_trunc('month', date), 'YYYY-MM') AS m, sum(sub_total) AS v FROM credit_notes WHERE shop_id = $1 AND ${range} GROUP BY 1`, [c.shopId, from]);
+    const cogs = await many(
+      db,
+      `SELECT to_char(date_trunc('month', i.date), 'YYYY-MM') AS m, sum((l->>'qty')::numeric * coalesce(it.cost, 0)) AS v
+         FROM invoices i CROSS JOIN jsonb_array_elements(i.lines) l LEFT JOIN items it ON it.id = (l->>'itemId')::uuid
+        WHERE i.shop_id = $1 AND i.status = 'Issued' AND i.date >= $2::date AND i.date < ($2::date + interval '1 year') GROUP BY 1`,
+      [c.shopId, from],
+    );
+    const expenses = await many(db, `SELECT category AS k, to_char(date_trunc('month', date), 'YYYY-MM') AS m, sum(amount) AS v FROM expenses WHERE shop_id = $1 AND ${range} GROUP BY 1, 2`, [c.shopId, from]);
+    // Vendor bills are stock purchases and reach P&L through cost of goods sold; running costs come from Expenses.
+    const months = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(Date.UTC(Number(from.slice(0, 4)), Number(from.slice(5, 7)) - 1 + i, 1));
+      return d.toISOString().slice(0, 7);
+    });
+    const at = (rows: any[], m: string) => Number(rows.find((r) => r.m === m)?.v ?? 0);
+    const total = (rows: any[]) => rows.reduce((s, r) => s + Number(r.v), 0);
+    const byCat = new Map<string, number>();
+    for (const e of expenses) byCat.set(e.k, (byCat.get(e.k) ?? 0) + Number(e.v));
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const income = r2(total(sales) - total(returns));
+    const cost = showCost ? r2(total(cogs)) : null;
+    const opex = r2([...byCat.values()].reduce((s, v) => s + v, 0));
+    return {
+      fy, from,
+      income: { sales: r2(total(sales)), returns: r2(total(returns)), net: income },
+      costOfGoods: cost,
+      grossProfit: cost === null ? null : r2(income - cost),
+      expenses: [...byCat.entries()].map(([category, amount]) => ({ category, amount: r2(amount) })).sort((a, b) => b.amount - a.amount),
+      totalExpenses: opex,
+      netProfit: cost === null ? null : r2(income - cost - opex),
+      monthly: months.map((m) => {
+        const inc = at(sales, m) - at(returns, m);
+        const exp = expenses.filter((e) => e.m === m).reduce((s, e) => s + Number(e.v), 0);
+        return { month: m, income: r2(inc), expenses: r2(exp + (showCost ? at(cogs, m) : 0)), profit: showCost ? r2(inc - at(cogs, m) - exp) : null };
+      }),
+    };
+  }),
+);
+
 reportsRouter.get(
   '/gst/gstr1',
   perm('reports.read'),

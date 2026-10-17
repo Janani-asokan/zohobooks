@@ -9,6 +9,7 @@ import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, Toggle } fro
 import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type DraftLine } from '@/components/LineItems';
 import { fmtDate, todayISO } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
+import { Hint } from '@/components/kit';
 
 const FREQ: Record<Rec['frequency'], string> = { weekly: 'Every week', monthly: 'Every month', quarterly: 'Every quarter', yearly: 'Every year' };
 
@@ -51,6 +52,9 @@ export default function Recurring() {
     <div className="page">
       <PageHeader title={t('nav.recurring')} crumbs={<>{t('nav.sales')} <span>/</span> {t('nav.recurring')}</>} subtitle="Bill retainers, AMCs and rentals automatically. Invoices are generated every hour for profiles that are due."
         actions={<button className="btn btn-primary" onClick={() => open()}><Plus size={16} /> New profile</button>} />
+      <Hint id="recurring" title="Bill automatically">
+        <p>Set up a profile once — rent, AMC, subscriptions — and Ledgerly creates the invoice on schedule. Turn on <strong>Auto-issue</strong> to number and send it without lifting a finger.</p>
+      </Hint>
       <div className="card table-wrap">
         {isLoading ? <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 160 }} /></div> : data.length === 0 ? <EmptyState icon={Repeat} title="No recurring invoices" text="Set up a profile once and invoices are created on schedule." action={<button className="btn btn-primary" onClick={() => open()}><Plus size={15} /> New profile</button>} /> : (
           <table className="table">

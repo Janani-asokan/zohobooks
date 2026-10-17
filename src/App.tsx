@@ -16,6 +16,10 @@ const Activity = lazy(() => import('./pages/super/Activity'));
 const Home = lazy(() => import('./pages/app/Home'));
 const Pos = lazy(() => import('./pages/app/Pos'));
 const Items = lazy(() => import('./pages/app/Items'));
+const ItemForm = lazy(() => import('./pages/app/ItemForm'));
+const PurchaseOrders = lazy(() => import('./pages/app/PurchaseOrders'));
+const Expenses = lazy(() => import('./pages/app/Expenses'));
+const Vendors = lazy(() => import('./pages/app/Vendors'));
 const Customers = lazy(() => import('./pages/app/Customers'));
 const SalesOrders = lazy(() => import('./pages/app/SalesOrders'));
 const Invoices = lazy(() => import('./pages/app/Invoices'));
@@ -61,6 +65,8 @@ export default function App() {
             <Route index element={<Home />} />
             <Route path="pos" element={<Pos />} />
             <Route path="items" element={<Items />} />
+            <Route path="items/new" element={<ItemForm />} />
+            <Route path="items/:id/edit" element={<ItemForm />} />
             <Route path="sales/customers" element={<Customers />} />
             <Route path="sales/orders" element={<SalesOrders />} />
             <Route path="sales/invoices" element={<Invoices />} />
@@ -70,7 +76,11 @@ export default function App() {
             <Route path="sales/payments" element={<PaymentsReceived />} />
             <Route path="sales/credit-notes" element={<CreditNotes />} />
             <Route path="sales/recurring" element={<Recurring />} />
-            <Route path="purchases" element={<Purchases />} />
+            <Route path="purchases" element={<Navigate to="/app/purchases/bills" replace />} />
+            <Route path="purchases/vendors" element={<Vendors />} />
+            <Route path="purchases/orders" element={<PurchaseOrders />} />
+            <Route path="purchases/bills" element={<Purchases />} />
+            <Route path="purchases/expenses" element={<Expenses />} />
             <Route path="banking" element={<Banking />} />
             <Route path="reports" element={<Reports />} />
             <Route path="organization" element={<Organization />} />

@@ -177,6 +177,14 @@ export async function buildGstr3b(db: Db, shopId: string, period: string) {
     if (isInterState(org.state, b.state || org.state)) itc.iamt += tax;
     else { itc.camt += tax / 2; itc.samt += tax / 2; }
   }
+  // Business expenses from GST-registered vendors also carry input tax credit.
+  const exps = await many(db, 'SELECT e.tax_amount, v.state, v.gstin FROM expenses e JOIN vendors v ON v.id = e.vendor_id WHERE e.shop_id = $1 AND e.date BETWEEN $2 AND $3 AND e.tax_amount > 0', [shopId, from, to]);
+  for (const e of exps) {
+    if (!e.gstin) continue;
+    const tax = Number(e.tax_amount);
+    if (isInterState(org.state, e.state || org.state)) itc.iamt += tax;
+    else { itc.camt += tax / 2; itc.samt += tax / 2; }
+  }
   const R = (o: any) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'number' ? r2(v) : v]));
   const payable = { iamt: r2(Math.max(0, out.iamt - itc.iamt)), camt: r2(Math.max(0, out.camt - itc.camt)), samt: r2(Math.max(0, out.samt - itc.samt)) };
   return {
@@ -185,7 +193,7 @@ export async function buildGstr3b(db: Db, shopId: string, period: string) {
     inter_sup: { unreg_details: [...interB2c.values()].map(R) },
     itc_elg: { itc_avl: R(itc) },
     payable,
-    note: 'Simplified: ITC is taken from bills with a vendor GSTIN; cross-utilisation of IGST credit across heads is not applied.',
+    note: 'Simplified: ITC is taken from bills and expenses with a vendor GSTIN; cross-utilisation of IGST credit across heads is not applied.',
   };
 }
 

@@ -6,6 +6,7 @@ import type { BankAccount } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { EmptyState, Field, Modal, PageHeader, Segmented } from '@/components/ui';
 import { fmtDate, money, todayISO } from '@/lib/format';
+import { Hint } from '@/components/kit';
 
 const ICON = { Bank: Landmark, Cash: Wallet, Card: CreditCard };
 const CATEGORIES = ['Customer Receipt', 'Sales', 'Vendor Payment', 'Rent', 'Salaries', 'Utilities', 'Office Expense', 'Other'];
@@ -43,6 +44,9 @@ export default function Banking() {
           </>
         )}
       />
+      <Hint id="banking" title="All your money in one place">
+        <p>Add each bank account, cash box or card. Customer payments, bill payments and expenses post here automatically; add anything else (like owner drawings) as a manual entry.</p>
+      </Hint>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
         <button className="card" onClick={() => setSelected('all')} style={{ textAlign: 'left', padding: 18, cursor: 'pointer', background: selected === 'all' ? 'linear-gradient(135deg,#2f5bea,#2347c4)' : 'var(--surface)', color: selected === 'all' ? '#fff' : 'var(--ink-800)', border: selected === 'all' ? 'none' : undefined, fontFamily: 'inherit' }}>

@@ -5,6 +5,7 @@ import { usePayments } from '@/api/hooks';
 import { usePrefs } from '@/context/PrefsContext';
 import { EmptyState, PageHeader, Pagination, SearchInput, StatCard, usePagination } from '@/components/ui';
 import { fmtDate, money } from '@/lib/format';
+import { Hint } from '@/components/kit';
 
 const MODE_ICON: Record<string, typeof Wallet> = { UPI: Smartphone, Cash: Banknote, Card: CreditCard, 'Bank Transfer': Landmark, Cheque: Landmark };
 
@@ -25,6 +26,9 @@ export default function PaymentsReceived() {
   return (
     <div className="page">
       <PageHeader title={t('nav.payments')} crumbs={<>{t('nav.sales')} <span>/</span> {t('nav.payments')}</>} subtitle="Every payment recorded against your invoices, including POS sales." />
+      <Hint id="payments" title="Money in">
+        <p>Record a payment from any invoice’s <strong>Record payment</strong> button — part-payments and TDS deductions are supported. Each payment is posted to the bank or cash account you choose, so Banking always matches.</p>
+      </Hint>
       <div className="stat-grid">
         <StatCard label="Received this month" value={money(thisMonth.reduce((s, p) => s + p.amount, 0))} icon={Wallet} tone="green" foot={<>{thisMonth.length} payments</>} />
         <StatCard label="UPI" value={money(byMode('UPI'))} icon={Smartphone} tone="violet" foot="This month" />

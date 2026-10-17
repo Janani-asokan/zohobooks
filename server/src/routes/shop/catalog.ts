@@ -27,6 +27,11 @@ const itemBody = z.object({
   reorderLevel: money.default(10),
   trackBatches: z.boolean().default(false),
   description: z.string().max(1000).default(''),
+  category: z.string().trim().max(60).default(''),
+  brand: z.string().trim().max(60).default(''),
+  // small data-URL thumbnail (client downscales to ~400px)
+  image: z.string().max(250_000).refine((v) => !v || v.startsWith('data:image/'), 'Image must be a picture').default(''),
+  mrp: z.number().min(0).nullable().default(null),
 });
 
 export async function listItems(db: Db, shopId: string, showCost: boolean, ids?: string[]) {
@@ -57,6 +62,10 @@ export async function listItems(db: Db, shopId: string, showCost: boolean, ids?:
     reorderLevel: Number(r.reorder_level),
     trackBatches: r.track_batches,
     description: r.description,
+    category: r.category,
+    brand: r.brand,
+    image: r.image,
+    mrp: r.mrp === null ? null : Number(r.mrp),
     stock: Number(r.stock),
     stockByBranch: Object.fromEntries(Object.entries(r.stock_by_branch as Record<string, unknown>).map(([k, v]) => [k, Number(v)])),
     createdAt: r.created_at,
@@ -83,9 +92,9 @@ catalogRouter.post(
     if (!slab.active) throw badRequest('This tax slab is disabled', { taxSlabId: 'Disabled slab' });
     const it = await one(
       db,
-      `INSERT INTO items (shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, track_batches, description)
-       VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
-      [c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.type === 'Goods' && b.trackBatches, b.description],
+      `INSERT INTO items (shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, track_batches, description, category, brand, image, mrp)
+       VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
+      [c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.type === 'Goods' && b.trackBatches, b.description, b.category, b.brand, b.image, b.mrp],
     );
     if (b.type === 'Goods' && b.openingStock > 0) {
       const branchId = await primaryBranchId(db, c.shopId, b.branchId);
@@ -106,14 +115,26 @@ catalogRouter.patch(
     const merged = { ...cur, ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)) } as any;
     await db.query(
       `UPDATE items SET type=$3, name=$4, sku=upper($5), barcode=$6, unit=$7, hsn=$8, cost=$9, sp1=$10, sp2=$11, sp3=$12, tax_slab_id=$13,
-              reorder_level=$14, track_batches=$15, description=$16 WHERE shop_id=$1 AND id=$2`,
+              reorder_level=$14, track_batches=$15, description=$16, category=$17, brand=$18, image=$19, mrp=$20 WHERE shop_id=$1 AND id=$2`,
       [
         c.shopId, cur.id, merged.type, merged.name, merged.sku, merged.barcode, merged.unit, merged.hsn, merged.cost, merged.sp1, merged.sp2, merged.sp3,
         b.taxSlabId ?? cur.tax_slab_id, b.reorderLevel ?? cur.reorder_level, b.trackBatches ?? cur.track_batches, merged.description,
+        merged.category, merged.brand, merged.image, b.mrp !== undefined ? b.mrp : cur.mrp,
       ],
     );
     await audit(db, req, c.shopId, 'update', 'item', cur.id, b);
     return (await listItems(db, c.shopId, allowed(c, 'items.cost'), [cur.id]))[0];
+  }),
+);
+
+/** Distinct categories & brands, for the item form's suggestions and the list filters. */
+catalogRouter.get(
+  '/items/facets',
+  T(async (db, _req, c) => {
+    const cats = await many(db, "SELECT category AS v, count(*)::int AS n FROM items WHERE shop_id = $1 AND NOT archived AND category <> '' GROUP BY 1 ORDER BY 1", [c.shopId]);
+    const brands = await many(db, "SELECT brand AS v, count(*)::int AS n FROM items WHERE shop_id = $1 AND NOT archived AND brand <> '' GROUP BY 1 ORDER BY 1", [c.shopId]);
+    const units = await many(db, 'SELECT DISTINCT unit AS v FROM items WHERE shop_id = $1 ORDER BY 1', [c.shopId]);
+    return { categories: cats.map((r) => ({ name: r.v, count: r.n })), brands: brands.map((r) => ({ name: r.v, count: r.n })), units: units.map((r) => r.v) };
   }),
 );
 

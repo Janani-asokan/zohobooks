@@ -104,6 +104,14 @@ export async function seed({ quiet = false } = {}) {
       ['Business', 'Sanjay Gupta', 'BrightPath Academy', '33AAGCB9988L1Z1', 'admin@brightpath.edu.in', '+91 97910 66554', 'Tamil Nadu', 'Anna Nagar, Chennai 600040', 'SP2'],
       ['Individual', 'Mohammed Irfan', '', '', '', '+91 98840 22113', 'Karnataka', 'Indiranagar, Bengaluru 560038', 'SP1'],
     ];
+    // Categories, brands & MRP (Zoho Inventory-style catalogue)
+    const meta: Array<[string, string, string, number | null]> = [
+      ['LOG-M331', 'Computer Accessories', 'Logitech', 1495], ['HP-680B', 'Printer Supplies', 'HP', 999], ['SD-64U3', 'Storage', 'SanDisk', 799],
+      ['PAP-A4-75', 'Stationery', 'JK Copier', 360], ['DEL-E2423', 'Monitors', 'Dell', 15999], ['CAB-UC1M', 'Computer Accessories', 'Portronics', 299],
+      ['SRV-LAP', 'Repair Services', '', null], ['SRV-OS', 'Repair Services', '', null], ['SRV-AMC', 'Contracts', '', null],
+    ];
+    for (const [sku, cat, brand, mrp] of meta) await db.query('UPDATE items SET category = $3, brand = $4, mrp = $5 WHERE shop_id = $1 AND sku = $2', [shopId, sku, cat, brand, mrp]);
+
     const cust: string[] = [];
     for (const [type, name, company, gstin, email, phone, state, address, tier] of customers) {
       const n = (await db.query("UPDATE counters SET value = CASE WHEN value < 1581 THEN 1582 ELSE value + 1 END WHERE shop_id = $1 AND key = 'customer' RETURNING value", [shopId])).rows[0].value;
@@ -182,6 +190,26 @@ export async function seed({ quiet = false } = {}) {
         ($1,'Meena Krishnan','manager@shop.com',$3,'Manager',$2), ($1,'Vignesh R','sales@shop.com',$4,'Sales Staff',$5), ($1,'Anitha S','accounts@shop.com',$6,'Accountant',$2)`,
       [shopId, head, await hashPassword(pw('manager123')), await hashPassword(pw('sales123')), vel, await hashPassword(pw('accounts123'))],
     );
+    // A purchase order half-received, and a few expenses
+    const { buildPurchaseLines, purchaseTotals } = await import('./routes/shop/purchasing');
+    const poLines = await buildPurchaseLines(db, shopId, [{ itemId: ids[0]!, qty: 20 }, { itemId: ids[2]!, qty: 50 }]);
+    poLines[0]!.received = 20;
+    const pt = purchaseTotals(poLines);
+    await db.query(
+      `INSERT INTO purchase_orders (shop_id, number, vendor_id, branch_id, date, expected_date, lines, status, sub_total, tax_total, total, notes)
+       VALUES ($1,'PO-0001',$2,$3,$4,$5,$6,'Partially Received',$7,$8,$9,'Festive season restock'), ($1,'PO-0002',$10,$3,$11,$12,$13,'Issued',$14,$15,$16,'')`,
+      [shopId, v[1], head, day(-6), day(4), JSON.stringify(poLines), pt.sub, pt.tax, pt.total, v[2], day(-1), day(6),
+        JSON.stringify(await buildPurchaseLines(db, shopId, [{ itemId: ids[3]!, qty: 100 }])), 24000, 2880, 26880],
+    );
+    await moveStock(db, { shopId, itemId: ids[0]!, branchId: head, qty: 20, reason: 'purchase', refType: 'purchase_order', note: 'PO-0001' });
+    await db.query("INSERT INTO counters (shop_id, key, value) VALUES ($1,'po',2)", [shopId]);
+    const cashAcc = (await db.query("SELECT id FROM bank_accounts WHERE shop_id = $1 AND type = 'Cash' LIMIT 1", [shopId])).rows[0].id;
+    for (const [d, cat, desc, amt, tax, acc] of [
+      [-28, 'Rent', 'Shop rent — Anna Salai', 35000, 0, hdfc], [-20, 'Internet & Phone', 'Airtel broadband', 1179, 212, hdfc],
+      [-12, 'Fuel & Travel', 'Delivery fuel', 1800, 0, cashAcc], [-5, 'Food & Refreshments', 'Tea & snacks', 640, 0, cashAcc],
+    ] as const)
+      await db.query('INSERT INTO expenses (shop_id, date, category, description, amount, tax_amount, account_id) VALUES ($1,$2,$3,$4,$5,$6,$7)', [shopId, day(d), cat, desc, amt, tax, acc]);
+
     await db.query(
       `INSERT INTO recurring_profiles (shop_id, name, customer_id, frequency, start_date, next_date, lines, with_gst, terms_days, branch_id, auto_issue)
        VALUES ($1,'BrightPath AMC (monthly)',$2,'monthly',$3,$4,$5,true,15,$6,true)`,

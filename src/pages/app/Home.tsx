@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { IndianRupee, Clock4, FileText, PackageX, Plus, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle } from 'lucide-react';
-import { useDashboard, useInvoices } from '@/api/hooks';
+import { Check, X, Rocket, IndianRupee, Clock4, FileText, PackageX, Plus, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle } from 'lucide-react';
+import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
+import { useLocalFlag } from '@/components/kit';
 import { useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { EmptyState, PageHeader, StatCard } from '@/components/ui';
@@ -23,7 +24,7 @@ export default function Home() {
   const quick = [
     ...(canSell ? [{ label: t('shell.newInvoice'), icon: FileText, to: '/app/sales/invoices/new', tone: 'blue', key: 'Alt N' }, { label: t('nav.pos'), icon: ScanLine, to: '/app/pos', tone: 'teal', key: 'Alt P' }] : []),
     ...(me.can('customers.write') ? [{ label: t('home.addCustomer'), icon: UserPlus, to: '/app/sales/customers?new=1', tone: 'green', key: 'Alt C' }] : []),
-    ...(me.can('items.write') ? [{ label: t('home.addItem'), icon: PackagePlus, to: '/app/items?new=1', tone: 'violet', key: 'Alt I' }] : []),
+    ...(me.can('items.write') ? [{ label: t('home.addItem'), icon: PackagePlus, to: '/app/items/new', tone: 'violet', key: 'Alt I' }] : []),
   ];
 
   if (dash.isError) {
@@ -41,6 +42,8 @@ export default function Home() {
         subtitle={`${me.shop.name} · Financial year ${d?.fy ?? '…'} (1 Apr – 31 Mar)`}
         actions={canSell && <button className="btn btn-primary" onClick={() => navigate('/app/sales/invoices/new')}><Plus size={16} /> {t('shell.newInvoice')}</button>}
       />
+
+      <GettingStarted />
 
       <div className="stat-grid">
         <StatCard label={t('home.receivables')} value={d ? money(d.receivable) : '—'} icon={Wallet} tone="blue" foot={d && <>{d.openCount} invoices awaiting payment</>} />
@@ -110,6 +113,65 @@ export default function Home() {
             </table>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function Ring({ pct }: { pct: number }) {
+  const r = 24, c = 2 * Math.PI * r;
+  return (
+    <svg className="gs-ring" viewBox="0 0 58 58" aria-label={`${pct}% complete`}>
+      <circle cx="29" cy="29" r={r} fill="none" stroke="rgba(255,255,255,.25)" strokeWidth="6" />
+      <circle cx="29" cy="29" r={r} fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} transform="rotate(-90 29 29)" style={{ transition: 'stroke-dashoffset .6s ease' }} />
+      <text x="29" y="33" textAnchor="middle" fontSize="13" fontWeight="800" fill="#fff">{pct}%</text>
+    </svg>
+  );
+}
+
+/** Onboarding checklist — computed from real data, so steps tick themselves off. */
+function GettingStarted() {
+  const me = useShopUser();
+  const admin = me.can('admin');
+  const org = useOrg().data;
+  const items = useItems().data;
+  const customers = useCustomers().data;
+  const invoices = useInvoices().data;
+  const vendors = useVendors(me.can('purchases.read')).data;
+  const staff = useStaff(admin).data;
+  const [hidden, setHidden] = useLocalFlag(`ledgerly.gs.${me.shop.id}`);
+  if (!admin || hidden || !org || !items || !customers || !invoices) return null;
+  const steps = [
+    { label: 'Add your shop logo', sub: 'Shown on every invoice', done: !!org.logo, to: '/app/organization' },
+    { label: 'Add your GSTIN', sub: 'Needed for tax invoices', done: !!org.gstin, to: '/app/organization' },
+    { label: 'Set up UPI payments', sub: 'QR code on invoices', done: !!org.upiId, to: '/app/organization' },
+    { label: 'Add your first item', sub: 'Products or services', done: items.length > 0, to: '/app/items/new' },
+    { label: 'Add a customer', sub: 'With an auto customer ID', done: customers.length > 0, to: '/app/sales/customers?new=1' },
+    { label: 'Create an invoice', sub: 'GST-ready, printable A4', done: invoices.some((i) => i.status !== 'Draft'), to: '/app/sales/invoices/new' },
+    ...(vendors ? [{ label: 'Add a vendor', sub: 'For purchases & bills', done: vendors.length > 0, to: '/app/purchases/vendors?new=1' }] : []),
+    ...(staff ? [{ label: 'Invite your team', sub: 'Role-based staff logins', done: staff.length > 1, to: '/app/team' }] : []),
+  ];
+  const done = steps.filter((s) => s.done).length;
+  if (done === steps.length) return null;
+  const pct = Math.round((done / steps.length) * 100);
+  return (
+    <div className="card gs-card" style={{ marginBottom: 18 }}>
+      <div className="gs-head">
+        <Ring pct={pct} />
+        <div style={{ flex: 1 }}>
+          <h3><Rocket size={17} style={{ verticalAlign: -3, marginRight: 6 }} />Get your shop ready</h3>
+          <p>{done} of {steps.length} done — finish setup to send professional GST invoices and get paid faster.</p>
+        </div>
+        <button className="icon-btn" style={{ color: '#fff' }} aria-label="Hide checklist" title="Hide checklist" onClick={() => setHidden(true)}><X size={18} /></button>
+      </div>
+      <div className="gs-steps">
+        {steps.map((s) => (
+          <Link key={s.label} to={s.to} className={`gs-step ${s.done ? 'done' : ''}`}>
+            <span className="gs-check"><Check size={14} strokeWidth={3} /></span>
+            <span>{s.label}<span className="gs-sub">{s.done ? 'Done' : s.sub}</span></span>
+            {!s.done && <ArrowRight size={14} className="muted" style={{ marginLeft: 'auto' }} />}
+          </Link>
+        ))}
       </div>
     </div>
   );

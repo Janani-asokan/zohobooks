@@ -26,7 +26,9 @@ export interface Item {
   id: string; type: 'Goods' | 'Services'; name: string; sku: string; barcode: string; unit: string; hsn: string; cost: number | null;
   sp1: number; sp2: number; sp3: number; taxSlabId: string; taxRate: number; reorderLevel: number; trackBatches: boolean; description: string;
   stock: number; stockByBranch: Record<string, number>; createdAt: string;
+  category: string; brand: string; image: string; mrp: number | null;
 }
+export interface ItemFacets { categories: Array<{ name: string; count: number }>; brands: Array<{ name: string; count: number }>; units: string[] }
 
 export interface Customer {
   id: string; customId: string; type: 'Individual' | 'Business'; name: string; companyName: string; gstin: string; email: string; phone: string;
@@ -68,7 +70,13 @@ export interface Recurring {
 }
 
 export interface Vendor { id: string; name: string; gstin: string; phone: string; email: string; state: string; payable: number }
-export interface Bill { id: string; number: string; vendorId: string; vendorName: string; vendorBillNo: string; date: string; dueDate: string; taxableAmount: number; taxAmount: number; amount: number; status: 'Open' | 'Paid'; description: string }
+export interface PurchaseLine { id: string; itemId: string; name: string; type: 'Goods' | 'Services'; unit: string; qty: number; rate: number; taxRate: number; amount: number; received: number }
+export interface Bill { id: string; number: string; vendorId: string; vendorName: string; vendorBillNo: string; date: string; dueDate: string; taxableAmount: number; taxAmount: number; amount: number; status: 'Open' | 'Paid'; description: string; lines: PurchaseLine[]; purchaseOrderId: string | null; stockAdded: boolean }
+export interface PurchaseOrder {
+  id: string; number: string; vendorId: string; vendorName: string; branchId: string | null; date: string; expectedDate: string | null; lines: PurchaseLine[];
+  status: 'Draft' | 'Issued' | 'Partially Received' | 'Received' | 'Cancelled'; subTotal: number; taxTotal: number; total: number; notes: string; billId: string | null; createdAt: string;
+}
+export interface Expense { id: string; date: string; category: string; description: string; vendorId: string | null; vendorName: string | null; amount: number; taxAmount: number; total: number; accountId: string | null; accountName: string | null; reference: string }
 export interface BankAccount { id: string; name: string; bank: string; accountNo: string; type: 'Bank' | 'Cash' | 'Card'; openingBalance: number; balance: number }
 export interface BankTxn { id: string; accountId: string; date: string; description: string; amount: number; category: string; refType: string; refId: string | null }
 

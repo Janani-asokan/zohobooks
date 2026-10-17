@@ -1,24 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Package, Wrench, Pencil, Trash2, ScanBarcode, AlertTriangle, TrendingUp, Download, Upload, Boxes, Tag, ArrowLeftRight, SlidersHorizontal, X, CalendarClock, Loader2, Archive } from 'lucide-react';
-import { api, download, fieldErrors } from '@/api/client';
-import { useBranches, useItems, useMovements, useMut, useStockAlerts, useTaxSlabs } from '@/api/hooks';
+import { Plus, Package, Wrench, Pencil, Trash2, ScanBarcode, Download, Upload, Boxes, Tag, ArrowLeftRight, SlidersHorizontal, X, CalendarClock, Archive, List, LayoutGrid, ExternalLink } from 'lucide-react';
+import { api, download } from '@/api/client';
+import { useBranches, useItemFacets, useItems, useMovements, useMut, useStockAlerts, useTaxSlabs } from '@/api/hooks';
 import type { Item } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, Pagination, SearchInput, Segmented, Toggle, usePagination } from '@/components/ui';
-import { BarcodeInput } from '@/components/BarcodeInput';
+import { Badge, ConfirmModal, EmptyState, Field, PageHeader, Pagination, SearchInput, Segmented, usePagination } from '@/components/ui';
 import { CsvImport } from '@/components/CsvImport';
 import { SavedViewsMenu, useSavedViews } from '@/components/SavedViews';
+import { Hint, Thumb } from '@/components/kit';
 import { fmtDate, money, todayISO } from '@/lib/format';
 
 type ItemType = Item['type'];
-type Draft = { type: ItemType; name: string; sku: string; barcode: string; unit: string; hsn: string; cost: string; sp1: string; sp2: string; sp3: string; taxSlabId: string; reorderLevel: string; trackBatches: boolean; description: string; openingStock: string; branchId: string; batchNo: string; expiryDate: string };
-
-const blank = (type: ItemType, taxSlabId: string, branchId: string, barcode = ''): Draft => ({
-  type, name: '', sku: '', barcode, unit: type === 'Goods' ? 'pcs' : 'job', hsn: '', cost: '', sp1: '', sp2: '', sp3: '', taxSlabId, reorderLevel: '10', trackBatches: false, description: '', openingStock: '', branchId, batchNo: '', expiryDate: '',
-});
-
 type EditableKey = 'name' | 'sku' | 'cost' | 'sp1' | 'sp2' | 'sp3';
 const NUMERIC: EditableKey[] = ['cost', 'sp1', 'sp2', 'sp3'];
 const ITEM_TEMPLATE = 'Type,Name,SKU,Barcode,Unit,HSN,Cost,SP1,SP2,SP3,Tax Rate,Stock,Reorder Level\r\nGoods,Sample Mouse,MOU-01,8901234567890,pcs,8471,250,399,379,389,18,25,5\r\nServices,Installation,SRV-INS,,job,9987,0,499,449,479,18,,\r\n';
@@ -37,14 +31,11 @@ export default function Items() {
   const slabs = slabsQ.data ?? [];
   const activeSlabs = slabs.filter((s) => s.active);
   const branches = useBranches().data ?? [];
-  const primaryBranch = branches.find((b) => b.isPrimary)?.id ?? branches[0]?.id ?? '';
 
-  const sv = useSavedViews('items', { tab: 'Goods' as ItemType | 'stock', q: '', tax: 'all', stock: 'all' as 'all' | 'low' | 'out', branch: 'all' });
+  const sv = useSavedViews('items', { tab: 'Goods' as ItemType | 'stock', q: '', tax: 'all', stock: 'all' as 'all' | 'low' | 'out', branch: 'all', category: 'all', brand: 'all' });
   const { tab, q, tax: taxFilter, stock: stockFilter, branch: branchFilter } = sv.filters;
-  const [modal, setModal] = useState<{ mode: 'new' | 'edit'; id?: string } | null>(null);
-  const [draft, setDraft] = useState<Draft>(() => blank('Goods', 'tax_18', ''));
-  const [touched, setTouched] = useState(false);
-  const [serverErr, setServerErr] = useState<Record<string, string>>({});
+  const catFilter = (sv.filters as { category?: string }).category ?? 'all';
+  const brandFilter = (sv.filters as { brand?: string }).brand ?? 'all';
   const [del, setDel] = useState<Item | null>(null);
   const [editing, setEditing] = useState<{ id: string; key: EditableKey; value: string } | null>(null);
   const [scan, setScan] = useState('');
@@ -52,38 +43,28 @@ export default function Items() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkTax, setBulkTax] = useState('');
   const [importOpen, setImportOpen] = useState(false);
-  const [stockItem, setStockItem] = useState<Item | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const setStockItem = (it: Item | null) => setOpenId(it?.id ?? null);
+  const [view, setView] = useState<'list' | 'grid'>(() => { try { return (localStorage.getItem('ledgerly.items.view') as 'list' | 'grid') || 'list'; } catch { return 'list'; } });
+  const changeView = (v: 'list' | 'grid') => { setView(v); try { localStorage.setItem('ledgerly.items.view', v); } catch { /* ignore */ } };
+  const facets = useItemFacets().data;
 
-  const defaultSlab = activeSlabs.find((s) => s.rate === 18)?.id ?? activeSlabs[0]?.id ?? '';
   const keys = [['items'], ['stockAlerts'], ['notifications'], ['dashboard'], ['movements']];
-  const createItem = useMut((b: Record<string, unknown>) => api.post<Item>('/shop/items', b), keys, { silentError: true });
   const updateItem = useMut((v: { id: string; body: Record<string, unknown> }) => api.patch<Item>(`/shop/items/${v.id}`, v.body), keys, { silentError: true });
   const archive = useMut((id: string) => api.del(`/shop/items/${id}`), keys, { success: 'Item archived' });
   const bulk = useMut((b: { ids: string[]; action: 'archive' | 'setTax'; taxSlabId?: string }) => api.post<{ updated: number }>('/shop/items/bulk', b), keys, { success: (r, v) => (v.action === 'archive' ? `${r.updated} items archived` : `Tax slab updated on ${r.updated} items`) });
 
-  const openNew = (type: ItemType = tab === 'Services' ? 'Services' : 'Goods', barcode = '') => {
-    setDraft(blank(type, defaultSlab, primaryBranch, barcode));
-    setTouched(false);
-    setServerErr({});
-    setModal({ mode: 'new' });
-  };
-  const openEdit = (it: Item) => {
-    setDraft({ ...blank(it.type, it.taxSlabId, primaryBranch), ...it, cost: String(it.cost ?? 0), sp1: String(it.sp1), sp2: String(it.sp2), sp3: String(it.sp3), reorderLevel: String(it.reorderLevel), openingStock: '', batchNo: '', expiryDate: '', branchId: primaryBranch });
-    setTouched(false);
-    setServerErr({});
-    setModal({ mode: 'edit', id: it.id });
-  };
+  const openNew = (type: ItemType = tab === 'Services' ? 'Services' : 'Goods', barcode = '') =>
+    navigate(`/app/items/new?type=${type}${barcode ? `&barcode=${encodeURIComponent(barcode)}` : ''}`);
+  const openEdit = (it: Item) => navigate(`/app/items/${it.id}/edit`);
 
   useEffect(() => {
-    if (params.get('new') && canWrite && slabsQ.data) {
-      openNew('Goods');
-      params.delete('new');
-      setParams(params, { replace: true });
-    }
+    if (params.get('new') && canWrite) { navigate('/app/items/new', { replace: true }); return; }
+    if (params.get('open')) { setOpenId(params.get('open')!); params.delete('open'); setParams(params, { replace: true }); }
     if (params.get('q')) { sv.setFilters({ q: params.get('q')!, tab: 'Goods' }); params.delete('q'); setParams(params, { replace: true }); }
     if (params.get('tab') === 'stock') { sv.setFilters({ tab: 'stock' }); params.delete('tab'); setParams(params, { replace: true }); }
     if (params.get('stock') === 'low') { sv.setFilters({ tab: 'Goods', stock: 'low' }); params.delete('stock'); setParams(params, { replace: true }); }
-  }, [slabsQ.data]);
+  }, [params]);
 
   const stockOf = (it: Item) => (branchFilter === 'all' ? it.stock : it.stockByBranch[branchFilter] ?? 0);
   const counts = { Goods: items.filter((i) => i.type === 'Goods').length, Services: items.filter((i) => i.type === 'Services').length };
@@ -93,55 +74,14 @@ export default function Items() {
     if (tab === 'stock') return [];
     return items
       .filter((i) => i.type === tab)
-      .filter((i) => !s || [i.name, i.sku, i.barcode, i.hsn].some((v) => v.toLowerCase().includes(s)))
+      .filter((i) => !s || [i.name, i.sku, i.barcode, i.hsn, i.category ?? '', i.brand ?? ''].some((v) => v.toLowerCase().includes(s)))
+      .filter((i) => catFilter === 'all' || i.category === catFilter)
+      .filter((i) => brandFilter === 'all' || i.brand === brandFilter)
       .filter((i) => taxFilter === 'all' || i.taxSlabId === taxFilter)
       .filter((i) => tab === 'Services' || stockFilter === 'all' || (stockFilter === 'out' ? stockOf(i) <= 0 : stockOf(i) <= i.reorderLevel));
-  }, [items, tab, q, taxFilter, stockFilter, branchFilter]);
-  const pg = usePagination(rows, 10);
-
-  /* ---------- validation ---------- */
-  const num = (v: string) => (v.trim() === '' ? NaN : Number(v));
-  const errs = {
-    name: !draft.name.trim() ? 'Item name is required' : '',
-    cost: !(num(draft.cost) >= 0) ? 'Enter base cost' : '',
-    sp1: !(num(draft.sp1) > 0) ? 'Required' : '',
-    sp2: !(num(draft.sp2) > 0) ? 'Required' : '',
-    sp3: !(num(draft.sp3) > 0) ? 'Required' : '',
-    barcode: draft.barcode && items.some((i) => i.barcode === draft.barcode && i.id !== modal?.id) ? 'Barcode already assigned to another item' : '',
-    sku: draft.sku && items.some((i) => i.sku.toLowerCase() === draft.sku.toLowerCase() && i.id !== modal?.id) ? 'SKU already exists' : '',
-    taxSlabId: !draft.taxSlabId ? 'Select a tax slab' : '',
-    hsn: draft.hsn && !/^\d{2,8}$/.test(draft.hsn) ? 'HSN/SAC must be 2–8 digits' : '',
-  };
-  const invalid = Object.values(errs).some(Boolean);
-  const e = (k: keyof typeof errs) => (touched ? errs[k] : '') || serverErr[k] || '';
-  const belowCost = (['sp1', 'sp2', 'sp3'] as const).filter((k) => num(draft[k]) > 0 && num(draft[k]) < num(draft.cost));
-
-  const save = (another = false) => {
-    setTouched(true);
-    setServerErr({});
-    if (invalid) return;
-    const body: Record<string, unknown> = {
-      type: draft.type, name: draft.name.trim(), sku: draft.sku.trim(), barcode: draft.barcode, unit: draft.unit, hsn: draft.hsn, cost: num(draft.cost),
-      sp1: num(draft.sp1), sp2: num(draft.sp2), sp3: num(draft.sp3), taxSlabId: draft.taxSlabId, reorderLevel: Number(draft.reorderLevel || 0),
-      trackBatches: draft.type === 'Goods' && draft.trackBatches, description: draft.description,
-    };
-    const onError = (err: Error) => { const f = fieldErrors(err); setServerErr(f); toast('error', Object.keys(f).length ? 'Please fix the highlighted fields' : err.message); };
-    if (modal?.mode === 'edit') {
-      updateItem.mutate({ id: modal.id!, body }, { onSuccess: (it) => { toast('success', 'Item updated', it.name); setModal(null); }, onError });
-    } else {
-      createItem.mutate(
-        { ...body, openingStock: draft.type === 'Goods' ? Math.max(0, Number(draft.openingStock || 0)) : 0, branchId: draft.branchId || null, batchNo: draft.batchNo || undefined, expiryDate: draft.expiryDate || undefined },
-        {
-          onSuccess: (it) => {
-            toast('success', 'Item created', it.name);
-            sv.setFilters({ tab: it.type });
-            if (another) { setDraft(blank(it.type, it.taxSlabId, draft.branchId)); setTouched(false); } else setModal(null);
-          },
-          onError,
-        },
-      );
-    }
-  };
+  }, [items, tab, q, taxFilter, stockFilter, branchFilter, catFilter, brandFilter]);
+  const tabCats = useMemo(() => { const m = new Map<string, number>(); items.filter((i) => i.type === tab && i.category).forEach((i) => m.set(i.category, (m.get(i.category) ?? 0) + 1)); return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])); }, [items, tab]);
+  const pg = usePagination(rows, view === 'grid' ? 12 : 10);
 
   /* ---------- inline editing ---------- */
   const commitInline = () => {
@@ -215,6 +155,10 @@ export default function Items() {
         }
       />
 
+      <Hint id="items" title="Your product & service catalogue">
+        <p>Add everything you sell once — it then appears on invoices, POS and purchase orders. Each item has <strong>three price levels</strong> (SP1 Standard, SP2 Loyal, SP3 New) that are picked automatically from the customer’s tier. Click any price or name in the list to edit it in place, or click the picture to see stock, batches and history.</p>
+      </Hint>
+
       <div className="card">
         <div className="row between" style={{ padding: '14px 16px 0', flexWrap: 'wrap', gap: 10 }}>
           <Segmented
@@ -226,7 +170,15 @@ export default function Items() {
               { value: 'stock', label: 'Stock & alerts', icon: Boxes },
             ]}
           />
-          {tab !== 'stock' && <SavedViewsMenu sv={sv} isActive={(f) => JSON.stringify(f) === JSON.stringify(sv.filters)} />}
+          {tab !== 'stock' && (
+            <div className="row" style={{ gap: 8 }}>
+              <div className="view-toggle" role="group" aria-label="View">
+                <button className={view === 'list' ? 'active' : ''} onClick={() => changeView('list')} title="List view" aria-pressed={view === 'list'}><List size={16} /></button>
+                <button className={view === 'grid' ? 'active' : ''} onClick={() => changeView('grid')} title="Grid view" aria-pressed={view === 'grid'}><LayoutGrid size={16} /></button>
+              </div>
+              <SavedViewsMenu sv={sv} isActive={(f) => JSON.stringify(f) === JSON.stringify(sv.filters)} />
+            </div>
+          )}
         </div>
 
         {tab === 'stock' ? <StockAlerts onOpen={(id) => { const it = items.find((i) => i.id === id); if (it) setStockItem(it); }} /> : (
@@ -234,6 +186,12 @@ export default function Items() {
             <div className="toolbar">
               <div className="toolbar-left">
                 <SearchInput value={q} onChange={(v) => { sv.setFilters({ q: v }); pg.setPage(1); }} placeholder="Search name, SKU, barcode, HSN…" />
+                {!!facets?.brands.length && (
+                  <select className="select" value={brandFilter} onChange={(ev) => { sv.setFilters({ brand: ev.target.value } as never); pg.setPage(1); }} aria-label="Brand filter">
+                    <option value="all">All brands</option>
+                    {facets.brands.map((b) => <option key={b.name} value={b.name}>{b.name} ({b.count})</option>)}
+                  </select>
+                )}
                 <select className="select" value={taxFilter} onChange={(ev) => sv.setFilters({ tax: ev.target.value })} aria-label="Tax slab filter">
                   <option value="all">All tax slabs</option>
                   {slabs.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -254,8 +212,16 @@ export default function Items() {
                   </>
                 )}
               </div>
-              {canWrite && <div className="toolbar-right small muted"><Pencil size={13} /> Click a value to edit it</div>}
+              {canWrite && view === 'list' && <div className="toolbar-right small muted"><Pencil size={13} /> Click a value to edit it</div>}
             </div>
+            {tabCats.length > 0 && (
+              <div className="filter-chips" role="group" aria-label="Category">
+                <button className={`filter-chip ${catFilter === 'all' ? 'active' : ''}`} onClick={() => { sv.setFilters({ category: 'all' } as never); pg.setPage(1); }}>All <span className="n">{counts[tab as ItemType]}</span></button>
+                {tabCats.map(([c, n]) => (
+                  <button key={c} className={`filter-chip ${catFilter === c ? 'active' : ''}`} onClick={() => { sv.setFilters({ category: catFilter === c ? 'all' : c } as never); pg.setPage(1); }}>{c} <span className="n">{n}</span></button>
+                ))}
+              </div>
+            )}
 
             {selected.size > 0 && (
               <div className="bulk-bar">
@@ -280,6 +246,23 @@ export default function Items() {
                 <EmptyState icon={tab === 'Goods' ? Package : Wrench} title={items.some((i) => i.type === tab) ? 'No items match your filters' : `No ${tab.toLowerCase()} yet`}
                   text={tab === 'Goods' ? 'Scan a barcode, import a CSV, or add your first product.' : 'Add services like repairs, installation or AMC.'}
                   action={canWrite && <button className="btn btn-primary" onClick={() => openNew()}><Plus size={15} /> New Item</button>} />
+              ) : view === 'grid' ? (
+                <div className="item-grid">
+                  {pg.slice.map((it) => {
+                    const st = stockOf(it);
+                    return (
+                      <button key={it.id} className="item-card" onClick={() => setOpenId(it.id)} style={flash === it.id ? { borderColor: 'var(--brand-500)' } : undefined}>
+                        <Thumb large name={it.name} image={it.image} />
+                        <div className="ic-name">{it.name}</div>
+                        <div className="ic-meta">{[it.category, it.brand].filter(Boolean).join(' · ') || it.sku || (it.type === 'Goods' ? 'Goods' : 'Service')}</div>
+                        <div className="ic-foot">
+                          <span className="ic-price">{money(it.sp1)}</span>
+                          {it.type === 'Goods' ? <span className={`stock-pill ${st <= 0 ? 'out' : st <= it.reorderLevel ? 'low' : ''}`}>{st <= 0 ? 'Out of stock' : `${st} ${it.unit}`}</span> : <span className="stock-pill" style={{ background: 'var(--violet-50)', color: 'var(--violet-600)' }}>Service</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               ) : (
                 <table className="table">
                   <thead>
@@ -300,10 +283,10 @@ export default function Items() {
                           <td><input type="checkbox" className="checkbox" checked={selected.has(it.id)} onChange={() => toggleSel(it.id)} aria-label={`Select ${it.name}`} /></td>
                           <td>
                             <div className="name-cell">
-                              <span className={`stat-icon ${it.type === 'Goods' ? 'tone-blue' : 'tone-violet'}`} style={{ width: 34, height: 34 }}>{it.type === 'Goods' ? <Package size={16} /> : <Wrench size={16} />}</span>
+                              <button className="thumb-btn" onClick={() => setOpenId(it.id)} title="Open item"><Thumb name={it.name} image={it.image} /></button>
                               <div>
                                 <div className="title">{cell(it, 'name')}</div>
-                                <div className="sub">{it.barcode ? <span className="row" style={{ gap: 4 }}><ScanBarcode size={12} /> {it.barcode}</span> : it.hsn ? `${it.type === 'Goods' ? 'HSN' : 'SAC'} ${it.hsn}` : 'No barcode'}{it.trackBatches && ' · batches'}</div>
+                                <div className="sub">{it.category && <span className="chip" style={{ marginRight: 6 }}>{it.category}</span>}{it.barcode ? <span className="row" style={{ gap: 4 }}><ScanBarcode size={12} /> {it.barcode}</span> : it.hsn ? `${it.type === 'Goods' ? 'HSN' : 'SAC'} ${it.hsn}` : 'No barcode'}{it.trackBatches && ' · batches'}</div>
                               </div>
                             </div>
                           </td>
@@ -337,95 +320,7 @@ export default function Items() {
         )}
       </div>
 
-      <Modal open={!!modal} onClose={() => setModal(null)} size="lg" title={modal?.mode === 'edit' ? 'Edit item' : 'New item'} subtitle="Scan the product barcode to start — scanners type the code and press Enter automatically."
-        footer={
-          <>
-            <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancel</button>
-            {modal?.mode === 'new' && <button className="btn btn-secondary" disabled={createItem.isPending} onClick={() => save(true)}>Save &amp; add another</button>}
-            <button className="btn btn-primary" disabled={createItem.isPending || updateItem.isPending} onClick={() => save()}>{(createItem.isPending || updateItem.isPending) && <Loader2 size={15} className="spin" />} {modal?.mode === 'edit' ? 'Save changes' : 'Save item'}</button>
-          </>
-        }>
-        <div className="row between" style={{ marginBottom: 18 }}>
-          <Segmented value={draft.type} onChange={(v) => setDraft({ ...draft, type: v, unit: v === 'Goods' ? 'pcs' : 'job' })} options={[{ value: 'Goods', label: 'Goods', icon: Package }, { value: 'Services', label: 'Service', icon: Wrench }]} />
-          <span className="small muted">{modal?.mode === 'new' ? `Added ${fmtDate(todayISO())}` : ''}</span>
-        </div>
-        <div className="form-grid">
-          <Field label="Barcode" className="span-all" error={e('barcode')} hint="Autofocused — scan now, or use the camera button.">
-            <BarcodeInput value={draft.barcode} autoFocus={!!modal} invalid={!!e('barcode')} onChange={(v) => setDraft((d) => ({ ...d, barcode: v }))}
-              onScan={(code) => { const existing = items.find((i) => i.barcode === code && i.id !== modal?.id); if (existing) toast('error', 'Barcode already in use', existing.name); else document.getElementById('item-name')?.focus(); }} />
-          </Field>
-          <Field label="Item name" required error={e('name')} className="span-all">
-            <input id="item-name" className={`input ${e('name') ? 'invalid' : ''}`} value={draft.name} onChange={(ev) => setDraft({ ...draft, name: ev.target.value })} placeholder={draft.type === 'Goods' ? 'e.g. Logitech M331 Silent Mouse' : 'e.g. Laptop Servicing'} />
-          </Field>
-          <Field label="SKU" error={e('sku')}><input className={`input ${e('sku') ? 'invalid' : ''}`} value={draft.sku} onChange={(ev) => setDraft({ ...draft, sku: ev.target.value })} placeholder="e.g. LOG-M331" /></Field>
-          <Field label={draft.type === 'Goods' ? 'HSN code' : 'SAC code'} error={e('hsn')} hint="Needed for GSTR-1 HSN summary"><input className={`input ${e('hsn') ? 'invalid' : ''}`} value={draft.hsn} onChange={(ev) => setDraft({ ...draft, hsn: ev.target.value.replace(/\D/g, '') })} placeholder={draft.type === 'Goods' ? '8471' : '9987'} maxLength={8} /></Field>
-          <Field label="Unit">
-            <select className="select" value={draft.unit} onChange={(ev) => setDraft({ ...draft, unit: ev.target.value })}>
-              {(draft.type === 'Goods' ? ['pcs', 'nos', 'box', 'kg', 'g', 'ltr', 'mtr', 'ream', 'dozen'] : ['job', 'hour', 'day', 'month', 'year']).map((u) => <option key={u}>{u}</option>)}
-            </select>
-          </Field>
-          <Field label="Tax slab" required error={e('taxSlabId')} hint="Managed in the platform Tax Lab">
-            <select className={`select ${e('taxSlabId') ? 'invalid' : ''}`} value={draft.taxSlabId} onChange={(ev) => setDraft({ ...draft, taxSlabId: ev.target.value })}>
-              {activeSlabs.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.rate}%)</option>)}
-            </select>
-          </Field>
-        </div>
-
-        <div className="section-title mt-24">Cost &amp; pricing tiers</div>
-        <div className="form-grid">
-          <Field label="Base cost" required error={e('cost')} hint="Your purchase cost per unit">
-            <div className="input-addon"><span>₹</span><input className={`input ${e('cost') ? 'invalid' : ''}`} type="number" min={0} value={draft.cost} onChange={(ev) => setDraft({ ...draft, cost: ev.target.value })} placeholder="10.00" /></div>
-          </Field>
-          {draft.type === 'Goods' ? (
-            <Field label="Reorder level" hint="Alert when total stock falls to this level">
-              <div className="input-addon"><span>{draft.unit}</span><input className="input" type="number" min={0} value={draft.reorderLevel} onChange={(ev) => setDraft({ ...draft, reorderLevel: ev.target.value })} /></div>
-            </Field>
-          ) : <div />}
-        </div>
-        <div className="form-grid cols-3" style={{ marginTop: 16 }}>
-          {([['sp1', 'SP1 (Standard)', 'Walk-in / regular price'], ['sp2', 'SP2 (Loyal)', 'Repeat & loyal customers'], ['sp3', 'SP3 (New)', 'First-time / promotional']] as const).map(([k, label, hint]) => {
-            const m = margin(num(draft[k]), num(draft.cost) || 0) ?? 0;
-            return (
-              <Field key={k} label={label} required error={e(k)} hint={num(draft[k]) > 0 && num(draft.cost) >= 0 ? <span className="row" style={{ gap: 4, color: m < 0 ? 'var(--red-600)' : 'var(--green-700)' }}><TrendingUp size={12} /> {m}% margin</span> : hint}>
-                <div className="input-addon"><span>₹</span><input className={`input ${e(k) ? 'invalid' : ''}`} type="number" min={0} value={draft[k]} onChange={(ev) => setDraft({ ...draft, [k]: ev.target.value })} /></div>
-              </Field>
-            );
-          })}
-        </div>
-        {belowCost.length > 0 && (
-          <div className="row small" style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'var(--amber-50)', color: 'var(--amber-700)', gap: 8 }}>
-            <AlertTriangle size={15} /> {belowCost.map((k) => k.toUpperCase()).join(', ')} {belowCost.length > 1 ? 'are' : 'is'} below base cost — you’ll sell at a loss.
-          </div>
-        )}
-
-        {draft.type === 'Goods' && (
-          <>
-            <div className="section-title mt-24">Stock</div>
-            <div className="row between" style={{ marginBottom: 14 }}>
-              <div><div className="strong">Track batches &amp; expiry</div><div className="small muted">For medicines, food and other perishables. Sales use first-expiry-first-out automatically.</div></div>
-              <Toggle checked={draft.trackBatches} onChange={(v) => setDraft({ ...draft, trackBatches: v })} />
-            </div>
-            {modal?.mode === 'new' && (
-              <div className="form-grid">
-                <Field label="Opening stock"><div className="input-addon"><span>{draft.unit}</span><input className="input" type="number" min={0} value={draft.openingStock} onChange={(ev) => setDraft({ ...draft, openingStock: ev.target.value })} placeholder="0" /></div></Field>
-                <Field label="At branch"><select className="select" value={draft.branchId} onChange={(ev) => setDraft({ ...draft, branchId: ev.target.value })}>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
-                {draft.trackBatches && (
-                  <>
-                    <Field label="Batch number"><input className="input" value={draft.batchNo} onChange={(ev) => setDraft({ ...draft, batchNo: ev.target.value })} placeholder="e.g. B2410" /></Field>
-                    <Field label="Expiry date"><input className="input" type="date" value={draft.expiryDate} onChange={(ev) => setDraft({ ...draft, expiryDate: ev.target.value })} /></Field>
-                  </>
-                )}
-              </div>
-            )}
-            {modal?.mode === 'edit' && <p className="small muted">Change stock from the <Boxes size={12} style={{ verticalAlign: -2 }} /> stock panel (adjustments and transfers keep a full history).</p>}
-          </>
-        )}
-        <Field label="Description" className="mt-16">
-          <textarea className="textarea" value={draft.description} onChange={(ev) => setDraft({ ...draft, description: ev.target.value })} placeholder="Internal notes (optional)" />
-        </Field>
-      </Modal>
-
-      {stockItem && <StockDrawer item={items.find((i) => i.id === stockItem.id) ?? stockItem} onClose={() => setStockItem(null)} canWrite={canWrite} />}
+      {openId && items.find((i) => i.id === openId) && <StockDrawer item={items.find((i) => i.id === openId)!} onClose={() => setOpenId(null)} canWrite={canWrite} showCost={me.can('items.cost')} onEdit={(it) => openEdit(it)} />}
 
       <CsvImport open={importOpen} onClose={() => setImportOpen(false)} endpoint="/shop/items/import" title="Import items" template={ITEM_TEMPLATE} invalidate={['items', 'stockAlerts']} />
 
@@ -465,9 +360,11 @@ function StockAlerts({ onOpen }: { onOpen: (itemId: string) => void }) {
   );
 }
 
-function StockDrawer({ item, onClose, canWrite }: { item: Item; onClose: () => void; canWrite: boolean }) {
+function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item; onClose: () => void; canWrite: boolean; showCost: boolean; onEdit: (it: Item) => void }) {
+  const navigate = useNavigate();
+  const goods = item.type === 'Goods';
   const branches = useBranches().data ?? [];
-  const { data, isLoading } = useMovements(item.id);
+  const { data, isLoading } = useMovements(goods ? item.id : undefined);
   const [mode, setMode] = useState<'none' | 'adjust' | 'transfer'>('none');
   const [form, setForm] = useState({ branchId: branches[0]?.id ?? '', toBranchId: branches[1]?.id ?? '', qty: '', dir: 'in' as 'in' | 'out', note: '', batchNo: '', expiryDate: '' });
   const keys = [['items'], ['movements'], ['stockAlerts'], ['notifications'], ['dashboard']];
@@ -485,12 +382,40 @@ function StockDrawer({ item, onClose, canWrite }: { item: Item; onClose: () => v
   return (
     <>
       <div className="overlay" style={{ padding: 0 }} onMouseDown={onClose} />
-      <aside className="drawer" role="dialog" aria-label={`Stock for ${item.name}`}>
+      <aside className="drawer" role="dialog" aria-label={item.name}>
         <div className="drawer-head">
-          <div><h3 style={{ fontSize: 17 }}>{item.name}</h3><p className="small muted">{item.sku || 'No SKU'} · reorder at {item.reorderLevel} {item.unit}</p></div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
+          <div className="detail-hero">
+            <Thumb name={item.name} image={item.image} size={52} />
+            <div style={{ minWidth: 0 }}>
+              <h3 style={{ fontSize: 17 }}>{item.name}</h3>
+              <p className="small muted">{[goods ? 'Goods' : 'Service', item.category, item.brand, item.sku].filter(Boolean).join(' · ')}</p>
+            </div>
+          </div>
+          <div className="row" style={{ gap: 4 }}>
+            {canWrite && <button className="btn btn-soft btn-sm" onClick={() => onEdit(item)}><Pencil size={14} /> Edit</button>}
+            <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
+          </div>
         </div>
         <div className="drawer-body">
+          <div className="section-title" style={{ marginTop: 0 }}>Pricing</div>
+          <div className="kv">
+            <div><span>SP1 · Standard</span><strong>{money(item.sp1)}</strong></div>
+            <div><span>SP2 · Loyal</span><strong>{money(item.sp2)}</strong></div>
+            <div><span>SP3 · New</span><strong>{money(item.sp3)}</strong></div>
+            {showCost && <div><span>Cost price</span><strong>{item.cost === null ? '—' : money(item.cost)}{item.cost !== null && item.sp1 > 0 && <span className="small muted"> · {Math.round(((item.sp1 - item.cost) / item.sp1) * 100)}% margin</span>}</strong></div>}
+            <div><span>GST</span><strong>{item.taxRate}%</strong></div>
+            <div><span>MRP</span><strong>{item.mrp == null ? '—' : money(item.mrp)}</strong></div>
+            <div><span>{goods ? 'HSN' : 'SAC'}</span><strong>{item.hsn || '—'}</strong></div>
+            {goods && <div><span>Barcode</span><strong className="mono" style={{ fontSize: 13 }}>{item.barcode || '—'}</strong></div>}
+          </div>
+          {item.description && <p className="small muted" style={{ marginTop: 10 }}>{item.description}</p>}
+          <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            {goods && item.barcode && <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/app/items/labels?ids=${item.id}`)}><Tag size={14} /> Print labels</button>}
+            <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/app/sales/invoices/new?item=${item.id}`)}><ExternalLink size={14} /> Sell on invoice</button>
+            {goods && <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/app/purchases/orders?new=1&item=${item.id}`)}><Boxes size={14} /> Reorder</button>}
+          </div>
+          {!goods ? null : (<>
+          <div className="section-title mt-24">Stock · reorder at {item.reorderLevel} {item.unit}</div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(3, branches.length + 1)}, 1fr)`, gap: 10 }}>
             <div className="card" style={{ padding: 12, boxShadow: 'none', background: 'var(--brand-50)' }}><div className="small muted">Total</div><div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink-900)' }}>{item.stock} <span className="small muted">{item.unit}</span></div></div>
             {branches.map((b) => <div key={b.id} className="card" style={{ padding: 12, boxShadow: 'none' }}><div className="small muted">{b.name}</div><div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink-900)' }}>{item.stockByBranch[b.id] ?? 0}</div></div>)}
@@ -548,6 +473,7 @@ function StockDrawer({ item, onClose, canWrite }: { item: Item; onClose: () => v
               {data?.movements.length === 0 && <p className="small muted">No movements yet.</p>}
             </div>
           )}
+          </>)}
         </div>
       </aside>
     </>

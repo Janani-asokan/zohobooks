@@ -4,7 +4,9 @@ import { perm } from '../../auth';
 import { audit } from '../../audit';
 import { many, one } from '../../db';
 import { badRequest, conflict, notFound, parse } from '../../http';
-import { nextSeq, requireRow } from '../../services/common';
+import { nextSeq, primaryBranchId, requireRow } from '../../services/common';
+import { moveStock } from '../../services/stock';
+import { buildPurchaseLines, purchaseLineInput, purchaseTotals } from './purchasing';
 import { GSTIN_RE } from '../../../../shared/gst';
 import { T } from './ctx';
 
@@ -43,6 +45,7 @@ moneyRouter.post(
 const serializeBill = (b: any) => ({
   id: b.id, number: b.number, vendorId: b.vendor_id, vendorName: b.vendor_name, vendorBillNo: b.vendor_bill_no, date: b.date, dueDate: b.due_date,
   taxableAmount: Number(b.taxable_amount), taxAmount: Number(b.tax_amount), amount: Number(b.amount), status: b.status, description: b.description,
+  lines: b.lines ?? [], purchaseOrderId: b.purchase_order_id ?? null, stockAdded: !!b.stock_added,
 });
 moneyRouter.get(
   '/bills',
@@ -54,19 +57,39 @@ moneyRouter.post(
   perm('purchases.write'),
   T(async (db, req, c) => {
     const b = parse(
-      z.object({ vendorId: z.string().uuid('Select a vendor'), vendorBillNo: z.string().max(60).default(''), date: iso, dueDate: iso, taxableAmount: z.number().positive('Enter the bill amount'), taxAmount: z.number().min(0).default(0), description: z.string().max(500).default('') }),
+      z.object({
+        vendorId: z.string().uuid('Select a vendor'), vendorBillNo: z.string().max(60).default(''), date: iso, dueDate: iso,
+        // Either itemised lines (adds stock) or a lump-sum amount (services, utilities…)
+        lines: z.array(purchaseLineInput).default([]),
+        addStock: z.boolean().default(true),
+        branchId: z.string().uuid().nullable().optional(),
+        taxableAmount: z.number().min(0).default(0), taxAmount: z.number().min(0).default(0), description: z.string().max(500).default(''),
+      }),
       req.body,
     );
     await requireRow(db, 'vendors', c.shopId, b.vendorId, 'Vendor');
-    if (b.dueDate < b.date) throw badRequest('Due date can’t be before bill date');
+    if (b.dueDate < b.date) throw badRequest('Due date can’t be before bill date', { dueDate: 'Due date can’t be before bill date' });
+    const lines = b.lines.length ? await buildPurchaseLines(db, c.shopId, b.lines) : [];
+    const t = lines.length ? purchaseTotals(lines) : { sub: b.taxableAmount, tax: b.taxAmount, total: b.taxableAmount + b.taxAmount };
+    if (!(t.sub > 0)) throw badRequest('Enter the bill amount or add items', { taxableAmount: 'Enter the bill amount' });
+    const branchId = await primaryBranchId(db, c.shopId, b.branchId);
     const n = await nextSeq(db, c.shopId, 'bill');
+    const number = `BILL-${String(n).padStart(4, '0')}`;
+    const stock = lines.length > 0 && b.addStock;
     const row = await one(
       db,
-      "INSERT INTO bills (shop_id, number, vendor_id, vendor_bill_no, date, due_date, taxable_amount, tax_amount, amount, status, description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'Open',$10) RETURNING *",
-      [c.shopId, `BILL-${String(n).padStart(4, '0')}`, b.vendorId, b.vendorBillNo, b.date, b.dueDate, b.taxableAmount, b.taxAmount, b.taxableAmount + b.taxAmount, b.description],
+      `INSERT INTO bills (shop_id, number, vendor_id, vendor_bill_no, date, due_date, taxable_amount, tax_amount, amount, status, description, lines, branch_id, stock_added)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'Open',$10,$11,$12,$13) RETURNING *`,
+      [c.shopId, number, b.vendorId, b.vendorBillNo, b.date, b.dueDate, t.sub, t.tax, t.total, b.description || (lines.length ? lines.map((l) => l.name).slice(0, 3).join(', ') : ''), JSON.stringify(lines.map((l) => ({ ...l, received: stock ? l.qty : 0 }))), branchId, stock],
     );
-    await audit(db, req, c.shopId, 'create', 'bill', row.id, { number: row.number, amount: Number(row.amount) });
-    return serializeBill(row);
+    if (stock)
+      for (const l of lines) {
+        if (l.type === 'Goods') await moveStock(db, { shopId: c.shopId, itemId: l.itemId, branchId, qty: l.qty, reason: 'purchase', refType: 'bill', refId: row.id, userId: c.id, note: number });
+        await db.query('UPDATE items SET cost = $3 WHERE shop_id = $1 AND id = $2', [c.shopId, l.itemId, l.rate]);
+      }
+    await audit(db, req, c.shopId, 'create', 'bill', row.id, { number, amount: Number(row.amount), stock });
+    const v = await one(db, 'SELECT name FROM vendors WHERE id = $1', [b.vendorId]);
+    return serializeBill({ ...row, vendor_name: v.name });
   }),
 );
 /** Paying a bill posts a withdrawal to the chosen account. */

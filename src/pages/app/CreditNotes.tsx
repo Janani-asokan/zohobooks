@@ -5,6 +5,7 @@ import { useCreditNotes } from '@/api/hooks';
 import { usePrefs } from '@/context/PrefsContext';
 import { Badge, EmptyState, PageHeader, Pagination, SearchInput, usePagination } from '@/components/ui';
 import { fmtDate, money } from '@/lib/format';
+import { Hint } from '@/components/kit';
 
 export default function CreditNotes() {
   const { t } = usePrefs();
@@ -18,6 +19,9 @@ export default function CreditNotes() {
   return (
     <div className="page">
       <PageHeader title={t('nav.creditNotes')} crumbs={<>{t('nav.sales')} <span>/</span> {t('nav.creditNotes')}</>} subtitle="Returns and post-sale corrections. Raise one from the invoice’s “More” menu; they’re reported in GSTR-1 (CDNR) automatically." />
+      <Hint id="creditnotes" title="Returns & corrections">
+        <p>Open an issued invoice and choose <strong>More → Credit note</strong> to return goods or correct a price. Returned goods can go back into stock, and the note reduces what the customer owes.</p>
+      </Hint>
       <div className="card">
         <div className="toolbar"><div className="toolbar-left"><SearchInput value={q} onChange={setQ} placeholder="Search credit note, invoice, customer…" /></div></div>
         <div className="table-wrap">
