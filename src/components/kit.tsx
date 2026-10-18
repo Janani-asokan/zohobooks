@@ -4,14 +4,9 @@ import { initials } from '@/lib/format';
 
 /* Small shared building blocks for the v2 look: item thumbnails, module hints, image downscaling. */
 
-const TILE = ['#5b5bf0', '#7b4ff0', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#8b5cf6', '#f97316'];
-const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7);
-export const tileColor = (seed: string) => TILE[Math.abs(hash(seed || '?')) % TILE.length]!;
-
 export function Thumb({ name, image, size, large }: { name: string; image?: string; size?: number; large?: boolean }) {
-  const c = tileColor(name);
   return (
-    <span className={`thumb ${large ? 'lg' : ''}`} style={{ ...(size ? { width: size, height: size } : {}), background: image ? 'var(--ink-100)' : `linear-gradient(135deg, ${c}, color-mix(in srgb, ${c} 70%, #000))` }}>
+    <span className={`thumb ${large ? 'lg' : ''}`} style={{ ...(size ? { width: size, height: size } : {}), background: 'var(--ink-100)', border: '1px solid var(--border)' }}>
       {image ? <img src={image} alt="" /> : initials(name || '?')}
     </span>
   );

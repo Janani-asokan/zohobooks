@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export const SERIES = ['#2563eb', '#0d9488'] as const;
+export const SERIES = ['#1f7a4d', '#d97706'] as const;
 
 interface Series {
   name: string;
@@ -56,7 +56,7 @@ export function BarChart({ labels, series, format, height = 240 }: { labels: str
           const gx = pad.l + band * i + (band - groupW) / 2;
           return (
             <g key={lab + i}>
-              {hover === i && <rect x={pad.l + band * i} y={pad.t} width={band} height={ih} fill="#eef3ff" rx={6} />}
+              {hover === i && <rect x={pad.l + band * i} y={pad.t} width={band} height={ih} fill="var(--ink-100)" rx={6} />}
               {series.map((s, si) => {
                 const v = s.values[i] ?? 0;
                 const h = (v / max) * ih;
@@ -137,7 +137,7 @@ export function AreaChart({ labels, values, format, height = 220, name }: { labe
         ))}
         {hover !== null && (
           <>
-            <line x1={x(hover)} x2={x(hover)} y1={pad.t} y2={pad.t + ih} stroke="#94a3b8" strokeDasharray="3 3" />
+            <line x1={x(hover)} x2={x(hover)} y1={pad.t} y2={pad.t + ih} stroke="#a1a1aa" strokeDasharray="3 3" />
             <circle cx={x(hover)} cy={y(values[hover] ?? 0)} r={5} fill={SERIES[0]} stroke="#fff" strokeWidth={2} />
           </>
         )}

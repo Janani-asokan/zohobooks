@@ -1,12 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, Users, CreditCard } from 'lucide-react';
+import { Building2, Users } from 'lucide-react';
 
 /** Settings pages share a left sub-navigation, like a classic settings screen. */
 export default function SettingsLayout() {
   const links = [
     { to: '/app/organization', label: 'Business profile', icon: Building2 },
     { to: '/app/team', label: 'Users, roles & branches', icon: Users },
-    { to: '/app/billing', label: 'Subscription & billing', icon: CreditCard },
   ];
   return (
     <div className="settings-shell">

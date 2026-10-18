@@ -75,7 +75,7 @@ function OrgForm({ initial }: { initial: Org }) {
     });
   };
 
-  const TPLS: Array<[Org['invoiceTemplate'], string, string]> = [['classic', 'Classic', '#2f5bea'], ['modern', 'Modern', 'linear-gradient(135deg,#1e3fb8,#4338ca)'], ['compact', 'Compact', '#0f172a']];
+  const TPLS: Array<[Org['invoiceTemplate'], string, string]> = [['classic', 'Classic', '#1f7a4d'], ['modern', 'Modern', '#18181b'], ['compact', 'Compact', '#71717a']];
 
   return (
     <div className="page" style={{ maxWidth: 1100 }}>

@@ -19,10 +19,10 @@ export const EXPENSE_CATEGORIES: Array<{ name: string; icon: typeof Zap; color: 
   { name: 'Repairs & Maintenance', icon: Wrench, color: '#8b5cf6' },
   { name: 'Office Supplies', icon: PenTool, color: '#14b8a6' },
   { name: 'Marketing', icon: Megaphone, color: '#ec4899' },
-  { name: 'Bank Charges', icon: Landmark, color: '#64748b' },
+  { name: 'Bank Charges', icon: Landmark, color: '#71717a' },
   { name: 'Professional Fees', icon: Briefcase, color: '#7b4ff0' },
   { name: 'Food & Refreshments', icon: Coffee, color: '#f97316' },
-  { name: 'Other', icon: MoreHorizontal, color: '#94a3b8' },
+  { name: 'Other', icon: MoreHorizontal, color: '#a1a1aa' },
 ];
 const catMeta = (n: string) => EXPENSE_CATEGORIES.find((c) => c.name === n) ?? EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length - 1]!;
 const blank = () => ({ date: todayISO(), category: '', description: '', vendorId: '', amount: '', taxAmount: '', accountId: '', reference: '' });
@@ -86,7 +86,7 @@ export default function Expenses() {
         <div className="cat-quick mt-16">
           {EXPENSE_CATEGORIES.slice(0, 8).map((c) => (
             <button key={c.name} onClick={() => start(c.name)} title={`Record ${c.name}`}>
-              <span style={{ background: `color-mix(in srgb, ${c.color} 14%, transparent)`, color: c.color }}><c.icon size={18} /></span>
+              <span style={{ background: 'var(--ink-100)', color: 'var(--ink-600)' }}><c.icon size={18} /></span>
               {c.name}
             </button>
           ))}
@@ -115,7 +115,7 @@ export default function Expenses() {
                         <td className="muted">{fmtDate(e.date)}</td>
                         <td>
                           <div className="name-cell">
-                            <span className="stat-icon" style={{ width: 34, height: 34, background: `color-mix(in srgb, ${c.color} 14%, transparent)`, color: c.color }}><c.icon size={16} /></span>
+                            <span className="stat-icon" style={{ width: 34, height: 34, background: 'var(--ink-100)', color: 'var(--ink-600)' }}><c.icon size={16} /></span>
                             <div><div className="title">{e.category}</div><div className="sub">{[e.description, e.vendorName, e.reference && `Ref ${e.reference}`].filter(Boolean).join(' · ') || '—'}</div></div>
                           </div>
                         </td>
@@ -140,8 +140,8 @@ export default function Expenses() {
         <Field label="Category" required error={err('category')}>
           <div className="cat-pick">
             {EXPENSE_CATEGORIES.map((c) => (
-              <button key={c.name} type="button" className={form.category === c.name ? 'active' : ''} onClick={() => setForm({ ...form, category: c.name })} style={form.category === c.name ? { borderColor: c.color, background: `color-mix(in srgb, ${c.color} 10%, var(--surface))` } : undefined}>
-                <c.icon size={16} style={{ color: c.color }} /> {c.name}
+              <button key={c.name} type="button" className={form.category === c.name ? 'active' : ''} onClick={() => setForm({ ...form, category: c.name })} >
+                <c.icon size={16} style={{ color: 'var(--ink-500)' }} /> {c.name}
               </button>
             ))}
           </div>

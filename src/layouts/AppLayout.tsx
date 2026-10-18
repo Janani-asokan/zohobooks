@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Home, Package, ShoppingCart, ShoppingBag, Landmark, BarChart3, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, UserRound, Boxes, ScanLine, CreditCard, Keyboard, WifiOff, ClipboardList, Wrench, Receipt, Wallet, Truck, LifeBuoy, Crown, RotateCcw, Repeat, IndianRupee, FileMinus } from 'lucide-react';
+import { Home, Package, ShoppingCart, ShoppingBag, Landmark, BarChart3, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, UserRound, Boxes, ScanLine, Keyboard, WifiOff, ClipboardList, Wrench, Receipt, Wallet, Truck, RotateCcw, Repeat, IndianRupee, FileMinus } from 'lucide-react';
 import { CommandPalette, type PaletteAction } from './CommandPalette';
 import { resetHints } from '@/components/kit';
 import { Sidebar, useSidebarState, type NavItem } from './Sidebar';
@@ -13,7 +13,7 @@ import { useNotifications, useOrg } from '@/api/hooks';
 import { useClickOutside } from '@/components/useClickOutside';
 import { useShortcuts } from '@/components/useShortcuts';
 import { useOnline } from '@/components/useOnline';
-import { daysUntil, fyLabel } from '@/lib/fy';
+import { fyLabel } from '@/lib/fy';
 import { initials } from '@/lib/format';
 
 export function OrgLogo({ logo, name, size = 36 }: { logo?: string; name: string; size?: number }) {
@@ -117,7 +117,6 @@ export default function AppLayout() {
   const online = useOnline();
   const [shortcuts, setShortcuts] = useState(false);
   const [palette, setPalette] = useState(false);
-  const days = daysUntil(me.shop.licenseEnd);
   const canSell = me.can('sales.write');
 
   // NOTE: no Configuration / system settings entry here — platform rules belong to the Super Admin.
@@ -187,7 +186,6 @@ export default function AppLayout() {
       ...A(me.can('reports.read'), goTo, 'Reports', BarChart3, '/app/reports', 'gstr gstr-1 gstr-3b profit loss p&l sales tax hsn'),
       ...A(me.can('admin'), 'Settings', 'Organization profile', Building2, '/app/organization', 'logo gstin upi address invoice template'),
       ...A(me.can('admin'), 'Settings', 'Staff, roles & branches', Users, '/app/team', 'users team branch'),
-      ...A(me.can('admin'), 'Settings', 'Subscription & billing', CreditCard, '/app/billing', 'plan license renew'),
     ];
   }, [canSell, me]);
 
@@ -222,30 +220,6 @@ export default function AppLayout() {
         mobileOpen={sb.mobileOpen}
         onNavigate={() => sb.setMobileOpen(false)}
         collapseLabel={t('nav.collapse')}
-        footer={
-          <div className="sidebar-help">
-            <span className="sh-icon">{me.can('admin') ? <Crown size={17} /> : <LifeBuoy size={17} />}</span>
-            {me.can('admin') ? (
-              <>
-                <strong>{me.shop.planName} plan</strong>
-                {days > 0 ? <>{days} days left on your licence. Upgrade for more users, branches &amp; invoices.</> : <>Your licence has expired — renew to keep billing.</>}
-                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-                  <button onClick={() => navigate('/app/billing')}>View plans</button>
-                  <button className="ghost" onClick={() => setPalette(true)} title="Ctrl + K"><Search size={12} /> Search</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <strong>Need a hand?</strong>
-                Press <b>Ctrl + K</b> to find anything, or <b>?</b> for shortcuts.
-                <div className="row" style={{ gap: 6 }}>
-                  <button onClick={() => setPalette(true)}>Search</button>
-                  <button className="ghost" onClick={() => { resetHints(); window.location.reload(); }} title="Show the help tips again"><RotateCcw size={12} /> Tips</button>
-                </div>
-              </>
-            )}
-          </div>
-        }
       />
       {sb.mobileOpen && <div className="scrim" onClick={() => sb.setMobileOpen(false)} />}
       <div className="shell-main">
@@ -267,9 +241,6 @@ export default function AppLayout() {
           </div>
           <SearchTrigger onOpen={() => setPalette(true)} />
           <div className="topbar-actions">
-            <Link to={me.can('admin') ? '/app/billing' : '#'} className={`license-pill ${days <= 30 ? 'warn' : ''}`} title={`License valid till ${me.shop.licenseEnd}`}>
-              {me.shop.planName} · {days}{t('shell.daysLeft')}
-            </Link>
             {canSell && (
               <button className="btn btn-primary btn-sm desktop-only" onClick={() => navigate('/app/sales/invoices/new')} title="Alt N">
                 <Plus size={15} /> {t('shell.newInvoice')}
@@ -288,9 +259,6 @@ export default function AppLayout() {
                       </button>
                       <button className="dropdown-item" onClick={() => { close(); navigate('/app/team'); }}>
                         <Users size={16} /> {t('shell.team')}
-                      </button>
-                      <button className="dropdown-item" onClick={() => { close(); navigate('/app/billing'); }}>
-                        <CreditCard size={16} /> {t('shell.billing')}
                       </button>
                     </>
                   )}

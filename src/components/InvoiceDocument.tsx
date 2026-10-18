@@ -60,13 +60,13 @@ export function InvoiceDocument({ inv, org, branchName, template }: { inv: Invoi
       <div className="doc-meta">
         <div className="box">
           <div className="lbl">Bill to</div>
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{c.companyName || c.name}</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#18181b' }}>{c.companyName || c.name}</div>
           {c.companyName && <div>Attn: {c.name}</div>}
-          {c.address && <div style={{ color: '#475569', whiteSpace: 'pre-line' }}>{c.address}</div>}
-          <div style={{ color: '#475569' }}>{c.state}</div>
-          {c.phone && <div style={{ color: '#475569' }}>{c.phone}</div>}
+          {c.address && <div style={{ color: '#52525b', whiteSpace: 'pre-line' }}>{c.address}</div>}
+          <div style={{ color: '#52525b' }}>{c.state}</div>
+          {c.phone && <div style={{ color: '#52525b' }}>{c.phone}</div>}
           {c.gstin && <div style={{ marginTop: 4, fontWeight: 700 }}>GSTIN: {c.gstin}</div>}
-          {c.customId && <div style={{ marginTop: 4, color: '#64748b' }}>Customer ID: {c.customId}</div>}
+          {c.customId && <div style={{ marginTop: 4, color: '#71717a' }}>Customer ID: {c.customId}</div>}
         </div>
         <div className="box">
           <div className="kv">
@@ -99,7 +99,7 @@ export function InvoiceDocument({ inv, org, branchName, template }: { inv: Invoi
             <tr key={l.id}>
               <td>{i + 1}</td>
               <td>
-                <div style={{ fontWeight: 600, color: '#0f172a' }}>{l.name}</div>
+                <div style={{ fontWeight: 600, color: '#18181b' }}>{l.name}</div>
                 {l.batches?.length ? <div className="doc-sub">Batch {l.batches.map((b) => `${b.batchNo}${b.expiryDate ? ` (exp ${fmtDate(b.expiryDate)})` : ''}`).join(', ')}</div> : null}
               </td>
               <td>{l.hsn || '—'}</td>
@@ -133,15 +133,15 @@ export function InvoiceDocument({ inv, org, branchName, template }: { inv: Invoi
           )}
           <div className="lbl-sm">Total in words</div>
           <div className="words">{amountInWords(inv.total)}</div>
-          {inv.notes && (<><div className="lbl-sm" style={{ marginTop: 14 }}>Notes</div><div style={{ color: '#475569', whiteSpace: 'pre-line' }}>{inv.notes}</div></>)}
+          {inv.notes && (<><div className="lbl-sm" style={{ marginTop: 14 }}>Notes</div><div style={{ color: '#52525b', whiteSpace: 'pre-line' }}>{inv.notes}</div></>)}
           {(org.bankDetails || qr) && (
             <div className="pay-box">
               {qr && <img src={qr} alt="UPI QR code" className="upi-qr" />}
               <div>
                 <div className="lbl-sm">Pay to</div>
-                {org.upiId && <div style={{ fontWeight: 700, color: '#0f172a' }}>UPI: {org.upiId}</div>}
-                {qr && <div style={{ color: '#64748b', fontSize: 10.5 }}>Scan with any UPI app to pay {money(inv.balance)}</div>}
-                {org.bankDetails && <div style={{ color: '#475569', whiteSpace: 'pre-line', marginTop: 4 }}>{org.bankDetails}</div>}
+                {org.upiId && <div style={{ fontWeight: 700, color: '#18181b' }}>UPI: {org.upiId}</div>}
+                {qr && <div style={{ color: '#71717a', fontSize: 10.5 }}>Scan with any UPI app to pay {money(inv.balance)}</div>}
+                {org.bankDetails && <div style={{ color: '#52525b', whiteSpace: 'pre-line', marginTop: 4 }}>{org.bankDetails}</div>}
               </div>
             </div>
           )}
@@ -159,8 +159,8 @@ export function InvoiceDocument({ inv, org, branchName, template }: { inv: Invoi
       </div>
 
       <div className="doc-foot">
-        <div style={{ color: '#64748b', maxWidth: 380 }}>
-          <div style={{ fontWeight: 700, color: '#334155' }}>{org.invoiceFooter}</div>
+        <div style={{ color: '#71717a', maxWidth: 380 }}>
+          <div style={{ fontWeight: 700, color: '#3f3f46' }}>{org.invoiceFooter}</div>
           <div style={{ fontSize: 10.5, marginTop: 4 }}>
             This is a computer-generated document.{' '}
             {org.compositionScheme ? 'Composition taxable person, not eligible to collect tax on supplies.' : inv.withGst ? `Tax payable on reverse charge: ${inv.reverseCharge ? 'Yes' : 'No'}.` : 'Prices are net; no GST charged.'}

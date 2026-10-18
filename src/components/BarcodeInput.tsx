@@ -107,7 +107,7 @@ export function BarcodeInput({
         </span>
       </div>
       {camera && (
-        <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', background: '#0f172a', position: 'relative' }}>
+        <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', background: '#18181b', position: 'relative' }}>
           {camError ? (
             <div className="small" style={{ color: '#fecaca', padding: 14 }}>{camError}</div>
           ) : (

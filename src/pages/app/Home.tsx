@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
-import { Check, X, Rocket, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays } from 'lucide-react';
+import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays } from 'lucide-react';
 import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
 import { useLocalFlag } from '@/components/kit';
 import { useShopUser } from '@/context/AuthContext';
@@ -11,7 +11,7 @@ import { AreaChart, Donut, MeterList } from '@/components/charts';
 import { fmtDate, money, moneyShort } from '@/lib/format';
 
 const pctChange = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : cur > 0 ? 100 : null);
-const STATUS_COLORS = { Paid: '#16a34a', 'Partially Paid': '#2563eb', Unpaid: '#d97706', Overdue: '#dc2626' } as const;
+const STATUS_COLORS = { Paid: '#1f7a4d', 'Partially Paid': '#71717a', Unpaid: '#d97706', Overdue: '#c22f2f' } as const;
 
 export default function Home() {
   const me = useShopUser();
@@ -75,7 +75,7 @@ export default function Home() {
   return (
     <div className="page">
       <PageHeader
-        title={<>{greet}, {me.user.name.split(' ')[0]} <span className="greet-wave" aria-hidden>👋</span></>}
+        title={<>{greet}, {me.user.name.split(' ')[0]}</>}
         subtitle="Here’s what’s happening with your business today."
         actions={<span className="date-pill"><CalendarDays size={15} /> {fyStart} – {now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
       />
@@ -129,7 +129,7 @@ export default function Home() {
 
       {quick.length > 0 && (
         <>
-          <h3 className="mt-24" style={{ fontSize: 15, marginBottom: 12 }}>Quick Actions</h3>
+          <h3 className="mt-24" style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Quick actions</h3>
           <div className="qa-grid">
             {quick.map((q) => (
               <Link key={q.label} to={q.to} className="qa-card">
@@ -137,22 +137,6 @@ export default function Home() {
                 <div><strong>{q.label}</strong><span className="qa-sub">{q.sub}</span></div>
               </Link>
             ))}
-            <div className="gst-banner">
-              <svg className="ill" width="64" height="64" viewBox="0 0 64 64" aria-hidden>
-                <rect x="12" y="6" width="34" height="44" rx="5" fill="#fff" stroke="#9db8e6" />
-                <rect x="18" y="14" width="18" height="3" rx="1.5" fill="#2563eb" />
-                <rect x="18" y="22" width="22" height="2.5" rx="1.25" fill="#c7d6ef" />
-                <rect x="18" y="28" width="16" height="2.5" rx="1.25" fill="#c7d6ef" />
-                <rect x="18" y="34" width="20" height="2.5" rx="1.25" fill="#c7d6ef" />
-                <circle cx="46" cy="46" r="12" fill="#0d9488" />
-                <path d="M40.5 46.5l3.6 3.6 7-7.4" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <div>
-                <strong>GST Ready</strong>
-                <p>Invoices, GSTR-1 &amp; GSTR-3B are prepared automatically from your data.</p>
-                <Link to={me.can('reports.read') ? '/app/reports' : '/app/sales/invoices'} className="btn btn-sm">Learn more <ArrowRight size={13} /></Link>
-              </div>
-            </div>
           </div>
         </>
       )}
@@ -178,17 +162,6 @@ export default function Home() {
         </div>
       </div>
     </div>
-  );
-}
-
-function Ring({ pct }: { pct: number }) {
-  const r = 24, c = 2 * Math.PI * r;
-  return (
-    <svg className="gs-ring" viewBox="0 0 58 58" aria-label={`${pct}% complete`}>
-      <circle cx="29" cy="29" r={r} fill="none" stroke="rgba(255,255,255,.25)" strokeWidth="6" />
-      <circle cx="29" cy="29" r={r} fill="none" stroke="#fff" strokeWidth="6" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} transform="rotate(-90 29 29)" style={{ transition: 'stroke-dashoffset .6s ease' }} />
-      <text x="29" y="33" textAnchor="middle" fontSize="13" fontWeight="800" fill="#fff">{pct}%</text>
-    </svg>
   );
 }
 
@@ -220,11 +193,12 @@ function GettingStarted() {
   return (
     <div className="card gs-card" style={{ marginBottom: 18 }}>
       <div className="gs-head">
-        <Ring pct={pct} />
         <div style={{ flex: 1 }}>
-          <h3><Rocket size={17} style={{ verticalAlign: -3, marginRight: 6 }} />Get your shop ready</h3>
-          <p>{done} of {steps.length} done — finish setup to send professional GST invoices and get paid faster.</p>
+          <h3>Finish setting up your business</h3>
+          <p>{done} of {steps.length} steps complete</p>
         </div>
+        <div className="progress gs-progress" aria-label={`${pct}% complete`}><span style={{ width: `${pct}%` }} /></div>
+        <span className="small muted" style={{ width: 36, textAlign: 'right' }}>{pct}%</span>
         <button className="icon-btn" style={{ color: '#fff' }} aria-label="Hide checklist" title="Hide checklist" onClick={() => setHidden(true)}><X size={18} /></button>
       </div>
       <div className="gs-steps">

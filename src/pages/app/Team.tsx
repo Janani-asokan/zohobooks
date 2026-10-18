@@ -68,11 +68,11 @@ export default function Team() {
 
   return (
     <div className="page">
-      <PageHeader title="Staff, roles & branches" subtitle={`Each staff member signs in with their own account. ${activeUsers} of ${me.shop.limits.users} users · ${branches.length} of ${me.shop.limits.branches} branches on the ${me.shop.planName} plan.`}
+      <PageHeader title="Staff, roles & branches" subtitle={`Each staff member signs in with their own account. ${activeUsers} active users · ${branches.length} ${branches.length === 1 ? 'branch' : 'branches'}.`}
         actions={tab === 'branches' ? (
-          <button className="btn btn-primary" disabled={branches.length >= me.shop.limits.branches} title={branches.length >= me.shop.limits.branches ? 'Plan limit reached' : undefined} onClick={() => { setBranch({ name: '', address: '', phone: '' }); setTouched(false); setBranchModal({}); }}><Plus size={16} /> New Branch</button>
+          <button className="btn btn-primary" disabled={branches.length >= me.shop.limits.branches} title={branches.length >= me.shop.limits.branches ? 'Limit reached for this account' : undefined} onClick={() => { setBranch({ name: '', address: '', phone: '' }); setTouched(false); setBranchModal({}); }}><Plus size={16} /> New Branch</button>
         ) : tab === 'staff' ? (
-          <button className="btn btn-primary" disabled={activeUsers >= me.shop.limits.users} title={activeUsers >= me.shop.limits.users ? 'Plan limit reached' : undefined} onClick={() => { setForm({ name: '', email: '', role: 'Sales Staff', branchId: branches[0]?.id ?? '', password: genPassword() }); setTouched(false); setServerErr({}); setStaffModal({}); }}><Plus size={16} /> Add Staff</button>
+          <button className="btn btn-primary" disabled={activeUsers >= me.shop.limits.users} title={activeUsers >= me.shop.limits.users ? 'Limit reached for this account' : undefined} onClick={() => { setForm({ name: '', email: '', role: 'Sales Staff', branchId: branches[0]?.id ?? '', password: genPassword() }); setTouched(false); setServerErr({}); setStaffModal({}); }}><Plus size={16} /> Add Staff</button>
         ) : null} />
       <div className="tabs">
         <button className={tab === 'staff' ? 'active' : ''} onClick={() => setTab('staff')}><Users size={15} /> Staff <span className="count">{staff.length}</span></button>

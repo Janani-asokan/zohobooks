@@ -48,7 +48,7 @@ export default function Billing() {
       await loadRazorpay();
       new window.Razorpay!({
         key: order.keyId, order_id: order.orderId, amount: order.amount, currency: 'INR', name: order.name, description: order.description,
-        prefill: { name: me.user.name, email: me.user.email }, theme: { color: '#2f5bea' },
+        prefill: { name: me.user.name, email: me.user.email }, theme: { color: '#1f7a4d' },
         handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
           try {
             await api.post('/billing/razorpay/verify', { orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature });

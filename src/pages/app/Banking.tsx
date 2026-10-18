@@ -49,7 +49,7 @@ export default function Banking() {
       </Hint>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
-        <button className="card" onClick={() => setSelected('all')} style={{ textAlign: 'left', padding: 18, cursor: 'pointer', background: selected === 'all' ? 'linear-gradient(135deg,#2f5bea,#2347c4)' : 'var(--surface)', color: selected === 'all' ? '#fff' : 'var(--ink-800)', border: selected === 'all' ? 'none' : undefined, fontFamily: 'inherit' }}>
+        <button className="card" onClick={() => setSelected('all')} style={{ textAlign: 'left', padding: 18, cursor: 'pointer', background: selected === 'all' ? 'var(--ink-900)' : 'var(--surface)', color: selected === 'all' ? '#fff' : 'var(--ink-800)', border: selected === 'all' ? 'none' : undefined, fontFamily: 'inherit' }}>
           <div className="small" style={{ opacity: 0.8, fontWeight: 600 }}>Total cash &amp; bank balance</div>
           <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>{money(total)}</div>
           <div className="small" style={{ opacity: 0.75, marginTop: 4 }}>{accounts.length} accounts</div>
