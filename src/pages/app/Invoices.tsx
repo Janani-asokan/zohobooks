@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, FileText, Printer, Download, Send, X, MessageCircle } from 'lucide-react';
 import { api } from '@/api/client';
@@ -15,8 +15,10 @@ import { daysUntil, fyLabel } from '@/lib/fy';
 import { toCsv } from '../../../shared/csv';
 import { waLink } from './InvoiceView';
 import { Hint } from '@/components/kit';
+import { InvoicePanel } from '@/components/InvoicePanel';
+import { printInvoice } from '@/lib/printInvoice';
 
-const TABS: Array<'All' | InvoiceStatus> = ['All', 'Draft', 'Unpaid', 'Partially Paid', 'Overdue', 'Paid', 'Cancelled'];
+const TABS: Array<'All' | InvoiceStatus> = ['All', 'Draft', 'Sent', 'Partially Paid', 'Overdue', 'Paid', 'Void'];
 
 function exportCsv(rows: Invoice[]) {
   const csv = toCsv(
@@ -49,7 +51,12 @@ export default function Invoices() {
   useEffect(() => {
     const s = params.get('status');
     if (s && TABS.includes(s as InvoiceStatus)) { sv.setFilters({ tab: s as InvoiceStatus }); params.delete('status'); setParams(params, { replace: true }); }
+    const qq = params.get('q');
+    if (qq) { sv.setFilters({ q: qq, tab: 'All' }); params.delete('q'); setParams(params, { replace: true }); }
   }, []);
+  const openId = params.get('i');
+  const select = (id: string | null) => { if (id) params.set('i', id); else params.delete('i'); setParams(params, { replace: true }); };
+  const closePanel = useCallback(() => select(null), [params]);
 
   const fys = [...new Set(invoices.map((i) => i.fy))].sort().reverse();
   const rows = useMemo(() => {
@@ -98,7 +105,7 @@ export default function Invoices() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 0, padding: 0 }}>
           {([
-            ['Outstanding receivables', sum(['Unpaid', 'Partially Paid', 'Overdue']), 'var(--ink-900)', 'Unpaid'],
+            ['Outstanding receivables', sum(['Sent', 'Partially Paid', 'Overdue']), 'var(--ink-900)', 'Sent'],
             ['Overdue', sum(['Overdue']), 'var(--red-600)', 'Overdue'],
             ['Collected (fully paid)', sum(['Paid']), 'var(--green-700)', 'Paid'],
             ['Drafts', invoices.filter((i) => i.status === 'Draft').reduce((s, i) => s + i.total, 0), 'var(--ink-500)', 'Draft'],
@@ -111,6 +118,7 @@ export default function Invoices() {
         </div>
       </div>
 
+      <div className={`split-page ${openId ? 'has-detail' : ''}`}>
       <div className="card">
         <div style={{ padding: '0 16px', overflowX: 'auto' }}>
           <div className="tabs" style={{ marginBottom: 0, borderBottom: 'none' }}>
@@ -145,28 +153,28 @@ export default function Invoices() {
               <thead>
                 <tr>
                   <th style={{ width: 36 }}><input type="checkbox" className="checkbox" checked={allOnPage} onChange={() => setSelected((s) => { const n = new Set(s); pg.slice.forEach((i) => (allOnPage ? n.delete(i.id) : n.add(i.id))); return n; })} aria-label="Select all on page" /></th>
-                  <th>{t('common.date')}</th><th>Invoice #</th><th>{t('common.customer')}</th><th>Type</th><th>{t('common.status')}</th><th>Due</th><th className="num">{t('common.amount')}</th><th className="num">Balance</th><th />
+                  <th className="hide-split">{t('common.date')}</th><th>Invoice #</th><th>{t('common.customer')}</th><th className="hide-split">Type</th><th>{t('common.status')}</th><th className="hide-split">Due</th><th className="num">{t('common.amount')}</th><th className="num hide-split">Balance</th><th className="hide-split" />
                 </tr>
               </thead>
               <tbody>
                 {pg.slice.map((inv) => {
                   const d = daysUntil(inv.dueDate);
                   return (
-                    <tr key={inv.id} className="clickable" onClick={() => navigate(`/app/sales/invoices/${inv.id}`)}>
+                    <tr key={inv.id} className={`clickable ${inv.id === openId ? 'row-selected' : ''}`} onClick={() => select(inv.id === openId ? null : inv.id)} onDoubleClick={() => navigate(`/app/sales/invoices/${inv.id}`)} aria-selected={inv.id === openId}>
                       <td onClick={(e) => e.stopPropagation()}><input type="checkbox" className="checkbox" checked={selected.has(inv.id)} onChange={() => setSelected((s) => { const n = new Set(s); n.has(inv.id) ? n.delete(inv.id) : n.add(inv.id); return n; })} aria-label={`Select ${inv.number ?? 'draft'}`} /></td>
-                      <td>{fmtDate(inv.date)}</td>
+                      <td className="hide-split">{fmtDate(inv.date)}</td>
                       <td className="strong" style={{ color: inv.number ? 'var(--brand-600)' : 'var(--ink-500)' }}>{inv.number ?? 'Draft'}{inv.source === 'pos' && <span className="chip" style={{ marginLeft: 6 }}>POS</span>}</td>
                       <td><div className="strong">{inv.customer.companyName || inv.customer.name}</div><div className="muted">{inv.customer.customId || 'Walk-in'}</div></td>
-                      <td>{inv.docType === 'TAX INVOICE' ? <Badge tone="green" plain>GST</Badge> : inv.docType === 'BILL OF SUPPLY' ? <Badge tone="violet" plain>BoS</Badge> : <Badge tone="amber" plain>Net</Badge>}</td>
+                      <td className="hide-split">{inv.docType === 'TAX INVOICE' ? <Badge tone="green" plain>GST</Badge> : inv.docType === 'BILL OF SUPPLY' ? <Badge tone="violet" plain>BoS</Badge> : <Badge tone="amber" plain>Net</Badge>}</td>
                       <td><StatusBadge status={inv.paymentStatus} /></td>
-                      <td className="muted">{inv.status !== 'Issued' || inv.balance <= 0 ? '—' : d < 0 ? <span style={{ color: 'var(--red-600)' }}>{-d}d overdue</span> : d === 0 ? 'Today' : `in ${d}d`}</td>
+                      <td className="muted hide-split">{inv.status !== 'Issued' || inv.balance <= 0 ? '—' : d < 0 ? <span style={{ color: 'var(--red-600)' }}>{-d}d overdue</span> : d === 0 ? 'Today' : `in ${d}d`}</td>
                       <td className="num strong">{money(inv.total)}</td>
-                      <td className="num">{inv.status === 'Issued' ? money(Math.max(0, inv.balance)) : '—'}</td>
-                      <td className="num" style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                      <td className="num hide-split">{inv.status === 'Issued' ? money(Math.max(0, inv.balance)) : '—'}</td>
+                      <td className="num hide-split" style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
                         {inv.status === 'Issued' && inv.balance > 0 && org && inv.customer.phone && (
                           <a className="icon-btn" title="WhatsApp reminder" target="_blank" rel="noreferrer" href={waLink(inv.customer.phone, `Dear ${inv.customer.companyName || inv.customer.name}, a gentle reminder that invoice ${inv.number} has ${money(inv.balance)} due. ${inv.publicToken ? `${window.location.origin}/share/${inv.publicToken}` : ''} — ${org.companyName}`)}><MessageCircle size={15} /></a>
                         )}
-                        <button className="icon-btn" title="Print" onClick={() => navigate(`/app/sales/invoices/${inv.id}?print=1`)}><Printer size={15} /></button>
+                        <button className="icon-btn" title="Print" onClick={() => printInvoice(inv.id, 'a4').catch((e) => toast('error', 'Could not print', e.message))}><Printer size={15} /></button>
                       </td>
                     </tr>
                   );
@@ -176,6 +184,8 @@ export default function Invoices() {
           )}
         </div>
         <Pagination {...pg} />
+      </div>
+      {openId && <InvoicePanel key={openId} id={openId} onClose={closePanel} />}
       </div>
     </div>
   );

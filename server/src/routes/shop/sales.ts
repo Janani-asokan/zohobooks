@@ -34,6 +34,8 @@ const customerBody = z
     state: z.string().trim().max(60).default(''),
     address: z.string().max(500).default(''),
     tier: z.enum(['SP1', 'SP2', 'SP3']).default('SP1'),
+    /** 0 = no limit. Omit to keep the saved limit. */
+    creditLimit: z.number().min(0).max(1e10).optional(),
   })
   .superRefine((v, ctx) => {
     if (v.email && !EMAIL_RE.test(v.email)) ctx.addIssue({ code: 'custom', path: ['email'], message: 'Enter a valid email' });
@@ -58,6 +60,7 @@ async function listCustomers(db: Db, shopId: string, id?: string) {
   return rows.map((c) => ({
     id: c.id, customId: c.custom_id, type: c.type, name: c.name, companyName: c.company_name, gstin: c.gstin, email: c.email, phone: c.phone,
     state: c.state, address: c.address, tier: c.tier, createdAt: c.created_at, billed: Number(c.billed), due: Math.max(0, Number(c.due)), invoiceCount: Number(c.invoice_count),
+    creditLimit: Number(c.credit_limit ?? 0),
   }));
 }
 
@@ -75,9 +78,9 @@ async function insertCustomer(db: Db, shopId: string, b: z.infer<typeof customer
   const n = await nextSeq(db, shopId, 'customer', 1000);
   return one(
     db,
-    `INSERT INTO customers (shop_id, custom_id, type, name, company_name, gstin, email, phone, state, address, tier)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, custom_id`,
-    [shopId, `${cfg.prefix}-${n}`, b.type, b.name, b.type === 'Business' ? b.companyName : '', b.type === 'Business' ? b.gstin : '', b.email, b.phone, b.state || orgState, b.address, b.tier],
+    `INSERT INTO customers (shop_id, custom_id, type, name, company_name, gstin, email, phone, state, address, tier, credit_limit)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id, custom_id`,
+    [shopId, `${cfg.prefix}-${n}`, b.type, b.name, b.type === 'Business' ? b.companyName : '', b.type === 'Business' ? b.gstin : '', b.email, b.phone, b.state || orgState, b.address, b.tier, b.creditLimit ?? 0],
   );
 }
 
@@ -99,11 +102,114 @@ salesRouter.put(
   T(async (db, req, c) => {
     const cur = await requireRow(db, 'customers', c.shopId, req.params.id!, 'Customer');
     const b = parse(customerBody, req.body);
-    await db.query('UPDATE customers SET type=$3, name=$4, company_name=$5, gstin=$6, email=$7, phone=$8, state=$9, address=$10, tier=$11 WHERE shop_id=$1 AND id=$2', [
-      c.shopId, cur.id, b.type, b.name, b.type === 'Business' ? b.companyName : '', b.type === 'Business' ? b.gstin : '', b.email, b.phone, b.state, b.address, b.tier,
+    await db.query('UPDATE customers SET type=$3, name=$4, company_name=$5, gstin=$6, email=$7, phone=$8, state=$9, address=$10, tier=$11, credit_limit=coalesce($12, credit_limit) WHERE shop_id=$1 AND id=$2', [
+      c.shopId, cur.id, b.type, b.name, b.type === 'Business' ? b.companyName : '', b.type === 'Business' ? b.gstin : '', b.email, b.phone, b.state, b.address, b.tier, b.creditLimit ?? null,
     ]);
     await audit(db, req, c.shopId, 'update', 'customer', cur.id);
     return (await listCustomers(db, c.shopId, cur.id))[0];
+  }),
+);
+
+/* ---------- Statement of account & contact history ---------- */
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+salesRouter.get(
+  '/customers/:id/statement',
+  T(async (db, req, c) => {
+    const cust = await requireRow(db, 'customers', c.shopId, req.params.id!, 'Customer');
+    const to = isoDate.safeParse(req.query.to).success ? String(req.query.to) : todayISO();
+    const from = isoDate.safeParse(req.query.from).success ? String(req.query.from) : `${to.slice(0, 4)}-${to.slice(5, 7) < '04' ? Number(to.slice(0, 4)) - 1 : to.slice(0, 4)}-04-01`;
+    return customerStatement(db, c.shopId, cust, from, to);
+  }),
+);
+
+export async function customerStatement(db: Db, shopId: string, cust: any, from: string, to: string) {
+  const args = [shopId, cust.id];
+  const opening = await one(
+    db,
+    `SELECT
+       coalesce((SELECT sum(total) FROM invoices WHERE shop_id = $1 AND customer_id = $2 AND status = 'Issued' AND date < $3), 0)
+     - coalesce((SELECT sum(p.amount + p.tds_amount) FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE p.shop_id = $1 AND i.customer_id = $2 AND p.date < $3), 0)
+     - coalesce((SELECT sum(cn.total) FROM credit_notes cn JOIN invoices i ON i.id = cn.invoice_id WHERE cn.shop_id = $1 AND i.customer_id = $2 AND cn.date < $3), 0) AS bal`,
+    [...args, from],
+  );
+  const rows = await many(
+    db,
+    `SELECT * FROM (
+       SELECT date, created_at AS at, 'invoice' AS type, id AS ref_id, number AS ref, 'Invoice' AS label, total AS debit, 0 AS credit
+         FROM invoices WHERE shop_id = $1 AND customer_id = $2 AND status = 'Issued' AND date BETWEEN $3 AND $4
+       UNION ALL
+       SELECT p.date, p.created_at, 'payment', p.invoice_id, i.number, 'Payment · ' || p.mode || CASE WHEN p.tds_amount > 0 THEN ' (incl. TDS)' ELSE '' END, 0, p.amount + p.tds_amount
+         FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE p.shop_id = $1 AND i.customer_id = $2 AND p.date BETWEEN $3 AND $4
+       UNION ALL
+       SELECT cn.date, cn.created_at, 'credit_note', cn.invoice_id, cn.number, 'Credit note · ' || i.number, 0, cn.total
+         FROM credit_notes cn JOIN invoices i ON i.id = cn.invoice_id WHERE cn.shop_id = $1 AND i.customer_id = $2 AND cn.date BETWEEN $3 AND $4
+     ) t ORDER BY date, at`,
+    [...args, from, to],
+  );
+  let bal = Number(opening.bal);
+  const openingBalance = r2(bal);
+  const entries = rows.map((r) => {
+    bal = r2(bal + Number(r.debit) - Number(r.credit));
+    return { date: r.date, type: r.type, refId: r.ref_id, ref: r.ref, label: r.label, debit: Number(r.debit), credit: Number(r.credit), balance: bal };
+  });
+  // Ageing of what is still open today, by days past due.
+  const open = await many(db, `SELECT number, date, due_date, total - amount_paid - amount_credited AS bal FROM invoices WHERE shop_id = $1 AND customer_id = $2 AND status = 'Issued' AND total - amount_paid - amount_credited > 0.005`, args);
+  const ageing = { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };
+  const now = Date.parse(todayISO());
+  for (const i of open) {
+    const days = Math.floor((now - Date.parse(i.due_date)) / 86_400_000);
+    const k = days <= 0 ? 'current' : days <= 30 ? 'd1_30' : days <= 60 ? 'd31_60' : days <= 90 ? 'd61_90' : 'd90_plus';
+    ageing[k] = r2(ageing[k] + Number(i.bal));
+  }
+  return {
+    customer: { id: cust.id, name: cust.name, companyName: cust.company_name, gstin: cust.gstin, address: cust.address, state: cust.state, phone: cust.phone, email: cust.email, creditLimit: Number(cust.credit_limit ?? 0) },
+    from, to, openingBalance, entries,
+    totals: { debit: r2(entries.reduce((s, e) => s + e.debit, 0)), credit: r2(entries.reduce((s, e) => s + e.credit, 0)) },
+    closingBalance: r2(bal), ageing,
+  };
+}
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+const activityKinds = ['note', 'call', 'email', 'meeting', 'whatsapp'] as const;
+salesRouter.get(
+  '/customers/:id/activity',
+  T(async (db, req, c) => {
+    const cust = await requireRow(db, 'customers', c.shopId, req.params.id!, 'Customer');
+    const notes = await many(db, 'SELECT * FROM customer_activity WHERE shop_id = $1 AND customer_id = $2 ORDER BY created_at DESC LIMIT 200', [c.shopId, cust.id]);
+    const events = await many(
+      db,
+      `SELECT * FROM (
+         SELECT issued_at AS at, 'invoice' AS kind, id AS ref_id, 'Invoice ' || number || ' issued for ₹' || to_char(total, 'FM99999999990.00') AS body FROM invoices WHERE shop_id = $1 AND customer_id = $2 AND issued_at IS NOT NULL
+         UNION ALL
+         SELECT p.created_at, 'payment', p.invoice_id, 'Payment of ₹' || to_char(p.amount, 'FM99999999990.00') || ' received by ' || p.mode || ' against ' || i.number FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE p.shop_id = $1 AND i.customer_id = $2
+         UNION ALL
+         SELECT r.at, 'reminder', r.invoice_id, initcap(r.channel) || ' · ' || r.detail || ' (' || i.number || ')' FROM reminder_log r JOIN invoices i ON i.id = r.invoice_id WHERE r.shop_id = $1 AND i.customer_id = $2
+       ) t ORDER BY at DESC LIMIT 200`,
+      [c.shopId, cust.id],
+    );
+    return [
+      ...notes.map((n) => ({ id: n.id, at: n.created_at, kind: n.kind, body: n.body, by: n.created_by_name, refId: null, manual: true })),
+      ...events.map((e, i) => ({ id: `e${i}`, at: e.at, kind: e.kind, body: e.body, by: '', refId: e.ref_id, manual: false })),
+    ].sort((a, b) => +new Date(b.at) - +new Date(a.at));
+  }),
+);
+salesRouter.post(
+  '/customers/:id/activity',
+  perm('customers.write'),
+  T(async (db, req, c) => {
+    const cust = await requireRow(db, 'customers', c.shopId, req.params.id!, 'Customer');
+    const b = parse(z.object({ kind: z.enum(activityKinds), body: z.string().trim().min(1, 'Write a note').max(2000) }), req.body);
+    const row = await one(db, 'INSERT INTO customer_activity (shop_id, customer_id, kind, body, created_by, created_by_name) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [c.shopId, cust.id, b.kind, b.body, c.id, c.name]);
+    return { id: row.id, at: row.created_at, kind: row.kind, body: row.body, by: row.created_by_name, refId: null, manual: true };
+  }),
+);
+salesRouter.delete(
+  '/customers/:id/activity/:noteId',
+  perm('customers.write'),
+  T(async (db, req, c) => {
+    const r = await db.query('DELETE FROM customer_activity WHERE shop_id = $1 AND customer_id = $2 AND id = $3', [c.shopId, req.params.id, req.params.noteId]);
+    if (!r.rowCount) throw notFound('Note');
   }),
 );
 
@@ -166,14 +272,24 @@ const soBody = z.object({
   expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   lines: z.array(lineInput).min(1, 'Add at least one item'),
   withGst: z.boolean(),
-  status: z.enum(['Draft', 'Sent', 'Accepted']),
+  status: z.enum(['Draft', 'Sent', 'Accepted', 'Declined']),
   notes: z.string().max(2000).default(''),
+  kind: z.enum(['quote', 'order']).default('order'),
 });
 
+/** Quotes and sales orders share a table: a quote converts to an order, and either converts to an invoice. */
 const serializeSO = (r: any) => ({
-  id: r.id, number: r.number, customerId: r.customer_id, date: r.date, expiryDate: r.expiry_date, lines: r.lines, withGst: r.with_gst,
-  status: r.status, notes: r.notes, total: Number(r.total), invoiceId: r.invoice_id ?? null, createdAt: r.created_at,
+  id: r.id, kind: r.kind ?? 'order', number: r.number, customerId: r.customer_id, date: r.date, expiryDate: r.expiry_date, lines: r.lines, withGst: r.with_gst,
+  status: r.status, notes: r.notes, total: Number(r.total), invoiceId: r.invoice_id ?? null, orderId: r.order_id ?? null, sourceId: r.source_id ?? null,
+  sourceNumber: r.source_number ?? null, createdAt: r.created_at,
 });
+const SO_SELECT = `SELECT so.*,
+  (SELECT id FROM invoices i WHERE i.sales_order_id = so.id AND i.status <> 'Cancelled' LIMIT 1) AS invoice_id,
+  (SELECT o.id FROM sales_orders o WHERE o.source_id = so.id LIMIT 1) AS order_id,
+  (SELECT q.number FROM sales_orders q WHERE q.id = so.source_id) AS source_number
+  FROM sales_orders so WHERE so.shop_id = $1`;
+const soNumber = async (db: Db, shopId: string, kind: 'quote' | 'order') =>
+  `${kind === 'quote' ? 'QT' : 'SO'}-${String(await nextSeq(db, shopId, kind === 'quote' ? 'qt' : 'so')).padStart(4, '0')}`;
 
 async function soTotals(db: Db, shopId: string, b: z.infer<typeof soBody>) {
   const org = await getOrg(db, shopId);
@@ -186,7 +302,7 @@ async function soTotals(db: Db, shopId: string, b: z.infer<typeof soBody>) {
 salesRouter.get(
   '/sales-orders',
   T(async (db, _req, c) =>
-    (await many(db, `SELECT so.*, (SELECT id FROM invoices i WHERE i.sales_order_id = so.id AND i.status <> 'Cancelled' LIMIT 1) AS invoice_id FROM sales_orders so WHERE so.shop_id = $1 ORDER BY so.created_at DESC`, [c.shopId])).map(serializeSO),
+    (await many(db, `${SO_SELECT} AND so.kind = $2 ORDER BY so.created_at DESC`, [c.shopId, _req.query.kind === 'quote' ? 'quote' : 'order'])).map(serializeSO),
   ),
 );
 salesRouter.post(
@@ -195,13 +311,12 @@ salesRouter.post(
   T(async (db, req, c) => {
     const b = parse(soBody, req.body);
     const t = await soTotals(db, c.shopId, b);
-    const n = await nextSeq(db, c.shopId, 'so');
     const row = await one(
       db,
-      'INSERT INTO sales_orders (shop_id, number, customer_id, date, expiry_date, lines, with_gst, status, notes, total, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
-      [c.shopId, `SO-${String(n).padStart(4, '0')}`, b.customerId, b.date, b.expiryDate, JSON.stringify(t.lines), t.withGst, b.status, b.notes, t.total, c.id],
+      'INSERT INTO sales_orders (shop_id, kind, number, customer_id, date, expiry_date, lines, with_gst, status, notes, total, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
+      [c.shopId, b.kind, await soNumber(db, c.shopId, b.kind), b.customerId, b.date, b.expiryDate, JSON.stringify(t.lines), t.withGst, b.status, b.notes, t.total, c.id],
     );
-    await audit(db, req, c.shopId, 'create', 'sales_order', row.id, { number: row.number });
+    await audit(db, req, c.shopId, 'create', b.kind === 'quote' ? 'quote' : 'sales_order', row.id, { number: row.number });
     return serializeSO(row);
   }),
 );
@@ -223,11 +338,31 @@ salesRouter.patch(
   '/sales-orders/:id/status',
   perm('sales.write'),
   T(async (db, req, c) => {
-    const { status } = parse(z.object({ status: z.enum(['Draft', 'Sent', 'Accepted']) }), req.body);
+    const { status } = parse(z.object({ status: z.enum(['Draft', 'Sent', 'Accepted', 'Declined']) }), req.body);
     const row = await one(db, 'UPDATE sales_orders SET status = $3 WHERE shop_id = $1 AND id = $2 RETURNING *', [c.shopId, req.params.id, status]);
     if (!row) throw notFound('Sales order');
     await audit(db, req, c.shopId, 'status', 'sales_order', row.id, { status });
     return serializeSO(row);
+  }),
+);
+/** Quote → sales order. The quote is marked Accepted and the order keeps a link back to it. */
+salesRouter.post(
+  '/sales-orders/:id/convert',
+  perm('sales.write'),
+  T(async (db, req, c) => {
+    const q = await one(db, 'SELECT * FROM sales_orders WHERE shop_id = $1 AND id = $2 FOR UPDATE', [c.shopId, req.params.id]);
+    if (!q || q.kind !== 'quote') throw notFound('Quote');
+    if (q.status === 'Declined') throw conflict('This quote was declined');
+    if (await one(db, 'SELECT 1 FROM sales_orders WHERE shop_id = $1 AND source_id = $2', [c.shopId, q.id])) throw conflict('This quote already has a sales order');
+    const row = await one(
+      db,
+      `INSERT INTO sales_orders (shop_id, kind, number, customer_id, date, expiry_date, lines, with_gst, status, notes, total, source_id, created_by)
+       VALUES ($1,'order',$2,$3,$4,$5,$6,$7,'Accepted',$8,$9,$10,$11) RETURNING *`,
+      [c.shopId, await soNumber(db, c.shopId, 'order'), q.customer_id, todayISO(), q.expiry_date > todayISO() ? q.expiry_date : todayISO(), JSON.stringify(q.lines), q.with_gst, q.notes, q.total, q.id, c.id],
+    );
+    await db.query("UPDATE sales_orders SET status = 'Accepted' WHERE shop_id = $1 AND id = $2", [c.shopId, q.id]);
+    await audit(db, req, c.shopId, 'convert', 'quote', q.id, { order: row.number });
+    return serializeSO({ ...row, source_number: q.number });
   }),
 );
 salesRouter.delete(
@@ -237,6 +372,7 @@ salesRouter.delete(
     const cur = await requireRow(db, 'sales_orders', c.shopId, req.params.id!, 'Sales order');
     const inv = await one(db, 'SELECT 1 FROM invoices WHERE shop_id = $1 AND sales_order_id = $2', [c.shopId, cur.id]);
     if (inv) throw conflict('This order has been invoiced and can’t be deleted');
+    if (await one(db, 'SELECT 1 FROM sales_orders WHERE shop_id = $1 AND source_id = $2', [c.shopId, cur.id])) throw conflict('This quote has a sales order and can’t be deleted');
     await db.query('DELETE FROM sales_orders WHERE shop_id = $1 AND id = $2', [c.shopId, cur.id]);
     await audit(db, req, c.shopId, 'delete', 'sales_order', cur.id, { number: cur.number });
   }),

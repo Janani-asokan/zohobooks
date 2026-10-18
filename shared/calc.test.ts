@@ -56,11 +56,11 @@ describe('financial year', () => {
 describe('invoice status', () => {
   const base = { status: 'Issued' as const, total: 1000, amountPaid: 0, amountCredited: 0, dueDate: '2099-01-01' };
   it('derives payment state', () => {
-    expect(invoiceStatus(base)).toBe('Unpaid');
+    expect(invoiceStatus(base)).toBe('Sent');
     expect(invoiceStatus({ ...base, amountPaid: 400 })).toBe('Partially Paid');
     expect(invoiceStatus({ ...base, amountPaid: 600, amountCredited: 400 })).toBe('Paid');
     expect(invoiceStatus({ ...base, dueDate: '2000-01-01' })).toBe('Overdue');
-    expect(invoiceStatus({ ...base, status: 'Cancelled' })).toBe('Cancelled');
+    expect(invoiceStatus({ ...base, status: 'Cancelled' })).toBe('Void');
   });
 });
 

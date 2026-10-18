@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Users, Building2, UserRound, Pencil, Trash2, Lock, Mail, Phone, FileText, Download, Upload, Loader2 } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
@@ -11,9 +11,10 @@ import { CsvImport } from '@/components/CsvImport';
 import { EMAIL_RE, initials, money } from '@/lib/format';
 import { GSTIN_RE, INDIAN_STATES, gstinMatchesState } from '../../../shared/gst';
 import { Hint } from '@/components/kit';
+import { CustomerPanel } from '@/components/CustomerPanel';
 
-type Draft = Pick<Customer, 'type' | 'name' | 'companyName' | 'gstin' | 'email' | 'phone' | 'state' | 'address' | 'tier'>;
-const blank = (state: string): Draft => ({ type: 'Individual', name: '', companyName: '', gstin: '', email: '', phone: '', state, address: '', tier: 'SP1' });
+type Draft = Pick<Customer, 'type' | 'name' | 'companyName' | 'gstin' | 'email' | 'phone' | 'state' | 'address' | 'tier' | 'creditLimit'>;
+const blank = (state: string): Draft => ({ type: 'Individual', name: '', companyName: '', gstin: '', email: '', phone: '', state, address: '', tier: 'SP1', creditLimit: 0 });
 const CUSTOMER_TEMPLATE = 'Type,Name,Company,GSTIN,Phone,Email,State,Address,Tier\r\nIndividual,Ravi Kumar,,,9876543210,ravi@example.com,Tamil Nadu,Adyar Chennai 600020,SP1\r\nBusiness,Priya Raman,Nila Textiles,33AAFCN5678K1Z2,9444011223,accounts@nila.in,Tamil Nadu,T. Nagar Chennai 600017,SP2\r\n';
 
 export default function Customers() {
@@ -34,6 +35,11 @@ export default function Customers() {
   const [del, setDel] = useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const nextId = useNextCustomerId(modal?.mode === 'new');
+  const selectedId = params.get('c');
+  const selected = customers.find((c) => c.id === selectedId) ?? null;
+  const select = (id: string | null) => { if (id) params.set('c', id); else params.delete('c'); setParams(params, { replace: true }); };
+  const closePanel = useCallback(() => select(null), [params]);
+  const openEdit = (c: Customer) => { setDraft({ type: c.type, name: c.name, companyName: c.companyName, gstin: c.gstin, email: c.email, phone: c.phone, state: c.state, address: c.address, tier: c.tier, creditLimit: c.creditLimit }); setTouched(false); setServerErr({}); setModal({ mode: 'edit', c }); };
 
   const keys = [['customers'], ['nextCustomerId']];
   const create = useMut((b: Draft) => api.post<Customer>('/shop/customers', b), keys, { silentError: true });
@@ -105,6 +111,7 @@ export default function Customers() {
         <p>Each customer gets an automatic ID (like ACS-1582). Business customers need a <strong>GSTIN</strong> for B2B tax invoices. Pick their <strong>price level</strong> (SP1 Standard, SP2 Loyal, SP3 New) once — invoices use it automatically. The “Due” column shows what they still owe you.</p>
       </Hint>
 
+      <div className={`split-page ${selected ? 'has-detail' : ''}`}>
       <div className="card">
         <div className="toolbar">
           <div className="toolbar-left">
@@ -127,10 +134,10 @@ export default function Customers() {
               <thead>
                 <tr>
                   <th>Customer</th>
-                  <th>Customer ID</th>
-                  <th>Type</th>
-                  <th>Contact</th>
-                  <th>Price tier</th>
+                  <th className="hide-split">Customer ID</th>
+                  <th className="hide-split">Type</th>
+                  <th className="hide-split">Contact</th>
+                  <th className="hide-split">Price tier</th>
                   <th className="num">Receivables</th>
                   <th />
                 </tr>
@@ -138,7 +145,7 @@ export default function Customers() {
               <tbody>
                 {pg.slice.map((c) => {
                   return (
-                    <tr key={c.id}>
+                    <tr key={c.id} className={`row-click ${c.id === selectedId ? 'row-selected' : ''}`} onClick={() => select(c.id === selectedId ? null : c.id)} aria-selected={c.id === selectedId}>
                       <td>
                         <div className="name-cell">
                           <span className="avatar" style={c.type === 'Business' ? { background: 'var(--violet-50)', color: 'var(--violet-600)', borderRadius: 8 } : undefined}>{initials(c.companyName || c.name)}</span>
@@ -148,20 +155,20 @@ export default function Customers() {
                           </div>
                         </div>
                       </td>
-                      <td><span className="chip mono">{c.customId}</span></td>
-                      <td>{c.type === 'Business' ? <Badge tone="violet" plain>Business</Badge> : <Badge tone="gray" plain>Individual</Badge>}</td>
-                      <td>
+                      <td className="hide-split"><span className="chip mono">{c.customId}</span></td>
+                      <td className="hide-split">{c.type === 'Business' ? <Badge tone="violet" plain>Business</Badge> : <Badge tone="gray" plain>Individual</Badge>}</td>
+                      <td className="hide-split">
                         <div className="small row" style={{ gap: 6 }}><Phone size={12} className="muted" /> {c.phone}</div>
                         {c.email && <div className="small row muted" style={{ gap: 6 }}><Mail size={12} /> {c.email}</div>}
                       </td>
-                      <td><span className="chip">{c.tier} · {TIER_LABEL[c.tier]}</span></td>
+                      <td className="hide-split"><span className="chip">{c.tier} · {TIER_LABEL[c.tier]}</span></td>
                       <td className="num">
                         <div className="strong">{money(c.due)}</div>
-                        <div className="muted">{c.invoiceCount} invoices</div>
+                        <div className="muted">{c.creditLimit > 0 && c.due > c.creditLimit ? <span style={{ color: 'var(--red-600)' }}>Over limit</span> : `${c.invoiceCount} invoices`}</div>
                       </td>
-                      <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                      <td className="num hide-split" style={{ whiteSpace: 'nowrap' }} onClick={(ev) => ev.stopPropagation()}>
                         {me.can('sales.write') && <button className="icon-btn" title="New invoice" onClick={() => navigate(`/app/sales/invoices/new?customer=${c.id}`)}><FileText size={15} /></button>}
-                        {canWrite && <button className="icon-btn" title="Edit" onClick={() => { setDraft({ type: c.type, name: c.name, companyName: c.companyName, gstin: c.gstin, email: c.email, phone: c.phone, state: c.state, address: c.address, tier: c.tier }); setTouched(false); setServerErr({}); setModal({ mode: 'edit', c }); }}><Pencil size={15} /></button>}
+                        {canWrite && <button className="icon-btn" title="Edit" onClick={() => openEdit(c)}><Pencil size={15} /></button>}
                         {canWrite && <button className="icon-btn danger" title={c.invoiceCount ? 'Customers with invoices can’t be deleted' : 'Delete'} disabled={c.invoiceCount > 0} onClick={() => setDel(c)}><Trash2 size={15} /></button>}
                       </td>
                     </tr>
@@ -172,6 +179,8 @@ export default function Customers() {
           )}
         </div>
         <Pagination {...pg} />
+      </div>
+      {selected && <CustomerPanel key={selected.id} customer={selected} onClose={closePanel} onEdit={canWrite ? () => openEdit(selected) : undefined} />}
       </div>
 
       <Modal
@@ -241,6 +250,9 @@ export default function Customers() {
             <select className="select" value={draft.state} onChange={(ev) => setDraft({ ...draft, state: ev.target.value })}>
               {INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}
             </select>
+          </Field>
+          <Field label="Credit limit" hint="Invoices past this need confirmation. 0 = no limit">
+            <div className="input-addon"><span>₹</span><input className="input" type="number" min={0} step={1000} value={draft.creditLimit || ''} placeholder="0" onChange={(ev) => setDraft({ ...draft, creditLimit: Math.max(0, Number(ev.target.value) || 0) })} /></div>
           </Field>
           <Field label="Billing address" className="span-all">
             <textarea className="textarea" value={draft.address} onChange={(ev) => setDraft({ ...draft, address: ev.target.value })} />

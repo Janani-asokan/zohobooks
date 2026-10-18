@@ -11,7 +11,7 @@ import { AreaChart, Donut, MeterList } from '@/components/charts';
 import { fmtDate, money, moneyShort } from '@/lib/format';
 
 const pctChange = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : cur > 0 ? 100 : null);
-const STATUS_COLORS = { Paid: '#1f7a4d', 'Partially Paid': '#71717a', Unpaid: '#d97706', Overdue: '#c22f2f' } as const;
+const STATUS_COLORS = { Paid: '#1f7a4d', 'Partially Paid': '#b7791f', Sent: '#3b6ea8', Overdue: '#c22f2f' } as const;
 
 export default function Home() {
   const me = useShopUser();
@@ -50,7 +50,7 @@ export default function Home() {
     return { labels: vals.map((_, i) => String(i + 1)), values: vals };
   }, [range, monthly, issued.length]);
 
-  const statusRows = (['Paid', 'Partially Paid', 'Unpaid', 'Overdue'] as const).map((st) => ({
+  const statusRows = (['Paid', 'Partially Paid', 'Sent', 'Overdue'] as const).map((st) => ({
     label: st,
     value: issued.filter((i) => i.paymentStatus === st).reduce((s, i) => s + (st === 'Paid' ? i.total : i.balance), 0),
     color: STATUS_COLORS[st],

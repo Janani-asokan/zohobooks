@@ -91,6 +91,11 @@ In production the API serves the built web app too, so you deploy one process. M
 - **E-invoice JSON** (NIC v1.1) and **e-way bill JSON** (bulk upload format).
 
 **Shop: selling**
+- **Quote → sales order → invoice.** Quotes (QT-) and orders (SO-) carry lines, prices and notes forward; each conversion links back to its source.
+- Invoice statuses: **Draft, Sent, Partially Paid, Paid, Overdue, Void**.
+- **Item picker** searches name, SKU, HSN and barcode as you type; Enter picks and moves to quantity, so an invoice is N → customer → item → quantity → Ctrl+Enter.
+- Customers have a **credit limit** (issuing past it needs a confirmation that is audited), a **statement of account** for any date range with ageing buckets (print or CSV), and a **contact history** of calls, notes, invoices, payments and reminders.
+- Customers and Invoices open a **split-view panel** beside the list; Esc closes it.
 - **POS counter billing:** scan, then cart, then Cash/UPI/Card, with change calculation, an 80 mm thermal receipt and WhatsApp bills.
 - **Share on WhatsApp** (wa.me), email from your own mail app, copy a public link.
 - **Payment reminders:** WhatsApp, email on demand, or automatic email reminders.

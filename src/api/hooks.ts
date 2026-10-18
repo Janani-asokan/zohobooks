@@ -24,7 +24,7 @@ export const useInvoices = () => useQuery(q<Invoice[]>(['invoices'], `${S}/invoi
 export const useInvoice = (id?: string) => useQuery(q<InvoiceDetail>(['invoice', id], `${S}/invoices/${id}`, !!id));
 export const usePayments = () => useQuery(q<PaymentRow[]>(['payments'], `${S}/payments`));
 export const useCreditNotes = () => useQuery(q<CreditNote[]>(['creditNotes'], `${S}/credit-notes`));
-export const useSalesOrders = () => useQuery(q<SalesOrder[]>(['salesOrders'], `${S}/sales-orders`));
+export const useSalesOrders = (kind: 'order' | 'quote' = 'order') => useQuery(q<SalesOrder[]>(['salesOrders', kind], `${S}/sales-orders?kind=${kind}`));
 export const useRecurring = () => useQuery(q<Recurring[]>(['recurring'], `${S}/recurring`));
 export const useVendors = (enabled = true) => useQuery(q<Vendor[]>(['vendors'], `${S}/vendors`, enabled));
 export const useBills = (enabled = true) => useQuery(q<Bill[]>(['bills'], `${S}/bills`, enabled));

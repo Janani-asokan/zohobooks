@@ -103,6 +103,8 @@ export const invoiceInput = z.object({
   /** Omit to keep what is saved; null clears it (ships to the billing address). */
   shipTo: z.object({ name: z.string().trim().max(120), address: z.string().trim().max(500), state: z.string().max(60).default(''), gstin: z.string().trim().max(15).default('') }).nullable().optional(),
   terms: z.string().max(1500).optional(),
+  /** Issue even though it takes the customer past their credit limit (the user confirmed). */
+  overrideCreditLimit: z.boolean().optional(),
 });
 export type InvoiceInput = z.infer<typeof invoiceInput>;
 
@@ -169,10 +171,35 @@ export async function createInvoice(db: Db, req: Request | null, shopId: string,
     ],
   );
   await saveDeliveryFields(db, shopId, row.id, input);
+  if (opts.issue && source === 'app') await checkCreditLimit(db, req, shopId, f.customerId, f.t.total, row.id, input.overrideCreditLimit);
   let number: string | null = null;
   if (opts.issue) number = await issue(db, req, shopId, row);
   await audit(db, req, shopId, opts.issue ? 'issue' : 'create_draft', 'invoice', row.id, { number, total: f.t.total, source });
   return getInvoice(db, shopId, row.id);
+}
+
+/**
+ * Blocks issuing when the customer's open balance plus this invoice would pass their credit limit (0 = no limit).
+ * The client shows the numbers and can retry with overrideCreditLimit, which is audited.
+ */
+async function checkCreditLimit(db: Db, req: Request | null, shopId: string, customerId: string | null, total: number, invoiceId: string, override?: boolean) {
+  if (!customerId) return;
+  const c = await one(
+    db,
+    `SELECT credit_limit, coalesce((SELECT sum(GREATEST(total - amount_paid - amount_credited, 0)) FROM invoices i
+       WHERE i.shop_id = $1 AND i.customer_id = $2 AND i.status = 'Issued' AND i.id <> $3), 0) AS open
+     FROM customers WHERE shop_id = $1 AND id = $2`,
+    [shopId, customerId, invoiceId],
+  );
+  const limit = Number(c?.credit_limit ?? 0);
+  if (!limit) return;
+  const open = Number(c.open);
+  if (open + total <= limit + 0.005) return;
+  if (override) {
+    await audit(db, req, shopId, 'override_credit_limit', 'invoice', invoiceId, { limit, open, total });
+    return;
+  }
+  throw new HttpError(409, `This takes the customer to ₹${(open + total).toFixed(2)}, over their credit limit of ₹${limit.toFixed(2)}.`, 'credit_limit', { limit, open, total });
 }
 
 async function saveDeliveryFields(db: Db, shopId: string, id: string, input: InvoiceInput) {
@@ -207,6 +234,7 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
     ],
   );
   await saveDeliveryFields(db, shopId, id, input);
+  if ((inv.status === 'Draft' && issueNow) || inv.status === 'Issued') await checkCreditLimit(db, req, shopId, f.customerId, f.t.total, id, input.overrideCreditLimit);
   if (inv.status === 'Draft' && issueNow) {
     const fresh = await one(db, 'SELECT * FROM invoices WHERE shop_id = $1 AND id = $2', [shopId, id]);
     await issue(db, req, shopId, fresh);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, ClipboardList, LayoutGrid, List, ArrowRight, FileText, Pencil, Trash2, Send, CheckCircle2, FilePen } from 'lucide-react';
+import { Plus, ClipboardList, LayoutGrid, List, ArrowRight, FileText, Pencil, Trash2, Send, CheckCircle2, FilePen, FileSignature, XCircle } from 'lucide-react';
 import { api } from '@/api/client';
 import { useCustomers, useMut, useOrg, useSalesOrders } from '@/api/hooks';
 import type { SalesOrder } from '@/api/types';
@@ -19,10 +19,24 @@ const STAGES: Array<{ status: SalesOrderStatus; icon: typeof FilePen; tone: stri
   { status: 'Accepted', icon: CheckCircle2, tone: 'green', hint: 'Ready to invoice' },
 ];
 
-export default function SalesOrders() {
+const COPY = {
+  quote: {
+    title: 'Quotes', one: 'quote', number: 'Quote #', newLabel: 'New Quote', date: 'Quote date', search: 'Search quote # or customer…',
+    subtitle: 'Price a job for a customer. Accepted quotes become sales orders or invoices in one click.',
+    empty: 'No quotes yet', emptyText: 'Send your customer a price before you bill them.', modalSub: 'An estimate for your customer. Nothing is reserved or billed.',
+  },
+  order: {
+    title: 'Sales Orders', one: 'sales order', number: 'Order #', newLabel: 'New Sales Order', date: 'Order date', search: 'Search order # or customer…',
+    subtitle: 'Confirmed orders waiting to be delivered and invoiced.',
+    empty: 'No sales orders yet', emptyText: 'Record a confirmed order, or convert an accepted quote.', modalSub: 'A confirmed order. Stock moves when it is invoiced.',
+  },
+};
+
+export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'order' }) {
   const me = useShopUser();
   const canWrite = me.can('sales.write');
-  const { data: orders = [], isLoading } = useSalesOrders();
+  const L = COPY[kind];
+  const { data: orders = [], isLoading } = useSalesOrders(kind);
   const { data: customerList = [] } = useCustomers();
   const org = useOrg().data;
   const navigate = useNavigate();
@@ -43,10 +57,11 @@ export default function SalesOrders() {
   const customer = customerList.find((c) => c.id === customerId);
   const calc = useCalcLines(lines);
   const keys = [['salesOrders']];
-  const createSO = useMut((b: Record<string, unknown>) => api.post<SalesOrder>('/shop/sales-orders', b), keys, { success: (r) => (r.status === 'Sent' ? `${r.number} saved as sent` : `${r.number} saved as draft`) });
-  const updateSO = useMut((v: { id: string; b: Record<string, unknown> }) => api.put<SalesOrder>(`/shop/sales-orders/${v.id}`, v.b), keys, { success: 'Sales order updated' });
+  const createSO = useMut((b: Record<string, unknown>) => api.post<SalesOrder>('/shop/sales-orders', { ...b, kind }), keys, { success: (r) => (r.status === 'Sent' ? `${r.number} saved as sent` : `${r.number} saved as draft`) });
+  const updateSO = useMut((v: { id: string; b: Record<string, unknown> }) => api.put<SalesOrder>(`/shop/sales-orders/${v.id}`, { ...v.b, kind }), keys, { success: (r) => `${r.number} updated` });
+  const convertQuote = useMut((id: string) => api.post<SalesOrder>(`/shop/sales-orders/${id}/convert`, {}), keys, { success: (r) => `Sales order ${r.number} created` });
   const moveSO = useMut((v: { id: string; status: SalesOrderStatus }) => api.patch<SalesOrder>(`/shop/sales-orders/${v.id}/status`, { status: v.status }), keys, { success: (r) => `${r.number} moved to ${r.status}` });
-  const removeSO = useMut((id: string) => api.del(`/shop/sales-orders/${id}`), keys, { success: 'Sales order deleted' });
+  const removeSO = useMut((id: string) => api.del(`/shop/sales-orders/${id}`), keys, { success: `${kind === 'quote' ? 'Quote' : 'Sales order'} deleted` });
 
   const open = (so?: SalesOrder) => {
     setCustomerId(so?.customerId ?? '');
@@ -82,7 +97,7 @@ export default function SalesOrders() {
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
     return orders
-      .map((so) => ({ so, c: customerList.find((c) => c.id === so.customerId), total: so.total, invoiced: !!so.invoiceId }))
+      .map((so) => ({ so, c: customerList.find((c) => c.id === so.customerId), total: so.total, invoiced: !!so.invoiceId || !!so.orderId }))
       .filter((r) => !s || [r.so.number, r.c?.name ?? '', r.c?.companyName ?? ''].some((v) => v.toLowerCase().includes(s)));
   }, [orders, customerList, q]);
 
@@ -95,7 +110,7 @@ export default function SalesOrders() {
           <span className="small muted">{fmtDate(r.so.date)}</span>
         </div>
         <div style={{ fontWeight: 600, color: 'var(--ink-900)', marginTop: 6 }}>{r.c?.companyName || r.c?.name}</div>
-        <div className="small muted">{r.so.lines.length} item{r.so.lines.length > 1 ? 's' : ''} · valid till {fmtDate(r.so.expiryDate)}</div>
+        <div className="small muted">{r.so.lines.length} item{r.so.lines.length > 1 ? 's' : ''} · {kind === 'quote' ? 'valid till' : 'deliver by'} {fmtDate(r.so.expiryDate)}{r.so.sourceNumber ? ` · from ${r.so.sourceNumber}` : ''}</div>
         <div className="row between" style={{ marginTop: 10 }}>
           <span style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-900)' }}>{money(r.total)}</span>
           {r.so.withGst ? <Badge tone="green" plain>GST</Badge> : <Badge tone="amber" plain>Net</Badge>}
@@ -108,12 +123,17 @@ export default function SalesOrders() {
             <button className="btn btn-secondary btn-sm" onClick={() => move(r.so, STAGES[idx + 1]!.status)}>
               Mark {STAGES[idx + 1]!.status} <ArrowRight size={13} />
             </button>
-          ) : r.invoiced ? (
+          ) : r.so.invoiceId ? (
             <Link to={`/app/sales/invoices/${r.so.invoiceId}`}><Badge tone="green" plain>Invoiced →</Badge></Link>
+          ) : r.so.orderId ? (
+            <Link to="/app/sales/orders"><Badge tone="green" plain>Ordered →</Badge></Link>
           ) : (
-            <button className="btn btn-primary btn-sm" onClick={() => navigate(`/app/sales/invoices/new?fromSO=${r.so.id}`)}>
-              <FileText size={13} /> Convert to invoice
-            </button>
+            <div className="row" style={{ gap: 6 }}>
+              {kind === 'quote' && <button className="btn btn-secondary btn-sm" disabled={convertQuote.isPending} onClick={() => convertQuote.mutate(r.so.id)}><FileSignature size={13} /> To order</button>}
+              <button className="btn btn-primary btn-sm" onClick={() => navigate(`/app/sales/invoices/new?fromSO=${r.so.id}`)}>
+                <FileText size={13} /> {kind === 'quote' ? 'To invoice' : 'Convert to invoice'}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -123,23 +143,25 @@ export default function SalesOrders() {
   return (
     <div className="page">
       <PageHeader
-        title="Sales Orders"
-        crumbs={<>Sales <span>/</span> Sales Orders</>}
-        subtitle="Draft quotes, share them with customers and convert accepted ones into invoices."
-        actions={canWrite && <button className="btn btn-primary" onClick={() => open()}><Plus size={16} /> New Sales Order</button>}
+        title={L.title}
+        crumbs={<>Sales <span>/</span> {L.title}</>}
+        subtitle={L.subtitle}
+        actions={canWrite && <button className="btn btn-primary" onClick={() => open()}><Plus size={16} /> {L.newLabel}</button>}
       />
-      <Hint id="salesorders" title="Quotes before invoices">
-        <p>Use sales orders for quotations and advance bookings. Once the customer accepts, open the order and click <strong>Convert to invoice</strong> — nothing has to be typed twice. Sales orders don’t reduce stock.</p>
-      </Hint>
+      {kind === 'quote' && (
+        <Hint id="quotes" title="Quote, order, invoice">
+          <p>When the customer accepts, turn the quote into a <strong>sales order</strong> to track delivery, or straight into an <strong>invoice</strong>. Lines, prices and notes carry over; nothing is typed twice. Neither quotes nor orders move stock.</p>
+        </Hint>
+      )}
 
       <div className="row between" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-        <SearchInput value={q} onChange={setQ} placeholder="Search order # or customer…" />
+        <SearchInput value={q} onChange={setQ} placeholder={L.search} />
         <Segmented value={view} onChange={setView} options={[{ value: 'board', label: 'Pipeline', icon: LayoutGrid }, { value: 'list', label: 'List', icon: List }]} />
       </div>
 
       {isLoading ? <div className="skeleton" style={{ height: 240 }} /> : orders.length === 0 ? (
         <div className="card">
-          <EmptyState icon={ClipboardList} title="No sales orders yet" text="Create a quote to send to your customer." action={<button className="btn btn-primary" onClick={() => open()}><Plus size={15} /> New Sales Order</button>} />
+          <EmptyState icon={ClipboardList} title={L.empty} text={L.emptyText} action={canWrite && <button className="btn btn-primary" onClick={() => open()}><Plus size={15} /> {L.newLabel}</button>} />
         </div>
       ) : view === 'board' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
@@ -171,7 +193,7 @@ export default function SalesOrders() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Date</th><th>Order #</th><th>Customer</th><th>Status</th><th>Valid till</th><th className="num">Amount</th><th />
+                  <th>Date</th><th>{L.number}</th><th>Customer</th><th>Status</th><th>{kind === 'quote' ? 'Valid till' : 'Deliver by'}</th><th className="num">Amount</th><th />
                 </tr>
               </thead>
               <tbody>
@@ -183,13 +205,16 @@ export default function SalesOrders() {
                     <td>
                       <select className="select" style={{ height: 32, width: 130 }} value={r.so.status} disabled={!canWrite || r.invoiced} onChange={(e) => move(r.so, e.target.value as SalesOrderStatus)}>
                         {STAGES.map((s) => <option key={s.status}>{s.status}</option>)}
+                        {kind === 'quote' && <option>Declined</option>}
                       </select>
                     </td>
                     <td className="muted">{fmtDate(r.so.expiryDate)}</td>
                     <td className="num strong">{money(r.total)}</td>
                     <td className="num" style={{ whiteSpace: 'nowrap' }}>
                       {canWrite && !r.invoiced && <button className="icon-btn" title="Edit" onClick={() => open(r.so)}><Pencil size={15} /></button>}
+                      {canWrite && kind === 'quote' && r.so.status === 'Accepted' && !r.invoiced && <button className="icon-btn" title="Convert to sales order" onClick={() => convertQuote.mutate(r.so.id)}><FileSignature size={15} /></button>}
                       {canWrite && r.so.status === 'Accepted' && !r.invoiced && <button className="icon-btn" title="Convert to invoice" onClick={() => navigate(`/app/sales/invoices/new?fromSO=${r.so.id}`)}><FileText size={15} /></button>}
+                      {canWrite && kind === 'quote' && r.so.status === 'Sent' && <button className="icon-btn" title="Mark declined" onClick={() => move(r.so, 'Declined')}><XCircle size={15} /></button>}
                     </td>
                   </tr>
                 ))}
@@ -203,8 +228,8 @@ export default function SalesOrders() {
         open={!!modal}
         onClose={() => setModal(null)}
         size="xl"
-        title={modal?.id ? 'Edit sales order' : 'New sales order'}
-        subtitle="A quote for your customer — no stock is reserved until it’s invoiced."
+        title={modal?.id ? `Edit ${L.one}` : `New ${L.one}`}
+        subtitle={L.modalSub}
         footer={
           <>
             <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancel</button>
@@ -220,8 +245,8 @@ export default function SalesOrders() {
               {customerList.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}
             </select>
           </Field>
-          <Field label="Order date"><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          <Field label="Valid till"><input className="input" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></Field>
+          <Field label={L.date}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+          <Field label={kind === 'quote' ? 'Valid till' : 'Deliver by'}><input className="input" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></Field>
         </div>
         <div style={{ margin: '18px 0 14px' }}>
           <TaxModeToggle withGst={withGst} onChange={setWithGst} disabled={org?.compositionScheme ? 'Composition scheme' : org && !org.gstin ? 'Add GSTIN in Organization profile' : undefined} />
@@ -237,7 +262,7 @@ export default function SalesOrders() {
       <ConfirmModal
         open={!!del}
         onClose={() => setDel(null)}
-        title="Delete sales order?"
+        title={`Delete ${L.one}?`}
         text={`${del?.number} will be permanently removed.`}
         onConfirm={() => removeSO.mutate(del!.id)}
       />

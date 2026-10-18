@@ -377,3 +377,27 @@ a.glance:hover { background: var(--ink-50); text-decoration: none; }
 }
 .doc-footer { justify-content: space-between; flex-wrap: wrap; position: sticky; bottom: 0; }
 @media (max-width: 760px) { .doc-footer { position: static; } .doc-footer > div { width: 100%; } .doc-footer .btn { flex: 1 1 auto; justify-content: center; } }
+.kv-list { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--sp-2) var(--sp-2); margin: 0; font-size: var(--fs-13); }
+.kv-list dt { color: var(--ink-400); padding-top: 2px; }
+.kv-list dd { margin: 0; color: var(--ink-800); }
+.only-print { display: none; }
+@media print { .print-area .only-print { display: block; } .print-area.statement { width: 190mm !important; padding: 10mm; } }
+/* Item combobox */
+.combo { position: relative; min-width: 0; }
+.combo-field { display: flex; align-items: center; height: 36px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); padding: 0 var(--sp-2); gap: var(--sp-2); }
+.combo-field:focus-within { border-color: var(--brand-600); box-shadow: var(--focus); }
+.combo-field.invalid { border-color: var(--red-600); }
+.combo-icon, .combo-caret { color: var(--ink-400); flex-shrink: 0; }
+.combo-caret { cursor: pointer; }
+.combo-input { flex: 1; min-width: 0; border: none; outline: none; background: none; font: inherit; font-size: var(--fs-14); color: var(--ink-900); height: 100%; }
+.combo-input::placeholder { color: var(--ink-400); }
+.combo-list { position: fixed; z-index: 80; max-height: 280px; overflow-y: auto; margin: 0; padding: var(--sp-1); list-style: none; background: var(--surface-raised, var(--surface)); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); }
+.combo-opt { padding: var(--sp-2); border-radius: var(--radius-sm); cursor: pointer; }
+.combo-opt.active { background: var(--row-hover); }
+.combo-opt.current .combo-name { color: var(--brand-600); }
+.combo-main { display: flex; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-14); }
+.combo-name { font-weight: 500; color: var(--ink-900); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-price { font-variant-numeric: tabular-nums; color: var(--ink-700); white-space: nowrap; }
+.combo-meta { font-size: var(--fs-12); color: var(--ink-500); margin-top: 2px; }
+.combo-empty { padding: var(--sp-3); color: var(--ink-500); font-size: var(--fs-13); }
+.combo-input, .combo-input:focus, .combo-input:focus-visible { border: none; outline: none; box-shadow: none; padding: 0; }

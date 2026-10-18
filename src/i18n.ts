@@ -77,6 +77,8 @@ const dict = {
   'status.Partially Paid': { en: 'Partially Paid', hi: 'आंशिक भुगतान', ta: 'பகுதி செலுத்தப்பட்டது' },
   'status.Draft': { en: 'Draft', hi: 'ड्राफ्ट', ta: 'வரைவு' },
   'status.Cancelled': { en: 'Cancelled', hi: 'रद्द', ta: 'ரத்து செய்யப்பட்டது' },
+  'status.Sent': { en: 'Sent', hi: 'भेजा गया', ta: 'அனுப்பப்பட்டது' },
+  'status.Void': { en: 'Void', hi: 'शून्य', ta: 'செல்லாது' },
   // dashboard
   'home.goodMorning': { en: 'Good morning', hi: 'सुप्रभात', ta: 'காலை வணக்கம்' },
   'home.goodAfternoon': { en: 'Good afternoon', hi: 'नमस्कार', ta: 'மதிய வணக்கம்' },

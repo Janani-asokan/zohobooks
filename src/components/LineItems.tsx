@@ -5,6 +5,7 @@ import { useToast } from '@/context/ToastContext';
 import { computeTotals, lineAmount } from '@/lib/calc';
 import { money, uid } from '@/lib/format';
 import { TIER_LABEL, type Item, type LineInput, type PriceTier } from '@/api/types';
+import { ItemPicker } from './ItemPicker';
 
 /** Editable line held in form state (key is client-only). */
 export interface DraftLine extends LineInput {
@@ -40,6 +41,8 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
     const it = items.find((i) => i.id === itemId);
     const line = lines.find((l) => l.key === key)!;
     set(key, { itemId, rate: it ? priceFor(it, line.tier) : 0 });
+    // Next stop is quantity, so a line is: type, Enter, quantity, Tab.
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-line="${key}"] input[aria-label="Quantity"]`)?.select());
   };
 
   const addByBarcode = (code: string) => {
@@ -53,8 +56,6 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
     onChange(blankIdx >= 0 ? lines.map((l, i) => (i === blankIdx ? { ...fresh, key: l.key } : l)) : [...lines, fresh]);
   };
 
-  const goods = items.filter((i) => i.type === 'Goods');
-  const services = items.filter((i) => i.type === 'Services');
 
   return (
     <div className="card" style={{ boxShadow: 'none' }}>
@@ -87,13 +88,9 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
               const branchStock = it && branchId ? it.stockByBranch[branchId] ?? 0 : it?.stock ?? 0;
               const short = it?.type === 'Goods' && l.qty > branchStock;
               return (
-                <tr key={l.key}>
+                <tr key={l.key} data-line={l.key}>
                   <td>
-                    <select className={`select ${bad ? 'invalid' : ''}`} value={l.itemId} onChange={(e) => pickItem(l.key, e.target.value)} aria-label="Item">
-                      <option value="">Select an item…</option>
-                      {goods.length > 0 && <optgroup label="Goods">{goods.map((i) => <option key={i.id} value={i.id}>{i.name}{i.sku ? ` · ${i.sku}` : ''}</option>)}</optgroup>}
-                      {services.length > 0 && <optgroup label="Services">{services.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}</optgroup>}
-                    </select>
+                    <ItemPicker items={items} value={l.itemId} tier={l.tier} onPick={(id) => pickItem(l.key, id)} invalid={bad} branchId={branchId} />
                     {it && (
                       <div className="small muted" style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
                         {it.type === 'Goods' ? (

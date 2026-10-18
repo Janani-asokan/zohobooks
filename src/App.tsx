@@ -81,7 +81,8 @@ export default function App() {
             <Route path="items/new" element={<ItemForm />} />
             <Route path="items/:id/edit" element={<ItemForm />} />
             <Route path="sales/customers" element={<Customers />} />
-            <Route path="sales/orders" element={<SalesOrders />} />
+            <Route path="sales/quotes" element={<SalesOrders key="quote" kind="quote" />} />
+            <Route path="sales/orders" element={<SalesOrders key="order" />} />
             <Route path="sales/invoices" element={<Invoices />} />
             <Route path="sales/invoices/new" element={<InvoiceForm />} />
             <Route path="sales/invoices/:id" element={<InvoiceView />} />

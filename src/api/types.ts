@@ -32,7 +32,7 @@ export interface ItemFacets { categories: Array<{ name: string; count: number }>
 
 export interface Customer {
   id: string; customId: string; type: 'Individual' | 'Business'; name: string; companyName: string; gstin: string; email: string; phone: string;
-  state: string; address: string; tier: PriceTier; createdAt: string; billed: number; due: number; invoiceCount: number;
+  state: string; address: string; tier: PriceTier; createdAt: string; billed: number; due: number; invoiceCount: number; creditLimit: number;
 }
 
 export interface Line {
@@ -67,7 +67,10 @@ export interface InvoiceDetail extends Invoice {
 }
 export interface PaymentRow { id: string; invoiceId: string; invoiceNumber: string; customer: string; date: string; amount: number; tdsAmount: number; mode: string; reference: string; account: string | null }
 
-export interface SalesOrder { id: string; number: string; customerId: string; date: string; expiryDate: string; lines: Line[]; withGst: boolean; status: 'Draft' | 'Sent' | 'Accepted'; notes: string; total: number; invoiceId: string | null; createdAt: string }
+export interface SalesOrder {
+  id: string; kind: 'quote' | 'order'; number: string; customerId: string; date: string; expiryDate: string; lines: Line[]; withGst: boolean;
+  status: 'Draft' | 'Sent' | 'Accepted' | 'Declined'; notes: string; total: number; invoiceId: string | null; orderId: string | null; sourceId: string | null; sourceNumber: string | null; createdAt: string;
+}
 export interface Recurring {
   id: string; name: string; customerId: string; frequency: 'weekly' | 'monthly' | 'quarterly' | 'yearly'; startDate: string; endDate: string | null; nextDate: string;
   lines: LineInput[]; withGst: boolean; termsDays: number; branchId: string | null; notes: string; autoIssue: boolean; active: boolean; lastRunAt: string | null; generated: number;

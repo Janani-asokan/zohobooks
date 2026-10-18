@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, type LucideIcon,
+  Truck, Package, ScanLine, FileSignature, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, type LucideIcon,
 } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import type { PaletteAction } from './CommandPalette';
@@ -15,6 +15,7 @@ export function buildNav(can: Can): NavItem[] {
     label: 'Sales', icon: ShoppingCart,
     children: [
       { label: 'Customers', to: '/app/sales/customers' },
+      { label: 'Quotes', to: '/app/sales/quotes' },
       { label: 'Sales Orders', to: '/app/sales/orders' },
       { label: 'Invoices', to: '/app/sales/invoices' },
       { label: 'Payments Received', to: '/app/sales/payments' },
@@ -48,6 +49,7 @@ export function buildCreate(can: Can): Array<{ title: string; links: CreateLink[
   const cols = [
     { title: 'Sales', links: [
       can('sales.write') && { label: 'Invoice', icon: FileText, to: '/app/sales/invoices/new', keys: 'N' },
+      can('sales.write') && { label: 'Quote', icon: FileSignature, to: '/app/sales/quotes?new=1' },
       can('sales.write') && { label: 'Sales order', icon: ClipboardList, to: '/app/sales/orders?new=1' },
       can('customers.write') && { label: 'Customer', icon: UserRound, to: '/app/sales/customers?new=1' },
       can('sales.write') && { label: 'POS sale', icon: ScanLine, to: '/app/pos' },
@@ -73,6 +75,7 @@ export function buildActions(can: Can): PaletteAction[] {
   add(can('sales.write'), 'Create', 'New invoice', FileText, '/app/sales/invoices/new', 'bill sale gst', 'N');
   add(can('customers.write'), 'Create', 'New customer', UserRound, '/app/sales/customers?new=1', 'client party');
   add(can('items.write'), 'Create', 'New item', Package, '/app/items/new', 'product goods sku');
+  add(can('sales.write'), 'Create', 'New quote', FileSignature, '/app/sales/quotes?new=1', 'estimate quotation proforma');
   add(can('sales.write'), 'Create', 'New sales order', ClipboardList, '/app/sales/orders?new=1', 'order booking');
   add(can('purchases.write'), 'Create', 'New bill', Receipt, '/app/purchases/bills?new=1', 'purchase vendor payable');
   add(can('purchases.write'), 'Create', 'New purchase order', ClipboardList, '/app/purchases/orders?new=1', 'po restock');
@@ -80,6 +83,7 @@ export function buildActions(can: Can): PaletteAction[] {
   add(can('sales.write'), 'Create', 'POS sale', ScanLine, '/app/pos', 'counter retail scan');
   add(true, 'Go to', 'Dashboard', LayoutDashboard, '/app', 'home overview');
   add(true, 'Go to', 'Customers', UserRound, '/app/sales/customers');
+  add(true, 'Go to', 'Quotes', FileSignature, '/app/sales/quotes', 'estimates quotations');
   add(true, 'Go to', 'Sales orders', ClipboardList, '/app/sales/orders');
   add(true, 'Go to', 'Invoices', FileText, '/app/sales/invoices');
   add(true, 'Go to', 'Payments received', IndianRupee, '/app/sales/payments', 'collections receipts');

@@ -73,6 +73,7 @@ await step('invoice print view and PDF use the same document', async () => {
 });
 await step('POS sale completes', async () => {
   await page.goto(BASE + '/app/pos');
+  await page.waitForSelector('text=SanDisk 64GB Pen Drive'); // catalogue loaded, so the scan can match
   await page.fill('input[aria-label="Scan or search items"]', '0619659161323');
   await page.keyboard.press('Enter');
   await page.click('button:has-text("Charge")');

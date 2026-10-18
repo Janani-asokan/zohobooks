@@ -182,6 +182,16 @@ export async function seed({ quiet = false } = {}) {
       const lines = await buildLines(db, shopId, soLines[i]!.map(([ix, qty]) => ({ itemId: ids[ix!]!, qty: qty!, tier: 'SP1' as const, discount: 0 })));
       await db.query('UPDATE sales_orders SET lines = $2, total = $3 WHERE id = $1', [so.id, JSON.stringify(lines), computeTotals(lines, i !== 2, i === 1).total]);
     }
+    // quotes waiting on customers
+    const quotes: Array<[string, number, number, string, Array<[number, number]>]> = [['QT-0001', 3, -4, 'Sent', [[0, 10], [2, 2]]], ['QT-0002', 0, -1, 'Draft', [[5, 3]]], ['QT-0003', 5, -12, 'Declined', [[4, 1]]]];
+    for (const [number, ci, off, status, picks] of quotes) {
+      const lines = await buildLines(db, shopId, picks.map(([ix, qty]) => ({ itemId: ids[ix]!, qty, tier: 'SP1' as const, discount: 0 })));
+      await db.query(
+        `INSERT INTO sales_orders (shop_id, kind, number, customer_id, date, expiry_date, lines, with_gst, status, notes, total) VALUES ($1,'quote',$2,$3,$4,$5,$6,true,$7,'',$8)`,
+        [shopId, number, cust[ci], day(off), day(off + 15), JSON.stringify(lines), status, computeTotals(lines, true, false).total],
+      );
+    }
+    await db.query("INSERT INTO counters (shop_id, key, value) VALUES ($1,'qt',3)", [shopId]);
 
     const v = (await db.query(
       `INSERT INTO vendors (shop_id, name, gstin, phone, email, state) VALUES

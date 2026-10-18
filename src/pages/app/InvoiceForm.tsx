@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle } from 'lucide-react';
-import { api, fieldErrors } from '@/api/client';
+import { api, ApiError, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useInvoice, useItems, useMut, useNextInvoiceNumber, useOrg, useSalesOrders } from '@/api/hooks';
 import { TIER_LABEL, type Invoice } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { Field, PageHeader, Toggle } from '@/components/ui';
+import { ConfirmModal, Field, PageHeader, Toggle } from '@/components/ui';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type DraftLine } from '@/components/LineItems';
 import { useShortcuts } from '@/components/useShortcuts';
@@ -34,8 +34,9 @@ function Form({ existing }: { existing?: Invoice }) {
   const { data: customers = [] } = useCustomers();
   const { data: branches = [] } = useBranches();
   const { data: items = [] } = useItems();
-  const orders = useSalesOrders();
-  const fromSO = params.get('fromSO') ? orders.data?.find((s) => s.id === params.get('fromSO')) : undefined;
+  const orders = useSalesOrders('order');
+  const quotes = useSalesOrders('quote');
+  const fromSO = params.get('fromSO') ? [...(orders.data ?? []), ...(quotes.data ?? [])].find((s) => s.id === params.get('fromSO')) : undefined;
 
   const [customerId, setCustomerId] = useState(existing?.customerId ?? params.get('customer') ?? '');
   const customer = customers.find((c) => c.id === customerId);
@@ -100,16 +101,20 @@ function Form({ existing }: { existing?: Invoice }) {
   const update = useMut((b: Record<string, unknown>) => api.put<Invoice>(`/shop/invoices/${existing!.id}`, b), keys, { silentError: true });
   const busy = create.isPending || update.isPending;
 
-  const save = (mode: 'draft' | 'issue' | 'issue-pay') => {
+  const [creditPrompt, setCreditPrompt] = useState<{ mode: 'issue' | 'issue-pay'; message: string } | null>(null);
+  const save = (mode: 'draft' | 'issue' | 'issue-pay', overrideCreditLimit = false) => {
     setTouched(true);
     setServerErr({});
     if (Object.values(errs).some(Boolean)) return toast('error', 'Please fix the highlighted fields');
-    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft' };
+    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit };
     const onSuccess = (inv: Invoice) => {
       toast('success', inv.status === 'Draft' ? 'Draft saved' : existing?.status === 'Issued' ? 'Invoice updated' : 'Invoice issued', inv.number ?? undefined);
       navigate(`/app/sales/invoices/${inv.id}${mode === 'issue-pay' ? '?pay=1' : ''}`);
     };
-    const onError = (err: Error) => { const f = fieldErrors(err); setServerErr(f); toast('error', err.message); };
+    const onError = (err: Error) => {
+      if (err instanceof ApiError && err.code === 'credit_limit' && mode !== 'draft') return setCreditPrompt({ mode, message: err.message });
+      const f = fieldErrors(err); setServerErr(f); toast('error', err.message);
+    };
     if (existing) update.mutate(body, { onSuccess, onError });
     else create.mutate(body, { onSuccess, onError });
   };
@@ -124,7 +129,7 @@ function Form({ existing }: { existing?: Invoice }) {
       <PageHeader
         crumbs={<><Link to="/app/sales/invoices">Invoices</Link> / {existing ? existing.number ?? 'Draft' : 'New'}</>}
         title={existing ? `Edit ${existing.number ?? 'draft'}` : 'New Invoice'}
-        subtitle={fromSO ? `Converting sales order ${fromSO.number}` : `Financial year ${fyLabel(date, me.platform.fyStartMonth)}`}
+        subtitle={fromSO ? `Converting ${fromSO.kind === 'quote' ? 'quote' : 'sales order'} ${fromSO.number}` : `Financial year ${fyLabel(date, me.platform.fyStartMonth)}`}
       />
 
       {isIssued && (
@@ -234,6 +239,9 @@ function Form({ existing }: { existing?: Invoice }) {
           </div>
         </div>
       </div>
+      <ConfirmModal open={!!creditPrompt} onClose={() => setCreditPrompt(null)} title="Over the credit limit" confirmLabel="Issue anyway"
+        text={<>{creditPrompt?.message} Issue the invoice anyway? This is recorded in the audit log.</>}
+        onConfirm={() => { const m = creditPrompt!.mode; setCreditPrompt(null); save(m, true); }} />
     </div>
   );
 }

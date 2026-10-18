@@ -11,7 +11,7 @@ export const SAMPLE_INVOICE: Invoice = {
     { id: 'l3', itemId: 'i3', name: 'On-site installation', type: 'Services', hsn: '9987', unit: 'job', qty: 1, rate: 1500, tier: 'SP1', taxRate: 18, discount: 0, amount: 1500 },
   ],
   withGst: true, docType: 'TAX INVOICE', placeOfSupply: 'Tamil Nadu', interState: false, reverseCharge: false, tcsRate: 0,
-  status: 'Issued', paymentStatus: 'Unpaid', subTotal: 22775, discount: 725, taxTotal: 3649.5, cgst: 1824.75, sgst: 1824.75, igst: 0, tcs: 0,
+  status: 'Issued', paymentStatus: 'Sent', subTotal: 22775, discount: 725, taxTotal: 3649.5, cgst: 1824.75, sgst: 1824.75, igst: 0, tcs: 0,
   roundOff: -0.5, total: 26424, amountPaid: 0, amountCredited: 0, balance: 26424, notes: 'Delivery within 3 working days.', source: 'app',
   salesOrderId: null, recurringId: null, publicToken: null, lastReminderAt: null, cancelReason: '', cancelledAt: null, issuedAt: null, createdAt: '2026-10-18T10:00:00Z',
   terms: '', einvoice: null, eway: null,

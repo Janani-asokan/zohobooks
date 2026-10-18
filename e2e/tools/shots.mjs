@@ -15,7 +15,7 @@ if (dark) await p.evaluate(() => localStorage.setItem('ledgerly.theme', 'dark'))
 await p.fill('input[type=email]', process.env.EMAIL ?? 'owner@shop.com'); await p.fill('input[type=password]', process.env.PASS ?? 'owner123'); await p.keyboard.press('Enter');
 await p.waitForURL(/\/(app|super-admin)/); await p.waitForTimeout(1200);
 for (const r of routes) {
-  const [route, name] = r.split('=');
+  const cut = r.lastIndexOf('='); const [route, name] = cut > 0 ? [r.slice(0, cut), r.slice(cut + 1)] : [r, undefined];
   await p.goto(B + route); await p.waitForTimeout(Number(process.env.WAIT ?? 1500));
   await p.screenshot({ path: `${out}/${name ?? route.replace(/\W+/g, '_')}.png`, fullPage: process.env.FULL === '1' });
 }

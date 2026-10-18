@@ -1,7 +1,10 @@
 import { Badge } from './ui';
 import { usePrefs } from '@/context/PrefsContext';
 
-const TONE: Record<string, string> = { Paid: 'green', 'Partially Paid': 'blue', Unpaid: 'amber', Overdue: 'red', Draft: 'gray', Cancelled: 'gray' };
+const TONE: Record<string, string> = {
+  Paid: 'green', 'Partially Paid': 'amber', Sent: 'blue', Overdue: 'red', Draft: 'gray', Void: 'gray', Unpaid: 'amber', Cancelled: 'gray',
+  Accepted: 'green', Declined: 'red', Expired: 'gray', Invoiced: 'green', Confirmed: 'blue',
+};
 
 /** Payment-status badge with translated label. */
 export function StatusBadge({ status }: { status: string }) {
