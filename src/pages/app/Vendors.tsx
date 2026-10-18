@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Truck, Phone, Mail, ClipboardList, FileText } from 'lucide-react';
+import { Plus, Truck, Phone, Mail, ClipboardList, FileText, X } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
 import { useBills, useMut, usePurchaseOrders, useVendors } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
@@ -8,6 +8,35 @@ import { EmptyState, Field, Modal, PageHeader, SearchInput, StatCard } from '@/c
 import { Hint, Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
 import { GSTIN_RE, INDIAN_STATES } from '../../../shared/gst';
+import { PartyStatement } from '@/components/PartyStatement';
+import type { Bill, Vendor } from '@/api/types';
+
+function VendorPanel({ v, bills, onClose }: { v: Vendor; bills: Bill[]; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.modal')) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const mine = bills.filter((b) => b.vendorId === v.id);
+  const overdue = mine.filter((b) => b.status === 'Overdue' || (b.balance > 0 && b.dueDate < new Date().toISOString().slice(0, 10)));
+  return (
+    <aside className="split-panel" aria-label={`${v.name} details`}>
+      <div className="split-panel-head">
+        <div style={{ flex: 1, minWidth: 0 }}><h2>{v.name}</h2><div className="small muted">{v.gstin ? `GSTIN ${v.gstin}` : 'Unregistered'}{v.state ? ` · ${v.state}` : ''}</div></div>
+        <button className="icon-btn" onClick={onClose} aria-label="Close panel" title="Esc"><X size={18} /></button>
+      </div>
+      <div className="split-panel-body stack" style={{ gap: 16 }}>
+        <div className="kpi-row">
+          <div><div className="k">You owe</div><div className="v">{money(v.payable)}</div></div>
+          <div><div className="k">Overdue</div><div className="v">{money(overdue.reduce((s, b) => s + b.balance, 0))}</div></div>
+          <div><div className="k">Bills</div><div className="v">{mine.length}</div></div>
+          <div><div className="k">Billed to date</div><div className="v">{money(mine.reduce((s, b) => s + b.amount, 0))}</div></div>
+        </div>
+        <PartyStatement url={`/shop/vendors/${v.id}/statement`} name={v.name} debitLabel="Paid" creditLabel="Billed" linkFor={() => '/app/purchases/bills'} />
+      </div>
+    </aside>
+  );
+}
 
 const blank = { name: '', gstin: '', phone: '', email: '', state: 'Tamil Nadu' };
 
@@ -24,6 +53,10 @@ export default function Vendors() {
   const [vendor, setVendor] = useState(blank);
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
+  const selectedId = params.get('v');
+  const selected = vendors.find((x) => x.id === selectedId) ?? null;
+  const select = (id: string | null) => { if (id) params.set('v', id); else params.delete('v'); setParams(params, { replace: true }); };
+  const closePanel = useCallback(() => select(null), [params]);
   const create = useMut((b: typeof blank) => api.post('/shop/vendors', b), [['vendors']], { success: 'Vendor added', silentError: true });
 
   const start = () => { setVendor(blank); setTouched(false); setServerErr({}); setOpen(true); };
@@ -51,30 +84,33 @@ export default function Vendors() {
         <StatCard label="Open purchase orders" value={orders.filter((o) => o.status === 'Issued' || o.status === 'Partially Received').length} icon={Truck} tone="green" foot="Awaiting goods" />
       </div>
 
-      <div className="card mt-16">
+      <div className={`split-page mt-16 ${selected ? 'has-detail' : ''}`}>
+      <div className="card">
         <div className="toolbar"><div className="toolbar-left"><SearchInput value={q} onChange={setQ} placeholder="Search vendor, GSTIN, phone…" /></div></div>
         <div className="table-wrap">
           {isLoading ? <div className="skeleton" style={{ height: 200, margin: 16 }} /> : rows.length === 0 ? (
             <EmptyState icon={Truck} title={vendors.length ? 'No vendors match' : 'No vendors yet'} text="Add the suppliers you buy from." action={canWrite && <button className="btn btn-primary" onClick={start}><Plus size={15} /> New Vendor</button>} />
           ) : (
             <table className="table">
-              <thead><tr><th>Vendor</th><th>GSTIN</th><th>State</th><th>Contact</th><th className="num">Bills</th><th className="num">Payables</th><th /></tr></thead>
+              <thead><tr><th>Vendor</th><th className="hide-split">GSTIN</th><th className="hide-split">State</th><th className="hide-split">Contact</th><th className="num">Bills</th><th className="num">Payables</th><th className="hide-split" /></tr></thead>
               <tbody>
                 {rows.map((v) => (
-                  <tr key={v.id}>
+                  <tr key={v.id} className={`row-click ${v.id === selectedId ? 'row-selected' : ''}`} onClick={() => select(v.id === selectedId ? null : v.id)} aria-selected={v.id === selectedId}>
                     <td><div className="name-cell"><Thumb name={v.name} size={36} /><span className="title">{v.name}</span></div></td>
-                    <td>{v.gstin ? <span className="chip mono">{v.gstin}</span> : <span className="muted small">Unregistered</span>}</td>
-                    <td className="muted">{v.state || '—'}</td>
-                    <td>{v.phone && <div className="small row" style={{ gap: 4 }}><Phone size={12} /> {v.phone}</div>}{v.email && <div className="muted row" style={{ gap: 4 }}><Mail size={12} /> {v.email}</div>}</td>
+                    <td className="hide-split">{v.gstin ? <span className="chip mono">{v.gstin}</span> : <span className="muted small">Unregistered</span>}</td>
+                    <td className="muted hide-split">{v.state || '—'}</td>
+                    <td className="hide-split">{v.phone && <div className="small row" style={{ gap: 4 }}><Phone size={12} /> {v.phone}</div>}{v.email && <div className="muted row" style={{ gap: 4 }}><Mail size={12} /> {v.email}</div>}</td>
                     <td className="num">{bills.filter((b) => b.vendorId === v.id).length}</td>
                     <td className="num strong" style={v.payable > 0 ? { color: 'var(--red-600)' } : undefined}>{money(v.payable)}</td>
-                    <td className="num">{canWrite && <button className="btn btn-soft btn-sm" onClick={() => navigate('/app/purchases/orders?new=1')}>New PO</button>}</td>
+                    <td className="num hide-split" onClick={(e) => e.stopPropagation()}>{canWrite && <button className="btn btn-soft btn-sm" onClick={() => navigate('/app/purchases/orders?new=1')}>New PO</button>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
         </div>
+      </div>
+      {selected && <VendorPanel key={selected.id} v={selected} bills={bills} onClose={closePanel} />}
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} title="New vendor" footer={<><button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={create.isPending} onClick={() => {

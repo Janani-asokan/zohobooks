@@ -4,6 +4,7 @@ import { Plus, ShoppingBag, CheckCircle2, Loader2, Package, Receipt, AlertTriang
 import { api, fieldErrors } from '@/api/client';
 import { useBankAccounts, useBills, useItems, useMut, useVendors } from '@/api/hooks';
 import type { Bill } from '@/api/types';
+import { StatusBadge } from '@/components/StatusBadge';
 import { useShopUser } from '@/context/AuthContext';
 import { Badge, EmptyState, Field, Modal, PageHeader, SearchInput, StatCard, Toggle } from '@/components/ui';
 import { Hint } from '@/components/kit';
@@ -24,26 +25,35 @@ export default function Purchases() {
   const { data: bills = [], isLoading } = useBills();
   const accounts = useBankAccounts().data ?? [];
   const items = useItems().data ?? [];
-  const [filter, setFilter] = useState<'All' | 'Open' | 'Overdue' | 'Paid'>('All');
+  const [filter, setFilter] = useState<'All' | Bill['status']>('All');
   const [q, setQ] = useState('');
   const [billOpen, setBillOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('items');
   const [bill, setBill] = useState(blankBill);
   const [payBill, setPayBill] = useState<Bill | null>(null);
   const [payAccount, setPayAccount] = useState('');
+  const [payForm, setPayForm] = useState({ amount: '', tdsAmount: '', mode: 'Bank Transfer', reference: '', date: todayISO() });
+  const [payErr, setPayErr] = useState('');
   const [view, setView] = useState<Bill | null>(null);
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
 
   const keys = [['bills'], ['vendors'], ['bankAccounts'], ['bankTxns'], ['notifications'], ['items'], ['stockAlerts'], ['movements'], ['dashboard']];
   const createBill = useMut((b: Record<string, unknown>) => api.post<Bill>('/shop/bills', b), keys, { success: (b) => `${b.number} recorded${b.stockAdded ? ' · stock added' : ''}`, silentError: true });
-  const pay = useMut((v: { id: string; accountId: string }) => api.post(`/shop/bills/${v.id}/pay`, { accountId: v.accountId, date: todayISO() }), keys, { success: 'Bill paid' });
+  const pay = useMut((v: { id: string; body: Record<string, unknown> }) => api.post<Bill>(`/shop/bills/${v.id}/pay`, v.body), [...keys, ['billPayments']], { success: (b) => (b.status === 'Paid' ? `${b.number} paid in full` : `Payment recorded · ${money(b.balance)} left`), silentError: true });
+  const startPay = (b: Bill) => { setPayBill(b); setPayErr(''); setPayForm({ amount: String(b.balance), tdsAmount: '', mode: 'Bank Transfer', reference: '', date: todayISO() }); setPayAccount(accounts.find((a) => a.type === 'Bank')?.id ?? accounts[0]?.id ?? ''); };
+  const savePay = () => {
+    const amount = Number(payForm.amount), tds = Number(payForm.tdsAmount || 0);
+    if (!(amount > 0)) return setPayErr('Enter the amount paid');
+    if (amount + tds > payBill!.balance + 0.005) return setPayErr(`More than the ${money(payBill!.balance)} still due`);
+    pay.mutate({ id: payBill!.id, body: { accountId: payAccount, date: payForm.date, amount, tdsAmount: tds, mode: payForm.mode, reference: payForm.reference } }, { onSuccess: () => setPayBill(null), onError: (e) => setPayErr(e.message) });
+  };
 
   const start = () => { setBill(blankBill()); setMode('items'); setTouched(false); setServerErr({}); setBillOpen(true); };
   useEffect(() => { if (params.get('new') && canWrite) { start(); setParams({}, { replace: true }); } }, [params]);
 
-  const statusOf = (b: Bill) => (b.status === 'Open' && daysUntil(b.dueDate) < 0 ? 'Overdue' : b.status);
-  const open = bills.filter((b) => b.status === 'Open');
+  const statusOf = (b: Bill) => b.status;
+  const open = bills.filter((b) => b.status !== 'Paid');
   const overdue = open.filter((b) => daysUntil(b.dueDate) < 0);
   const monthStart = todayISO().slice(0, 8) + '01';
   const itc = bills.filter((b) => b.date >= monthStart).reduce((s, b) => s + b.taxAmount, 0);
@@ -76,8 +86,8 @@ export default function Purchases() {
         <p>Enter a bill <strong>item by item</strong> to add the goods to stock straight away (no purchase order needed), or as a <strong>single amount</strong> when the vendor bill has no stock items. Record rent, salaries and other running costs under <strong>Expenses</strong> so they show in Profit &amp; Loss. Click <strong>Pay</strong> when you settle it — the money leaves the bank or cash account you choose.</p>
       </Hint>
       <div className="stat-grid">
-        <StatCard label="Total payables" value={money(open.reduce((s, b) => s + b.amount, 0))} icon={ShoppingBag} tone="blue" foot={<>{open.length} open bills</>} />
-        <StatCard label="Overdue bills" value={money(overdue.reduce((s, b) => s + b.amount, 0))} icon={AlertTriangle} tone="red" foot={<>{overdue.length} past due</>} />
+        <StatCard label="Total payables" value={money(open.reduce((s, b) => s + b.balance, 0))} icon={ShoppingBag} tone="blue" foot={<>{open.length} open bills</>} />
+        <StatCard label="Overdue bills" value={money(overdue.reduce((s, b) => s + b.balance, 0))} icon={AlertTriangle} tone="red" foot={<>{overdue.length} past due</>} />
         <StatCard label="Input tax credit (this month)" value={money(itc)} icon={CheckCircle2} tone="green" foot="GST on purchase bills · used in GSTR-3B" />
         <StatCard label="Paid this month" value={money(bills.filter((b) => b.status === 'Paid' && b.date >= monthStart).reduce((s, b) => s + b.amount, 0))} icon={Receipt} tone="violet" foot="Bills dated this month" />
       </div>
@@ -87,14 +97,14 @@ export default function Purchases() {
           <div className="toolbar-left" style={{ flexWrap: 'wrap' }}>
             <SearchInput value={q} onChange={setQ} placeholder="Search bill, vendor…" />
             <div className="filter-chips" style={{ padding: 0 }}>
-              {(['All', 'Open', 'Overdue', 'Paid'] as const).map((f) => <button key={f} className={`filter-chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>{f} <span className="n">{f === 'All' ? bills.length : bills.filter((b) => statusOf(b) === f).length}</span></button>)}
+              {(['All', 'Open', 'Overdue', 'Partially Paid', 'Paid'] as const).map((f) => <button key={f} className={`filter-chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>{f} <span className="n">{f === 'All' ? bills.length : bills.filter((b) => statusOf(b) === f).length}</span></button>)}
             </div>
           </div>
         </div>
         <div className="table-wrap">
           {isLoading ? <div className="skeleton" style={{ height: 200, margin: 16 }} /> : rows.length === 0 ? <EmptyState icon={ShoppingBag} title={bills.length ? 'No bills match' : 'No bills yet'} text="Record purchase bills from your vendors." action={canWrite && <button className="btn btn-primary" onClick={start}><Plus size={15} /> New Bill</button>} /> : (
             <table className="table">
-              <thead><tr><th>Date</th><th>Bill #</th><th>Vendor</th><th>Details</th><th>Due</th><th>Status</th><th className="num">GST</th><th className="num">Total</th><th /></tr></thead>
+              <thead><tr><th>Date</th><th>Bill #</th><th>Vendor</th><th>Details</th><th>Due</th><th>Status</th><th className="num">Total</th><th className="num">Balance</th><th /></tr></thead>
               <tbody>
                 {rows.map((b) => (
                   <tr key={b.id} className="clickable" onClick={() => setView(b)}>
@@ -103,10 +113,10 @@ export default function Purchases() {
                     <td>{b.vendorName}</td>
                     <td className="muted">{b.description || '—'}{b.stockAdded && <div><span className="chip" style={{ background: 'var(--green-50)', color: 'var(--green-700)' }}><Package size={11} /> {b.purchaseOrderId ? 'From PO' : 'Stock added'}</span></div>}</td>
                     <td className="muted">{fmtDate(b.dueDate)}</td>
-                    <td><Badge>{statusOf(b)}</Badge></td>
-                    <td className="num muted">{money(b.taxAmount)}</td>
-                    <td className="num strong">{money(b.amount)}</td>
-                    <td className="num" onClick={(e) => e.stopPropagation()}>{b.status === 'Open' && canWrite && <button className="btn btn-secondary btn-sm" onClick={() => { setPayBill(b); setPayAccount(accounts.find((a) => a.type === 'Bank')?.id ?? accounts[0]?.id ?? ''); }}><CheckCircle2 size={14} /> Pay</button>}</td>
+                    <td><StatusBadge status={statusOf(b)} /></td>
+                    <td className="num strong">{money(b.amount)}<div className="muted">GST {money(b.taxAmount)}</div></td>
+                    <td className="num">{b.balance > 0 ? money(b.balance) : '—'}</td>
+                    <td className="num" onClick={(e) => e.stopPropagation()}>{b.balance > 0 && canWrite && <button className="btn btn-secondary btn-sm" onClick={() => startPay(b)}><CheckCircle2 size={14} /> Pay</button>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -152,9 +162,16 @@ export default function Purchases() {
         )}
       </Modal>
 
-      <Modal open={!!payBill} onClose={() => setPayBill(null)} title={`Pay ${payBill?.number}`} subtitle={payBill ? `${money(payBill.amount)} will be withdrawn from the chosen account.` : ''}
-        footer={<><button className="btn btn-secondary" onClick={() => setPayBill(null)}>Cancel</button><button className="btn btn-primary" disabled={!payAccount || pay.isPending} onClick={() => pay.mutate({ id: payBill!.id, accountId: payAccount }, { onSuccess: () => setPayBill(null) })}>Mark as paid</button></>}>
-        <Field label="Pay from"><select className="select" value={payAccount} onChange={(e) => setPayAccount(e.target.value)}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {money(a.balance)}</option>)}</select></Field>
+      <Modal open={!!payBill} onClose={() => setPayBill(null)} title={`Pay ${payBill?.number}`} subtitle={payBill ? `${payBill.vendorName} · ${money(payBill.balance)} of ${money(payBill.amount)} still due` : ''}
+        footer={<><button className="btn btn-secondary" onClick={() => setPayBill(null)}>Cancel</button><button className="btn btn-primary" disabled={!payAccount || pay.isPending} onClick={savePay}>Record payment</button></>}>
+        <div className="form-grid">
+          <Field label="Amount paid" required error={payErr}><div className="input-addon"><span>₹</span><input className={`input ${payErr ? 'invalid' : ''}`} type="number" min={0} value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} autoFocus /></div></Field>
+          <Field label="Payment date"><input className="input" type="date" value={payForm.date} max={todayISO()} onChange={(e) => setPayForm({ ...payForm, date: e.target.value })} /></Field>
+          <Field label="Pay from"><select className="select" value={payAccount} onChange={(e) => setPayAccount(e.target.value)}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {money(a.balance)}</option>)}</select></Field>
+          <Field label="Mode"><select className="select" value={payForm.mode} onChange={(e) => setPayForm({ ...payForm, mode: e.target.value })}>{['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Card'].map((m) => <option key={m}>{m}</option>)}</select></Field>
+          <Field label="Reference" hint="UTR, cheque number…"><input className="input" value={payForm.reference} maxLength={100} onChange={(e) => setPayForm({ ...payForm, reference: e.target.value })} /></Field>
+          <Field label="TDS deducted" hint="Counts towards the bill; not withdrawn"><div className="input-addon"><span>₹</span><input className="input" type="number" min={0} value={payForm.tdsAmount} onChange={(e) => setPayForm({ ...payForm, tdsAmount: e.target.value })} /></div></Field>
+        </div>
       </Modal>
 
       {view && (
@@ -176,7 +193,7 @@ export default function Purchases() {
                 <div className="grand"><span>Total</span><strong>{money(view.amount)}</strong></div>
               </div>
               {view.stockAdded && <p className="small muted mt-16"><Package size={13} style={{ verticalAlign: -2 }} /> {view.purchaseOrderId ? 'Goods were received on the purchase order.' : 'These goods were added to stock when the bill was saved.'}</p>}
-              {view.status === 'Open' && canWrite && <button className="btn btn-primary mt-16" onClick={() => { setPayBill(view); setPayAccount(accounts.find((a) => a.type === 'Bank')?.id ?? accounts[0]?.id ?? ''); setView(null); }}><CheckCircle2 size={15} /> Record payment</button>}
+              {view.balance > 0 && canWrite && <button className="btn btn-primary mt-16" onClick={() => { startPay(view); setView(null); }}><CheckCircle2 size={15} /> Record payment</button>}
             </div>
           </aside>
         </>

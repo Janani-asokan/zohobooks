@@ -31,6 +31,7 @@ export function buildNav(can: Can): NavItem[] {
         { label: 'Vendors', to: '/app/purchases/vendors' },
         { label: 'Purchase Orders', to: '/app/purchases/orders' },
         { label: 'Bills', to: '/app/purchases/bills' },
+        { label: 'Payments Made', to: '/app/purchases/payments' },
         { label: 'Expenses', to: '/app/purchases/expenses' },
       ],
     });
@@ -92,6 +93,7 @@ export function buildActions(can: Can): PaletteAction[] {
   add(can('purchases.read'), 'Go to', 'Vendors', Truck, '/app/purchases/vendors', 'suppliers');
   add(can('purchases.read'), 'Go to', 'Purchase orders', ClipboardList, '/app/purchases/orders', 'po');
   add(can('purchases.read'), 'Go to', 'Bills', Receipt, '/app/purchases/bills', 'payables');
+  add(can('purchases.read'), 'Go to', 'Payments made', IndianRupee, '/app/purchases/payments', 'vendor payments payables ageing');
   add(can('purchases.read'), 'Go to', 'Expenses', Wallet, '/app/purchases/expenses');
   add(true, 'Go to', 'Items', Package, '/app/items', 'inventory products catalogue stock');
   add(true, 'Go to', 'Low stock', Boxes, '/app/items?tab=stock', 'reorder expiry batches alerts');

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
 import { api, ApiError } from './client';
 import { useToast } from '@/context/ToastContext';
 import type {
-  AuditEntry, BankAccount, BankTxn, Bill, Branch, CreditNote, Customer, Dashboard, Invoice, InvoiceDetail, Item, Notification, Organization,
+  AuditEntry, BankAccount, BankTxn, Bill, BillPayment, Branch, CreditNote, Customer, Dashboard, Invoice, InvoiceDetail, Item, Notification, Organization,
   ItemFacets, PaymentRow, Plan, PurchaseOrder, Expense, PlatformConfig, Recurring, SalesOrder, Shop, StaffUser, TaxSlab, Vendor,
 } from './types';
 import type { PrintSettings } from '../../shared/printSettings';
@@ -28,6 +28,7 @@ export const useSalesOrders = (kind: 'order' | 'quote' = 'order') => useQuery(q<
 export const useRecurring = () => useQuery(q<Recurring[]>(['recurring'], `${S}/recurring`));
 export const useVendors = (enabled = true) => useQuery(q<Vendor[]>(['vendors'], `${S}/vendors`, enabled));
 export const useBills = (enabled = true) => useQuery(q<Bill[]>(['bills'], `${S}/bills`, enabled));
+export const useBillPayments = () => useQuery(q<BillPayment[]>(['billPayments'], `${S}/bill-payments`));
 export const useBankAccounts = () => useQuery(q<BankAccount[]>(['bankAccounts'], `${S}/bank-accounts`));
 export const useBankTxns = (enabled = true) => useQuery(q<BankTxn[]>(['bankTxns'], `${S}/bank-transactions`, enabled));
 export const useStaff = (enabled = true) => useQuery(q<StaffUser[]>(['staff'], `${S}/staff`, enabled));

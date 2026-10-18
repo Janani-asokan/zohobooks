@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { perm } from '../../auth';
+import type { Request } from 'express';
+import { perm, todayISO } from '../../auth';
 import { audit } from '../../audit';
-import { many, one } from '../../db';
+import { many, one, type Db } from '../../db';
 import { badRequest, conflict, notFound, parse } from '../../http';
 import { nextSeq, primaryBranchId, requireRow } from '../../services/common';
 import { moveStock } from '../../services/stock';
@@ -27,7 +28,7 @@ moneyRouter.get(
   '/vendors',
   perm('purchases.read'),
   T(async (db, _req, c) =>
-    (await many(db, "SELECT v.*, coalesce((SELECT sum(amount) FROM bills b WHERE b.vendor_id = v.id AND b.status = 'Open'),0) AS payable FROM vendors v WHERE v.shop_id = $1 ORDER BY v.name", [c.shopId])).map(serializeVendor),
+    (await many(db, 'SELECT v.*, coalesce((SELECT sum(amount - amount_paid) FROM bills b WHERE b.vendor_id = v.id),0) AS payable FROM vendors v WHERE v.shop_id = $1 ORDER BY v.name', [c.shopId])).map(serializeVendor),
   ),
 );
 moneyRouter.post(
@@ -44,7 +45,9 @@ moneyRouter.post(
 /* ---------- Bills (purchases, for payables + input tax credit) ---------- */
 const serializeBill = (b: any) => ({
   id: b.id, number: b.number, vendorId: b.vendor_id, vendorName: b.vendor_name, vendorBillNo: b.vendor_bill_no, date: b.date, dueDate: b.due_date,
-  taxableAmount: Number(b.taxable_amount), taxAmount: Number(b.tax_amount), amount: Number(b.amount), status: b.status, description: b.description,
+  taxableAmount: Number(b.taxable_amount), taxAmount: Number(b.tax_amount), amount: Number(b.amount), amountPaid: Number(b.amount_paid ?? 0),
+  balance: Math.max(0, Math.round((Number(b.amount) - Number(b.amount_paid ?? 0)) * 100) / 100),
+  status: b.status === 'Paid' ? 'Paid' : Number(b.amount_paid ?? 0) > 0 ? 'Partially Paid' : b.due_date < todayISO() ? 'Overdue' : 'Open', description: b.description,
   lines: b.lines ?? [], purchaseOrderId: b.purchase_order_id ?? null, stockAdded: !!b.stock_added,
 });
 moneyRouter.get(
@@ -92,22 +95,159 @@ moneyRouter.post(
     return serializeBill({ ...row, vendor_name: v.name });
   }),
 );
-/** Paying a bill posts a withdrawal to the chosen account. */
+/* ---------- Payments made (against bills, in part or in full) ---------- */
+export const billPaymentInput = z.object({
+  accountId: z.string().uuid('Choose the paying account'),
+  date: iso,
+  /** Omit to pay the whole balance. */
+  amount: z.number().positive('Enter the amount paid').optional(),
+  tdsAmount: z.number().min(0).default(0),
+  mode: z.enum(['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Card']).default('Bank Transfer'),
+  reference: z.string().trim().max(100).default(''),
+  notes: z.string().max(500).default(''),
+});
+
+/** Records a payment, withdraws it from the account and marks the bill Paid once nothing is left. */
+export async function payBill(db: Db, req: Request | null, shopId: string, billId: string, b: z.infer<typeof billPaymentInput>, userId: string | null) {
+  const bill = await one(db, 'SELECT b.*, v.name AS vendor_name FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.shop_id = $1 AND b.id = $2 FOR UPDATE OF b', [shopId, billId]);
+  if (!bill) throw notFound('Bill');
+  const balance = r2(Number(bill.amount) - Number(bill.amount_paid));
+  if (balance <= 0) throw conflict('This bill is already paid');
+  const amount = r2(b.amount ?? balance - b.tdsAmount);
+  const settles = r2(amount + b.tdsAmount);
+  if (settles > balance + 0.005) throw badRequest(`That is more than the ₹${balance.toFixed(2)} still due`, { amount: 'More than the balance due' });
+  await requireRow(db, 'bank_accounts', shopId, b.accountId, 'Account');
+  const number = `PM-${String(await nextSeq(db, shopId, 'pm')).padStart(4, '0')}`;
+  const p = await one(
+    db,
+    `INSERT INTO bill_payments (shop_id, number, bill_id, vendor_id, date, amount, tds_amount, mode, reference, account_id, notes, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    [shopId, number, bill.id, bill.vendor_id, b.date, amount, b.tdsAmount, b.mode, b.reference, b.accountId, b.notes, userId],
+  );
+  const paid = r2(Number(bill.amount_paid) + settles);
+  await db.query('UPDATE bills SET amount_paid = $3, status = $4 WHERE shop_id = $1 AND id = $2', [shopId, bill.id, paid, paid >= Number(bill.amount) - 0.005 ? 'Paid' : 'Open']);
+  await db.query("INSERT INTO bank_transactions (shop_id, account_id, date, description, amount, category, ref_type, ref_id) VALUES ($1,$2,$3,$4,$5,'Vendor Payment','bill_payment',$6)", [
+    shopId, b.accountId, b.date, `${number} · ${bill.number} · ${bill.vendor_name}`, -amount, p.id,
+  ]);
+  await audit(db, req, shopId, 'pay', 'bill', bill.id, { payment: number, amount, tds: b.tdsAmount });
+  return p;
+}
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
 moneyRouter.post(
   '/bills/:id/pay',
   perm('purchases.write'),
   T(async (db, req, c) => {
-    const b = parse(z.object({ accountId: z.string().uuid('Choose the paying account'), date: iso }), req.body);
-    const bill = await one(db, 'SELECT b.*, v.name AS vendor_name FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.shop_id = $1 AND b.id = $2 FOR UPDATE', [c.shopId, req.params.id]);
-    if (!bill) throw notFound('Bill');
-    if (bill.status === 'Paid') throw conflict('This bill is already paid');
-    await requireRow(db, 'bank_accounts', c.shopId, b.accountId, 'Account');
-    await db.query("UPDATE bills SET status = 'Paid' WHERE shop_id = $1 AND id = $2", [c.shopId, bill.id]);
-    await db.query("INSERT INTO bank_transactions (shop_id, account_id, date, description, amount, category, ref_type, ref_id) VALUES ($1,$2,$3,$4,$5,'Vendor Payment','bill',$6)", [
-      c.shopId, b.accountId, b.date, `${bill.number} · ${bill.vendor_name}`, -Number(bill.amount), bill.id,
-    ]);
-    await audit(db, req, c.shopId, 'pay', 'bill', bill.id, { amount: Number(bill.amount) });
-    return serializeBill({ ...bill, status: 'Paid' });
+    await payBill(db, req, c.shopId, req.params.id!, parse(billPaymentInput, req.body), c.id);
+    return serializeBill(await one(db, 'SELECT b.*, v.name AS vendor_name FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.shop_id = $1 AND b.id = $2', [c.shopId, req.params.id]));
+  }),
+);
+
+const serializeBillPayment = (p: any) => ({
+  id: p.id, number: p.number, billId: p.bill_id, billNumber: p.bill_number, vendorBillNo: p.vendor_bill_no ?? '', vendorId: p.vendor_id, vendorName: p.vendor_name,
+  date: p.date, amount: Number(p.amount), tdsAmount: Number(p.tds_amount), mode: p.mode, reference: p.reference, accountId: p.account_id, accountName: p.account_name ?? null, notes: p.notes,
+});
+moneyRouter.get(
+  '/bill-payments',
+  perm('purchases.read'),
+  T(async (db, _req, c) =>
+    (await many(
+      db,
+      `SELECT p.*, b.number AS bill_number, b.vendor_bill_no, v.name AS vendor_name, a.name AS account_name
+       FROM bill_payments p JOIN bills b ON b.id = p.bill_id JOIN vendors v ON v.id = p.vendor_id LEFT JOIN bank_accounts a ON a.id = p.account_id
+       WHERE p.shop_id = $1 ORDER BY p.date DESC, p.created_at DESC`,
+      [c.shopId],
+    )).map(serializeBillPayment),
+  ),
+);
+/** Undo a payment: the bill reopens and the bank withdrawal is removed. */
+moneyRouter.delete(
+  '/bill-payments/:id',
+  perm('purchases.write'),
+  T(async (db, req, c) => {
+    const p = await one(db, 'SELECT * FROM bill_payments WHERE shop_id = $1 AND id = $2 FOR UPDATE', [c.shopId, req.params.id]);
+    if (!p) throw notFound('Payment');
+    await db.query("DELETE FROM bank_transactions WHERE shop_id = $1 AND ref_type = 'bill_payment' AND ref_id = $2", [c.shopId, p.id]);
+    await db.query('DELETE FROM bill_payments WHERE shop_id = $1 AND id = $2', [c.shopId, p.id]);
+    await db.query("UPDATE bills SET amount_paid = GREATEST(amount_paid - $3, 0), status = 'Open' WHERE shop_id = $1 AND id = $2", [c.shopId, p.bill_id, r2(Number(p.amount) + Number(p.tds_amount))]);
+    await audit(db, req, c.shopId, 'delete_payment', 'bill', p.bill_id, { payment: p.number, amount: Number(p.amount) });
+  }),
+);
+
+/* ---------- Vendor statement and payables ageing ---------- */
+moneyRouter.get(
+  '/vendors/:id/statement',
+  perm('purchases.read'),
+  T(async (db, req, c) => {
+    const v = await requireRow(db, 'vendors', c.shopId, req.params.id!, 'Vendor');
+    const to = iso.safeParse(req.query.to).success ? String(req.query.to) : todayISO();
+    const from = iso.safeParse(req.query.from).success ? String(req.query.from) : fyStartOf(to);
+    const args = [c.shopId, v.id];
+    const opening = await one(
+      db,
+      `SELECT coalesce((SELECT sum(amount) FROM bills WHERE shop_id = $1 AND vendor_id = $2 AND date < $3), 0)
+            - coalesce((SELECT sum(amount + tds_amount) FROM bill_payments WHERE shop_id = $1 AND vendor_id = $2 AND date < $3), 0) AS bal`,
+      [...args, from],
+    );
+    const rows = await many(
+      db,
+      `SELECT * FROM (
+         SELECT date, created_at AS at, 'bill' AS type, id AS ref_id, number || CASE WHEN vendor_bill_no <> '' THEN ' (' || vendor_bill_no || ')' ELSE '' END AS ref, 'Bill' AS label, amount AS credit, 0 AS debit
+           FROM bills WHERE shop_id = $1 AND vendor_id = $2 AND date BETWEEN $3 AND $4
+         UNION ALL
+         SELECT p.date, p.created_at, 'payment', p.bill_id, p.number, 'Payment · ' || p.mode || ' · ' || b.number || CASE WHEN p.tds_amount > 0 THEN ' (incl. TDS)' ELSE '' END, 0, p.amount + p.tds_amount
+           FROM bill_payments p JOIN bills b ON b.id = p.bill_id WHERE p.shop_id = $1 AND p.vendor_id = $2 AND p.date BETWEEN $3 AND $4
+       ) t ORDER BY date, at`,
+      [...args, from, to],
+    );
+    let bal = Number(opening.bal);
+    const openingBalance = r2(bal);
+    const entries = rows.map((r) => {
+      bal = r2(bal + Number(r.credit) - Number(r.debit));
+      return { date: r.date, type: r.type, refId: r.ref_id, ref: r.ref, label: r.label, debit: Number(r.debit), credit: Number(r.credit), balance: bal };
+    });
+    const open = await many(db, 'SELECT due_date, amount - amount_paid AS bal FROM bills WHERE shop_id = $1 AND vendor_id = $2 AND amount - amount_paid > 0.005', args);
+    return {
+      vendor: { id: v.id, name: v.name, gstin: v.gstin, state: v.state, phone: v.phone, email: v.email },
+      from, to, openingBalance, entries, closingBalance: r2(bal),
+      totals: { debit: r2(entries.reduce((s, e) => s + e.debit, 0)), credit: r2(entries.reduce((s, e) => s + e.credit, 0)) },
+      ageing: ageingOf(open),
+    };
+  }),
+);
+
+/** Buckets of what is still owed, by days past the due date. */
+export function ageingOf(rows: Array<{ due_date: string; bal: unknown }>, today = todayISO()) {
+  const out = { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 };
+  const now = Date.parse(today);
+  for (const r of rows) {
+    const days = Math.floor((now - Date.parse(r.due_date)) / 86_400_000);
+    const k = days <= 0 ? 'current' : days <= 30 ? 'd1_30' : days <= 60 ? 'd31_60' : days <= 90 ? 'd61_90' : 'd90_plus';
+    out[k] = r2(out[k] + Number(r.bal));
+  }
+  return out;
+}
+const fyStartOf = (d: string) => `${Number(d.slice(0, 4)) - (d.slice(5, 7) < '04' ? 1 : 0)}-04-01`;
+
+moneyRouter.get(
+  '/payables-ageing',
+  perm('purchases.read'),
+  T(async (db, _req, c) => {
+    const rows = await many(
+      db,
+      `SELECT v.id AS vendor_id, v.name, b.due_date, b.amount - b.amount_paid AS bal
+       FROM bills b JOIN vendors v ON v.id = b.vendor_id WHERE b.shop_id = $1 AND b.amount - b.amount_paid > 0.005 ORDER BY v.name`,
+      [c.shopId],
+    );
+    const byVendor = new Map<string, { vendorId: string; name: string; rows: typeof rows }>();
+    for (const r of rows) {
+      const e = byVendor.get(r.vendor_id) ?? { vendorId: r.vendor_id, name: r.name, rows: [] as typeof rows };
+      e.rows.push(r);
+      byVendor.set(r.vendor_id, e);
+    }
+    const vendors = [...byVendor.values()].map((v) => { const a = ageingOf(v.rows); return { vendorId: v.vendorId, name: v.name, ...a, total: r2(Object.values(a).reduce((s, n) => s + n, 0)) }; });
+    const total = ageingOf(rows);
+    return { asOf: todayISO(), vendors, totals: { ...total, total: r2(Object.values(total).reduce((s, n) => s + n, 0)) } };
   }),
 );
 

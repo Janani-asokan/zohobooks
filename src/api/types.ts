@@ -78,7 +78,11 @@ export interface Recurring {
 
 export interface Vendor { id: string; name: string; gstin: string; phone: string; email: string; state: string; payable: number }
 export interface PurchaseLine { id: string; itemId: string; name: string; type: 'Goods' | 'Services'; unit: string; qty: number; rate: number; taxRate: number; amount: number; received: number }
-export interface Bill { id: string; number: string; vendorId: string; vendorName: string; vendorBillNo: string; date: string; dueDate: string; taxableAmount: number; taxAmount: number; amount: number; status: 'Open' | 'Paid'; description: string; lines: PurchaseLine[]; purchaseOrderId: string | null; stockAdded: boolean }
+export interface Bill { id: string; number: string; vendorId: string; vendorName: string; vendorBillNo: string; date: string; dueDate: string; taxableAmount: number; taxAmount: number; amount: number; amountPaid: number; balance: number; status: 'Open' | 'Overdue' | 'Partially Paid' | 'Paid'; description: string; lines: PurchaseLine[]; purchaseOrderId: string | null; stockAdded: boolean }
+export interface BillPayment {
+  id: string; number: string; billId: string; billNumber: string; vendorBillNo: string; vendorId: string; vendorName: string; date: string;
+  amount: number; tdsAmount: number; mode: string; reference: string; accountId: string | null; accountName: string | null; notes: string;
+}
 export interface PurchaseOrder {
   id: string; number: string; vendorId: string; vendorName: string; branchId: string | null; date: string; expectedDate: string | null; lines: PurchaseLine[];
   status: 'Draft' | 'Issued' | 'Partially Received' | 'Received' | 'Cancelled'; subTotal: number; taxTotal: number; total: number; notes: string; billId: string | null; createdAt: string;

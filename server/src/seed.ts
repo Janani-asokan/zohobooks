@@ -203,13 +203,19 @@ export async function seed({ quiet = false } = {}) {
     const bills: Array<[number, number, number, number, number, 'Open' | 'Paid', string]> = [
       [0, -35, -5, 83051, 14949, 'Paid', 'Monitors ×10'], [1, -20, 10, 39407, 7093, 'Open', 'Peripherals restock'], [2, -8, 22, 21429, 2571, 'Open', 'A4 paper ×100 reams'],
     ];
-    for (const [i, [vi, d, due, tax, gst, st, desc]] of bills.entries())
+    for (const [i, [vi, d, due, tax, gst, , desc]] of bills.entries())
       await db.query("INSERT INTO bills (shop_id, number, vendor_id, date, due_date, taxable_amount, tax_amount, amount, status, description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [
-        shopId, `BILL-${String(i + 1).padStart(4, '0')}`, v[vi], day(d), day(due), tax, gst, tax + gst, st, desc,
+        shopId, `BILL-${String(i + 1).padStart(4, '0')}`, v[vi], day(d), day(due), tax, gst, tax + gst, 'Open', desc,
       ]);
     await db.query("INSERT INTO counters (shop_id, key, value) VALUES ($1,'bill',3)", [shopId]);
+    // Bill 1 paid in full, bill 2 in part; each payment is a bank withdrawal.
+    const { payBill } = await import('./routes/shop/money');
+    const billIds = (await db.query('SELECT id, status FROM bills WHERE shop_id = $1 ORDER BY number', [shopId])).rows.map((r) => r.id);
+    for (const [i, [, d, , , , st]] of bills.entries())
+      if (st === 'Paid') await payBill(db, null, shopId, billIds[i], { accountId: hdfc, date: day(d + 1), tdsAmount: 0, mode: 'Bank Transfer', reference: 'NEFT', notes: '' }, null);
+    await payBill(db, null, shopId, billIds[1], { accountId: hdfc, date: day(-6), amount: 20000, tdsAmount: 0, mode: 'UPI', reference: '', notes: 'Part payment' }, null);
     for (const [acc, d, desc, amt, cat] of [
-      [hdfc, -34, 'Payment to Redington India', -98000, 'Vendor Payment'], [hdfc, -25, 'Shop rent — this month', -35000, 'Rent'],
+      [hdfc, -25, 'Shop rent — this month', -35000, 'Rent'],
       [hdfc, -9, 'Electricity bill', -6240, 'Utilities'],
     ] as const)
       await db.query('INSERT INTO bank_transactions (shop_id, account_id, date, description, amount, category) VALUES ($1,$2,$3,$4,$5,$6)', [shopId, acc, day(d), desc, amt, cat]);

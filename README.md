@@ -101,6 +101,11 @@ In production the API serves the built web app too, so you deploy one process. M
 - **Payment reminders:** WhatsApp, email on demand, or automatic email reminders.
 - **Recurring invoices**, generated hourly. **Sales orders** move Draft → Sent → Accepted and convert to an invoice.
 
+**Shop: purchases**
+- Pay vendor bills **in part or in full**, with mode, reference and TDS. Each payment (PM-0001…) is a bank or cash withdrawal; removing one reopens the bill and reverses the withdrawal.
+- **Payments Made** list and a **payables ageing** table (not due, 1–30, 31–60, 61–90, 90+ days).
+- **Vendor statement** for any date range in a split-view panel, with print and CSV.
+
 **Shop: inventory**
 - Items with SP1/SP2/SP3 price tiers, barcode scanning (USB scanner or camera), inline editing, and bulk tax-slab changes or archiving.
 - **Stock per branch** with adjustments, **transfers between branches** and full movement history.
