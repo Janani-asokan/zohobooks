@@ -50,7 +50,11 @@ export interface Invoice {
   cgst: number; sgst: number; igst: number; tcs: number; roundOff: number; total: number; amountPaid: number; amountCredited: number; balance: number;
   notes: string; source: 'app' | 'pos' | 'recurring'; salesOrderId: string | null; recurringId: string | null; publicToken: string | null;
   lastReminderAt: string | null; cancelReason: string; cancelledAt: string | null; issuedAt: string | null; createdAt: string;
+  shipTo?: ShipTo | null; terms?: string;
+  einvoice?: { irn: string; ackNo: string; ackDate: string; signedQr: string } | null;
+  eway?: { number: string; date: string; vehicleNo: string } | null;
 }
+export interface ShipTo { name: string; address: string; state: string; gstin: string }
 export interface Payment { id: string; date: string; amount: number; tdsAmount: number; mode: string; reference: string; account: string | null; notes: string }
 export interface CreditNote {
   id: string; number: string; fy: string; invoiceId: string; invoiceNumber: string; invoiceDate: string; customer: CustomerSnapshot; date: string; reason: string;

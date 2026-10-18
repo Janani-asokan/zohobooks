@@ -1,0 +1,141 @@
+/* Printable tax invoice (.ti). One stylesheet for the screen preview, the print dialog and the server PDF.
+   Colour is used only for the title and rules (--ti-color); text is black so B/W printers stay legible. */
+.ti {
+  --ti-color: #1f3a5f;
+  --ti-ink: #111;
+  --ti-muted: #555;
+  --ti-rule: #c9ccd1;
+  --ti-head-bg: #f1f2f4;
+  position: relative;
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 14mm 13mm;
+  background: #fff;
+  color: var(--ti-ink);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 9pt;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light;
+}
+.ti.ti-a5 { width: 148mm; min-height: 210mm; padding: 10mm; font-size: 7.5pt; }
+.ti.ti-compact { font-size: 8pt; }
+.ti.ti-a5.ti-compact { font-size: 7pt; }
+.ti * { box-sizing: border-box; }
+.ti h1 { margin: 0; }
+.ti dl, .ti dd { margin: 0; }
+.ti-strong { font-weight: 600; }
+.ti-muted { color: var(--ti-muted); }
+.ti-small { font-size: 0.92em; }
+.ti-pre { white-space: pre-line; }
+.ti-mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85em; word-break: break-all; }
+.ti-label { font-size: 0.8em; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ti-muted); margin-bottom: 1.5mm; }
+
+.ti-mark { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; font-size: 72pt; font-weight: 700; letter-spacing: 0.1em; color: rgba(0, 0, 0, 0.06); transform: rotate(-24deg); }
+
+/* Header */
+.ti-head { display: flex; justify-content: space-between; gap: 8mm; padding-bottom: 4mm; border-bottom: 0.6mm solid var(--ti-color); }
+.ti-from { display: flex; gap: 4mm; min-width: 0; }
+.ti-logo { width: 18mm; height: 18mm; object-fit: contain; flex-shrink: 0; }
+.ti-logo-text { display: grid; place-items: center; border: 0.3mm solid var(--ti-rule); border-radius: 1.5mm; font-weight: 600; font-size: 11pt; color: var(--ti-color); }
+.ti-company { font-size: 1.55em; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; margin-bottom: 1mm; }
+.ti-title { text-align: right; flex-shrink: 0; }
+.ti-title h1 { font-size: 1.6em; font-weight: 700; letter-spacing: 0.08em; color: var(--ti-color); margin-bottom: 2mm; }
+.ti-kv { display: grid; grid-template-columns: auto auto; justify-content: end; gap: 0.6mm 4mm; }
+.ti-kv dt { color: var(--ti-muted); }
+.ti-kv dd { text-align: right; }
+.ti-kv-left { justify-content: start; margin-top: 2mm; }
+.ti-kv-left dd { text-align: left; }
+
+.ti-irn { display: flex; gap: 4mm; align-items: center; padding: 3mm 0; border-bottom: 0.2mm solid var(--ti-rule); }
+.ti-irn img { width: 22mm; height: 22mm; }
+.ti-irn .ti-kv { justify-content: start; grid-template-columns: auto 1fr; }
+.ti-irn .ti-kv dd { text-align: left; }
+
+/* Parties */
+.ti-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; padding: 4mm 0; border-bottom: 0.2mm solid var(--ti-rule); }
+.ti-parties.three { grid-template-columns: 1fr 1fr 0.9fr; }
+
+/* Items */
+.ti table { width: 100%; border-collapse: collapse; }
+.ti th, .ti td { padding: 1.6mm 1.4mm; text-align: left; vertical-align: top; }
+.ti .r { text-align: right; white-space: nowrap; }
+.ti-items { margin-top: 4mm; font-size: 0.92em; }
+.ti-items th, .ti-items td { padding: 1.5mm 1mm; }
+.ti-items th:first-child, .ti-items td:first-child { padding-left: 0.5mm; }
+.ti-items th:last-child, .ti-items td:last-child { padding-right: 0.5mm; }
+.ti-items thead th { font-size: 0.85em; font-weight: 600; color: var(--ti-ink); background: var(--ti-head-bg); border-top: 0.3mm solid var(--ti-ink); border-bottom: 0.3mm solid var(--ti-ink); white-space: nowrap; }
+.ti-items tbody td { border-bottom: 0.2mm solid var(--ti-rule); }
+.ti-items tfoot td { border-top: 0.3mm solid var(--ti-ink); border-bottom: 0.3mm solid var(--ti-ink); font-weight: 600; }
+.ti-items .c-sno { width: 8mm; }
+.ti-items .c-item { width: auto; }
+.ti-items thead th { white-space: normal; vertical-align: bottom; }
+.ti-compact .ti-items th, .ti-compact .ti-items td { padding: 1mm 1.2mm; }
+
+/* Summary: tax breakup + totals stay together */
+.ti-summary { display: grid; grid-template-columns: 1fr 72mm; gap: 8mm; padding-top: 4mm; }
+.ti-a5 .ti-summary { grid-template-columns: 1fr 56mm; gap: 5mm; }
+.ti-tax th { font-size: 0.85em; font-weight: 600; border-bottom: 0.3mm solid var(--ti-ink); }
+.ti-tax td { border-bottom: 0.2mm solid var(--ti-rule); }
+.ti-words { margin-top: 3mm; }
+.ti-totals { display: grid; grid-template-columns: 1fr auto; row-gap: 1.2mm; align-content: start; }
+.ti-totals dd { padding-left: 4mm; }
+.ti-totals dt { color: var(--ti-muted); }
+.ti-totals dd { text-align: right; white-space: nowrap; }
+.ti-totals .ti-grand { font-size: 1.25em; font-weight: 700; color: var(--ti-ink); padding: 1.6mm 0; border-top: 0.3mm solid var(--ti-ink); border-bottom: 0.3mm solid var(--ti-ink); }
+
+/* Footer */
+.ti-foot { display: grid; grid-template-columns: 1fr 55mm; gap: 8mm; padding-top: 5mm; margin-top: 4mm; border-top: 0.2mm solid var(--ti-rule); }
+.ti-foot-left { display: grid; gap: 3mm; align-content: start; }
+.ti-pay { display: flex; gap: 3mm; align-items: flex-start; }
+.ti-pay img { width: 24mm; height: 24mm; flex-shrink: 0; }
+.ti-sign { text-align: right; display: flex; flex-direction: column; justify-content: flex-end; }
+.ti-sign-space { height: 16mm; display: flex; justify-content: flex-end; align-items: flex-end; }
+.ti-sign-space img { max-height: 15mm; max-width: 50mm; object-fit: contain; }
+.ti-sign-line { border-top: 0.2mm solid var(--ti-ink); padding-top: 1mm; margin-left: 10mm; color: var(--ti-muted); }
+.ti-fine { margin-top: 5mm; font-size: 0.82em; color: var(--ti-muted); text-align: center; }
+
+/* Templates */
+.ti-modern .ti-head { border-bottom: none; padding-bottom: 5mm; }
+.ti-modern .ti-items thead th { background: var(--ti-color); color: #fff; border-color: var(--ti-color); }
+.ti-modern .ti-totals .ti-grand { border-color: var(--ti-color); }
+.ti-compact .ti-logo { width: 13mm; height: 13mm; }
+.ti-compact .ti-head { border-bottom-width: 0.4mm; }
+
+.ti-a5 .ti-parties.three { grid-template-columns: 1fr 1fr; }
+.ti-a5 .ti-parties.three > :last-child { grid-column: 1 / -1; }
+.ti-a5 .ti-foot { grid-template-columns: 1fr 42mm; gap: 5mm; }
+
+/* Pagination: repeat the column header on each page, never split a row, keep the totals and signature together. */
+.ti-items thead { display: table-header-group; }
+.ti-items tfoot { display: table-row-group; }
+.ti-items tr, .ti-tax tr { break-inside: avoid; page-break-inside: avoid; }
+.ti-summary, .ti-foot, .ti-parties, .ti-head { break-inside: avoid; page-break-inside: avoid; }
+
+/* Screen frame for previews */
+.paper-stage { background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--sp-6); overflow: auto; }
+.paper-stage .ti, .paper-stage .receipt { margin: 0 auto; box-shadow: 0 0 0 1px var(--border); }
+.paper-scale { zoom: var(--paper-zoom, 1); }
+
+/* Standalone print route */
+body.print-route { background: #e9ebef; }
+.print-shell { min-height: 100vh; }
+.print-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4); background: var(--bg); border-bottom: 1px solid var(--border); }
+.print-bar .grow { flex: 1; }
+.print-page { padding: var(--sp-6) var(--sp-4); display: flex; justify-content: center; }
+.print-page .ti, .print-page .receipt { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+@media (max-width: 860px) { .print-page { padding: var(--sp-3) 0; overflow-x: auto; justify-content: flex-start; } }
+
+@media print {
+  body.print-route { background: #fff; }
+  body.print-route .print-bar { display: none; }
+  body.print-route .print-shell { min-height: 0; }
+  body.print-route .print-page { padding: 0; display: block; }
+  body.print-route .print-page .ti, body.print-route .print-page .receipt { box-shadow: none; }
+  /* Page margins come from @page, so the sheet itself has none. */
+  body.print-route .ti { width: auto; min-height: 0; padding: 0; }
+  .ti { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Fixed elements repeat on every printed page. */
+  body.print-route .ti-mark { position: fixed; }
+}

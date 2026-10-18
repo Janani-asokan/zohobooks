@@ -100,6 +100,9 @@ export const invoiceInput = z.object({
   tcsRate: z.number().min(0).max(5).default(0),
   notes: z.string().max(2000).default(''),
   salesOrderId: z.string().uuid().nullable().optional(),
+  /** Omit to keep what is saved; null clears it (ships to the billing address). */
+  shipTo: z.object({ name: z.string().trim().max(120), address: z.string().trim().max(500), state: z.string().max(60).default(''), gstin: z.string().trim().max(15).default('') }).nullable().optional(),
+  terms: z.string().max(1500).optional(),
 });
 export type InvoiceInput = z.infer<typeof invoiceInput>;
 
@@ -165,10 +168,16 @@ export async function createInvoice(db: Db, req: Request | null, shopId: string,
       req?.ctx?.kind === 'user' ? req.ctx.id : null,
     ],
   );
+  await saveDeliveryFields(db, shopId, row.id, input);
   let number: string | null = null;
   if (opts.issue) number = await issue(db, req, shopId, row);
   await audit(db, req, shopId, opts.issue ? 'issue' : 'create_draft', 'invoice', row.id, { number, total: f.t.total, source });
   return getInvoice(db, shopId, row.id);
+}
+
+async function saveDeliveryFields(db: Db, shopId: string, id: string, input: InvoiceInput) {
+  if (input.shipTo !== undefined) await db.query('UPDATE invoices SET ship_to = $3 WHERE shop_id = $1 AND id = $2', [shopId, id, input.shipTo && (input.shipTo.name || input.shipTo.address) ? JSON.stringify(input.shipTo) : null]);
+  if (input.terms !== undefined) await db.query('UPDATE invoices SET terms = $3 WHERE shop_id = $1 AND id = $2', [shopId, id, input.terms]);
 }
 
 export async function updateInvoice(db: Db, req: Request, shopId: string, id: string, input: InvoiceInput, issueNow: boolean) {
@@ -197,6 +206,7 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
       f.inter, input.reverseCharge, input.tcsRate, f.t.subTotal, f.t.discount, f.t.taxTotal, f.t.cgst, f.t.sgst, f.t.igst, f.t.tcs, f.t.roundOff, f.t.total, input.notes,
     ],
   );
+  await saveDeliveryFields(db, shopId, id, input);
   if (inv.status === 'Draft' && issueNow) {
     const fresh = await one(db, 'SELECT * FROM invoices WHERE shop_id = $1 AND id = $2', [shopId, id]);
     await issue(db, req, shopId, fresh);
@@ -267,6 +277,9 @@ export function serializeInvoice(r: any) {
     recurringId: r.recurring_id,
     publicToken: r.status === 'Issued' ? r.public_token : null,
     einvoice: r.einvoice,
+    shipTo: r.ship_to ?? null,
+    terms: r.terms ?? '',
+    eway: r.eway ?? null,
     lastReminderAt: r.last_reminder_at,
     cancelReason: r.cancel_reason,
     cancelledAt: r.cancelled_at,

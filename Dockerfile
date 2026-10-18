@@ -10,9 +10,9 @@ RUN npm run build && npm prune --omit=dev
 # ---- run ----
 FROM node:20-bookworm-slim
 WORKDIR /app
-# pg_dump for the backup job
-RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
-ENV NODE_ENV=production PORT=10000
+# pg_dump for the backup job; Chromium prints invoices to PDF (same template as the browser print view)
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client chromium fonts-noto-core && rm -rf /var/lib/apt/lists/*
+ENV NODE_ENV=production PORT=10000 CHROMIUM_PATH=/usr/bin/chromium
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

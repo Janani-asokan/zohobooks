@@ -5,7 +5,7 @@ import { fmtDate, money } from '@/lib/format';
 import {
   labelFontMm, labelSize, paperWidthMm, type BarcodeFieldKey, type BarcodeSettings, type ThermalSettings,
 } from '../../shared/printSettings';
-import { upiLink, useQr } from './InvoiceDocument';
+import { upiLink, useQr } from './qr';
 
 /** Print just the `.print-area`, with a page size that matches the paper (receipt roll or label stock). */
 export function printWithPage(pageCss: string, bodyClass: string) {

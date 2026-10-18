@@ -39,9 +39,10 @@
 @media print {
   @page { size: A4; margin: 0; }
   body { background: #fff !important; }
-  body * { visibility: hidden; }
-  .print-area, .print-area * { visibility: visible; }
-  .print-area { position: absolute; left: 0; top: 0; width: 210mm; }
+  /* In-app pages print only their .print-area; the standalone print route prints as is. */
+  body:not(.print-route) * { visibility: hidden; }
+  body:not(.print-route) .print-area, body:not(.print-route) .print-area * { visibility: visible; }
+  body:not(.print-route) .print-area { position: absolute; left: 0; top: 0; width: 210mm; }
   .doc-stage { padding: 0; background: none; }
   .a4 { box-shadow: none; margin: 0; }
   .no-print { display: none !important; }

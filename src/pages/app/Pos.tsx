@@ -9,7 +9,7 @@ import { TIER_LABEL } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Field, Modal, Segmented, Toggle } from '@/components/ui';
-import { upiLink, useQr } from '@/components/InvoiceDocument';
+import { upiLink, useQr } from '@/components/qr';
 import { useShortcuts } from '@/components/useShortcuts';
 import { computeTotals, lineAmount } from '@/lib/calc';
 import { money } from '@/lib/format';

@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
-import { SALES_KEYS, useBankAccounts, useBranches, useCustomers, useInvoice, useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
-import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
+import { SALES_KEYS, useBankAccounts, useBranches, useInvoice, useMut, useOrg, usePrintSettings } from '@/api/hooks';
+import { printInvoice, printRoute, type PrintPaper } from '@/lib/printInvoice';
 import { withPrintDefaults } from '../../../shared/printSettings';
 import type { InvoiceDetail, Organization } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { ConfirmModal, EmptyState, Field, Modal, Segmented } from '@/components/ui';
 import { StatusBadge } from '@/components/StatusBadge';
-import { InvoiceDocument } from '@/components/InvoiceDocument';
+import { TaxInvoice } from '@/components/TaxInvoice';
 import { useClickOutside } from '@/components/useClickOutside';
 import { fmtDate, money, todayISO } from '@/lib/format';
 
@@ -53,8 +53,6 @@ export default function InvoiceView() {
   const toast = useToast();
   const q = useInvoice(id);
   const org = useOrg().data;
-  const items = useItems().data ?? [];
-  const customers = useCustomers().data ?? [];
   const printCfg = withPrintDefaults(usePrintSettings().data);
   const branches = useBranches().data ?? [];
   const accounts = useBankAccounts().data ?? [];
@@ -74,7 +72,12 @@ export default function InvoiceView() {
   const [ewbOpen, setEwbOpen] = useState(false);
   const [ewb, setEwb] = useState({ distanceKm: '', vehicleNo: '', transporterName: '', transporterId: '' });
   const [ewbErr, setEwbErr] = useState('');
-  const [tpl, setTpl] = useState<Organization['invoiceTemplate'] | ''>('');
+  const [mailOpen, setMailOpen] = useState(false);
+  const [mail, setMail] = useState({ to: '', cc: '', message: '' });
+  const [refsOpen, setRefsOpen] = useState(false);
+  const [refs, setRefs] = useState({ irn: '', ackNo: '', ackDate: '', signedQr: '', ewayBillNo: '', ewayDate: '', vehicleNo: '' });
+  const [refsErr, setRefsErr] = useState<Record<string, string>>({});
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const keys = SALES_KEYS;
   const payMut = useMut((b: Record<string, unknown>) => api.post(`/shop/invoices/${id}/payments`, b), keys, { silentError: true });
@@ -83,17 +86,28 @@ export default function InvoiceView() {
   const cancelMut = useMut((reason: string) => api.post(`/shop/invoices/${id}/cancel`, { reason }), keys, { success: 'Invoice cancelled — stock restored' });
   const delMut = useMut(() => api.del(`/shop/invoices/${id}`), keys, { success: 'Draft deleted' });
   const issueMut = useMut((b: Record<string, unknown>) => api.put(`/shop/invoices/${id}`, b), keys, { success: 'Invoice issued' });
+  const mailMut = useMut((b: typeof mail) => api.post<{ status: string; detail: string }>(`/shop/invoices/${id}/email`, b), [['invoice']], { silentError: true });
+  const refsMut = useMut((b: typeof refs) => api.put(`/shop/invoices/${id}/gst-refs`, b), keys, { silentError: true });
   const remind = useMut((channel: 'email' | 'whatsapp') => api.post<{ status: string; detail: string }>(`/shop/invoices/${id}/reminders`, { channel }), [['invoice']], {});
 
   useEffect(() => {
     if (!inv) return;
     if (params.get('pay') && inv.status === 'Issued' && inv.balance > 0) { openPay(); params.delete('pay'); setParams(params, { replace: true }); }
-    if (params.get('print')) { params.delete('print'); setParams(params, { replace: true }); setTimeout(() => window.print(), 400); }
+    if (params.get('print')) { params.delete('print'); setParams(params, { replace: true }); doPrint('a4'); }
   }, [inv?.id]);
 
   if (q.isError) return <div className="page"><div className="card"><EmptyState icon={FileX} title="Invoice not found" text={q.error.message} action={<Link to="/app/sales/invoices" className="btn btn-primary">Back to invoices</Link>} /></div></div>;
   if (!inv || !org) return <div className="page"><div className="skeleton" style={{ height: 600 }} /></div>;
 
+  function doPrint(paper: PrintPaper) {
+    printInvoice(id!, paper).catch((e) => toast('error', 'Could not print', e.message));
+  }
+  const downloadPdf = (paper: PrintPaper = 'a4') => {
+    setPdfBusy(true);
+    download(`/shop/invoices/${id}/pdf?paper=${paper}`, `${inv?.number ?? 'draft-invoice'}.pdf`)
+      .catch((e) => toast('error', 'PDF not ready', e.message))
+      .finally(() => setPdfBusy(false));
+  };
   const openPay = () => { setPay({ amount: String(inv.balance), tdsAmount: '', mode: 'UPI', reference: '', date: todayISO(), accountId: '' }); setPayErr({}); setPayOpen(true); };
   const savePay = () => {
     const amount = Number(pay.amount);
@@ -114,7 +128,8 @@ export default function InvoiceView() {
     cnMut.mutate({ invoiceId: inv.id, date: todayISO(), reason: cnReason, restock: cnRestock, lines }, { onSuccess: () => setCnOpen(false) });
   };
 
-  const branch = branches.find((b) => b.id === inv.branchId)?.name;
+  const branchRow = branches.find((b) => b.id === inv.branchId);
+  const branchInfo = branchRow ? { name: branchRow.name, address: branchRow.address, phone: branchRow.phone } : null;
   const canSell = me.can('sales.write');
   const editable = canSell && (inv.status === 'Draft' || (inv.status === 'Issued' && inv.amountPaid === 0 && inv.amountCredited === 0));
   const hasGoods = inv.lines.some((l) => l.type === 'Goods');
@@ -150,7 +165,8 @@ export default function InvoiceView() {
                   {inv.balance > 0 && (
                     <a className="dropdown-item" href={waLink(phone, whatsappText(inv, org, true))} target="_blank" rel="noreferrer" onClick={() => { close(); remind.mutate('whatsapp'); }}><Bell size={16} /> WhatsApp payment reminder</a>
                   )}
-                  <a className="dropdown-item" href={`mailto:${inv.customer.email}?subject=${encodeURIComponent(`Invoice ${inv.number} from ${org.companyName}`)}&body=${encodeURIComponent(whatsappText(inv, org))}`} onClick={close}><Mail size={16} /> Email from my mail app</a>
+                  {canSell && <button className="dropdown-item" onClick={() => { close(); setMail({ to: inv.customer.email, cc: '', message: '' }); setMailOpen(true); }}><Mail size={16} /> Email invoice with PDF</button>}
+                  <a className="dropdown-item" href={`mailto:${inv.customer.email}?subject=${encodeURIComponent(`Invoice ${inv.number} from ${org.companyName}`)}&body=${encodeURIComponent(whatsappText(inv, org))}`} onClick={close}><ExternalLink size={16} /> Email from my mail app</a>
                   {inv.balance > 0 && canSell && (
                     <button className="dropdown-item" onClick={() => { close(); remind.mutate('email', { onSuccess: (r) => toast(r.status === 'sent' ? 'success' : 'info', r.status === 'sent' ? 'Reminder emailed' : 'Reminder not emailed', r.detail) }); }}><Send size={16} /> Email reminder (from server)</button>
                   )}
@@ -160,12 +176,16 @@ export default function InvoiceView() {
               )}
             </Menu>
           )}
-          <Menu label="Print / PDF" icon={Printer}>
+          <Menu label="Print" icon={Printer}>
             {(close) => (
               <>
-                <button className="dropdown-item" onClick={() => { close(); window.print(); }}><Printer size={16} /> A4 invoice / save as PDF</button>
-                <button className="dropdown-item" onClick={() => { close(); printReceipt(printCfg.thermal); }}><Receipt size={16} /> Thermal receipt ({printCfg.thermal.paper === '2in' ? '2″' : '3″'})</button>
-                {me.can('admin') && <><div className="dropdown-sep" /><button className="dropdown-item" onClick={() => { close(); navigate('/app/print-settings'); }}><Pencil size={16} /> Print settings</button></>}
+                <button className="dropdown-item" onClick={() => { close(); doPrint('a4'); }}><Printer size={16} /> Print A4</button>
+                <button className="dropdown-item" onClick={() => { close(); doPrint('a5'); }}><Printer size={16} /> Print A5</button>
+                <button className="dropdown-item" onClick={() => { close(); doPrint('thermal'); }}><Receipt size={16} /> Print receipt ({printCfg.thermal.paper === '2in' ? '58' : '80'}mm)</button>
+                <div className="dropdown-sep" />
+                <button className="dropdown-item" disabled={pdfBusy} onClick={() => { close(); downloadPdf(printCfg.invoice.paper); }}><Download size={16} /> Download PDF</button>
+                <Link className="dropdown-item" to={printRoute(inv.id, printCfg.invoice.paper)} onClick={close}><ExternalLink size={16} /> Open print view</Link>
+                {me.can('admin') && <><div className="dropdown-sep" /><button className="dropdown-item" onClick={() => { close(); navigate('/app/print-settings'); }}><Pencil size={16} /> Invoice layout settings</button></>}
               </>
             )}
           </Menu>
@@ -176,6 +196,7 @@ export default function InvoiceView() {
                   {inv.status === 'Issued' && canSell && <button className="dropdown-item" onClick={() => { close(); setCnQty({}); setCnRestock(true); setCnOpen(true); }}><Undo2 size={16} /> Create credit note</button>}
                   {inv.status === 'Issued' && inv.customer.gstin && <button className="dropdown-item" onClick={() => { close(); download(`/shop/invoices/${inv.id}/einvoice.json`, `einvoice-${inv.number}.json`).then(() => toast('success', 'E-invoice JSON downloaded', 'Upload it on the IRP portal (einvoice1.gst.gov.in).')).catch((e) => toast('error', e.message)); }}><FileJson size={16} /> E-invoice JSON</button>}
                   {inv.status === 'Issued' && hasGoods && <button className="dropdown-item" onClick={() => { close(); setEwbErr(''); setEwbOpen(true); }}><Truck size={16} /> E-way bill JSON</button>}
+                  {inv.status === 'Issued' && canSell && <button className="dropdown-item" onClick={() => { close(); setRefs({ irn: inv.einvoice?.irn ?? '', ackNo: inv.einvoice?.ackNo ?? '', ackDate: inv.einvoice?.ackDate ?? '', signedQr: inv.einvoice?.signedQr ?? '', ewayBillNo: inv.eway?.number ?? '', ewayDate: inv.eway?.date ?? '', vehicleNo: inv.eway?.vehicleNo ?? '' }); setRefsErr({}); setRefsOpen(true); }}><BadgeCheck size={16} /> Record IRN / e-way bill no.</button>}
                   <div className="dropdown-sep" />
                   {inv.status === 'Issued' && canSell && <button className="dropdown-item danger" onClick={() => { close(); setCancelReason(''); setCancelOpen(true); }}><Ban size={16} /> Cancel invoice</button>}
                   {inv.status === 'Draft' && canSell && <button className="dropdown-item danger" onClick={() => { close(); setDelOpen(true); }}><Trash2 size={16} /> Delete draft</button>}
@@ -188,13 +209,10 @@ export default function InvoiceView() {
 
       <div className="grid-3-1" style={{ gridTemplateColumns: 'minmax(0, 1fr) 320px', alignItems: 'start' }}>
         <div>
-          <div className="row no-print" style={{ gap: 8, marginBottom: 10 }}>
-            <span className="small muted">Template preview:</span>
-            <Segmented value={tpl || org.invoiceTemplate} onChange={(v) => setTpl(v)} options={[{ value: 'classic', label: 'Classic' }, { value: 'modern', label: 'Modern' }, { value: 'compact', label: 'Compact' }]} />
-          </div>
-          <div className="doc-stage print-area">
-            <InvoiceDocument inv={inv} org={org} branchName={branch} template={tpl || undefined} />
-            <div className="only-receipt"><ThermalReceipt data={receiptFromInvoice(inv, items, customers.find((c) => c.id === inv.customerId)?.due, inv.payments[0]?.mode)} org={org} s={printCfg.thermal} /></div>
+          <div className="paper-stage">
+            <div className="paper-scale" style={{ ['--paper-zoom' as string]: printCfg.invoice.paper === 'a5' ? 1 : 0.86 }}>
+              <TaxInvoice inv={inv} org={org} branch={branchInfo} s={printCfg.invoice} />
+            </div>
           </div>
         </div>
 
@@ -299,6 +317,33 @@ export default function InvoiceView() {
         footer={<><button className="btn btn-secondary" onClick={() => setCancelOpen(false)}>Keep invoice</button><button className="btn btn-danger" disabled={cancelReason.trim().length < 3 || cancelMut.isPending} onClick={() => cancelMut.mutate(cancelReason, { onSuccess: () => setCancelOpen(false) })}>Cancel invoice</button></>}>
         <Field label="Reason" required><input className="input" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="e.g. Order cancelled by customer" autoFocus /></Field>
         {inv.amountPaid > 0 && <p className="field-error" style={{ marginTop: 10 }}>Remove the recorded payments first.</p>}
+      </Modal>
+
+      <Modal open={mailOpen} onClose={() => setMailOpen(false)} title="Email invoice" subtitle={`${inv.number} goes as a PDF attachment, with a link to view it online.`}
+        footer={<><button className="btn btn-secondary" onClick={() => setMailOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={mailMut.isPending || !mail.to} onClick={() => mailMut.mutate(mail, {
+          onSuccess: (r) => { setMailOpen(false); toast(r.status === 'sent' ? 'success' : 'info', r.status === 'sent' ? 'Invoice emailed' : 'Email not sent', r.detail); },
+          onError: (e) => toast('error', e.message),
+        })}>{mailMut.isPending ? <Loader2 size={15} className="spin" /> : <Send size={15} />} Send</button></>}>
+        <div className="form-grid">
+          <Field label="To" required className="span-all"><input className="input" type="email" value={mail.to} onChange={(e) => setMail({ ...mail, to: e.target.value })} placeholder="customer@example.com" autoFocus /></Field>
+          <Field label="Cc" className="span-all"><input className="input" type="email" value={mail.cc} onChange={(e) => setMail({ ...mail, cc: e.target.value })} /></Field>
+          <Field label="Message" hint="Leave blank for the standard note with the amount and due date." className="span-all"><textarea className="textarea" rows={4} value={mail.message} onChange={(e) => setMail({ ...mail, message: e.target.value })} /></Field>
+        </div>
+      </Modal>
+
+      <Modal open={refsOpen} onClose={() => setRefsOpen(false)} title="IRN and e-way bill" subtitle="After you upload to the IRP and the e-way bill portal, paste the numbers here. They print on the invoice with the e-invoice QR."
+        footer={<><button className="btn btn-secondary" onClick={() => setRefsOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={refsMut.isPending} onClick={() => refsMut.mutate(refs, {
+          onSuccess: () => { setRefsOpen(false); toast('success', 'Saved', 'The invoice now shows these references.'); },
+          onError: (e) => { setRefsErr(fieldErrors(e)); toast('error', e.message); },
+        })}>Save</button></>}>
+        <div className="form-grid">
+          <Field label="IRN" hint="64 characters, from the IRP acknowledgement" error={refsErr.irn} className="span-all"><input className="input mono" value={refs.irn} onChange={(e) => setRefs({ ...refs, irn: e.target.value.trim() })} maxLength={64} /></Field>
+          <Field label="Ack no." error={refsErr.ackNo}><input className="input" value={refs.ackNo} onChange={(e) => setRefs({ ...refs, ackNo: e.target.value })} /></Field>
+          <Field label="Ack date" error={refsErr.ackDate}><input className="input" value={refs.ackDate} onChange={(e) => setRefs({ ...refs, ackDate: e.target.value })} placeholder="18-10-2026 14:05" /></Field>
+          <Field label="Signed QR code" hint="Optional. Paste the SignedQRCode value; otherwise the QR encodes the IRN." className="span-all"><textarea className="textarea mono" rows={2} value={refs.signedQr} onChange={(e) => setRefs({ ...refs, signedQr: e.target.value.trim() })} /></Field>
+          <Field label="E-way bill no." hint="12 digits" error={refsErr.ewayBillNo}><input className="input" inputMode="numeric" value={refs.ewayBillNo} onChange={(e) => setRefs({ ...refs, ewayBillNo: e.target.value.replace(/\D/g, '').slice(0, 12) })} /></Field>
+          <Field label="Vehicle no."><input className="input" value={refs.vehicleNo} onChange={(e) => setRefs({ ...refs, vehicleNo: e.target.value.toUpperCase() })} placeholder="TN01AB1234" /></Field>
+        </div>
       </Modal>
 
       <ConfirmModal open={delOpen} onClose={() => setDelOpen(false)} title="Delete draft?" text="Drafts have no invoice number yet, so deleting one leaves no gap in your series." onConfirm={() => delMut.mutate(undefined, { onSuccess: () => navigate('/app/sales/invoices') })} />

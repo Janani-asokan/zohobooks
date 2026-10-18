@@ -12,7 +12,7 @@ import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInpu
 import { useShortcuts } from '@/components/useShortcuts';
 import { addDays, todayISO } from '@/lib/format';
 import { fyLabel } from '@/lib/fy';
-import { isInterState } from '../../../shared/gst';
+import { INDIAN_STATES, isInterState } from '../../../shared/gst';
 
 const TERMS = [
   { label: 'Due on receipt', days: 0 }, { label: 'Net 7', days: 7 }, { label: 'Net 15', days: 15 }, { label: 'Net 30', days: 30 }, { label: 'Net 45', days: 45 },
@@ -48,6 +48,8 @@ function Form({ existing }: { existing?: Invoice }) {
   const [tcsRate, setTcsRate] = useState(existing?.tcsRate ?? 0);
   const [lines, setLines] = useState<DraftLine[]>(() => existing?.lines.map(toDraft) ?? [emptyLine('SP1')]);
   const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [docTerms, setDocTerms] = useState(existing?.terms ?? '');
+  const [shipTo, setShipTo] = useState(existing?.shipTo ?? null);
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const nextNo = useNextInvoiceNumber(date);
@@ -102,7 +104,7 @@ function Form({ existing }: { existing?: Invoice }) {
     setTouched(true);
     setServerErr({});
     if (Object.values(errs).some(Boolean)) return toast('error', 'Please fix the highlighted fields');
-    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft' };
+    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft' };
     const onSuccess = (inv: Invoice) => {
       toast('success', inv.status === 'Draft' ? 'Draft saved' : existing?.status === 'Issued' ? 'Invoice updated' : 'Invoice issued', inv.number ?? undefined);
       navigate(`/app/sales/invoices/${inv.id}${mode === 'issue-pay' ? '?pay=1' : ''}`);
@@ -189,6 +191,22 @@ function Form({ existing }: { existing?: Invoice }) {
               <Field label="Customer notes" hint="Printed on the invoice">
                 <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Thanks for your business." />
               </Field>
+              <Field label="Terms and conditions" hint="Leave blank to use the default terms from Print settings">
+                <textarea className="textarea" rows={3} maxLength={1500} value={docTerms} onChange={(e) => setDocTerms(e.target.value)} placeholder="Default terms" />
+              </Field>
+              <div className="card" style={{ padding: 14, boxShadow: 'none' }}>
+                <div className="row between">
+                  <div><div className="strong" style={{ color: 'var(--ink-900)' }}>Ship to a different address</div><div className="small muted">Printed next to the billing address</div></div>
+                  <Toggle checked={!!shipTo} onChange={(v) => setShipTo(v ? { name: customer?.companyName || customer?.name || '', address: '', state: customer?.state ?? '', gstin: '' } : null)} />
+                </div>
+                {shipTo && (
+                  <div className="form-grid" style={{ marginTop: 12 }}>
+                    <Field label="Name"><input className="input" value={shipTo.name} maxLength={120} onChange={(e) => setShipTo({ ...shipTo, name: e.target.value })} /></Field>
+                    <Field label="State"><select className="select" value={shipTo.state} onChange={(e) => setShipTo({ ...shipTo, state: e.target.value })}><option value="">Select</option>{INDIAN_STATES.map((st) => <option key={st}>{st}</option>)}</select></Field>
+                    <Field label="Address" className="span-all"><textarea className="textarea" rows={2} maxLength={500} value={shipTo.address} onChange={(e) => setShipTo({ ...shipTo, address: e.target.value })} /></Field>
+                  </div>
+                )}
+              </div>
               {withGst && (
                 <div className="card" style={{ padding: 14, boxShadow: 'none' }}>
                   <div className="row between">

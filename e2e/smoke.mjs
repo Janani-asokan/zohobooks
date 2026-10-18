@@ -62,6 +62,15 @@ await step('owner issues an invoice and records a payment', async () => {
   await page.click('.modal >> text=Save payment');
   await page.waitForSelector('text=Payment recorded');
 });
+await step('invoice print view and PDF use the same document', async () => {
+  const id = page.url().match(/invoices\/([0-9a-f-]{36})/)[1];
+  await page.goto(`${BASE}/invoices/${id}/print?paper=a4`);
+  await page.waitForFunction('window.__PRINT_READY === true');
+  if (!(await page.locator('.ti-items tbody tr').count())) throw new Error('print view has no item rows');
+  const pdf = await page.request.get(`${BASE}/api/shop/invoices/${id}/pdf?paper=a4`);
+  if (pdf.status() !== 200 || pdf.headers()['content-type'] !== 'application/pdf') throw new Error(`PDF failed: ${pdf.status()}`);
+  if (!(await pdf.body()).subarray(0, 5).toString().startsWith('%PDF')) throw new Error('not a PDF');
+});
 await step('POS sale completes', async () => {
   await page.goto(BASE + '/app/pos');
   await page.fill('input[aria-label="Scan or search items"]', '0619659161323');

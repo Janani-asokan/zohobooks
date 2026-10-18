@@ -9,7 +9,7 @@ import { createOrder, razorpayEnabled, verifySignature } from '../../integration
 import { extendLicense } from '../platform';
 import { EMAIL_RE, GSTIN_RE, gstinMatchesState } from '../../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE, STAFF_ROLES } from '../../../../shared/permissions';
-import { BARCODE_FIELDS, LABEL_SIZES, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
+import { BARCODE_FIELDS, INVOICE_FIELDS, LABEL_SIZES, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
 import { T } from './ctx';
 
 export const coreRouter = Router();
@@ -86,6 +86,17 @@ const printSchema = z.object({
       const size = LABEL_SIZES.find((l) => l.id === b.labelSize);
       if (size && size.printer !== b.printer) ctx.addIssue({ code: 'custom', path: ['labelSize'], message: 'This label size is for a different printer type' });
     }),
+  invoice: z
+    .object({
+      template: z.enum(['standard', 'modern', 'compact']),
+      paper: z.enum(['a4', 'a5']),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Pick a colour'),
+      fields: z.object(Object.fromEntries(INVOICE_FIELDS.map((k) => [k, z.boolean()])) as Record<(typeof INVOICE_FIELDS)[number], z.ZodBoolean>),
+      terms: z.string().max(1500),
+      signatoryLabel: z.string().trim().min(1).max(60),
+      signatureImage: z.string().max(400_000).refine((v) => v === '' || /^data:image\/(png|jpeg|webp);base64,/.test(v), 'Upload a PNG, JPG or WebP image'),
+    })
+    .optional(),
 });
 
 coreRouter.get('/print-settings', T(async (db, _req, c) => withPrintDefaults((await one(db, 'SELECT print_settings FROM organizations WHERE shop_id = $1', [c.shopId]))?.print_settings)));
@@ -93,9 +104,11 @@ coreRouter.put(
   '/print-settings',
   perm('admin'),
   T(async (db, req, c) => {
-    const b = parse(printSchema, req.body);
+    const parsed = parse(printSchema, req.body);
+    // Older clients send only thermal + barcode; keep the saved invoice layout in that case.
+    const b = { ...parsed, invoice: parsed.invoice ?? withPrintDefaults((await one(db, 'SELECT print_settings FROM organizations WHERE shop_id = $1', [c.shopId]))?.print_settings).invoice };
     await db.query('UPDATE organizations SET print_settings = $2 WHERE shop_id = $1', [c.shopId, JSON.stringify(b)]);
-    await audit(db, req, c.shopId, 'update', 'print_settings', c.shopId, { theme: b.thermal.theme, paper: b.thermal.paper, label: b.barcode.labelSize });
+    await audit(db, req, c.shopId, 'update', 'print_settings', c.shopId, { theme: b.thermal.theme, paper: b.thermal.paper, label: b.barcode.labelSize, invoice: b.invoice.template });
     return withPrintDefaults(b);
   }),
 );

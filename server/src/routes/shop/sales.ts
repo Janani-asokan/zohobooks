@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { perm, todayISO } from '../../auth';
+import { perm, todayISO, userCtx } from '../../auth';
 import { audit } from '../../audit';
 import { config } from '../../config';
-import { many, one, type Db } from '../../db';
-import { badRequest, conflict, notFound, parse } from '../../http';
+import { many, one, withTenant, type Db } from '../../db';
+import { badRequest, conflict, h, HttpError, notFound, parse } from '../../http';
 import { sendMail } from '../../mailer';
+import { invoicePrintBundle } from '../../services/printBundle';
+import { invoicePdf, type PdfPaper } from '../../services/pdf';
 import { getOrg, nextSeq, peekSeq, platformConfig, requireRow } from '../../services/common';
 import {
   buildLines, cancelInvoice, createCreditNote, createInvoice, creditNoteInput, deletePayment, getInvoice, invoiceInput, lineInput,
@@ -370,6 +372,91 @@ salesRouter.post(
     await audit(db, req, c.shopId, 'export_ewaybill', 'invoice', inv.id, { vehicle: t.vehicleNo });
     res.setHeader('Content-Disposition', `attachment; filename="ewaybill-${inv.number}.json"`);
     res.json(payload);
+  }),
+);
+
+/* ---------- Printing, PDF and email ---------- */
+const paperOf = (v: unknown): PdfPaper => (v === 'a5' || v === 'thermal' ? v : 'a4');
+export const pdfName = (inv: { number: string | null; status: string }) => `${(inv.number ?? 'draft-invoice').replace(/[^\w.-]+/g, '-')}.pdf`;
+
+salesRouter.get('/invoices/:id/print-data', T(async (db, req, c) => invoicePrintBundle(db, c.shopId, req.params.id!)));
+
+salesRouter.get(
+  '/invoices/:id/pdf',
+  h(async (req, res) => {
+    const c = userCtx(req);
+    const inv = await withTenant(c.shopId, (db) => getInvoice(db, c.shopId, req.params.id!));
+    const pdf = await renderPdfOr503(c.shopId, inv.id, paperOf(req.query.paper));
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `${req.query.inline ? 'inline' : 'attachment'}; filename="${pdfName(inv)}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(pdf);
+  }),
+);
+
+export async function renderPdfOr503(shopId: string, invoiceId: string, paper: PdfPaper) {
+  try {
+    return await invoicePdf(shopId, invoiceId, paper);
+  } catch (e) {
+    console.error('[pdf]', (e as Error).message);
+    throw new HttpError(503, 'Could not create the PDF right now. Use Print → Save as PDF instead.', 'pdf_unavailable');
+  }
+}
+
+salesRouter.post(
+  '/invoices/:id/email',
+  perm('sales.write'),
+  h(async (req, res) => {
+    const c = userCtx(req);
+    const b = parse(z.object({ to: z.string().trim().regex(EMAIL_RE, 'Enter a valid email'), cc: z.string().trim().default(''), message: z.string().max(2000).default('') }), req.body);
+    const { inv, org } = await withTenant(c.shopId, async (db) => ({ inv: await getInvoice(db, c.shopId, req.params.id!), org: await getOrg(db, c.shopId) }));
+    if (inv.status !== 'Issued') throw conflict('Issue the invoice before emailing it');
+    const pdf = await renderPdfOr503(c.shopId, inv.id, 'a4');
+    const who = inv.customer.companyName || inv.customer.name;
+    const link = inv.publicToken ? `${config.appUrl}/share/${inv.publicToken}` : '';
+    const text = [
+      b.message || `Dear ${who},\n\nPlease find attached invoice ${inv.number} dated ${inv.date} for ₹${inv.total.toFixed(2)}.`,
+      inv.balance > 0 ? `Amount due: ₹${inv.balance.toFixed(2)} by ${inv.dueDate}.` : '',
+      link ? `View online: ${link}` : '',
+      `Regards,\n${org.company_name}`,
+    ].filter(Boolean).join('\n\n');
+    const sent = await sendMail({
+      to: b.to, cc: b.cc || undefined, subject: `Invoice ${inv.number} from ${org.company_name}`, text,
+      attachments: [{ filename: pdfName(inv), content: pdf, contentType: 'application/pdf' }],
+    });
+    const detail = sent ? `Emailed ${b.to} with PDF` : 'Email not configured on server (logged only)';
+    await withTenant(c.shopId, async (db) => {
+      await db.query('INSERT INTO reminder_log (shop_id, invoice_id, channel, status, detail) VALUES ($1,$2,$3,$4,$5)', [c.shopId, inv.id, 'email', sent ? 'sent' : 'skipped', detail]);
+      await audit(db, req, c.shopId, 'email_invoice', 'invoice', inv.id, { to: b.to, sent });
+    });
+    res.json({ status: sent ? 'sent' : 'skipped', detail });
+  }),
+);
+
+/** Record the IRN / acknowledgement from the IRP and the e-way bill number so they print on the invoice. */
+salesRouter.put(
+  '/invoices/:id/gst-refs',
+  perm('sales.write'),
+  T(async (db, req, c) => {
+    const b = parse(
+      z.object({
+        irn: z.string().trim().regex(/^([0-9a-f]{64})?$/i, 'The IRN is a 64-character code').default(''),
+        ackNo: z.string().trim().max(20).default(''),
+        ackDate: z.string().trim().max(25).default(''),
+        signedQr: z.string().trim().max(4000).default(''),
+        ewayBillNo: z.string().trim().regex(/^(\d{12})?$/, 'E-way bill numbers have 12 digits').default(''),
+        ewayDate: z.string().trim().max(25).default(''),
+        vehicleNo: z.string().trim().max(15).default(''),
+      }),
+      req.body,
+    );
+    const inv = await lockInvoice(db, c.shopId, req.params.id!);
+    if (inv.status !== 'Issued') throw conflict('Issue the invoice first');
+    const einvoice = b.irn ? { irn: b.irn.toLowerCase(), ackNo: b.ackNo, ackDate: b.ackDate, signedQr: b.signedQr } : null;
+    const eway = b.ewayBillNo ? { number: b.ewayBillNo, date: b.ewayDate, vehicleNo: b.vehicleNo.toUpperCase() } : null;
+    await db.query('UPDATE invoices SET einvoice = $3, eway = $4 WHERE shop_id = $1 AND id = $2', [c.shopId, inv.id, einvoice && JSON.stringify(einvoice), eway && JSON.stringify(eway)]);
+    await audit(db, req, c.shopId, 'update_gst_refs', 'invoice', inv.id, { irn: !!einvoice, eway: eway?.number });
+    return getInvoice(db, c.shopId, inv.id);
   }),
 );
 

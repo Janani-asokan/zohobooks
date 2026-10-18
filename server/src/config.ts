@@ -38,5 +38,11 @@ export const config = {
    * On by default whenever demo data is seeded; set DEMO_SIMPLE_PASSWORDS=0 to turn it off.
    */
   demoSimplePasswords: bool(env.DEMO_SIMPLE_PASSWORDS, env.SEED_DEMO === '1'),
+  pdf: {
+    /** Chromium used to print invoices to PDF. Empty = Playwright's own download (development). */
+    chromiumPath: env.CHROMIUM_PATH ?? '',
+    /** Where the headless browser loads the print page from. In production that is this server; in development, Vite. */
+    renderOrigin: (env.RENDER_ORIGIN ?? (env.NODE_ENV === 'production' ? `http://127.0.0.1:${env.PORT ?? 4000}` : 'http://localhost:5173')).replace(/\/$/, ''),
+  },
   staticDir: env.STATIC_DIR ?? path.resolve(process.cwd(), 'dist'),
 };

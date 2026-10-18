@@ -1,15 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Minus, Plus, Loader2, Printer, Tag, Upload } from 'lucide-react';
+import { ChevronDown, Minus, Plus, Loader2, Printer, Tag, Upload, Trash2 } from 'lucide-react';
 import { api } from '@/api/client';
 import { useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { TaxInvoice } from '@/components/TaxInvoice';
+import { SAMPLE_INVOICE } from '@/components/sampleInvoice';
+import { readLogo } from '@/lib/image';
+import { SALES_KEYS } from '@/api/hooks';
 import { BarcodeLabel, SAMPLE_LABEL_ITEM, SAMPLE_RECEIPT, ThermalReceipt, printReceipt } from '@/components/printing';
 import {
-  BARCODE_FIELD_LABEL, LABEL_SIZES, MAX_BARCODE_FIELDS, labelSize, withPrintDefaults,
-  type BarcodeSettings, type PrintSettings as PS, type ThermalSettings, type ThermalTheme,
+  BARCODE_FIELD_LABEL, INVOICE_FIELDS, INVOICE_FIELD_LABEL, LABEL_SIZES, MAX_BARCODE_FIELDS, labelSize, withPrintDefaults,
+  type BarcodeSettings, type InvoicePrintSettings, type InvoiceTemplate, type PrintSettings as PS, type ThermalSettings, type ThermalTheme,
 } from '../../../shared/printSettings';
+
+const INVOICE_TEMPLATES: Array<{ id: InvoiceTemplate; label: string; tip: string }> = [
+  { id: 'standard', label: 'Standard', tip: 'Ruled header, light table head.' },
+  { id: 'modern', label: 'Modern', tip: 'Table head in your colour.' },
+  { id: 'compact', label: 'Compact', tip: 'Smaller type for long invoices.' },
+];
+const COLOURS = ['#1F3A5F', '#0F766E', '#7C2D12', '#374151', '#111111'];
 
 const THEMES: Array<{ id: ThermalTheme; label: string; tip: string; isNew?: boolean }> = [
   { id: 'compact', label: 'Compact', tip: 'For businesses with shorter item names and fewer columns; clean and efficient.' },
@@ -40,7 +51,9 @@ export default function PrintSettings() {
   const org = useOrg().data;
   const items = useItems().data ?? [];
   const q = usePrintSettings();
-  const [tab, setTab] = useState<'thermal' | 'barcode'>('thermal');
+  const [tab, setTab] = useState<'invoice' | 'thermal' | 'barcode'>('invoice');
+  const logoRef = useRef<HTMLInputElement>(null);
+  const signRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<PS | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({ details: true });
   const [hoverTheme, setHoverTheme] = useState<ThermalTheme | null>(null);
@@ -49,10 +62,13 @@ export default function PrintSettings() {
   useEffect(() => { if (q.data && !draft) setDraft(withPrintDefaults(q.data)); }, [q.data]);
   const dirty = useMemo(() => !!draft && !!q.data && JSON.stringify(draft) !== JSON.stringify(withPrintDefaults(q.data)), [draft, q.data]);
   const save = useMut((b: PS) => api.put<PS>('/shop/print-settings', b), [['printSettings']], { success: 'Print settings saved' });
+  const saveLogo = useMut((logo: string) => api.put('/shop/organization', { ...org, logo }), [['org'], ...SALES_KEYS], { success: 'Logo updated' });
 
   if (!draft || !org) return <div className="page"><div className="skeleton" style={{ height: 480 }} /></div>;
   const th = draft.thermal;
   const bc = draft.barcode;
+  const iv = draft.invoice;
+  const setI = (p: Partial<InvoicePrintSettings>) => setDraft({ ...draft, invoice: { ...iv, ...p } });
   const setT = (p: Partial<ThermalSettings>) => setDraft({ ...draft, thermal: { ...th, ...p } });
   const setB = (p: Partial<BarcodeSettings>) => setDraft({ ...draft, barcode: { ...bc, ...p } });
   const enabledCount = bc.fields.filter((f) => f.enabled).length;
@@ -67,18 +83,26 @@ export default function PrintSettings() {
   return (
     <div className="page">
       <div className="page-header">
-        <div><h1>Print Settings</h1><p>Choose how thermal receipts and barcode labels look. The preview updates as you change things.</p></div>
+        <div><h1>Print settings</h1><p>How your invoices, receipts and barcode labels print. The preview updates as you change things.</p></div>
         <div className="row" style={{ gap: 8 }}>
           {dirty && <button className="btn btn-secondary" onClick={() => setDraft(withPrintDefaults(q.data))}>Discard</button>}
           <button className="btn btn-primary" disabled={!canEdit || !dirty || save.isPending} onClick={() => save.mutate(draft, { onSuccess: (r) => setDraft(withPrintDefaults(r)) })} title={canEdit ? undefined : 'Only the owner can change print settings'}>
-            {save.isPending && <Loader2 size={15} className="spin" />} Save Settings
+            {save.isPending && <Loader2 size={15} className="spin" />} Save
           </button>
         </div>
       </div>
 
       <div className="ps-layout">
         <div className="ps-preview">
-          {tab === 'thermal' ? (
+          {tab === 'invoice' ? (
+            <>
+              <div className="ps-paper-tag">{iv.paper.toUpperCase()} · {INVOICE_TEMPLATES.find((x) => x.id === iv.template)!.label} · sample invoice</div>
+              <div className="ps-doc" style={{ zoom: iv.paper === 'a5' ? 0.82 : 0.6 } as React.CSSProperties}>
+                <TaxInvoice inv={{ ...SAMPLE_INVOICE, terms: '' }} org={org} s={iv} />
+              </div>
+              <div className="ps-help">Print from any invoice with <strong>Print</strong>. Downloads, emails and WhatsApp links use this same layout.</div>
+            </>
+          ) : tab === 'thermal' ? (
             <>
               <div className="ps-paper-tag">{th.paper === '2in' ? '2 inch (58 mm) roll' : '3 inch (80 mm) roll'} · {THEMES.find((x) => x.id === th.theme)!.label} theme · sample bill</div>
               <ThermalReceipt data={SAMPLE_RECEIPT} org={org} s={th} />
@@ -104,11 +128,75 @@ export default function PrintSettings() {
 
         <div>
           <div className="tabs" style={{ marginBottom: 14 }}>
-            <button className={tab === 'thermal' ? 'active' : ''} onClick={() => setTab('thermal')}>Thermal Settings</button>
-            <button className={tab === 'barcode' ? 'active' : ''} onClick={() => setTab('barcode')}>Barcode Print</button>
+            <button className={tab === 'invoice' ? 'active' : ''} onClick={() => setTab('invoice')}>Invoice</button>
+            <button className={tab === 'thermal' ? 'active' : ''} onClick={() => setTab('thermal')}>Thermal receipt</button>
+            <button className={tab === 'barcode' ? 'active' : ''} onClick={() => setTab('barcode')}>Barcode labels</button>
           </div>
 
-          {tab === 'thermal' ? (
+          {tab === 'invoice' ? (
+            <div className="card ps-panel">
+              <div className="ps-sec">
+                <h3>Template</h3>
+                <div className="tpl-pick">
+                  {INVOICE_TEMPLATES.map((x) => (
+                    <button key={x.id} className={`ps-theme ${iv.template === x.id ? 'active' : ''}`} onClick={() => setI({ template: x.id })} aria-pressed={iv.template === x.id}>
+                      <strong>{x.label}</strong><span className="small muted">{x.tip}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="ps-sec">
+                <h3>Paper</h3>
+                <div className="ps-radios">
+                  {(['a4', 'a5'] as const).map((p) => (
+                    <label key={p} className={`ps-radio ${iv.paper === p ? 'active' : ''}`}>{p.toUpperCase()}<input type="radio" name="ipaper" checked={iv.paper === p} onChange={() => setI({ paper: p })} /></label>
+                  ))}
+                </div>
+                <p className="small muted" style={{ marginTop: 8 }}>A5 drops the line-total column to fit; totals are unchanged. 80mm receipts use the Thermal receipt tab.</p>
+              </div>
+              <div className="ps-sec">
+                <h3>Logo and colour</h3>
+                <div className="row" style={{ gap: 12 }}>
+                  <div className="thumb" style={{ width: 56, height: 56 }}>{org.logo ? <img src={org.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span className="small muted">None</span>}</div>
+                  <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; try { saveLogo.mutate(await readLogo(f)); } catch { toast('error', 'Could not read that image'); } }} />
+                  <button className="btn btn-secondary btn-sm" disabled={!canEdit || saveLogo.isPending} onClick={() => logoRef.current?.click()}><Upload size={14} /> {org.logo ? 'Change logo' : 'Upload logo'}</button>
+                  {org.logo && <button className="btn btn-ghost btn-sm" disabled={!canEdit} onClick={() => saveLogo.mutate('')}><Trash2 size={14} /> Remove</button>}
+                </div>
+                <div className="field" style={{ marginTop: 14 }}>
+                  <label htmlFor="brand-color">Brand colour</label>
+                  <div className="row" style={{ gap: 8 }}>
+                    <input id="brand-color" type="color" value={iv.color} onChange={(e) => setI({ color: e.target.value.toUpperCase() })} style={{ width: 40, height: 32, padding: 0, border: '1px solid var(--border-strong)', borderRadius: 6, background: 'none' }} />
+                    <input className="input mono" style={{ width: 110 }} value={iv.color} maxLength={7} onChange={(e) => setI({ color: e.target.value })} aria-label="Colour hex code" />
+                    {COLOURS.map((c) => <button key={c} className="swatch" style={{ background: c }} aria-label={`Use ${c}`} aria-pressed={iv.color.toUpperCase() === c} onClick={() => setI({ color: c })} />)}
+                  </div>
+                  <span className="field-hint">Used for the title and rules only, so invoices stay readable on black-and-white printers.</span>
+                </div>
+              </div>
+              <div className="ps-sec">
+                <h3>Show on the invoice</h3>
+                <div className="ps-grid2">
+                  {INVOICE_FIELDS.map((k) => <Check key={k} checked={iv.fields[k]} onChange={(v) => setI({ fields: { ...iv.fields, [k]: v } })}>{INVOICE_FIELD_LABEL[k]}</Check>)}
+                </div>
+              </div>
+              <div className="ps-sec">
+                <div className="field">
+                  <label htmlFor="inv-terms">Default terms and conditions</label>
+                  <textarea id="inv-terms" className="textarea" rows={4} maxLength={1500} value={iv.terms} onChange={(e) => setI({ terms: e.target.value })} />
+                  <span className="field-hint">An invoice can override these with its own terms.</span>
+                </div>
+                <div className="field" style={{ marginTop: 12 }}>
+                  <label htmlFor="sig-label">Signatory label</label>
+                  <input id="sig-label" className="input" maxLength={60} value={iv.signatoryLabel} onChange={(e) => setI({ signatoryLabel: e.target.value })} />
+                </div>
+                <div className="row" style={{ gap: 12, marginTop: 12 }}>
+                  <div className="thumb" style={{ width: 96, height: 44 }}>{iv.signatureImage ? <img src={iv.signatureImage} alt="Signature" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span className="small muted">No signature</span>}</div>
+                  <input ref={signRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; try { setI({ signatureImage: await readLogo(f, 480) }); } catch { toast('error', 'Could not read that image'); } }} />
+                  <button className="btn btn-secondary btn-sm" onClick={() => signRef.current?.click()}><Upload size={14} /> Signature or stamp</button>
+                  {iv.signatureImage && <button className="btn btn-ghost btn-sm" onClick={() => setI({ signatureImage: '' })}><Trash2 size={14} /> Remove</button>}
+                </div>
+              </div>
+            </div>
+          ) : tab === 'thermal' ? (
             <div className="card ps-panel">
               <div className="ps-sec">
                 <div className="ps-themes">

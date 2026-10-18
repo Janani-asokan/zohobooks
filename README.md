@@ -58,6 +58,8 @@ In production the API serves the built web app too, so you deploy one process. M
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Sends password-reset, reminder and license emails. Without these, emails are only logged |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | Lets shop owners renew their license online |
 | `BACKUPS_ENABLED=1`, `BACKUP_DIR`, `BACKUP_KEEP` | Daily `pg_dump` backups (on by default in production) |
+| `CHROMIUM_PATH` | Chromium used to print invoices to PDF (the Docker image sets `/usr/bin/chromium`) |
+| `RENDER_ORIGIN` | Where that browser loads the print page from. Defaults to this server (`http://127.0.0.1:$PORT`) in production and Vite in development |
 | `EINVOICE_API_URL`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | Reserved for direct GSP/IRP filing and the WhatsApp Business API (see below) |
 
 ---
@@ -81,7 +83,10 @@ In production the API serves the built web app too, so you deploy one process. M
 - Invoices with server-side totals. CGST+SGST or IGST is chosen from the place of supply.
 - **Net (no tax) / GST toggle**, **Bill of Supply** for composition dealers and exempt sales, **reverse charge**, **TCS**.
 - Partial payments with **TDS**, and credit notes that can restock returned goods.
-- Printable A4 invoices in **3 templates** with a **UPI QR** for the exact balance, bank details, and the amount in words.
+- **One invoice document everywhere.** `/invoices/:id/print` renders only the tax invoice, on **A4, A5 or an 80 mm roll**. The in-app Print button, *Download PDF*, *Email invoice* (PDF attached) and the WhatsApp share link all produce that same document. The server makes PDFs by printing the route in headless Chromium.
+- Print layout: `@page` margins of 13–14 mm, the column header repeats on every page, rows never split, the totals block stays together, and *Page X of Y* sits in the footer (Chrome and Edge draw it from CSS; Firefox adds its own). Colour is limited to the title and rules, so it reads well on black-and-white printers.
+- Full GST layout: seller and buyer GSTIN, bill-to and ship-to, place of supply with state code, S.No / Item / HSN / Qty / Unit / Rate / Discount / Taxable value / GST % / Tax / Amount, tax breakup by rate, amount in words, bank details with a **UPI QR** for the balance, terms, signatory with an optional signature image, and the **e-invoice IRN, acknowledgement and QR** plus the e-way bill number once they are recorded.
+- **Print settings → Invoice:** choose a template (Standard, Modern, Compact), paper, logo, brand colour, which fields to show, default terms and signatory, all with a live preview.
 - **GSTR-1 JSON** in the GSTN offline-tool layout (B2B, B2CL, B2CS, CDNR, nil-rated, HSN, documents issued), **GSTR-3B** with input credit from purchase bills, and an **HSN summary**.
 - **E-invoice JSON** (NIC v1.1) and **e-way bill JSON** (bulk upload format).
 

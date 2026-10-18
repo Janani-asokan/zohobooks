@@ -155,3 +155,11 @@
 .tpl-thumb { height: 72px; border-radius: 4px; background: #fff; border: 1px solid var(--border); margin-bottom: var(--sp-2); position: relative; overflow: hidden; }
 .tpl-thumb i { position: absolute; left: 8px; right: 8px; height: 4px; border-radius: 2px; background: #e5e7eb; }
 @media (max-width: 1100px) { .ps-layout { grid-template-columns: minmax(0, 1fr); } .ps-preview { position: static; max-height: none; min-height: 0; } }
+/* Invoice layout settings */
+.ps-doc { box-shadow: 0 0 0 1px var(--border); background: #fff; }
+.ps-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--sp-3); }
+.tpl-pick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.tpl-pick .ps-theme { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: var(--sp-3); height: auto; }
+.swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--border-strong); cursor: pointer; padding: 0; }
+.swatch[aria-pressed='true'] { outline: 2px solid var(--focus); outline-offset: 1px; }
+@media (max-width: 520px) { .ps-grid2, .tpl-pick { grid-template-columns: minmax(0, 1fr); } }

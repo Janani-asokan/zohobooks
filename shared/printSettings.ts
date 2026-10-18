@@ -47,7 +47,29 @@ export const labelSize = (id: string) => LABEL_SIZES.find((l) => l.id === id) ??
 
 export interface BarcodeSettings { printer: PrinterType; labelSize: string; fields: BarcodeField[]; barcodeHeight: number }
 
-export interface PrintSettings { thermal: ThermalSettings; barcode: BarcodeSettings }
+/* ---------------- A4 / A5 tax invoice ---------------- */
+export type InvoiceTemplate = 'standard' | 'modern' | 'compact';
+export type InvoicePaper = 'a4' | 'a5';
+export const INVOICE_FIELDS = ['logo', 'hsn', 'unit', 'discount', 'taxBreakup', 'amountInWords', 'bankDetails', 'upiQr', 'terms', 'notes', 'signature', 'shipTo', 'placeOfSupply', 'eInvoice'] as const;
+export type InvoiceFieldKey = (typeof INVOICE_FIELDS)[number];
+export const INVOICE_FIELD_LABEL: Record<InvoiceFieldKey, string> = {
+  logo: 'Logo', hsn: 'HSN / SAC column', unit: 'Unit column', discount: 'Discount column', taxBreakup: 'Tax breakup by rate', amountInWords: 'Amount in words',
+  bankDetails: 'Bank details', upiQr: 'UPI QR code', terms: 'Terms and conditions', notes: 'Customer notes', signature: 'Authorised signatory',
+  shipTo: 'Ship-to address', placeOfSupply: 'Place of supply', eInvoice: 'E-invoice IRN and QR',
+};
+export interface InvoicePrintSettings {
+  template: InvoiceTemplate;
+  paper: InvoicePaper;
+  /** Hex colour used for the title and rules. Everything else prints in black for B/W printers. */
+  color: string;
+  fields: Record<InvoiceFieldKey, boolean>;
+  terms: string;
+  signatoryLabel: string;
+  /** Signature or stamp image (data URL). */
+  signatureImage: string;
+}
+
+export interface PrintSettings { thermal: ThermalSettings; barcode: BarcodeSettings; invoice: InvoicePrintSettings }
 
 export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   thermal: {
@@ -69,6 +91,13 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
       { key: 'unit', enabled: false, size: 18, bold: false },
     ],
   },
+  invoice: {
+    template: 'standard', paper: 'a4', color: '#1F3A5F',
+    fields: Object.fromEntries(INVOICE_FIELDS.map((k) => [k, true])) as Record<InvoiceFieldKey, boolean>,
+    terms: 'Goods once sold will not be taken back.\nInterest at 18% p.a. is charged on payments received after the due date.\nSubject to local jurisdiction.',
+    signatoryLabel: 'Authorised Signatory',
+    signatureImage: '',
+  },
 };
 
 /** Fill in anything missing (older saved settings, new fields) from the defaults. */
@@ -83,6 +112,7 @@ export function withPrintDefaults(saved: unknown): PrintSettings {
   return {
     thermal: { ...d.thermal, ...(s.thermal ?? {}) },
     barcode: { ...d.barcode, ...(s.barcode ?? {}), fields },
+    invoice: { ...d.invoice, ...(s.invoice ?? {}), fields: { ...d.invoice.fields, ...(s.invoice?.fields ?? {}) } },
   };
 }
 

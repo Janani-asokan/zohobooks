@@ -66,3 +66,7 @@ export function amountInWords(amount: number): string {
   const paise = Math.round((amount - rupees) * 100);
   return `Rupees ${words(rupees)}${paise ? ` and ${two(paise)} Paise` : ''} Only`;
 }
+
+const inr2 = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** Indian digit grouping without the ₹ sign, for dense tables (1,23,456.00). */
+export const num2 = (n: number) => inr2.format(Number.isFinite(n) ? n : 0);

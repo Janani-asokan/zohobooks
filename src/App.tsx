@@ -10,6 +10,7 @@ import SettingsLayout from './layouts/SettingsLayout';
 
 // Route-level code splitting keeps the first load small.
 const PublicInvoice = lazy(() => import('./pages/PublicInvoice'));
+const PrintInvoice = lazy(() => import('./pages/PrintInvoice'));
 const Landing = lazy(() => import('./pages/Landing'));
 const SuperDashboard = lazy(() => import('./pages/super/Dashboard'));
 const Configuration = lazy(() => import('./pages/super/Configuration'));
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/share/:token" element={<PublicInvoice />} />
+        <Route path="/invoices/:id/print" element={<PrintInvoice />} />
 
         <Route element={<ProtectedRoute kind="super" />}>
           <Route path="/super-admin" element={<SuperAdminLayout />}>

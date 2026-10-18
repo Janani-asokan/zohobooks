@@ -6,6 +6,8 @@ export interface Mail {
   subject: string;
   text: string;
   html?: string;
+  cc?: string;
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
 }
 
 let transport: nodemailer.Transporter | null = null;
@@ -16,7 +18,8 @@ export async function sendMail(mail: Mail): Promise<boolean> {
   if (!config.smtp) {
     outbox.push(mail);
     if (outbox.length > 200) outbox.shift();
-    if (config.env !== 'test') console.log(`[mail:dev] to=${mail.to} subject="${mail.subject}"\n${mail.text}\n`);
+    const files = mail.attachments?.map((a) => `${a.filename} (${Math.round(a.content.length / 1024)} KB)`).join(', ');
+    if (config.env !== 'test') console.log(`[mail:dev] to=${mail.to} subject="${mail.subject}"${files ? ` attachments=${files}` : ''}\n${mail.text}\n`);
     return false;
   }
   transport ??= nodemailer.createTransport({
