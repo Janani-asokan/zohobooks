@@ -1,18 +1,20 @@
 import type { ReactNode } from 'react';
 import { ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Canopy } from '@/components/Canopy';
 
 /** Split-screen frame shared by login, password reset and forced password change. */
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
     <div className="login">
       <div className="login-left">
-        <div className="row">
+        <Link to="/" className="row" style={{ color: 'inherit' }}>
           <div className="brand-mark">L</div>
           <div className="brand-text">
             <strong style={{ color: 'var(--ink-900)' }}>Ledgerly Books</strong>
             <span>GST BILLING &amp; ACCOUNTING</span>
           </div>
-        </div>
+        </Link>
         <div className="login-form-wrap">{children}</div>
         <div className="login-foot">
           <span>© {new Date().getFullYear()} Ledgerly Books. All rights reserved.</span>
@@ -20,8 +22,9 @@ export function AuthShell({ children }: { children: ReactNode }) {
         </div>
       </div>
       <div className="login-right" aria-hidden>
+        <Canopy fireflies={16} />
         <div className="login-hero">
-          <h2>Billing, inventory and GST accounting for growing businesses.</h2>
+          <h2>Grow your business, naturally.</h2>
           <p>One place to invoice customers, manage stock and purchases, and prepare your GST returns.</p>
           <ul className="login-points">
             <li><CheckCircle2 size={18} /><div><strong>GST-compliant invoicing</strong>Tax invoices, bills of supply and credit notes with CGST, SGST and IGST worked out for you.</div></li>

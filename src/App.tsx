@@ -10,6 +10,7 @@ import SettingsLayout from './layouts/SettingsLayout';
 
 // Route-level code splitting keeps the first load small.
 const PublicInvoice = lazy(() => import('./pages/PublicInvoice'));
+const Landing = lazy(() => import('./pages/Landing'));
 const SuperDashboard = lazy(() => import('./pages/super/Dashboard'));
 const Configuration = lazy(() => import('./pages/super/Configuration'));
 const Plans = lazy(() => import('./pages/super/Plans'));
@@ -37,6 +38,13 @@ const Team = lazy(() => import('./pages/app/Team'));
 const Billing = lazy(() => import('./pages/app/Billing'));
 const BarcodeLabels = lazy(() => import('./pages/app/BarcodeLabels'));
 
+/** "/" shows the public landing page to visitors and sends signed-in users to their workspace. */
+function RootPage() {
+  const { me, loading } = useAuth();
+  if (loading) return <FullPageSpinner />;
+  return me ? <Navigate to={homeFor(me)} replace /> : <Landing />;
+}
+
 function RootRedirect() {
   const { me, loading } = useAuth();
   if (loading) return <FullPageSpinner />;
@@ -47,6 +55,7 @@ export default function App() {
   return (
     <Suspense fallback={<FullPageSpinner />}>
       <Routes>
+        <Route path="/" element={<RootPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/share/:token" element={<PublicInvoice />} />

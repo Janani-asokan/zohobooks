@@ -313,3 +313,37 @@
 .login-points li svg { color: #6fcf93; flex-shrink: 0; margin-top: 2px; }
 .login-points li strong { color: #fff; display: block; font-weight: 600; }
 .login-quote { margin-top: 48px; padding-top: 24px; border-top: 1px solid #2e2e33; color: #a1a1aa; font-size: 13px; }
+
+/* ---------- v5 "Canopy" shell ---------- */
+.brand-mark { background: var(--gold); color: #141210; font-family: var(--font-display); font-weight: 700; font-size: 16px; }
+.brand-text strong { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: 0; }
+.nav-link.active { background: var(--side-active); color: #fff; }
+.nav-link.active::after { content: ''; display: block; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gold); }
+.nav-link.active svg, .nav-link.parent-active svg { color: var(--gold); }
+.nav-sub .nav-link.active::before { background: var(--gold); }
+.nav-sub .nav-link.active::after { display: none; }
+.sidebar.super .nav-link.active { background: var(--side-active); }
+.topbar { border-bottom-color: var(--border); }
+.org-logo { color: var(--ink-900); }
+
+/* Login — dark canopy panel to match the landing page */
+.login-right { background: radial-gradient(120% 90% at 70% 10%, #1d4a2f 0%, #0f2418 45%, #070a07 100%); padding: 0; display: block; }
+.login-right .canopy { position: absolute; inset: 0; }
+.login-hero { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 64px; max-width: 620px; margin: 0; z-index: 2; }
+.login-hero h2 { font-family: var(--font-display); color: #f5c400; font-size: 44px; font-weight: 600; line-height: 1.08; letter-spacing: -0.01em; }
+.login-hero p { color: #e9e4d6; font-size: 15.5px; }
+.login-points li { color: #e9e4d6; }
+.login-points li svg { color: #f5c400; }
+.login-quote { border-top-color: rgba(255,255,255,.12); color: #bdb6a6; }
+
+/* ---------- Canopy artwork ---------- */
+.canopy { position: absolute; inset: 0; overflow: hidden; pointer-events: none; --mx: 0; --my: 0; }
+.canopy svg { position: absolute; inset: -4%; width: 108%; height: 108%; }
+.canopy .layer { transition: transform .6s cubic-bezier(.2,.7,.2,1); }
+.canopy .l-back { transform: translate(calc(var(--mx) * -10px), calc(var(--my) * -6px)); }
+.canopy .l-mid { transform: translate(calc(var(--mx) * -22px), calc(var(--my) * -12px)); }
+.canopy .l-front { transform: translate(calc(var(--mx) * -40px), calc(var(--my) * -22px)); }
+.canopy .sway { transform-box: view-box; transform-origin: 0 0; animation: sway 8s ease-in-out infinite alternate; }
+@keyframes sway { from { transform: rotate(-1.6deg); } to { transform: rotate(1.8deg); } }
+.firefly { position: absolute; border-radius: 50%; background: #ffd84d; box-shadow: 0 0 10px 3px rgba(255, 216, 77, .55); opacity: 0; animation: firefly 7s ease-in-out infinite; }
+@keyframes firefly { 0% { opacity: 0; transform: translate(0, 0); } 20% { opacity: .9; } 50% { opacity: .5; transform: translate(18px, -26px); } 80% { opacity: .85; } 100% { opacity: 0; transform: translate(-10px, -48px); } }
