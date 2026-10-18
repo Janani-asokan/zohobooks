@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Loader2, Mail, KeyRound, Languages } from 'lucide-react';
 import { homeFor, useAuth } from '@/context/AuthContext';
@@ -12,14 +13,8 @@ import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { LANGS } from '@/i18n';
 import { AuthShell } from './AuthShell';
 
-/** The demo-account helper is shown in development only (or when VITE_SHOW_DEMO=1 at build time). */
-const SHOW_DEMO = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO === '1';
-
-const DEMO: Array<[string, string, string]> = [
-  ['Shop owner', 'owner@shop.com', 'owner123'],
-  ['Super admin', 'admin@ledgerly.in', 'admin123'],
-  ['Sales staff', 'sales@shop.com', 'sales123'],
-];
+/** The server says whether demo mode is on (simple demo passwords) and which logins to offer. */
+type DemoAccount = { label: string; email: string; password: string };
 
 export default function Login() {
   const { me, loading: authLoading, login } = useAuth();
@@ -40,6 +35,8 @@ export default function Login() {
   const [forgotTouched, setForgotTouched] = useState(false);
   const [forgotBusy, setForgotBusy] = useState(false);
   const [devLink, setDevLink] = useState('');
+  const demo = useQuery({ queryKey: ['authDemo'], queryFn: () => api.get<{ enabled: boolean; accounts: DemoAccount[] }>('/auth/demo'), staleTime: Infinity, retry: false });
+  const demoAccounts = demo.data?.enabled ? demo.data.accounts : [];
 
   if (authLoading) return <FullPageSpinner />;
   if (me) return <Navigate to={from && from.startsWith(homeFor(me)) ? from : homeFor(me)} replace />;
@@ -127,12 +124,12 @@ export default function Login() {
         </button>
       </form>
 
-      {SHOW_DEMO && (
+      {demoAccounts.length > 0 && (
       <div className="demo-creds">
         <div style={{ fontWeight: 700, color: 'var(--ink-800)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
           <KeyRound size={14} /> Demo accounts
         </div>
-        {DEMO.map(([who, e, p]) => (
+        {demoAccounts.map(({ label: who, email: e, password: p }) => (
           <div key={e} className="row between" style={{ marginTop: 3 }}>
             <span>{who} · {e} / {p}</span>
             <button type="button" onClick={() => { setEmail(e); setPassword(p); setError(''); }}>Use</button>

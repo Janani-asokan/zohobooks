@@ -38,7 +38,7 @@ There's no role picker on the login page: the server works out who you are from 
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Janani-asokan/zohobooks)
 
-The `render.yaml` blueprint creates a PostgreSQL database and the web service (built from the `Dockerfile`). On first start it loads the demo shops. **Every demo account uses the generated `DEMO_PASSWORD`**, which you can find under the service's *Environment* tab. The well-known demo passwords don't work on a public deployment. To start with an empty platform instead, remove `SEED_DEMO` and set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`.
+The `render.yaml` blueprint creates a PostgreSQL database and the web service (built from the `Dockerfile`). On first start it loads the demo shops. **Demo mode is on** (`DEMO_SIMPLE_PASSWORDS=1`): the demo logins use the simple passwords (`owner@shop.com` / `owner123`, `admin@ledgerly.in` / `admin123`, …) and the login page lists them, so anyone with the link can sign in. Before real use, set `DEMO_SIMPLE_PASSWORDS=0`. A fresh seed then gives the demo accounts the generated `DEMO_PASSWORD` instead; an existing database keeps the simple passwords until you change them, so change them yourself. To start with an empty platform instead, remove `SEED_DEMO` and set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`.
 
 Free-tier notes: the service sleeps after 15 minutes without visitors (the first request then takes about 50 seconds), and Render's free PostgreSQL expires after 30 days. Use paid plans for real shops.
 

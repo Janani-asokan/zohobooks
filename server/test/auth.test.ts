@@ -63,6 +63,14 @@ describe('authentication', () => {
   });
 });
 
+describe('demo mode', () => {
+  it('does not publish demo logins unless demo mode is on', async () => {
+    const r = await request(app).get('/api/auth/demo');
+    expect(r.status).toBe(200);
+    expect(r.body).toEqual({ enabled: false, accounts: [] });
+  });
+});
+
 describe('staff accounts & permissions', () => {
   it('forces new staff to change their temporary password', async () => {
     const owner = await login('owner@shop.com', 'owner123');

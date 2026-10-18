@@ -3,6 +3,7 @@
  * Uses the same services as the API so totals, numbering and stock are computed for real.
  */
 import { hashPassword, todayISO } from './auth';
+import { config } from './config';
 import { pool, query, tx, withTenant } from './db';
 import { migrate } from './migrate';
 import { provisionShop } from './services/provision';
@@ -20,8 +21,26 @@ export async function resetDatabase() {
   await migrate(undefined, () => {});
 }
 
-/** Demo passwords — overridden by DEMO_PASSWORD so a public deployment never uses the well-known ones. */
-const pw = (fallback: string) => process.env.DEMO_PASSWORD || fallback;
+/** Demo passwords — DEMO_PASSWORD replaces the well-known ones unless demo mode (simple passwords) is on. */
+const pw = (fallback: string) => (config.demoSimplePasswords ? fallback : process.env.DEMO_PASSWORD || fallback);
+
+/** The demo logins and their simple passwords, shown on the login page in demo mode. */
+export const DEMO_ACCOUNTS: Array<{ label: string; email: string; password: string; kind: 'super' | 'user' }> = [
+  { label: 'Shop owner', email: 'owner@shop.com', password: 'owner123', kind: 'user' },
+  { label: 'Super admin', email: 'admin@ledgerly.in', password: 'admin123', kind: 'super' },
+  { label: 'Manager', email: 'manager@shop.com', password: 'manager123', kind: 'user' },
+  { label: 'Sales staff', email: 'sales@shop.com', password: 'sales123', kind: 'user' },
+  { label: 'Accountant', email: 'accounts@shop.com', password: 'accounts123', kind: 'user' },
+];
+
+/** Demo mode on an existing database: put the demo logins back on their simple passwords. */
+export async function resetDemoPasswords() {
+  for (const a of DEMO_ACCOUNTS) {
+    const hash = await hashPassword(a.password);
+    if (a.kind === 'super') await query('UPDATE super_admins SET password_hash = $2, failed_attempts = 0, locked_until = NULL WHERE lower(email) = $1', [a.email, hash]);
+    else await query('UPDATE users SET password_hash = $2, failed_attempts = 0, locked_until = NULL, must_change_password = false WHERE lower(email) = $1', [a.email, hash]);
+  }
+}
 
 export async function seed({ quiet = false } = {}) {
   const log = quiet ? () => {} : console.log;
@@ -218,7 +237,7 @@ export async function seed({ quiet = false } = {}) {
   });
   await tx(async (db) => db.query("INSERT INTO audit_log (shop_id, actor_type, actor_name, action, entity) VALUES (NULL,'system','System','seed','database')"));
   log(`[seed] done — today ${todayISO()}`);
-  if (process.env.DEMO_PASSWORD) log('  All demo accounts use the DEMO_PASSWORD value.');
+  if (process.env.DEMO_PASSWORD && !config.demoSimplePasswords) log('  All demo accounts use the DEMO_PASSWORD value.');
   else {
     log('  Super admin : admin@ledgerly.in / admin123');
     log('  Shop owner  : owner@shop.com / owner123');

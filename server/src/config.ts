@@ -33,5 +33,10 @@ export const config = {
   /** E-invoice (IRP) provider credentials — when absent, the app generates the JSON for manual upload only. */
   einvoice: env.EINVOICE_API_URL ? { url: env.EINVOICE_API_URL, clientId: env.EINVOICE_CLIENT_ID ?? '', clientSecret: env.EINVOICE_CLIENT_SECRET ?? '' } : null,
   whatsapp: env.WHATSAPP_TOKEN && env.WHATSAPP_PHONE_ID ? { token: env.WHATSAPP_TOKEN, phoneId: env.WHATSAPP_PHONE_ID } : null,
+  /**
+   * Demo mode: the well-known demo passwords (owner123, admin123 …) work and the login page lists them.
+   * On by default whenever demo data is seeded; set DEMO_SIMPLE_PASSWORDS=0 to turn it off.
+   */
+  demoSimplePasswords: bool(env.DEMO_SIMPLE_PASSWORDS, env.SEED_DEMO === '1'),
   staticDir: env.STATIC_DIR ?? path.resolve(process.cwd(), 'dist'),
 };

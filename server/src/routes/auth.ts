@@ -115,6 +115,16 @@ authRouter.post(
   }),
 );
 
+/** Demo mode only: the public demo logins, so the login page can offer them. */
+authRouter.get(
+  '/demo',
+  h(async (_req, res) => {
+    if (!config.demoSimplePasswords) return res.json({ enabled: false, accounts: [] });
+    const { DEMO_ACCOUNTS } = await import('../seed');
+    res.json({ enabled: true, accounts: DEMO_ACCOUNTS.map(({ label, email, password }) => ({ label, email, password })) });
+  }),
+);
+
 authRouter.get(
   '/me',
   h(async (req, res) => {

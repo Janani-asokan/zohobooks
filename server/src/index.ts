@@ -34,6 +34,11 @@ async function bootstrap() {
 async function main() {
   await migrate();
   await bootstrap();
+  if (config.demoSimplePasswords) {
+    const { resetDemoPasswords } = await import('./seed');
+    await resetDemoPasswords();
+    console.log('[bootstrap] Demo mode: demo accounts use their simple passwords (owner123, admin123 …). Set DEMO_SIMPLE_PASSWORDS=0 to turn off.');
+  }
   const app = createApp();
   app.listen(config.port, () => console.log(`[server] Ledgerly API listening on :${config.port} (${config.env})`));
   startJobs();
