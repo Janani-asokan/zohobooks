@@ -86,7 +86,7 @@ function OrgForm({ initial }: { initial: Org }) {
             <div className="card-body">
               <div className="section-title">Logo</div>
               <div className="row" style={{ gap: 18 }}>
-                <div role="button" tabIndex={0} aria-label="Upload logo" style={{ width: 120, height: 120, borderRadius: 16, border: '2px dashed var(--border-strong)', display: 'grid', placeItems: 'center', background: 'var(--ink-50)', overflow: 'hidden', cursor: 'pointer' }}
+                <div role="button" tabIndex={0} aria-label="Upload logo" style={{ width: 120, height: 120, borderRadius: 8, border: '2px dashed var(--border-strong)', display: 'grid', placeItems: 'center', background: 'var(--ink-50)', overflow: 'hidden', cursor: 'pointer' }}
                   onClick={() => fileRef.current?.click()} onKeyDown={(ev) => ev.key === 'Enter' && fileRef.current?.click()} onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.preventDefault(); onFile(ev.dataTransfer.files[0]); }}>
                   {org.logo ? <img src={org.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImageIcon size={30} className="muted" />}
                 </div>
@@ -172,16 +172,16 @@ function OrgForm({ initial }: { initial: Org }) {
           <div className="card-header"><div><h3>Invoice header preview</h3><p>How customers see you</p></div></div>
           <div className="card-body light-scope" style={{ background: '#fff', borderRadius: '0 0 12px 12px' }}>
             <div style={{ borderBottom: '3px solid var(--brand-600)', paddingBottom: 14, display: 'flex', gap: 12 }}>
-              <div style={{ width: 54, height: 54, borderRadius: 10, background: 'var(--brand-50)', display: 'grid', placeItems: 'center', fontWeight: 800, color: 'var(--brand-700)', overflow: 'hidden', flexShrink: 0 }}>
+              <div style={{ width: 54, height: 54, borderRadius: 8, background: 'var(--brand-50)', display: 'grid', placeItems: 'center', fontWeight: 600, color: 'var(--brand-700)', overflow: 'hidden', flexShrink: 0 }}>
                 {org.logo ? <img src={org.logo} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : initials(org.companyName || '?')}
               </div>
               <div className="small" style={{ minWidth: 0, color: 'var(--ink-700)' }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--ink-900)' }}>{org.companyName || 'Company name'}</div>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink-900)' }}>{org.companyName || 'Company name'}</div>
                 <div style={{ whiteSpace: 'pre-line' }}>{org.address}</div>
-                {org.gstin && <div style={{ fontWeight: 700 }}>GSTIN: {org.gstin}</div>}
+                {org.gstin && <div style={{ fontWeight: 600 }}>GSTIN: {org.gstin}</div>}
               </div>
             </div>
-            <div style={{ textAlign: 'right', marginTop: 10, fontWeight: 800, letterSpacing: '.08em', color: 'var(--brand-700)' }}>{org.compositionScheme ? 'BILL OF SUPPLY' : org.gstin ? 'TAX INVOICE' : 'INVOICE'}</div>
+            <div style={{ textAlign: 'right', marginTop: 10, fontWeight: 600, letterSpacing: '.08em', color: 'var(--brand-700)' }}>{org.compositionScheme ? 'BILL OF SUPPLY' : org.gstin ? 'TAX INVOICE' : 'INVOICE'}</div>
           </div>
         </div>
       </div>

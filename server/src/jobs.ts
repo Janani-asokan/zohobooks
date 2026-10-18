@@ -89,7 +89,7 @@ export async function runLicenseReminders() {
   for (const r of rows) {
     await sendMail({
       to: r.email,
-      subject: `Your Ledgerly Books license expires in ${r.days} day${r.days > 1 ? 's' : ''}`,
+      subject: `Your Kanakku license expires in ${r.days} day${r.days > 1 ? 's' : ''}`,
       text: `Hi ${r.owner},\n\nThe license for "${r.name}" expires on ${r.license_end}. Renew from ${config.appUrl}/app/billing to avoid interruption.`,
     });
     await query('UPDATE shops SET last_expiry_reminder = current_date WHERE id = $1', [r.id]);

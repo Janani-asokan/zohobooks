@@ -1,37 +1,32 @@
 import type { ReactNode } from 'react';
-import { ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Canopy } from '@/components/Canopy';
+import { ShieldCheck, Check } from 'lucide-react';
+import { KanakkuLogo } from '@/components/Logo';
 
 /** Split-screen frame shared by login, password reset and forced password change. */
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
     <div className="login">
       <div className="login-left">
-        <Link to="/" className="row" style={{ color: 'inherit' }}>
-          <div className="brand-mark">L</div>
-          <div className="brand-text">
-            <strong style={{ color: 'var(--ink-900)' }}>Ledgerly Books</strong>
-            <span>GST BILLING &amp; ACCOUNTING</span>
-          </div>
+        <Link to="/" aria-label="Kanakku home" style={{ color: 'var(--brand-600)', alignSelf: 'flex-start' }}>
+          <KanakkuLogo height={18} />
         </Link>
         <div className="login-form-wrap">{children}</div>
         <div className="login-foot">
-          <span>© {new Date().getFullYear()} Ledgerly Books. All rights reserved.</span>
-          <span className="row" style={{ gap: 6 }}><ShieldCheck size={14} /> Encrypted sessions · bcrypt-hashed passwords</span>
+          <span>© {new Date().getFullYear()} Kanakku</span>
+          <span className="row" style={{ gap: 6 }}><ShieldCheck size={14} /> Encrypted sessions. Each business sees only its own data.</span>
         </div>
       </div>
       <div className="login-right" aria-hidden>
-        <Canopy fireflies={16} light />
         <div className="login-hero">
-          <h2>Grow your business, <em>naturally.</em></h2>
-          <p>One place to invoice customers, manage stock and purchases, and prepare your GST returns.</p>
+          <h2>Billing and stock, without the paperwork.</h2>
+          <p>GST invoices, inventory across warehouses and the accounts behind them — in one place your accountant can trust.</p>
           <ul className="login-points">
-            <li><CheckCircle2 size={18} /><div><strong>GST-compliant invoicing</strong>Tax invoices, bills of supply and credit notes with CGST, SGST and IGST worked out for you.</div></li>
-            <li><CheckCircle2 size={18} /><div><strong>Inventory and purchasing</strong>Barcode items, purchase orders, batch and expiry tracking across branches.</div></li>
-            <li><CheckCircle2 size={18} /><div><strong>Returns ready to file</strong>GSTR-1, GSTR-3B and HSN summaries prepared from your transactions.</div></li>
+            <li><Check size={16} /><div><strong>Invoices in under 30 seconds</strong>Find items by name, SKU, HSN or barcode. CGST, SGST or IGST is picked from the place of supply.</div></li>
+            <li><Check size={16} /><div><strong>Stock that keeps itself up to date</strong>Invoices reduce it, bills add to it, and every movement is recorded per item and warehouse.</div></li>
+            <li><Check size={16} /><div><strong>Returns ready when you are</strong>GSTR-1 and GSTR-3B summaries, P&amp;L and balance sheet, exportable to PDF, Excel and CSV.</div></li>
           </ul>
-          <div className="login-quote">Financial year runs 1 April – 31 March. Invoice numbering resets automatically.</div>
+          <div className="login-quote">Financial year April–March. Invoice numbers restart every 1 April.</div>
         </div>
       </div>
     </div>

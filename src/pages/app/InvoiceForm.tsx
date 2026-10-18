@@ -126,7 +126,7 @@ function Form({ existing }: { existing?: Invoice }) {
       />
 
       {isIssued && (
-        <div className="row small" style={{ gap: 8, padding: '10px 14px', borderRadius: 10, background: 'var(--amber-50)', color: 'var(--amber-700)', marginBottom: 14 }}>
+        <div className="row small" style={{ gap: 8, padding: '10px 14px', borderRadius: 8, background: 'var(--amber-50)', color: 'var(--amber-700)', marginBottom: 14 }}>
           <AlertTriangle size={15} /> This invoice is already issued. Editing keeps its number and re-applies stock. Once it has payments or credit notes, raise a credit note instead.
         </div>
       )}
@@ -158,7 +158,7 @@ function Form({ existing }: { existing?: Invoice }) {
               )}
             </div>
             <Field label="Invoice #" hint={existing?.number ? 'Invoice numbers are permanent' : me.platform.autoResetInvoiceNumbering ? 'Assigned when issued · resets every 1 April' : 'Assigned when issued · continuous'}>
-              <input className="input" readOnly value={number} style={{ fontWeight: 700, fontFamily: 'ui-monospace, Menlo, monospace' }} />
+              <input className="input" readOnly value={number} style={{ fontWeight: 600, fontFamily: 'ui-monospace, Menlo, monospace' }} />
             </Field>
             <Field label="Branch" hint="Stock is taken from this branch">
               <select className="select" value={branchId} onChange={(e) => setBranchId(e.target.value)}>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
@@ -207,7 +207,7 @@ function Form({ existing }: { existing?: Invoice }) {
           </div>
         </div>
 
-        <div className="card-footer" style={{ justifyContent: 'space-between', position: 'sticky', bottom: 0, flexWrap: 'wrap', gap: 10 }}>
+        <div className="card-footer doc-footer">
           <button className="btn btn-ghost" onClick={() => navigate(-1)}>Cancel</button>
           <div className="row" style={{ flexWrap: 'wrap' }}>
             {(!existing || existing.status === 'Draft') && <button className="btn btn-secondary" disabled={busy} onClick={() => save('draft')}><Save size={15} /> Save as Draft</button>}

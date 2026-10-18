@@ -84,7 +84,7 @@ platformRouter.post(
     }
     await sendMail({
       to: b.email,
-      subject: 'Your Ledgerly Books workspace is ready',
+      subject: 'Your Kanakku workspace is ready',
       text: `Hi ${b.ownerName},\n\nYour workspace "${b.shopName}" is ready.\nSign in at ${config.appUrl}/login with ${b.email} and the temporary password shared with you. You'll be asked to set a new password on first sign-in.`,
     });
     const [row] = await query(`${SHOPS_SQL} WHERE s.id = $1`, [shop.id]);
@@ -146,7 +146,7 @@ platformRouter.post(
     const token = randomToken();
     await query("INSERT INTO password_resets (token_hash, principal_type, principal_id, expires_at) VALUES ($1,'user',$2, now() + interval '24 hours')", [sha256(token), owner.id]);
     const url = `${config.appUrl}/reset-password?token=${token}`;
-    await sendMail({ to: owner.email, subject: 'Reset your Ledgerly Books password', text: `Hi ${owner.name},\n\nYour service provider sent you a password reset link (valid 24 hours):\n${url}` });
+    await sendMail({ to: owner.email, subject: 'Reset your Kanakku password', text: `Hi ${owner.name},\n\nYour service provider sent you a password reset link (valid 24 hours):\n${url}` });
     await tx((db) => audit(db, req, null, 'send_owner_reset', 'shop', req.params.id));
     res.json({ ok: true, sentTo: owner.email, ...(config.exposeDevResetLinks ? { devResetUrl: url } : {}) });
   }),

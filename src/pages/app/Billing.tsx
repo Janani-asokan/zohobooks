@@ -71,9 +71,9 @@ export default function Billing() {
 
   return (
     <div className="page" style={{ maxWidth: 1080 }}>
-      <PageHeader title="Subscription & billing" subtitle="Your Ledgerly Books software license." />
+      <PageHeader title="Subscription & billing" subtitle="Your Kanakku software license." />
       {me.shop.licenseExpired && (
-        <div className="row" style={{ gap: 10, padding: '14px 16px', borderRadius: 12, background: 'var(--red-50)', color: 'var(--red-600)', marginBottom: 16, fontWeight: 600 }}>
+        <div className="row" style={{ gap: 10, padding: '14px 16px', borderRadius: 8, background: 'var(--red-50)', color: 'var(--red-600)', marginBottom: 16, fontWeight: 600 }}>
           <AlertTriangle size={18} /> Your license expired on {fmtDate(me.shop.licenseEnd)}. Renew to unlock your workspace — your data is safe.
         </div>
       )}
@@ -96,7 +96,7 @@ export default function Billing() {
               <div className="row" style={{ gap: 10, marginTop: 16 }}>
                 <span className="small muted">Term</span>
                 <div className="segmented">{[1, 2, 3].map((y) => <button key={y} className={years === y ? 'active' : ''} onClick={() => setYears(y)}>{y} year{y > 1 ? 's' : ''}</button>)}</div>
-                <strong style={{ marginLeft: 'auto', fontSize: 18 }}>{chosen ? money(chosen.pricePerYear * years) : '—'}</strong>
+                <strong style={{ marginLeft: 'auto', fontSize: 16 }}>{chosen ? money(chosen.pricePerYear * years) : '—'}</strong>
               </div>
             </div>
             <div className="card-footer" style={{ justifyContent: 'space-between' }}>
@@ -120,7 +120,7 @@ export default function Billing() {
         </div>
         <div className="card" style={{ padding: 20 }}>
           <div className="small muted">Current plan</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink-900)', marginTop: 2 }}>{me.shop.planName}</div>
+          <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--ink-900)', marginTop: 2 }}>{me.shop.planName}</div>
           <div className="divider" />
           <div className="row between small"><span className="muted">Valid from</span><strong>{fmtDate(me.shop.licenseStart)}</strong></div>
           <div className="row between small" style={{ marginTop: 6 }}><span className="muted">Valid till</span><strong>{fmtDate(me.shop.licenseEnd)}</strong></div>

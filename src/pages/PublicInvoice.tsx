@@ -34,7 +34,7 @@ export default function PublicInvoice() {
       <div className="doc-stage print-area" style={{ maxWidth: 'calc(210mm + 56px)', margin: '0 auto' }}>
         <InvoiceDocument inv={inv} org={org} branchName={branchName} />
       </div>
-      <p className="no-print small muted" style={{ textAlign: 'center', marginTop: 16 }}>Powered by Ledgerly Books</p>
+      <p className="no-print small muted" style={{ textAlign: 'center', marginTop: 16 }}>Powered by Kanakku</p>
     </div>
   );
 }

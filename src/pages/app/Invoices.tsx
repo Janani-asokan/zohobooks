@@ -105,7 +105,7 @@ export default function Invoices() {
           ] as const).map(([l, v, c, tabKey], i) => (
             <button key={l} onClick={() => sv.setFilters({ tab: tabKey })} style={{ padding: '16px 20px', textAlign: 'left', background: 'none', border: 'none', borderLeft: i ? '1px solid var(--border)' : 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
               <div className="small muted" style={{ fontWeight: 600 }}>{l}</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: c, marginTop: 4 }}>{money(v)}</div>
+              <div style={{ fontSize: 20, fontWeight: 600, color: c, marginTop: 4 }}>{money(v)}</div>
             </button>
           ))}
         </div>

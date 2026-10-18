@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export const SERIES = ['#2f7d4f', '#a88400'] as const;
+export const SERIES = ['#3b6ea8', '#b7791f'] as const;
 
 interface Series {
   name: string;
@@ -72,7 +72,7 @@ export function BarChart({ labels, series, format, height = 240 }: { labels: str
       </svg>
       {hover !== null && (
         <div className="chart-tip" style={{ left: `${((pad.l + band * hover + band / 2) / W) * 100}%`, top: `${(pad.t / H) * 100 + 12}%` }}>
-          <div style={{ fontWeight: 700, marginBottom: 2 }}>{labels[hover]}</div>
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>{labels[hover]}</div>
           {series.map((s, si) => (
             <div key={s.name}>
               <i style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: SERIES[si], marginRight: 6 }} />

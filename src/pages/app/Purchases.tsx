@@ -162,7 +162,7 @@ export default function Purchases() {
           <div className="overlay" style={{ padding: 0 }} onMouseDown={() => setView(null)} />
           <aside className="drawer" role="dialog" aria-label={view.number}>
             <div className="drawer-head">
-              <div><div className="row" style={{ gap: 8 }}><h3 style={{ fontSize: 18 }}>{view.number}</h3><Badge>{statusOf(view)}</Badge></div><p className="small muted">{view.vendorName} · {fmtDate(view.date)} · due {fmtDate(view.dueDate)}</p></div>
+              <div><div className="row" style={{ gap: 8 }}><h3 style={{ fontSize: 16 }}>{view.number}</h3><Badge>{statusOf(view)}</Badge></div><p className="small muted">{view.vendorName} · {fmtDate(view.date)} · due {fmtDate(view.dueDate)}</p></div>
               <button className="icon-btn" onClick={() => setView(null)} aria-label="Close"><X size={18} /></button>
             </div>
             <div className="drawer-body">

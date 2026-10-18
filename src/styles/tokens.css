@@ -1,0 +1,129 @@
+/* ==========================================================================
+   Kanakku design tokens
+   Ink blue carries the brand; a muted teal marks primary actions and status;
+   neutral greys do the rest. Dark mode is tuned separately, not inverted.
+   Type scale: 12 / 13 / 14 / 16 / 20 / 24 / 32. Spacing: 4px grid.
+   ========================================================================== */
+:root,
+.light-scope {
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: var(--font);
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  --fs-12: 12px; --fs-13: 13px; --fs-14: 14px; --fs-16: 16px; --fs-20: 20px; --fs-24: 24px; --fs-32: 32px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 8px;
+  --row-h: 40px;
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 60px;
+  --topbar-h: 56px;
+
+  /* Brand: ink blue */
+  --brand-50: #eef3f9;
+  --brand-100: #dbe5f1;
+  --brand-200: #b6c9e0;
+  --brand-300: #8aa6c8;
+  --brand-500: #31527c;
+  --brand-600: #1f3a5f;
+  --brand-700: #172d4a;
+  --brand-900: #0b1726;
+  --brand-grad: var(--brand-600);
+
+  /* Accent: muted teal — primary actions and status only */
+  --accent: #0f766e;
+  --accent-hover: #0b5f58;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6f4f2;
+
+  /* Neutrals */
+  --ink-900: #111827;
+  --ink-800: #1f2937;
+  --ink-700: #374151;
+  --ink-600: #4b5563;
+  --ink-500: #6b7280;
+  --ink-400: #9ca3af;
+  --ink-300: #d1d5db;
+  --ink-200: #e5e7eb;
+  --ink-150: #eceef1;
+  --ink-100: #f3f4f6;
+  --ink-50: #f9fafb;
+
+  /* Status */
+  --green-50: #ecf8f1; --green-600: #15803d; --green-700: #166534;
+  --amber-50: #fdf6e7; --amber-600: #b45309; --amber-700: #92400e;
+  --red-50: #fdf0f0;   --red-500: #dc2626;   --red-600: #b91c1c;
+  --violet-50: var(--ink-100); --violet-600: var(--ink-600);
+  --teal-50: var(--accent-soft); --teal-600: var(--accent);
+
+  /* Surfaces */
+  --bg: #ffffff;
+  --canvas: #f7f8fa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --row-hover: #f7f9fc;
+  --row-selected: #eef3f9;
+  --border: #e6e8ec;
+  --border-strong: #d3d7de;
+  --tip-bg: #111827;
+  --tip-fg: #ffffff;
+
+  /* Legacy aliases used by older components */
+  --action: var(--accent);
+  --action-hover: var(--accent-hover);
+  --action-ink: var(--accent-ink);
+  --gold: var(--accent);
+  --gold-soft: var(--accent-soft);
+  --side-bg: #fbfbfc;
+  --side-active: var(--brand-50);
+  --side-ink: var(--ink-700);
+  --side-muted: var(--ink-500);
+  --side-line: var(--border);
+
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px #4a74a8;
+  --ring: 0 0 0 3px rgba(31, 58, 95, 0.18);
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: 0 4px 16px rgba(17, 24, 39, 0.10), 0 1px 3px rgba(17, 24, 39, 0.06);
+  --shadow-lg: 0 16px 40px rgba(17, 24, 39, 0.16), 0 2px 6px rgba(17, 24, 39, 0.06);
+  color-scheme: light;
+}
+
+/* Dark: low-glare slate surfaces, lifted ink-blue for links, brighter teal for actions. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --brand-50: #16233a; --brand-100: #1c2d48; --brand-200: #2a4266; --brand-300: #46638f; --brand-500: #7fa3d4; --brand-600: #9ab9e3; --brand-700: #c3d6f0; --brand-900: #e6eef9;
+    --accent: #4fbfb2; --accent-hover: #6fd0c4; --accent-ink: #06201d; --accent-soft: #10302d;
+    --ink-900: #eef1f5; --ink-800: #d9dee6; --ink-700: #bcc4cf; --ink-600: #9aa4b2; --ink-500: #7e8897; --ink-400: #5f6877; --ink-300: #3c4451;
+    --ink-200: #2b323d; --ink-150: #242a34; --ink-100: #1e242d; --ink-50: #181d25;
+    --green-50: #10281b; --green-600: #4cc27a; --green-700: #7dd8a1;
+    --amber-50: #2b2111; --amber-600: #e5a83c; --amber-700: #f0c06a;
+    --red-50: #2e1618; --red-500: #f07272; --red-600: #f07272;
+    --bg: #0f1217; --canvas: #0c0f13; --surface: #151a21; --surface-raised: #1b212a; --row-hover: #1a2029; --row-selected: #1a2a40;
+    --border: #262d38; --border-strong: #343c49; --tip-bg: #e6eaf0; --tip-fg: #111827;
+    --side-bg: #12161c;
+    --focus: 0 0 0 2px var(--bg), 0 0 0 4px #7fa3d4;
+    --ring: 0 0 0 3px rgba(127, 163, 212, 0.28);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --brand-50: #16233a; --brand-100: #1c2d48; --brand-200: #2a4266; --brand-300: #46638f; --brand-500: #7fa3d4; --brand-600: #9ab9e3; --brand-700: #c3d6f0; --brand-900: #e6eef9;
+  --accent: #4fbfb2; --accent-hover: #6fd0c4; --accent-ink: #06201d; --accent-soft: #10302d;
+  --ink-900: #eef1f5; --ink-800: #d9dee6; --ink-700: #bcc4cf; --ink-600: #9aa4b2; --ink-500: #7e8897; --ink-400: #5f6877; --ink-300: #3c4451;
+  --ink-200: #2b323d; --ink-150: #242a34; --ink-100: #1e242d; --ink-50: #181d25;
+  --green-50: #10281b; --green-600: #4cc27a; --green-700: #7dd8a1;
+  --amber-50: #2b2111; --amber-600: #e5a83c; --amber-700: #f0c06a;
+  --red-50: #2e1618; --red-500: #f07272; --red-600: #f07272;
+  --bg: #0f1217; --canvas: #0c0f13; --surface: #151a21; --surface-raised: #1b212a; --row-hover: #1a2029; --row-selected: #1a2a40;
+  --border: #262d38; --border-strong: #343c49; --tip-bg: #e6eaf0; --tip-fg: #111827;
+  --side-bg: #12161c;
+  --focus: 0 0 0 2px var(--bg), 0 0 0 4px #7fa3d4;
+  --ring: 0 0 0 3px rgba(127, 163, 212, 0.28);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}

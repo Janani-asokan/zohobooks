@@ -91,13 +91,13 @@ export default function SalesOrders() {
     return (
       <div key={r.so.id} className="card" style={{ padding: 14, boxShadow: 'var(--shadow-xs)' }}>
         <div className="row between">
-          <span className="strong" style={{ color: 'var(--brand-600)', fontWeight: 700 }}>{r.so.number}</span>
+          <span className="strong" style={{ color: 'var(--brand-600)', fontWeight: 600 }}>{r.so.number}</span>
           <span className="small muted">{fmtDate(r.so.date)}</span>
         </div>
         <div style={{ fontWeight: 600, color: 'var(--ink-900)', marginTop: 6 }}>{r.c?.companyName || r.c?.name}</div>
         <div className="small muted">{r.so.lines.length} item{r.so.lines.length > 1 ? 's' : ''} · valid till {fmtDate(r.so.expiryDate)}</div>
         <div className="row between" style={{ marginTop: 10 }}>
-          <span style={{ fontWeight: 800, fontSize: 16, color: 'var(--ink-900)' }}>{money(r.total)}</span>
+          <span style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-900)' }}>{money(r.total)}</span>
           {r.so.withGst ? <Badge tone="green" plain>GST</Badge> : <Badge tone="amber" plain>Net</Badge>}
         </div>
         <div className="row" style={{ marginTop: 12, gap: 6, borderTop: '1px solid var(--ink-150)', paddingTop: 10 }}>
@@ -151,7 +151,7 @@ export default function SalesOrders() {
                   <div className="row" style={{ gap: 8 }}>
                     <span className={`stat-icon tone-${st.tone === 'gray' ? 'blue' : st.tone}`} style={{ width: 28, height: 28, borderRadius: 8 }}><st.icon size={14} /></span>
                     <div>
-                      <div style={{ fontWeight: 700, color: 'var(--ink-900)' }}>{st.status} <span className="chip" style={{ marginLeft: 4 }}>{list.length}</span></div>
+                      <div style={{ fontWeight: 600, color: 'var(--ink-900)' }}>{st.status} <span className="chip" style={{ marginLeft: 4 }}>{list.length}</span></div>
                       <div className="small muted">{st.hint}</div>
                     </div>
                   </div>
@@ -159,7 +159,7 @@ export default function SalesOrders() {
                 </div>
                 <div className="stack" style={{ gap: 10 }}>
                   {list.map(card)}
-                  {list.length === 0 && <div className="small muted" style={{ textAlign: 'center', padding: 24, border: '1.5px dashed var(--ink-300)', borderRadius: 10 }}>Nothing here</div>}
+                  {list.length === 0 && <div className="small muted" style={{ textAlign: 'center', padding: 24, border: '1.5px dashed var(--ink-300)', borderRadius: 8 }}>Nothing here</div>}
                 </div>
               </div>
             );

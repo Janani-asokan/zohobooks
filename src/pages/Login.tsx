@@ -87,7 +87,7 @@ export default function Login() {
         <span />
         <label className="row small muted" style={{ gap: 6 }}>
           <Languages size={14} />
-          <select className="select" style={{ height: 30, width: 'auto', fontSize: 12.5 }} value={lang} onChange={(e) => setLang(e.target.value as typeof lang)} aria-label="Language">
+          <select className="select" style={{ height: 30, width: 'auto', fontSize: 12 }} value={lang} onChange={(e) => setLang(e.target.value as typeof lang)} aria-label="Language">
             {LANGS.map((l) => <option key={l.id} value={l.id}>{l.native}</option>)}
           </select>
         </label>
@@ -99,7 +99,7 @@ export default function Login() {
         <Field label={t('login.email')} required error={touched.email ? emailErr : ''}>
           <div className="input-group">
             <span className="lead"><Mail size={16} /></span>
-            <input className={`input ${touched.email && emailErr ? 'invalid' : ''}`} type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setTouched((x) => ({ ...x, email: true }))} style={{ height: 44 }} autoFocus />
+            <input className={`input ${touched.email && emailErr ? 'invalid' : ''}`} type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setTouched((x) => ({ ...x, email: true }))} style={{ height: 40 }} autoFocus />
           </div>
         </Field>
         <Field label={t('login.password')} required error={touched.password ? passErr : ''}>
@@ -126,7 +126,7 @@ export default function Login() {
 
       {demoAccounts.length > 0 && (
       <div className="demo-creds">
-        <div style={{ fontWeight: 700, color: 'var(--ink-800)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ fontWeight: 600, color: 'var(--ink-800)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
           <KeyRound size={14} /> Demo accounts
         </div>
         {demoAccounts.map(({ label: who, email: e, password: p }) => (

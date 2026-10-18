@@ -147,7 +147,7 @@ authRouter.post(
       const url = `${config.appUrl}/reset-password?token=${token}`;
       await sendMail({
         to: p.row.email,
-        subject: 'Reset your Ledgerly Books password',
+        subject: 'Reset your Kanakku password',
         text: `Hi ${p.row.name},\n\nUse this link to set a new password (valid for 30 minutes):\n${url}\n\nIf you didn't request this, you can ignore this email.`,
       });
       if (config.exposeDevResetLinks) devResetUrl = url;

@@ -138,7 +138,7 @@ export default function Team() {
                 <span className="stat-icon tone-blue"><Building2 size={18} /></span>
                 {b.isPrimary ? <Badge tone="blue"><Star size={11} /> Primary</Badge> : <button className="btn btn-ghost btn-sm" onClick={() => updateBranch.mutate({ id: b.id, b: { name: b.name, address: b.address, phone: b.phone, isPrimary: true } })}>Make primary</button>}
               </div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink-900)', marginTop: 12 }}>{b.name}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink-900)', marginTop: 12 }}>{b.name}</div>
               <div className="small muted" style={{ marginTop: 2 }}>{b.address || 'No address'}</div>
               <div className="small muted">{b.phone}</div>
               <div className="row between" style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--ink-150)' }}>

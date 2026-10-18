@@ -1,19 +1,38 @@
 {
-  "name": "Ledgerly Books",
-  "short_name": "Ledgerly",
-  "description": "GST billing, inventory and accounting for Indian businesses",
+  "name": "Kanakku",
+  "short_name": "Kanakku",
+  "description": "Billing and stock, without the paperwork.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f6f6f7",
-  "theme_color": "#0e0e0c",
+  "background_color": "#ffffff",
+  "theme_color": "#1F3A5F",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "New invoice", "url": "/app/sales/invoices/new" },
-    { "name": "POS billing", "url": "/app/pos" }
+    {
+      "name": "New invoice",
+      "url": "/app/sales/invoices/new"
+    },
+    {
+      "name": "POS billing",
+      "url": "/app/pos"
+    }
   ]
 }

@@ -8,8 +8,11 @@ import { ToastProvider } from './context/ToastContext';
 import { PrefsProvider } from './context/PrefsContext';
 import { ApiError } from './api/client';
 import { registerServiceWorker } from './pwa';
-import './styles/global.css';
-import './styles/layout.css';
+import './styles/tokens.css';
+import './styles/base.css';
+import './styles/shell.css';
+import './styles/features.css';
+import './styles/documents.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

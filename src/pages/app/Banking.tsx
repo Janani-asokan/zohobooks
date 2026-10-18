@@ -51,7 +51,7 @@ export default function Banking() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
         <button className="card" onClick={() => setSelected('all')} style={{ textAlign: 'left', padding: 18, cursor: 'pointer', background: selected === 'all' ? 'var(--ink-900)' : 'var(--surface)', color: selected === 'all' ? '#fff' : 'var(--ink-800)', border: selected === 'all' ? 'none' : undefined, fontFamily: 'inherit' }}>
           <div className="small" style={{ opacity: 0.8, fontWeight: 600 }}>Total cash &amp; bank balance</div>
-          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 6 }}>{money(total)}</div>
+          <div style={{ fontSize: 24, fontWeight: 600, marginTop: 6 }}>{money(total)}</div>
           <div className="small" style={{ opacity: 0.75, marginTop: 4 }}>{accounts.length} accounts</div>
         </button>
         {accounts.map((a) => {
@@ -63,9 +63,9 @@ export default function Banking() {
                 <span className="stat-icon tone-blue" style={{ width: 34, height: 34 }}><I size={17} /></span>
                 <span className="chip">{a.type}</span>
               </div>
-              <div style={{ fontWeight: 700, color: 'var(--ink-900)', marginTop: 10 }}>{a.name}</div>
+              <div style={{ fontWeight: 600, color: 'var(--ink-900)', marginTop: 10 }}>{a.name}</div>
               <div className="small muted">{a.bank} · {a.accountNo}</div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--ink-900)', marginTop: 8 }}>{money(balance(a.id))}</div>
+              <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--ink-900)', marginTop: 8 }}>{money(balance(a.id))}</div>
             </button>
           );
         })}

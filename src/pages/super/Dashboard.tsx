@@ -104,7 +104,7 @@ export default function SuperDashboard() {
   return (
     <div className="page">
       <PageHeader
-        title="Good to see you 👋"
+        title="Platform overview"
         subtitle={`Here’s how the platform is doing · ${now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`}
         actions={<button className="btn btn-primary" onClick={() => { setServerErr({}); setTouched(false); setCreateOpen(true); }}><Plus size={16} /> New Shop Owner</button>}
       />
@@ -136,7 +136,7 @@ export default function SuperDashboard() {
                   <Badge tone="amber">{daysUntil(s.licenseEnd)}d left</Badge>
                 </div>
               ))}
-              {expiring.length === 0 && <span className="small muted">No renewals due this month 🎉</span>}
+              {expiring.length === 0 && <span className="small muted">No renewals due this month.</span>}
             </div>
           </div>
         </div>
@@ -227,7 +227,7 @@ export default function SuperDashboard() {
         <p className="small muted" style={{ marginTop: 12 }}>License valid from today until <strong>{fmtDate(addDays(todayISO(), plan?.trialDays ?? 365 * form.years))}</strong>.</p>
       </Modal>
 
-      <Modal open={!!created} onClose={() => setCreated(null)} title="Workspace created 🎉" subtitle="Share these sign-in details with the owner over a secure channel."
+      <Modal open={!!created} onClose={() => setCreated(null)} title="Workspace created" subtitle="Share these sign-in details with the owner over a secure channel."
         footer={<button className="btn btn-primary" onClick={() => { navigator.clipboard?.writeText(`Email: ${created?.email}\nTemporary password: ${created?.password}`); toast('success', 'Copied to clipboard'); }}>Copy details</button>}>
         <div className="card" style={{ padding: 16, boxShadow: 'none', background: 'var(--ink-50)' }}>
           <div className="small muted">Email</div><div className="strong">{created?.email}</div>

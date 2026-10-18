@@ -127,7 +127,7 @@ export default function InvoiceView() {
           <button className="icon-btn" onClick={() => navigate('/app/sales/invoices')} aria-label="Back"><ArrowLeft size={18} /></button>
           <div>
             <div className="row" style={{ gap: 10 }}>
-              <h1 style={{ fontSize: 20, fontWeight: 800 }}>{inv.number ?? 'Draft invoice'}</h1>
+              <h1 style={{ fontSize: 20, fontWeight: 600 }}>{inv.number ?? 'Draft invoice'}</h1>
               <StatusBadge status={inv.paymentStatus} />
               {inv.source !== 'app' && <span className="chip">{inv.source === 'pos' ? 'POS' : 'Recurring'}</span>}
             </div>

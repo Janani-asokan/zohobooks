@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays } from 'lucide-react';
 import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
 import { useLocalFlag } from '@/components/kit';
-import { CountUp } from '@/components/motion';
 import { useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { EmptyState, PageHeader, StatCard } from '@/components/ui';
@@ -84,10 +83,10 @@ export default function Home() {
       <GettingStarted />
 
       <div className="stat-grid">
-        <StatCard label="Total Revenue" value={d ? <CountUp value={d.fySales} format={money} /> : '—'} icon={IndianRupee} tone="green" trend={{ pct: pctChange(revCur, revPrev) }} foot={d && <>FY {d.fy}</>} />
-        <StatCard label="Total Invoices" value={invoices.data ? <CountUp value={issued.length} /> : '—'} icon={FileText} tone="blue" trend={{ pct: pctChange(invCur, invPrev) }} foot="Issued this FY" />
-        <StatCard label="Pending Payments" value={d ? <CountUp value={d.receivable} format={money} /> : '—'} icon={Wallet} tone="amber" foot={d && (d.overdueCount ? <Link to="/app/sales/invoices?status=Overdue" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{d.overdueCount} overdue · {money(d.overdue)} →</Link> : <>{d.openCount} invoices awaiting payment</>)} />
-        <StatCard label="Total Customers" value={customers.data ? <CountUp value={custList.length} /> : '—'} icon={Users} tone="violet" trend={{ pct: pctChange(custCur, custPrev), label: 'new vs last month' }} foot={`${custCur} new this month`} />
+        <StatCard label="Total Revenue" value={d ? money(d.fySales) : '—'} icon={IndianRupee} tone="green" trend={{ pct: pctChange(revCur, revPrev) }} foot={d && <>FY {d.fy}</>} />
+        <StatCard label="Total Invoices" value={invoices.data ? issued.length : '—'} icon={FileText} tone="blue" trend={{ pct: pctChange(invCur, invPrev) }} foot="Issued this FY" />
+        <StatCard label="Pending Payments" value={d ? money(d.receivable) : '—'} icon={Wallet} tone="amber" foot={d && (d.overdueCount ? <Link to="/app/sales/invoices?status=Overdue" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{d.overdueCount} overdue · {money(d.overdue)} →</Link> : <>{d.openCount} invoices awaiting payment</>)} />
+        <StatCard label="Total Customers" value={customers.data ? custList.length : '—'} icon={Users} tone="violet" trend={{ pct: pctChange(custCur, custPrev), label: 'new vs last month' }} foot={`${custCur} new this month`} />
       </div>
 
       <div className="dash-row mt-16">

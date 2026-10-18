@@ -27,7 +27,7 @@ export const config = {
   },
   jobs: { enabled: bool(env.JOBS_ENABLED, env.NODE_ENV !== 'test') },
   smtp: env.SMTP_HOST
-    ? { host: env.SMTP_HOST, port: Number(env.SMTP_PORT ?? 587), user: env.SMTP_USER ?? '', pass: env.SMTP_PASS ?? '', from: env.SMTP_FROM ?? 'Ledgerly Books <no-reply@ledgerly.in>' }
+    ? { host: env.SMTP_HOST, port: Number(env.SMTP_PORT ?? 587), user: env.SMTP_USER ?? '', pass: env.SMTP_PASS ?? '', from: env.SMTP_FROM ?? 'Kanakku <no-reply@kanakku.app>' }
     : null,
   razorpay: env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET } : null,
   /** E-invoice (IRP) provider credentials — when absent, the app generates the JSON for manual upload only. */

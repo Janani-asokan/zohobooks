@@ -77,7 +77,7 @@ function ConfigForm({ config }: { config: PlatformConfig }) {
           <div className="card-body">
             <div className="form-grid">
               <Field label="Customer ID prefix" required error={prefixErr} hint="Existing customer IDs keep their original prefix.">
-                <input className={`input ${prefixErr ? 'invalid' : ''}`} value={prefix} maxLength={5} onChange={(e) => setPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} style={{ fontWeight: 700, letterSpacing: '.08em' }} />
+                <input className={`input ${prefixErr ? 'invalid' : ''}`} value={prefix} maxLength={5} onChange={(e) => setPrefix(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} style={{ fontWeight: 600, letterSpacing: '.08em' }} />
               </Field>
               <Field label="Preview">
                 <div className="row" style={{ height: 40, gap: 8 }}>
@@ -119,12 +119,12 @@ function ConfigForm({ config }: { config: PlatformConfig }) {
             <div className="grid-2">
               <div className="card" style={{ boxShadow: 'none', padding: 16, background: 'var(--ink-50)' }}>
                 <div className="small muted">Financial year starts</div>
-                <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--ink-900)', marginTop: 2 }}>1 April</div>
+                <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-900)', marginTop: 2 }}>1 April</div>
                 <div className="small muted">Current: {fmtDate(start.toISOString())}</div>
               </div>
               <div className="card" style={{ boxShadow: 'none', padding: 16, background: 'var(--ink-50)' }}>
                 <div className="small muted">Financial year ends</div>
-                <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--ink-900)', marginTop: 2 }}>31 March</div>
+                <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--ink-900)', marginTop: 2 }}>31 March</div>
                 <div className="small muted">Current: {fmtDate(end.toISOString())}</div>
               </div>
             </div>
@@ -144,7 +144,7 @@ function ConfigForm({ config }: { config: PlatformConfig }) {
               <Toggle checked={autoReset} onChange={setAutoReset} />
             </div>
 
-            <div className="row" style={{ marginTop: 16, padding: 14, borderRadius: 10, background: autoReset ? 'var(--brand-50)' : 'var(--ink-50)', gap: 12, flexWrap: 'wrap' }}>
+            <div className="row" style={{ marginTop: 16, padding: 14, borderRadius: 8, background: autoReset ? 'var(--brand-50)' : 'var(--ink-50)', gap: 12, flexWrap: 'wrap' }}>
               <Info size={16} style={{ color: 'var(--brand-600)' }} />
               <span className="small">Example sequence:</span>
               {autoReset ? (

@@ -25,7 +25,7 @@ export default function SuperAdminLayout() {
       <Sidebar
         items={NAV}
         variant="super"
-        brand={{ title: 'Ledgerly Console', sub: 'SUPER ADMIN', mark: 'L' }}
+        brand={{ home: '/super-admin', tag: 'Console' }}
         collapsed={sb.collapsed}
         onToggle={sb.toggle}
         mobileOpen={sb.mobileOpen}
@@ -47,7 +47,7 @@ export default function SuperAdminLayout() {
             <Menu size={20} />
           </button>
           <div>
-            <div style={{ fontWeight: 700, color: 'var(--ink-900)' }}>{title}</div>
+            <div style={{ fontWeight: 600, color: 'var(--ink-900)' }}>{title}</div>
             <div className="org-sub">Platform-wide controls</div>
           </div>
           <div className="topbar-actions">

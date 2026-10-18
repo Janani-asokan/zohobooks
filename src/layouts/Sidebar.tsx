@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { KanakkuLogo, KanakkuMark } from '@/components/Logo';
 import { ChevronRight, PanelLeftClose, PanelLeftOpen, type LucideIcon } from 'lucide-react';
 
 export interface NavItem {
@@ -24,7 +25,7 @@ export function Sidebar({
   collapseLabel = 'Collapse',
 }: {
   items: NavItem[];
-  brand: { title: string; sub: string; mark: string };
+  brand: { home: string; tag?: string };
   variant?: 'super';
   collapsed: boolean;
   onToggle: () => void;
@@ -45,11 +46,10 @@ export function Sidebar({
   return (
     <aside className={`sidebar ${variant ?? ''} ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-brand">
-        <div className="brand-mark">{brand.mark}</div>
-        <div className="brand-text">
-          <strong>{brand.title}</strong>
-          <span>{brand.sub}</span>
-        </div>
+        <Link to={brand.home} aria-label="Kanakku home" onClick={onNavigate}>
+          {collapsed ? <KanakkuMark size={22} /> : <KanakkuLogo height={17} />}
+        </Link>
+        {brand.tag && !collapsed && <span className="badge badge-gray plain" style={{ marginLeft: 'auto' }}>{brand.tag}</span>}
       </div>
       <nav className="sidebar-nav" onMouseLeave={() => setFlyout(null)}>
         {items.map((it) => {

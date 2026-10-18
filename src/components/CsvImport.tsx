@@ -52,7 +52,7 @@ export function CsvImport({ open, onClose, endpoint, title, template, invalidate
         </div>
       ) : (
         <div className="stack" style={{ gap: 14 }}>
-          <button type="button" onClick={() => fileRef.current?.click()} style={{ border: '2px dashed var(--border-strong)', borderRadius: 12, padding: 28, background: 'var(--ink-50)', cursor: 'pointer', color: 'var(--ink-700)' }}
+          <button type="button" onClick={() => fileRef.current?.click()} style={{ border: '2px dashed var(--border-strong)', borderRadius: 8, padding: 28, background: 'var(--ink-50)', cursor: 'pointer', color: 'var(--ink-700)' }}
             onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); setFile(e.dataTransfer.files[0] ?? null); }}>
             <FileUp size={26} style={{ color: 'var(--brand-600)' }} />
             <div style={{ fontWeight: 600, marginTop: 8 }}>{file ? file.name : 'Choose a CSV file or drop it here'}</div>

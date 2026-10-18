@@ -186,7 +186,7 @@ function PODrawer({ po, canWrite, onClose, onEdit }: { po: PurchaseOrder; canWri
       <aside className="drawer" role="dialog" aria-label={po.number} style={{ width: 'min(640px, 100vw)' }}>
         <div className="drawer-head">
           <div>
-            <div className="row" style={{ gap: 8 }}><h3 style={{ fontSize: 18 }}>{po.number}</h3><Badge tone={tone(po.status)}>{po.status}</Badge></div>
+            <div className="row" style={{ gap: 8 }}><h3 style={{ fontSize: 16 }}>{po.number}</h3><Badge tone={tone(po.status)}>{po.status}</Badge></div>
             <p className="small muted">{po.vendorName} · ordered {fmtDate(po.date)}{po.expectedDate ? ` · expected ${fmtDate(po.expectedDate)}` : ''}</p>
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>

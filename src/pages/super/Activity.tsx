@@ -78,7 +78,7 @@ export default function Activity() {
           <div className="table-wrap">
             <table className="table">
               <thead><tr><th>File</th><th>Created</th><th className="num">Size</th></tr></thead>
-              <tbody>{(backups.data?.files ?? []).map((f) => <tr key={f.name}><td className="strong" style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12.5 }}>{f.name}</td><td>{when(f.createdAt)}</td><td className="num">{kb(f.bytes)}</td></tr>)}</tbody>
+              <tbody>{(backups.data?.files ?? []).map((f) => <tr key={f.name}><td className="strong" style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}>{f.name}</td><td>{when(f.createdAt)}</td><td className="num">{kb(f.bytes)}</td></tr>)}</tbody>
             </table>
             {backups.data?.files.length === 0 && <EmptyState icon={Database} title="No backups yet" text="Run your first backup now." />}
           </div>

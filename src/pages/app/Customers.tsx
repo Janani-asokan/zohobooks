@@ -141,7 +141,7 @@ export default function Customers() {
                     <tr key={c.id}>
                       <td>
                         <div className="name-cell">
-                          <span className="avatar" style={c.type === 'Business' ? { background: 'var(--violet-50)', color: 'var(--violet-600)', borderRadius: 10 } : undefined}>{initials(c.companyName || c.name)}</span>
+                          <span className="avatar" style={c.type === 'Business' ? { background: 'var(--violet-50)', color: 'var(--violet-600)', borderRadius: 8 } : undefined}>{initials(c.companyName || c.name)}</span>
                           <div>
                             <div className="title">{c.companyName || c.name}</div>
                             <div className="sub">{c.type === 'Business' ? `${c.name} · GSTIN ${c.gstin}` : c.state}</div>
@@ -190,7 +190,7 @@ export default function Customers() {
           <Field label="Customer ID" hint={modal?.mode === 'edit' ? 'IDs are permanent' : `Auto-assigned using the “${me.platform.customerIdPrefix}” prefix`}>
             <div className="input-group">
               <span className="lead"><Lock size={14} /></span>
-              <input className="input" readOnly value={modal?.mode === 'edit' ? modal.c!.customId : nextId.data?.customId ?? '…'} style={{ fontWeight: 700, fontFamily: 'ui-monospace, Menlo, monospace' }} />
+              <input className="input" readOnly value={modal?.mode === 'edit' ? modal.c!.customId : nextId.data?.customId ?? '…'} style={{ fontWeight: 600, fontFamily: 'ui-monospace, Menlo, monospace' }} />
             </div>
           </Field>
           <Field label="Default price tier" hint="Applied automatically on invoices">

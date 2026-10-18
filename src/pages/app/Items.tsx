@@ -340,7 +340,7 @@ function StockAlerts({ onOpen }: { onOpen: (itemId: string) => void }) {
         <div className="table-wrap">
           {isLoading ? <div className="skeleton" style={{ height: 120, margin: 16 }} /> : data?.lowStock.length ? (
             <table className="table"><thead><tr><th>Item</th><th className="num">Stock</th><th className="num">Reorder at</th></tr></thead>
-              <tbody>{data.lowStock.map((r) => <tr key={r.itemId} className="clickable" onClick={() => onOpen(r.itemId)}><td className="strong">{r.name}</td><td className="num" style={{ color: r.stock <= 0 ? 'var(--red-600)' : 'var(--amber-700)', fontWeight: 700 }}>{r.stock} {r.unit}</td><td className="num muted">{r.reorderLevel}</td></tr>)}</tbody></table>
+              <tbody>{data.lowStock.map((r) => <tr key={r.itemId} className="clickable" onClick={() => onOpen(r.itemId)}><td className="strong">{r.name}</td><td className="num" style={{ color: r.stock <= 0 ? 'var(--red-600)' : 'var(--amber-700)', fontWeight: 600 }}>{r.stock} {r.unit}</td><td className="num muted">{r.reorderLevel}</td></tr>)}</tbody></table>
           ) : <EmptyState icon={Boxes} title="Stock looks healthy" text="No items are at their reorder level." />}
         </div>
       </div>
@@ -387,7 +387,7 @@ function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item
           <div className="detail-hero">
             <Thumb name={item.name} image={item.image} size={52} />
             <div style={{ minWidth: 0 }}>
-              <h3 style={{ fontSize: 17 }}>{item.name}</h3>
+              <h3 style={{ fontSize: 16 }}>{item.name}</h3>
               <p className="small muted">{[goods ? 'Goods' : 'Service', item.category, item.brand, item.sku].filter(Boolean).join(' · ')}</p>
             </div>
           </div>
@@ -417,8 +417,8 @@ function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item
           {!goods ? null : (<>
           <div className="section-title mt-24">Stock · reorder at {item.reorderLevel} {item.unit}</div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(3, branches.length + 1)}, 1fr)`, gap: 10 }}>
-            <div className="card" style={{ padding: 12, boxShadow: 'none', background: 'var(--brand-50)' }}><div className="small muted">Total</div><div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink-900)' }}>{item.stock} <span className="small muted">{item.unit}</span></div></div>
-            {branches.map((b) => <div key={b.id} className="card" style={{ padding: 12, boxShadow: 'none' }}><div className="small muted">{b.name}</div><div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink-900)' }}>{item.stockByBranch[b.id] ?? 0}</div></div>)}
+            <div className="card" style={{ padding: 12, boxShadow: 'none', background: 'var(--brand-50)' }}><div className="small muted">Total</div><div style={{ fontSize: 20, fontWeight: 600, color: 'var(--ink-900)' }}>{item.stock} <span className="small muted">{item.unit}</span></div></div>
+            {branches.map((b) => <div key={b.id} className="card" style={{ padding: 12, boxShadow: 'none' }}><div className="small muted">{b.name}</div><div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink-900)' }}>{item.stockByBranch[b.id] ?? 0}</div></div>)}
           </div>
           {canWrite && (
             <div className="row" style={{ gap: 8, marginTop: 14 }}>
@@ -465,7 +465,7 @@ function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item
                 <div key={m.id} className="timeline-item">
                   <div className="row between">
                     <strong style={{ color: 'var(--ink-900)', fontSize: 13 }}>{REASON_LABEL[m.reason] ?? m.reason}</strong>
-                    <span style={{ fontWeight: 700, color: m.qty > 0 ? 'var(--green-700)' : 'var(--red-600)' }}>{m.qty > 0 ? '+' : ''}{m.qty}</span>
+                    <span style={{ fontWeight: 600, color: m.qty > 0 ? 'var(--green-700)' : 'var(--red-600)' }}>{m.qty > 0 ? '+' : ''}{m.qty}</span>
                   </div>
                   <div className="small muted">{new Date(m.at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · {m.branch} · {m.user}{m.note ? ` · ${m.note}` : ''}{m.batchNo ? ` · batch ${m.batchNo}` : ''}</div>
                 </div>

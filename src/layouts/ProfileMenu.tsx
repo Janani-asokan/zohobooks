@@ -22,7 +22,7 @@ export function ProfileMenu({ name, sub, email, children }: { name: string; sub:
           <div className="row" style={{ padding: '8px 10px 10px' }}>
             <span className="avatar lg">{initials(name)}</span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, color: 'var(--ink-900)' }}>{name}</div>
+              <div style={{ fontWeight: 600, color: 'var(--ink-900)' }}>{name}</div>
               <div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{email}</div>
             </div>
           </div>

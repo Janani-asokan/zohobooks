@@ -89,7 +89,7 @@ export default function Pos() {
         <div className="row" style={{ gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
           <div className="input-group" style={{ flex: 1, minWidth: 240 }}>
             <span className="lead" style={{ color: 'var(--brand-600)' }}>{q ? <Search size={17} /> : <ScanBarcode size={17} />}</span>
-            <input ref={scanRef} className="input" style={{ height: 46, fontSize: 15 }} placeholder="Scan barcode or type to search (F2)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onScanEnter()} aria-label="Scan or search items" />
+            <input ref={scanRef} className="input" style={{ height: 46, fontSize: 14 }} placeholder="Scan barcode or type to search (F2)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onScanEnter()} aria-label="Scan or search items" />
           </div>
           <Segmented value={kind} onChange={setKind} options={[{ value: 'all', label: 'All' }, { value: 'Goods', label: 'Goods', icon: Package }, { value: 'Services', label: 'Services', icon: Wrench }]} />
         </div>
@@ -146,14 +146,14 @@ export default function Pos() {
         <div style={{ padding: 14, borderTop: '1px solid var(--border)', background: 'var(--ink-50)' }} className="stack">
           <div className="row between small"><span className="muted">Sub total</span><span>{money(totals.subTotal)}</span></div>
           {withGst && <div className="row between small"><span className="muted">GST{inter ? ' (IGST)' : ' (CGST + SGST)'}</span><span>{money(totals.taxTotal)}</span></div>}
-          <div className="row between"><strong style={{ fontSize: 15 }}>Total</strong><strong style={{ fontSize: 24, color: 'var(--brand-700)' }}>{money(totals.total)}</strong></div>
+          <div className="row between"><strong style={{ fontSize: 14 }}>Total</strong><strong style={{ fontSize: 24, color: 'var(--brand-700)' }}>{money(totals.total)}</strong></div>
           <div className="pay-modes">
             {([['Cash', Banknote], ['UPI', Smartphone], ['Card', CreditCard]] as const).map(([m, I]) => <button key={m} className={mode === m ? 'active' : ''} onClick={() => setMode(m)}><I size={16} /> {m}</button>)}
           </div>
           {mode === 'Cash' && (
             <div className="row" style={{ gap: 10 }}>
               <Field label="Cash tendered" className=""><div className="input-addon"><span>₹</span><input className="input" type="number" min={0} value={tendered} onChange={(e) => setTendered(e.target.value)} placeholder={String(totals.total)} /></div></Field>
-              <div style={{ marginLeft: 'auto', textAlign: 'right' }}><div className="small muted">Change</div><div style={{ fontWeight: 800, fontSize: 18, color: change < 0 ? 'var(--red-600)' : 'var(--green-700)' }}>{tendered ? money(change) : '—'}</div></div>
+              <div style={{ marginLeft: 'auto', textAlign: 'right' }}><div className="small muted">Change</div><div style={{ fontWeight: 600, fontSize: 16, color: change < 0 ? 'var(--red-600)' : 'var(--green-700)' }}>{tendered ? money(change) : '—'}</div></div>
             </div>
           )}
           {mode === 'UPI' && (
@@ -181,7 +181,7 @@ export default function Pos() {
         }>
         {done && org && (
           <div className="print-area">
-            {done.change > 0 && <div className="row" style={{ justifyContent: 'center', gap: 8, marginBottom: 12, fontSize: 16 }}>Give change: <strong style={{ color: 'var(--green-700)', fontSize: 22 }}>{money(done.change)}</strong></div>}
+            {done.change > 0 && <div className="row" style={{ justifyContent: 'center', gap: 8, marginBottom: 12, fontSize: 16 }}>Give change: <strong style={{ color: 'var(--green-700)', fontSize: 20 }}>{money(done.change)}</strong></div>}
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', width: 'fit-content', margin: '0 auto' }}>
               <ThermalReceipt data={receiptFromInvoice(done.invoice, items, customers.find((c) => c.id === done.invoice.customerId)?.due, mode)} org={org} s={printCfg.thermal} />
             </div>

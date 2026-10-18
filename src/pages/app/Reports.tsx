@@ -166,7 +166,7 @@ export default function Reports() {
 
         {tab === 'gst' && (
           <div className="stack">
-            {!g1.data?.gstin && g1.data && <div className="row small" style={{ gap: 8, padding: '10px 14px', borderRadius: 10, background: 'var(--amber-50)', color: 'var(--amber-700)' }}><Info size={15} /> Add your GSTIN in Organization profile — returns need it.</div>}
+            {!g1.data?.gstin && g1.data && <div className="row small" style={{ gap: 8, padding: '10px 14px', borderRadius: 8, background: 'var(--amber-50)', color: 'var(--amber-700)' }}><Info size={15} /> Add your GSTIN in Organization profile — returns need it.</div>}
             <div className="grid-2" style={{ alignItems: 'start' }}>
               <div className="card">
                 <div className="card-header">

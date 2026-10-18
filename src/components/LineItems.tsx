@@ -174,8 +174,8 @@ export function TotalsPanel({ lines, withGst, interState, tcsRate = 0 }: { lines
       {Math.abs(t.roundOff) > 0.001 && <Row l="Round off" v={money(t.roundOff)} />}
       <div className="divider" style={{ margin: '10px 0' }} />
       <div className="row between">
-        <span style={{ fontWeight: 700, color: 'var(--ink-900)', fontSize: 15 }}>Total (₹)</span>
-        <span style={{ fontWeight: 800, color: 'var(--brand-700)', fontSize: 22 }}>{money(t.total)}</span>
+        <span style={{ fontWeight: 600, color: 'var(--ink-900)', fontSize: 14 }}>Total (₹)</span>
+        <span style={{ fontWeight: 600, color: 'var(--brand-700)', fontSize: 20 }}>{money(t.total)}</span>
       </div>
     </div>
   );
