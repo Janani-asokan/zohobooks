@@ -36,6 +36,7 @@ const Reports = lazy(() => import('./pages/app/Reports'));
 const Organization = lazy(() => import('./pages/app/Organization'));
 const Team = lazy(() => import('./pages/app/Team'));
 const Billing = lazy(() => import('./pages/app/Billing'));
+const PrintSettings = lazy(() => import('./pages/app/PrintSettings'));
 const BarcodeLabels = lazy(() => import('./pages/app/BarcodeLabels'));
 
 /** "/" shows the public landing page to visitors and sends signed-in users to their workspace. */
@@ -96,6 +97,7 @@ export default function App() {
             <Route element={<SettingsLayout />}>
               <Route path="organization" element={<Organization />} />
               <Route path="team" element={<Team />} />
+              <Route path="print-settings" element={<PrintSettings />} />
               <Route path="billing" element={<Billing />} />
             </Route>
           </Route>

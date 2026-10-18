@@ -66,7 +66,7 @@ const MID = { c: '#1f5230', v: '#123520' };
 const FRONT = { c: '#2c6e3f', v: '#1a4a2a' };
 const LIT = { c: '#3d8a50', v: '#24593a' };
 
-export function Canopy({ className, fireflies = 22, interactive = true }: { className?: string; fireflies?: number; interactive?: boolean }) {
+export function Canopy({ className, fireflies = 22, interactive = true, light = false }: { className?: string; fireflies?: number; interactive?: boolean; light?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -98,8 +98,8 @@ export function Canopy({ className, fireflies = 22, interactive = true }: { clas
             <stop offset="100%" stopColor="#f5c400" stopOpacity="0" />
           </radialGradient>
           <linearGradient id="cn-floor" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="55%" stopColor="#050705" stopOpacity="0" />
-            <stop offset="100%" stopColor="#050705" stopOpacity=".95" />
+            <stop offset="55%" stopColor="#12381f" stopOpacity="0" />
+            <stop offset="100%" stopColor="#12381f" stopOpacity=".9" />
           </linearGradient>
         </defs>
         <rect width="1440" height="800" fill="url(#cn-glow)" />
@@ -130,7 +130,7 @@ export function Canopy({ className, fireflies = 22, interactive = true }: { clas
           <P x={200} y={880} r={-84} s={0.9} d={1.3} el={<Frond len={300} droop={60} color={FRONT.c} vein={FRONT.v} />} />
           <P x={1240} y={880} r={-96} s={0.9} flip d={0.6} el={<Frond len={300} droop={60} color={FRONT.c} vein={FRONT.v} />} />
         </g>
-        <rect width="1440" height="800" fill="url(#cn-floor)" />
+        {!light && <rect width="1440" height="800" fill="url(#cn-floor)" />}
       </svg>
       {flies.map((f, i) => (
         <span key={i} className="firefly" style={{ left: f.left, top: f.top, width: f.size, height: f.size, animationDelay: f.delay, animationDuration: f.dur }} />

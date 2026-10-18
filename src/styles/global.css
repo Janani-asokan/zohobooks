@@ -38,10 +38,10 @@
   --violet-50: #f5f4f2; --violet-600: #57534e;
   --teal-50: #f5f4f2; --teal-600: #57534e;
 
-  --bg: #f6f4ee;
+  --bg: #ffffff;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --row-hover: #faf8f3;
+  --row-hover: #faf9f6;
   --tip-bg: #1c1917;
   --tip-fg: #ffffff;
   color-scheme: light;
@@ -58,11 +58,11 @@
   --radius: 10px;
   --radius-lg: 14px;
 
-  --side-bg: #0e0e0c;
-  --side-active: #1f1d17;
-  --side-ink: #b4ada3;
-  --side-muted: #7d766c;
-  --side-line: rgba(255, 255, 255, .06);
+  --side-bg: #ffffff;
+  --side-active: #fff6d1;
+  --side-ink: #44403c;
+  --side-muted: #8a837a;
+  --side-line: #ece8df;
   --action: #f5c400;
   --action-hover: #e6b800;
   --action-ink: #141210;

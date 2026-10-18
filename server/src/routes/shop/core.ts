@@ -9,6 +9,7 @@ import { createOrder, razorpayEnabled, verifySignature } from '../../integration
 import { extendLicense } from '../platform';
 import { EMAIL_RE, GSTIN_RE, gstinMatchesState } from '../../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE, STAFF_ROLES } from '../../../../shared/permissions';
+import { BARCODE_FIELDS, LABEL_SIZES, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
 import { T } from './ctx';
 
 export const coreRouter = Router();
@@ -59,6 +60,43 @@ coreRouter.put(
     );
     await audit(db, req, c.shopId, 'update', 'organization', c.shopId, { gstin: b.gstin, composition: b.compositionScheme, template: b.invoiceTemplate });
     return serializeOrg(await getOrg(db, c.shopId));
+  }),
+);
+
+/* ---------- Print settings (thermal receipts & barcode labels) ---------- */
+const fieldSchema = z.object({ key: z.enum(BARCODE_FIELDS), enabled: z.boolean(), size: z.number().int().min(8).max(40), bold: z.boolean() });
+const printSchema = z.object({
+  thermal: z.object({
+    theme: z.enum(['compact', 'advanced', 'simple', 'classic']),
+    paper: z.enum(['2in', '3in']),
+    showLogo: z.boolean(), showPartyBalance: z.boolean(), showItemDescription: z.boolean(), showTime: z.boolean(),
+    showGstin: z.boolean(), showHsn: z.boolean(), showTaxBreakup: z.boolean(), showSavings: z.boolean(), showUpiQr: z.boolean(),
+    footer: z.string().max(200),
+  }),
+  barcode: z
+    .object({
+      printer: z.enum(['a4', 'label']),
+      labelSize: z.string().refine((id) => LABEL_SIZES.some((l) => l.id === id), 'Unknown label size'),
+      barcodeHeight: z.number().int().min(20).max(80),
+      fields: z.array(fieldSchema).max(BARCODE_FIELDS.length),
+    })
+    .superRefine((b, ctx) => {
+      if (b.fields.filter((f) => f.enabled).length > MAX_BARCODE_FIELDS) ctx.addIssue({ code: 'custom', path: ['fields'], message: `Select up to ${MAX_BARCODE_FIELDS} columns` });
+      if (new Set(b.fields.map((f) => f.key)).size !== b.fields.length) ctx.addIssue({ code: 'custom', path: ['fields'], message: 'Each column can appear once' });
+      const size = LABEL_SIZES.find((l) => l.id === b.labelSize);
+      if (size && size.printer !== b.printer) ctx.addIssue({ code: 'custom', path: ['labelSize'], message: 'This label size is for a different printer type' });
+    }),
+});
+
+coreRouter.get('/print-settings', T(async (db, _req, c) => withPrintDefaults((await one(db, 'SELECT print_settings FROM organizations WHERE shop_id = $1', [c.shopId]))?.print_settings)));
+coreRouter.put(
+  '/print-settings',
+  perm('admin'),
+  T(async (db, req, c) => {
+    const b = parse(printSchema, req.body);
+    await db.query('UPDATE organizations SET print_settings = $2 WHERE shop_id = $1', [c.shopId, JSON.stringify(b)]);
+    await audit(db, req, c.shopId, 'update', 'print_settings', c.shopId, { theme: b.thermal.theme, paper: b.thermal.paper, label: b.barcode.labelSize });
+    return withPrintDefaults(b);
   }),
 );
 

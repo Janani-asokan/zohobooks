@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Home, Package, ShoppingCart, ShoppingBag, Landmark, BarChart3, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, UserRound, Boxes, ScanLine, Keyboard, WifiOff, ClipboardList, Wrench, Receipt, Wallet, Truck, RotateCcw, Repeat, IndianRupee, FileMinus } from 'lucide-react';
+import { Home, Package, ShoppingCart, ShoppingBag, Landmark, BarChart3, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, UserRound, Boxes, ScanLine, Keyboard, WifiOff, Printer, ClipboardList, Wrench, Receipt, Wallet, Truck, RotateCcw, Repeat, IndianRupee, FileMinus } from 'lucide-react';
 import { CommandPalette, type PaletteAction } from './CommandPalette';
 import { resetHints } from '@/components/kit';
 import { Sidebar, useSidebarState, type NavItem } from './Sidebar';
@@ -185,6 +185,7 @@ export default function AppLayout() {
       ...A(me.can('banking.read'), goTo, 'Banking', Landmark, '/app/banking', 'cash bank accounts reconcile'),
       ...A(me.can('reports.read'), goTo, 'Reports', BarChart3, '/app/reports', 'gstr gstr-1 gstr-3b profit loss p&l sales tax hsn'),
       ...A(me.can('admin'), 'Settings', 'Organization profile', Building2, '/app/organization', 'logo gstin upi address invoice template'),
+      ...A(me.can('admin'), 'Settings', 'Print settings', Printer, '/app/print-settings', 'thermal receipt barcode label printer paper 2 inch 3 inch'),
       ...A(me.can('admin'), 'Settings', 'Staff, roles & branches', Users, '/app/team', 'users team branch'),
     ];
   }, [canSell, me]);
@@ -256,6 +257,9 @@ export default function AppLayout() {
                     <>
                       <button className="dropdown-item" onClick={() => { close(); navigate('/app/organization'); }}>
                         <Building2 size={16} /> {t('shell.orgProfile')}
+                      </button>
+                      <button className="dropdown-item" onClick={() => { close(); navigate('/app/print-settings'); }}>
+                        <Printer size={16} /> Print settings
                       </button>
                       <button className="dropdown-item" onClick={() => { close(); navigate('/app/team'); }}>
                         <Users size={16} /> {t('shell.team')}

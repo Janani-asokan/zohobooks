@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2 } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
-import { SALES_KEYS, useBankAccounts, useBranches, useInvoice, useMut, useOrg } from '@/api/hooks';
+import { SALES_KEYS, useBankAccounts, useBranches, useCustomers, useInvoice, useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
+import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
+import { withPrintDefaults } from '../../../shared/printSettings';
 import type { InvoiceDetail, Organization } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -51,6 +53,9 @@ export default function InvoiceView() {
   const toast = useToast();
   const q = useInvoice(id);
   const org = useOrg().data;
+  const items = useItems().data ?? [];
+  const customers = useCustomers().data ?? [];
+  const printCfg = withPrintDefaults(usePrintSettings().data);
   const branches = useBranches().data ?? [];
   const accounts = useBankAccounts().data ?? [];
   const inv = q.data;
@@ -155,7 +160,15 @@ export default function InvoiceView() {
               )}
             </Menu>
           )}
-          <button className="btn btn-secondary" onClick={() => window.print()}><Printer size={15} /> Print / PDF</button>
+          <Menu label="Print / PDF" icon={Printer}>
+            {(close) => (
+              <>
+                <button className="dropdown-item" onClick={() => { close(); window.print(); }}><Printer size={16} /> A4 invoice / save as PDF</button>
+                <button className="dropdown-item" onClick={() => { close(); printReceipt(printCfg.thermal); }}><Receipt size={16} /> Thermal receipt ({printCfg.thermal.paper === '2in' ? '2″' : '3″'})</button>
+                {me.can('admin') && <><div className="dropdown-sep" /><button className="dropdown-item" onClick={() => { close(); navigate('/app/print-settings'); }}><Pencil size={16} /> Print settings</button></>}
+              </>
+            )}
+          </Menu>
           {(inv.status === 'Issued' || inv.status === 'Draft') && (
             <Menu label="More" icon={Receipt}>
               {(close) => (
@@ -181,6 +194,7 @@ export default function InvoiceView() {
           </div>
           <div className="doc-stage print-area">
             <InvoiceDocument inv={inv} org={org} branchName={branch} template={tpl || undefined} />
+            <div className="only-receipt"><ThermalReceipt data={receiptFromInvoice(inv, items, customers.find((c) => c.id === inv.customerId)?.due, inv.payments[0]?.mode)} org={org} s={printCfg.thermal} /></div>
           </div>
         </div>
 

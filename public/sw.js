@@ -3,7 +3,7 @@
  * - GET /api/shop/* : network-first, falling back to the last cached response when offline.
  * - Auth, platform, public links and all writes: never cached.
  */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL = `ledgerly-shell-${VERSION}`;
 const DATA = `ledgerly-data-${VERSION}`;
 

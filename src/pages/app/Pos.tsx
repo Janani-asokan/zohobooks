@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound } from 'lucide-react';
 import { api } from '@/api/client';
-import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg } from '@/api/hooks';
+import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
+import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
+import { withPrintDefaults } from '../../../shared/printSettings';
 import type { Invoice, Item, PriceTier } from '@/api/types';
 import { TIER_LABEL } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
@@ -10,7 +12,7 @@ import { Field, Modal, Segmented, Toggle } from '@/components/ui';
 import { upiLink, useQr } from '@/components/InvoiceDocument';
 import { useShortcuts } from '@/components/useShortcuts';
 import { computeTotals, lineAmount } from '@/lib/calc';
-import { fmtDate, money } from '@/lib/format';
+import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
 import { waLink } from './InvoiceView';
 
@@ -25,6 +27,7 @@ export default function Pos() {
   const { data: customers = [] } = useCustomers();
   const branches = useBranches().data ?? [];
   const org = useOrg().data;
+  const printCfg = withPrintDefaults(usePrintSettings().data);
   const [q, setQ] = useState('');
   const [kind, setKind] = useState<'all' | 'Goods' | 'Services'>('all');
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -172,32 +175,15 @@ export default function Pos() {
             {done && done.invoice.customer.phone && org && (
               <a className="btn btn-secondary" target="_blank" rel="noreferrer" href={waLink(done.invoice.customer.phone, `Thank you for shopping at ${org.companyName}! Bill ${done.invoice.number}: ${money(done.invoice.total)}. ${done.invoice.publicToken ? `${window.location.origin}/share/${done.invoice.publicToken}` : ''}`)}><MessageCircle size={15} /> WhatsApp bill</a>
             )}
-            <button className="btn btn-secondary" onClick={() => { document.body.classList.add('print-receipt'); window.print(); setTimeout(() => document.body.classList.remove('print-receipt'), 500); }}><Printer size={15} /> Print receipt</button>
+            <button className="btn btn-secondary" onClick={() => printReceipt(printCfg.thermal)}><Printer size={15} /> Print receipt</button>
             <button className="btn btn-primary" onClick={reset} autoFocus><Plus size={15} /> New sale</button>
           </>
         }>
         {done && org && (
           <div className="print-area">
             {done.change > 0 && <div className="row" style={{ justifyContent: 'center', gap: 8, marginBottom: 12, fontSize: 16 }}>Give change: <strong style={{ color: 'var(--green-700)', fontSize: 22 }}>{money(done.change)}</strong></div>}
-            <div className="receipt light-scope" style={{ border: '1px solid var(--border)', borderRadius: 8 }}>
-              <div className="c b" style={{ fontSize: 14 }}>{org.companyName}</div>
-              <div className="c">{org.address.split('\n')[0]}</div>
-              {org.gstin && <div className="c">GSTIN {org.gstin}</div>}
-              <hr />
-              <div className="rr"><span>{done.invoice.number}</span><span>{fmtDate(done.invoice.date)}</span></div>
-              <div>{done.invoice.customer.companyName || done.invoice.customer.name}</div>
-              <hr />
-              {done.invoice.lines.map((l) => (
-                <div key={l.id}><div>{l.name}</div><div className="rr"><span>{l.qty} × {l.rate.toFixed(2)}</span><span>{l.amount.toFixed(2)}</span></div></div>
-              ))}
-              <hr />
-              <div className="rr"><span>Sub total</span><span>{done.invoice.subTotal.toFixed(2)}</span></div>
-              {done.invoice.withGst && (done.invoice.interState ? <div className="rr"><span>IGST</span><span>{done.invoice.igst.toFixed(2)}</span></div> : <><div className="rr"><span>CGST</span><span>{done.invoice.cgst.toFixed(2)}</span></div><div className="rr"><span>SGST</span><span>{done.invoice.sgst.toFixed(2)}</span></div></>)}
-              {Math.abs(done.invoice.roundOff) > 0 && <div className="rr"><span>Round off</span><span>{done.invoice.roundOff.toFixed(2)}</span></div>}
-              <div className="rr big"><span>TOTAL</span><span>₹{done.invoice.total.toFixed(2)}</span></div>
-              <div className="rr"><span>Paid ({mode})</span><span>{done.invoice.amountPaid.toFixed(2)}</span></div>
-              <hr />
-              <div className="c">{org.invoiceFooter}</div>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', width: 'fit-content', margin: '0 auto' }}>
+              <ThermalReceipt data={receiptFromInvoice(done.invoice, items, customers.find((c) => c.id === done.invoice.customerId)?.due, mode)} org={org} s={printCfg.thermal} />
             </div>
           </div>
         )}

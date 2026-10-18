@@ -30,7 +30,7 @@ const write = (k: string, v: string) => {
 
 /** Per-viewer UI preferences (theme, language). Stored locally; not account data. */
 export function PrefsProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => read('ledgerly.theme', 'system'));
+  const [theme, setThemeState] = useState<Theme>(() => read('ledgerly.theme', 'light'));
   const [lang, setLangState] = useState<Lang>(() => read('ledgerly.lang', 'en'));
 
   useEffect(() => {

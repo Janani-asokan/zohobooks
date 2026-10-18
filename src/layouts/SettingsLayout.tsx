@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, Users } from 'lucide-react';
+import { Building2, Printer, Users } from 'lucide-react';
 
 /** Settings pages share a left sub-navigation, like a classic settings screen. */
 export default function SettingsLayout() {
   const links = [
     { to: '/app/organization', label: 'Business profile', icon: Building2 },
+    { to: '/app/print-settings', label: 'Print settings', icon: Printer },
     { to: '/app/team', label: 'Users, roles & branches', icon: Users },
   ];
   return (

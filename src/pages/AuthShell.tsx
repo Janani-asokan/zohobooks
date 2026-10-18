@@ -22,9 +22,9 @@ export function AuthShell({ children }: { children: ReactNode }) {
         </div>
       </div>
       <div className="login-right" aria-hidden>
-        <Canopy fireflies={16} />
+        <Canopy fireflies={16} light />
         <div className="login-hero">
-          <h2>Grow your business, naturally.</h2>
+          <h2>Grow your business, <em>naturally.</em></h2>
           <p>One place to invoice customers, manage stock and purchases, and prepare your GST returns.</p>
           <ul className="login-points">
             <li><CheckCircle2 size={18} /><div><strong>GST-compliant invoicing</strong>Tax invoices, bills of supply and credit notes with CGST, SGST and IGST worked out for you.</div></li>

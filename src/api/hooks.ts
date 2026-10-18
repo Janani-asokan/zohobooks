@@ -5,6 +5,7 @@ import type {
   AuditEntry, BankAccount, BankTxn, Bill, Branch, CreditNote, Customer, Dashboard, Invoice, InvoiceDetail, Item, Notification, Organization,
   ItemFacets, PaymentRow, Plan, PurchaseOrder, Expense, PlatformConfig, Recurring, SalesOrder, Shop, StaffUser, TaxSlab, Vendor,
 } from './types';
+import type { PrintSettings } from '../../shared/printSettings';
 
 const S = '/shop';
 const q = <T,>(key: QueryKey, url: string, enabled = true) => ({ queryKey: key, queryFn: () => api.get<T>(url), enabled });
@@ -17,6 +18,7 @@ export const useItems = () => useQuery(q<Item[]>(['items'], `${S}/items`));
 export const useItemFacets = () => useQuery(q<ItemFacets>(['itemFacets'], `${S}/items/facets`));
 export const usePurchaseOrders = (enabled = true) => useQuery(q<PurchaseOrder[]>(['purchaseOrders'], `${S}/purchase-orders`, enabled));
 export const useExpenses = (enabled = true) => useQuery(q<Expense[]>(['expenses'], `${S}/expenses`, enabled));
+export const usePrintSettings = () => useQuery({ ...q<PrintSettings>(['printSettings'], `${S}/print-settings`), staleTime: 5 * 60_000 });
 export const useCustomers = () => useQuery(q<Customer[]>(['customers'], `${S}/customers`));
 export const useInvoices = () => useQuery(q<Invoice[]>(['invoices'], `${S}/invoices`));
 export const useInvoice = (id?: string) => useQuery(q<InvoiceDetail>(['invoice', id], `${S}/invoices/${id}`, !!id));
