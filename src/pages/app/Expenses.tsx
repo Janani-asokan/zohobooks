@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Paperclip } from 'lucide-react';
+import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
+import { Attachments, attachFile } from '@/components/Attachments';
+import { matchParty } from '@/lib/match';
+import type { ExtractResult } from '../../../shared/extract';
 import { Plus, Wallet, Trash2, Loader2, Zap, Home, Users, Wifi, Fuel, Wrench, PenTool, Megaphone, Landmark, Briefcase, Coffee, MoreHorizontal, PieChart } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
 import { useBankAccounts, useExpenses, useMut, useVendors } from '@/api/hooks';
@@ -24,6 +29,25 @@ export const EXPENSE_CATEGORIES: Array<{ name: string; icon: typeof Zap; color: 
   { name: 'Food & Refreshments', icon: Coffee, color: '#f97316' },
   { name: 'Other', icon: MoreHorizontal, color: '#a1a1aa' },
 ];
+/** Category from the merchant and the receipt text: TNEB → Electricity, Airtel → Internet & Phone, Swiggy → Food… */
+export function guessExpenseCategory(text: string): string | null {
+  const t = text.toLowerCase();
+  const rules: Array<[string, RegExp]> = [
+    ['Electricity', /electric|tneb|tangedco|bescom|msedcl|kseb|power bill|units consumed/],
+    ['Internet & Phone', /airtel|jio|vodafone|\bvi\b|bsnl|act fibernet|broadband|internet|mobile bill|postpaid/],
+    ['Rent', /\brent\b|lease|landlord/],
+    ['Fuel & Travel', /petrol|diesel|fuel|indian oil|hpcl|bpcl|uber|ola\b|rapido|irctc|flight|toll|fastag|parking/],
+    ['Food & Refreshments', /swiggy|zomato|restaurant|cafe|tea|coffee|snacks|hotel|food/],
+    ['Office Supplies', /stationery|paper|toner|cartridge|pen\b|office supplies|printing/],
+    ['Repairs & Maintenance', /repair|maintenance|service charge|plumber|electrician|amc/],
+    ['Marketing', /advert|facebook ads|google ads|meta ads|pamphlet|banner|flex|marketing/],
+    ['Bank Charges', /bank charge|processing fee|neft charge|imps charge|annual fee|gst on charges/],
+    ['Professional Fees', /chartered accountant|\bca\b|consult|legal|advocate|audit fee|professional fee/],
+    ['Salaries & Wages', /salary|wages|payroll/],
+  ];
+  return rules.find(([, re]) => re.test(t))?.[0] ?? null;
+}
+
 const catMeta = (n: string) => EXPENSE_CATEGORIES.find((c) => c.name === n) ?? EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length - 1]!;
 const blank = () => ({ date: todayISO(), category: '', description: '', vendorId: '', amount: '', taxAmount: '', accountId: '', reference: '' });
 
@@ -41,11 +65,13 @@ export default function Expenses() {
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const [del, setDel] = useState<Expense | null>(null);
+  const [filesFor, setFilesFor] = useState<Expense | null>(null);
+  const [expFile, setExpFile] = useState<PendingFile | null>(null);
   const keys = [['expenses'], ['bankAccounts'], ['bankTxns'], ['dashboard']];
   const create = useMut((b: Record<string, unknown>) => api.post<Expense>('/shop/expenses', b), keys, { success: (e) => `${e.category} expense of ${money(e.total)} recorded`, silentError: true });
   const remove = useMut((id: string) => api.del(`/shop/expenses/${id}`), keys, { success: 'Expense deleted' });
 
-  const start = (category = '') => { setForm({ ...blank(), category, accountId: accounts.find((a) => a.type === 'Cash')?.id ?? accounts[0]?.id ?? '' }); setTouched(false); setServerErr({}); setOpen(true); };
+  const start = (category = '') => { setExpFile(null); setForm({ ...blank(), category, accountId: accounts.find((a) => a.type === 'Cash')?.id ?? accounts[0]?.id ?? '' }); setTouched(false); setServerErr({}); setOpen(true); };
   useEffect(() => { if (params.get('new') && canWrite && accounts.length) { start(); setParams({}, { replace: true }); } }, [params, accounts.length]);
 
   const monthStart = todayISO().slice(0, 8) + '01';
@@ -65,7 +91,42 @@ export default function Expenses() {
   const save = () => {
     setTouched(true); setServerErr({});
     if (Object.values(errs).some(Boolean)) return;
-    create.mutate({ ...form, vendorId: form.vendorId || null, amount: Number(form.amount), taxAmount: Number(form.taxAmount || 0) }, { onSuccess: () => setOpen(false), onError: (e) => setServerErr(fieldErrors(e)) });
+    create.mutate({ ...form, vendorId: form.vendorId || null, amount: Number(form.amount), taxAmount: Number(form.taxAmount || 0) }, {
+      onSuccess: (x) => { setOpen(false); if (expFile) void attachFile('expense', x.id, expFile.file.name, expFile.dataUrl).catch(() => undefined); },
+      onError: (e) => setServerErr(fieldErrors(e)),
+    });
+  };
+
+  /* ---------- fill from a receipt ---------- */
+  const expRows = (r: ExtractResult): FillRow[] => {
+    const d = r.data;
+    const cat = guessExpenseCategory([d.party.companyName, d.party.name, r.textPreview, ...d.lines.map((l) => l.name)].filter(Boolean).join(' '));
+    const v = matchParty(vendors, d.party);
+    const net = d.subtotal ?? (d.total != null && d.taxTotal != null ? d.total - d.taxTotal : d.total);
+    return [
+      { key: 'category', label: 'Category', value: cat, current: form.category },
+      { key: 'date', label: 'Date', value: d.date, display: d.date ? fmtDate(d.date) : undefined, current: form.date },
+      { key: 'amount', label: 'Amount before GST', value: net, display: net != null ? money(net) : undefined, current: form.amount },
+      { key: 'tax', label: 'GST', value: d.taxTotal, display: d.taxTotal != null ? money(d.taxTotal) : undefined, current: form.taxAmount },
+      { key: 'vendor', label: 'Vendor', value: v?.name, current: vendors.find((x) => x.id === form.vendorId)?.name },
+      { key: 'description', label: 'Description', value: [d.party.companyName || d.party.name, d.lines[0]?.name].filter(Boolean).join(' · ').slice(0, 200) || null, current: form.description },
+      { key: 'reference', label: 'Reference', value: d.documentNumber, current: form.reference },
+    ];
+  };
+  const applyExp = (keys: Set<string>, r: ExtractResult, file: PendingFile) => {
+    const rows = Object.fromEntries(expRows(r).map((x) => [x.key, x.value]));
+    const v = matchParty(vendors, r.data.party);
+    setForm((f) => ({
+      ...f,
+      category: keys.has('category') && rows.category ? String(rows.category) : f.category,
+      date: keys.has('date') && rows.date ? String(rows.date) : f.date,
+      amount: keys.has('amount') && rows.amount != null ? String(rows.amount) : f.amount,
+      taxAmount: keys.has('tax') && rows.tax != null ? String(rows.tax) : f.taxAmount,
+      vendorId: keys.has('vendor') && v ? v.id : f.vendorId,
+      description: keys.has('description') && rows.description ? String(rows.description) : f.description,
+      reference: keys.has('reference') && rows.reference ? String(rows.reference).slice(0, 60) : f.reference,
+    }));
+    setExpFile(file);
   };
 
   return (
@@ -121,7 +182,7 @@ export default function Expenses() {
                         </td>
                         <td className="muted">{e.accountName ?? '—'}</td>
                         <td className="num strong">{money(e.total)}{e.taxAmount > 0 && <div className="muted">incl. GST {money(e.taxAmount)}</div>}</td>
-                        <td className="num">{canWrite && <button className="icon-btn danger" title="Delete" onClick={() => setDel(e)}><Trash2 size={15} /></button>}</td>
+                        <td className="num" style={{ whiteSpace: 'nowrap' }}><button className="icon-btn" title="Receipts and files" onClick={() => setFilesFor(e)}><Paperclip size={15} /></button>{canWrite && <button className="icon-btn danger" title="Delete" onClick={() => setDel(e)}><Trash2 size={15} /></button>}</td>
                       </tr>
                     );
                   })}
@@ -137,6 +198,10 @@ export default function Expenses() {
       </div>
 
       <Modal open={open} onClose={() => setOpen(false)} size="lg" title="Record expense" footer={<><button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={create.isPending} onClick={save}>{create.isPending && <Loader2 size={15} className="spin" />} Save expense</button></>}>
+        <div style={{ marginBottom: 16 }}>
+          <SmartUpload kind="expense" toRows={expRows} onApply={applyExp} title="Fill from a receipt" hint="Upload or photograph the bill (electricity, rent receipt, fuel, internet…). The receipt is kept with the expense." />
+          {expFile && <div className="small muted" style={{ marginTop: 6 }}>{expFile.file.name} will be attached to this expense.</div>}
+        </div>
         <Field label="Category" required error={err('category')}>
           <div className="cat-pick">
             {EXPENSE_CATEGORIES.map((c) => (
@@ -161,6 +226,9 @@ export default function Expenses() {
         <p className="small muted" style={{ marginTop: 10 }}>Total paid: <strong style={{ color: 'var(--ink-900)' }}>{money(Number(form.amount || 0) + Number(form.taxAmount || 0))}</strong></p>
       </Modal>
 
+      <Modal open={!!filesFor} onClose={() => setFilesFor(null)} title="Receipts and files" subtitle={filesFor ? `${filesFor.category} · ${fmtDate(filesFor.date)} · ${money(filesFor.total)}` : ''}>
+        {filesFor && <Attachments entity="expense" entityId={filesFor.id} canWrite={canWrite} title="Files" />}
+      </Modal>
       <ConfirmModal open={!!del} onClose={() => setDel(null)} title="Delete expense?" confirmLabel="Delete" text={<>The {del?.category} expense of {del && money(del.total)} will be removed and the amount returned to {del?.accountName ?? 'the account'}.</>} onConfirm={() => remove.mutate(del!.id)} />
     </div>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, FileText, Boxes, ShoppingBag, Landmark, BarChart3, Users, Check } from 'lucide-react';
-import { KanakkuLogo } from '@/components/Logo';
+import { BrandLogo } from '@/components/Logo';
 import '@/styles/landing.css';
 
 const FEATURES = [
@@ -22,13 +22,13 @@ const SCREENS = [
 
 export default function Landing() {
   const [screen, setScreen] = useState(SCREENS[0]!.id);
-  useEffect(() => { document.title = 'Kanakku — Billing and stock, without the paperwork'; }, []);
+  useEffect(() => { document.title = 'Corpus360 — Billing and stock, without the paperwork'; }, []);
   const current = SCREENS.find((s) => s.id === screen)!;
 
   return (
     <div className="lp">
       <header className="lp-nav">
-        <Link to="/" className="lp-logo" aria-label="Kanakku home"><KanakkuLogo height={18} /></Link>
+        <Link to="/" className="lp-logo" aria-label="Corpus360 home"><BrandLogo height={18} /></Link>
         <nav className="lp-links"><a href="#features">Product</a><a href="#screens">Screens</a><a href="#faq">Questions</a></nav>
         <Link to="/login" className="btn btn-secondary">Sign in</Link>
       </header>
@@ -36,7 +36,7 @@ export default function Landing() {
       <section className="lp-hero">
         <p className="lp-eyebrow">For Indian shops, distributors and service businesses</p>
         <h1>Billing and stock, without the paperwork.</h1>
-        <p className="lp-sub">Kanakku puts GST invoicing, inventory and the accounts behind them in one tool. Make an invoice in under 30 seconds, see what is low on stock, and hand your accountant clean books at the end of the month.</p>
+        <p className="lp-sub">Corpus360 puts GST invoicing, inventory and the accounts behind them in one tool. Make an invoice in under 30 seconds, see what is low on stock, and hand your accountant clean books at the end of the month.</p>
         <div className="lp-cta">
           <Link to="/login" className="btn btn-primary btn-lg">Sign in <ArrowRight size={16} /></Link>
           <a href="#features" className="btn btn-ghost btn-lg">See what it does</a>
@@ -52,7 +52,7 @@ export default function Landing() {
         <div className="lp-tabs" role="tablist" aria-label="Screens">
           {SCREENS.map((s) => <button key={s.id} role="tab" aria-selected={screen === s.id} className={screen === s.id ? 'active' : ''} onClick={() => setScreen(s.id)}>{s.label}</button>)}
         </div>
-        <div className="lp-frame"><img src={current.src} alt={`Kanakku ${current.label.toLowerCase()} screen`} /></div>
+        <div className="lp-frame"><img src={current.src} alt={`Corpus360 ${current.label.toLowerCase()} screen`} /></div>
       </section>
 
       <section className="lp-section" id="features">
@@ -79,8 +79,8 @@ export default function Landing() {
       </section>
 
       <footer className="lp-foot">
-        <KanakkuLogo height={15} />
-        <span>© {new Date().getFullYear()} Kanakku. Billing and stock, without the paperwork.</span>
+        <BrandLogo height={15} />
+        <span>© {new Date().getFullYear()} Corpus360. Billing and stock, without the paperwork.</span>
         <Link to="/login">Sign in</Link>
       </footer>
     </div>

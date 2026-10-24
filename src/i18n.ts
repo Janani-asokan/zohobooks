@@ -97,7 +97,7 @@ const dict = {
   'home.invoiced': { en: 'Invoiced', hi: 'इनवॉइस किया', ta: 'பட்டியலிடப்பட்டது' },
   'home.collected': { en: 'Collected', hi: 'वसूला गया', ta: 'வசூலிக்கப்பட்டது' },
   // login
-  'login.title': { en: 'Sign in to Kanakku', hi: 'अपने खाते में साइन इन करें', ta: 'உங்கள் கணக்கில் உள்நுழையவும்' },
+  'login.title': { en: 'Sign in to Corpus360', hi: 'अपने खाते में साइन इन करें', ta: 'உங்கள் கணக்கில் உள்நுழையவும்' },
   'login.lead': { en: 'Use the email your business invited you with.', hi: 'एक सुरक्षित वर्कस्पेस से इनवॉइस, इन्वेंट्री और जीएसटी अनुपालन संभालें।', ta: 'ஒரே பாதுகாப்பான இடத்தில் விலைப்பட்டியல், இருப்பு மற்றும் ஜிஎஸ்டி இணக்கத்தை நிர்வகிக்கவும்.' },
   'login.email': { en: 'Email address', hi: 'ईमेल पता', ta: 'மின்னஞ்சல் முகவரி' },
   'login.password': { en: 'Password', hi: 'पासवर्ड', ta: 'கடவுச்சொல்' },

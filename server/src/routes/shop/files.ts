@@ -1,0 +1,106 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { rateLimit } from '../../auth';
+import { audit } from '../../audit';
+import { many, one } from '../../db';
+import { forbidden, HttpError, notFound, parse } from '../../http';
+import { getOrg } from '../../services/common';
+import { aiEnabled, decodeDataUrl, extractDocument } from '../../services/extract';
+import { can, type Permission } from '../../../../shared/permissions';
+import { T, allowed } from './ctx';
+
+export const filesRouter = Router();
+
+/* ---------- Read an uploaded PDF or photo into form fields ---------- */
+const KINDS = ['item', 'items', 'bill', 'expense', 'customer', 'vendor', 'invoice', 'order'] as const;
+
+filesRouter.get('/extract/status', T(async () => ({ ai: aiEnabled() })));
+filesRouter.post(
+  '/extract',
+  rateLimit('extract', 30, 60_000),
+  T(async (db, req, c) => {
+    const b = parse(z.object({ kind: z.enum(KINDS), file: z.string().min(20), filename: z.string().max(200).default('') }), req.body);
+    const org = await getOrg(db, c.shopId);
+    const result = await extractDocument(b.file, b.kind, { name: org.company_name, gstin: org.gstin ?? '' });
+    await audit(db, req, c.shopId, 'extract', b.kind, c.shopId, { file: b.filename, method: result.method, lines: result.data.lines.length });
+    return result;
+  }),
+);
+
+/* ---------- Attachments on records ---------- */
+const ENTITIES = {
+  invoice: { table: 'invoices', read: null, write: 'sales.write' },
+  credit_note: { table: 'credit_notes', read: null, write: 'sales.write' },
+  sales_order: { table: 'sales_orders', read: null, write: 'sales.write' },
+  customer: { table: 'customers', read: null, write: 'customers.write' },
+  item: { table: 'items', read: null, write: 'items.write' },
+  bill: { table: 'bills', read: 'purchases.read', write: 'purchases.write' },
+  vendor: { table: 'vendors', read: 'purchases.read', write: 'purchases.write' },
+  expense: { table: 'expenses', read: 'purchases.read', write: 'purchases.write' },
+  purchase_order: { table: 'purchase_orders', read: 'purchases.read', write: 'purchases.write' },
+} as const satisfies Record<string, { table: string; read: Permission | null; write: Permission }>;
+type Entity = keyof typeof ENTITIES;
+const entityEnum = z.enum(Object.keys(ENTITIES) as [Entity, ...Entity[]]);
+const SHOP_QUOTA_BYTES = 500 * 1024 * 1024;
+
+const serialize = (a: any) => ({ id: a.id, entity: a.entity, entityId: a.entity_id, filename: a.filename, mime: a.mime, size: a.size, uploadedBy: a.uploaded_by_name, createdAt: a.created_at });
+
+filesRouter.get(
+  '/attachments',
+  T(async (db, req, c) => {
+    const q = parse(z.object({ entity: entityEnum, entityId: z.string().uuid() }), req.query);
+    const rule = ENTITIES[q.entity];
+    if (rule.read && !allowed(c, rule.read)) throw forbidden();
+    return (await many(db, 'SELECT id, entity, entity_id, filename, mime, size, uploaded_by_name, created_at FROM attachments WHERE shop_id = $1 AND entity = $2 AND entity_id = $3 ORDER BY created_at DESC', [c.shopId, q.entity, q.entityId])).map(serialize);
+  }),
+);
+
+filesRouter.post(
+  '/attachments',
+  rateLimit('upload', 60, 60_000),
+  T(async (db, req, c) => {
+    const b = parse(z.object({ entity: entityEnum, entityId: z.string().uuid(), filename: z.string().trim().min(1).max(200), file: z.string().min(20) }), req.body);
+    const rule = ENTITIES[b.entity];
+    if (!can(c.role, rule.write)) throw forbidden();
+    if (!(await one(db, `SELECT 1 FROM ${rule.table} WHERE shop_id = $1 AND id = $2`, [c.shopId, b.entityId]))) throw notFound('Record');
+    const { mime, bytes } = decodeDataUrl(b.file);
+    const used = await one(db, 'SELECT coalesce(sum(size), 0)::bigint AS n FROM attachments WHERE shop_id = $1', [c.shopId]);
+    if (Number(used.n) + bytes.length > SHOP_QUOTA_BYTES) throw new HttpError(413, 'Your file storage is full (500 MB). Remove old attachments to add more.', 'quota');
+    const filename = b.filename.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_');
+    const row = await one(
+      db,
+      'INSERT INTO attachments (shop_id, entity, entity_id, filename, mime, size, data, uploaded_by, uploaded_by_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, entity, entity_id, filename, mime, size, uploaded_by_name, created_at',
+      [c.shopId, b.entity, b.entityId, filename, mime, bytes.length, bytes, c.id, c.name],
+    );
+    await audit(db, req, c.shopId, 'attach', b.entity, b.entityId, { file: filename, size: bytes.length });
+    return serialize(row);
+  }),
+);
+
+filesRouter.get(
+  '/attachments/:id',
+  T(async (db, req, c, res) => {
+    const a = await one(db, 'SELECT * FROM attachments WHERE shop_id = $1 AND id = $2', [c.shopId, req.params.id]);
+    if (!a) throw notFound('File');
+    const rule = ENTITIES[a.entity as Entity];
+    if (rule.read && !allowed(c, rule.read)) throw forbidden();
+    res.setHeader('Content-Type', a.mime);
+    res.setHeader('Content-Length', String(a.size));
+    res.setHeader('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="${encodeURIComponent(a.filename)}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.end(a.data);
+  }),
+);
+
+filesRouter.delete(
+  '/attachments/:id',
+  T(async (db, req, c) => {
+    const a = await one(db, 'SELECT id, entity, entity_id, filename FROM attachments WHERE shop_id = $1 AND id = $2', [c.shopId, req.params.id]);
+    if (!a) throw notFound('File');
+    if (!can(c.role, ENTITIES[a.entity as Entity].write)) throw forbidden();
+    await db.query('DELETE FROM attachments WHERE shop_id = $1 AND id = $2', [c.shopId, a.id]);
+    await audit(db, req, c.shopId, 'detach', a.entity, a.entity_id, { file: a.filename });
+  }),
+);

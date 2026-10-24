@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { KanakkuLogo, KanakkuMark } from '@/components/Logo';
+import { BrandLogo, BrandMark } from '@/components/Logo';
 import { ChevronRight, PanelLeftClose, PanelLeftOpen, type LucideIcon } from 'lucide-react';
 
 export interface NavItem {
@@ -46,8 +46,8 @@ export function Sidebar({
   return (
     <aside className={`sidebar ${variant ?? ''} ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-brand">
-        <Link to={brand.home} aria-label="Kanakku home" onClick={onNavigate}>
-          {collapsed ? <KanakkuMark size={22} /> : <KanakkuLogo height={17} />}
+        <Link to={brand.home} aria-label="Corpus360 home" onClick={onNavigate}>
+          {collapsed ? <BrandMark size={22} /> : <BrandLogo height={17} />}
         </Link>
         {brand.tag && !collapsed && <span className="badge badge-gray plain" style={{ marginLeft: 'auto' }}>{brand.tag}</span>}
       </div>

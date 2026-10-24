@@ -10,6 +10,12 @@ import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInpu
 import { addDays, fmtDate, money, todayISO } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
 import { Hint } from '@/components/kit';
+import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
+import { Attachments, attachFile } from '@/components/Attachments';
+import { useDocLines } from '@/lib/docLines';
+import { matchParty } from '@/lib/match';
+import { uid } from '@/lib/format';
+import type { ExtractResult } from '../../../shared/extract';
 
 type SalesOrderStatus = SalesOrder['status'];
 
@@ -63,7 +69,31 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
   const moveSO = useMut((v: { id: string; status: SalesOrderStatus }) => api.patch<SalesOrder>(`/shop/sales-orders/${v.id}/status`, { status: v.status }), keys, { success: (r) => `${r.number} moved to ${r.status}` });
   const removeSO = useMut((id: string) => api.del(`/shop/sales-orders/${id}`), keys, { success: `${kind === 'quote' ? 'Quote' : 'Sales order'} deleted` });
 
+  const docLines = useDocLines(false);
+  const [soFile, setSoFile] = useState<PendingFile | null>(null);
+  const soRows = (r: ExtractResult): FillRow[] => {
+    const c = matchParty(customerList, r.data.party);
+    const who = r.data.party.companyName || r.data.party.name;
+    return [
+      { key: 'customer', label: 'Customer', value: c ? c.companyName || c.name : who ? `${who} (not found)` : null, display: c ? `${c.companyName || c.name} · matched` : who ? `${who}\nNot in your customers. Add them first, or pick one.` : undefined, current: customer ? customer.companyName || customer.name : '' },
+      { key: 'ref', label: 'Their reference (added to notes)', value: r.data.documentNumber, current: notes },
+      { key: 'lines', label: 'Item lines', value: docLines.count(r) || null, display: `${docLines.count(r)} line${docLines.count(r) === 1 ? '' : 's'} (see below)` },
+    ];
+  };
+  const applySo = async (keys: Set<string>, r: ExtractResult, file: PendingFile) => {
+    const c = keys.has('customer') ? matchParty(customerList, r.data.party) : null;
+    if (c) setCustomerId(c.id);
+    const tier = (c ?? customer)?.tier ?? 'SP1';
+    if (keys.has('ref') && r.data.documentNumber) setNotes((n) => [n, `Your ref: ${r.data.documentNumber}`].filter(Boolean).join('\n'));
+    if (keys.has('lines')) {
+      const { lines: got } = await docLines.resolve(r);
+      if (got.length) setLines(got.map((x) => ({ key: uid('ln_'), itemId: x.item.id, qty: x.qty, tier, rate: x.rate ?? (tier === 'SP1' ? x.item.sp1 : tier === 'SP2' ? x.item.sp2 : x.item.sp3), discount: x.discount })));
+    }
+    setSoFile(file);
+  };
+
   const open = (so?: SalesOrder) => {
+    setSoFile(null);
     setCustomerId(so?.customerId ?? '');
     setDate(so?.date ?? todayISO());
     setExpiry(so?.expiryDate ?? addDays(todayISO(), 30));
@@ -89,7 +119,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
     if (errs.customer || errs.lines) return;
     const b = { customerId, date, expiryDate: expiry, withGst, lines: toInput(lines), notes, status };
     if (modal?.id) updateSO.mutate({ id: modal.id, b }, { onSuccess: () => setModal(null) });
-    else createSO.mutate(b, { onSuccess: () => setModal(null) });
+    else createSO.mutate(b, { onSuccess: (so) => { setModal(null); if (soFile) void attachFile('sales_order', so.id, soFile.file.name, soFile.dataUrl).catch(() => undefined); } });
   };
 
   const move = (so: SalesOrder, status: SalesOrderStatus) => moveSO.mutate({ id: so.id, status });
@@ -238,6 +268,15 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
           </>
         }
       >
+        {!modal?.id ? (
+          <div style={{ marginBottom: 16 }}>
+            <SmartUpload kind="order" toRows={soRows} onApply={(k, r, f) => void applySo(k, r, f)} extra={docLines.extra}
+              title="Fill from an enquiry or purchase order" hint="Upload what the customer sent: an enquiry, their PO, or a photo of a handwritten list." />
+            {soFile && <div className="small muted" style={{ marginTop: 6 }}>{soFile.file.name} will be kept with this {L.one}.</div>}
+          </div>
+        ) : (
+          <div style={{ marginBottom: 16 }}><Attachments entity="sales_order" entityId={modal.id} canWrite={canWrite} title="Files" /></div>
+        )}
         <div className="form-grid cols-3">
           <Field label="Customer" required error={touched ? errs.customer : ''}>
             <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => { setCustomerId(e.target.value); const c = customerList.find((x) => x.id === e.target.value); if (c?.type === 'Business' && org?.gstin && !org.compositionScheme) setWithGst(true); }}>

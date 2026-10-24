@@ -10,6 +10,12 @@ import { ConfirmModal, Field, PageHeader, Toggle } from '@/components/ui';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type DraftLine } from '@/components/LineItems';
 import { useShortcuts } from '@/components/useShortcuts';
+import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
+import { attachFile } from '@/components/Attachments';
+import { useDocLines } from '@/lib/docLines';
+import { matchParty } from '@/lib/match';
+import { uid } from '@/lib/format';
+import type { ExtractResult } from '../../../shared/extract';
 import { addDays, todayISO } from '@/lib/format';
 import { fyLabel } from '@/lib/fy';
 import { INDIAN_STATES, isInterState } from '../../../shared/gst';
@@ -101,6 +107,29 @@ function Form({ existing }: { existing?: Invoice }) {
   const update = useMut((b: Record<string, unknown>) => api.put<Invoice>(`/shop/invoices/${existing!.id}`, b), keys, { silentError: true });
   const busy = create.isPending || update.isPending;
 
+  const docLines = useDocLines(false);
+  const [invFile, setInvFile] = useState<PendingFile | null>(null);
+  const fillRows = (r: ExtractResult): FillRow[] => {
+    const c = matchParty(customers, r.data.party);
+    const who = r.data.party.companyName || r.data.party.name;
+    return [
+      { key: 'customer', label: 'Customer', value: c ? c.companyName || c.name : who ? `${who} (not found)` : null, display: c ? `${c.companyName || c.name} · matched` : who ? `${who}\nNot in your customers. Add them first, or pick one.` : undefined, current: customer ? customer.companyName || customer.name : '' },
+      { key: 'ref', label: 'Their reference (added to notes)', value: r.data.documentNumber, current: notes },
+      { key: 'lines', label: 'Item lines', value: docLines.count(r) || null, display: `${docLines.count(r)} line${docLines.count(r) === 1 ? '' : 's'} (see below)` },
+    ];
+  };
+  const applyFill = async (keys: Set<string>, r: ExtractResult, file: PendingFile) => {
+    const c = keys.has('customer') ? matchParty(customers, r.data.party) : null;
+    const tier = (c ?? customer)?.tier ?? 'SP1';
+    if (c) selectCustomer(c.id);
+    if (keys.has('ref') && r.data.documentNumber) setNotes((n) => [n, `Your ref: ${r.data.documentNumber}`].filter(Boolean).join('\n'));
+    if (keys.has('lines')) {
+      const { lines: got, skipped } = await docLines.resolve(r);
+      if (got.length) setLines(got.map((x) => ({ key: uid('ln_'), itemId: x.item.id, qty: x.qty, tier, rate: x.rate ?? (tier === 'SP1' ? x.item.sp1 : tier === 'SP2' ? x.item.sp2 : x.item.sp3), discount: x.discount })));
+      if (skipped) toast('info', `${skipped} line${skipped > 1 ? 's' : ''} not added`, 'Those items aren’t in your catalogue.');
+    }
+    setInvFile(file);
+  };
   const [creditPrompt, setCreditPrompt] = useState<{ mode: 'issue' | 'issue-pay'; message: string } | null>(null);
   const save = (mode: 'draft' | 'issue' | 'issue-pay', overrideCreditLimit = false) => {
     setTouched(true);
@@ -109,6 +138,7 @@ function Form({ existing }: { existing?: Invoice }) {
     const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit };
     const onSuccess = (inv: Invoice) => {
       toast('success', inv.status === 'Draft' ? 'Draft saved' : existing?.status === 'Issued' ? 'Invoice updated' : 'Invoice issued', inv.number ?? undefined);
+      if (invFile) void attachFile('invoice', inv.id, invFile.file.name, invFile.dataUrl).catch(() => undefined);
       navigate(`/app/sales/invoices/${inv.id}${mode === 'issue-pay' ? '?pay=1' : ''}`);
     };
     const onError = (err: Error) => {
@@ -140,6 +170,13 @@ function Form({ existing }: { existing?: Invoice }) {
 
       <div className="card">
         <div className="card-body">
+          {!existing && (
+            <div style={{ marginBottom: 16 }}>
+              <SmartUpload kind="invoice" toRows={fillRows} onApply={(k, r, f) => void applyFill(k, r, f)} extra={docLines.extra}
+                title="Fill from a purchase order or enquiry" hint="Upload the customer’s PO, enquiry or a photo of their list. The customer and items are filled in; the file is kept with the invoice." />
+              {invFile && <div className="small muted" style={{ marginTop: 6 }}>{invFile.file.name} will be attached to this invoice.</div>}
+            </div>
+          )}
           <div className="form-grid">
             <Field label="Customer" required error={(touched ? errs.customer : '') || serverErr.customerId}>
               <div className="row" style={{ gap: 8 }}>

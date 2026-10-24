@@ -1,9 +1,9 @@
-/* Kanakku service worker — installable app + read-only offline mode.
+/* Corpus360 service worker — installable app + read-only offline mode.
  * - App shell & static assets: stale-while-revalidate.
  * - GET /api/shop/* : network-first, falling back to the last cached response when offline.
  * - Auth, platform, public links and all writes: never cached.
  */
-const VERSION = 'v8';
+const VERSION = 'v9';
 const SHELL = `ledgerly-shell-${VERSION}`;
 const DATA = `ledgerly-data-${VERSION}`;
 

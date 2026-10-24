@@ -40,7 +40,7 @@ async function main() {
     console.log('[bootstrap] Demo mode: demo accounts use their simple passwords (owner123, admin123 …). Set DEMO_SIMPLE_PASSWORDS=0 to turn off.');
   }
   const app = createApp();
-  app.listen(config.port, () => console.log(`[server] Kanakku API listening on :${config.port} (${config.env})`));
+  app.listen(config.port, () => console.log(`[server] Corpus360 API listening on :${config.port} (${config.env})`));
   startJobs();
 }
 

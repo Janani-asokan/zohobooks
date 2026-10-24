@@ -9,7 +9,16 @@ import { Hint, Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
 import { GSTIN_RE, INDIAN_STATES } from '../../../shared/gst';
 import { PartyStatement } from '@/components/PartyStatement';
+import { Attachments, attachFile } from '@/components/Attachments';
+import { SmartUpload, type PendingFile } from '@/components/SmartUpload';
+import { applyParty, partyRows } from '@/lib/partyFill';
+import { useShopUser as useMe } from '@/context/AuthContext';
 import type { Bill, Vendor } from '@/api/types';
+
+function VendorFiles({ id }: { id: string }) {
+  const me = useMe();
+  return <Attachments entity="vendor" entityId={id} canWrite={me.can('purchases.write')} title="Documents" />;
+}
 
 function VendorPanel({ v, bills, onClose }: { v: Vendor; bills: Bill[]; onClose: () => void }) {
   useEffect(() => {
@@ -32,6 +41,7 @@ function VendorPanel({ v, bills, onClose }: { v: Vendor; bills: Bill[]; onClose:
           <div><div className="k">Bills</div><div className="v">{mine.length}</div></div>
           <div><div className="k">Billed to date</div><div className="v">{money(mine.reduce((s, b) => s + b.amount, 0))}</div></div>
         </div>
+        <VendorFiles id={v.id} />
         <PartyStatement url={`/shop/vendors/${v.id}/statement`} name={v.name} debitLabel="Paid" creditLabel="Billed" linkFor={() => '/app/purchases/bills'} />
       </div>
     </aside>
@@ -53,13 +63,14 @@ export default function Vendors() {
   const [vendor, setVendor] = useState(blank);
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
+  const [vendFile, setVendFile] = useState<PendingFile | null>(null);
   const selectedId = params.get('v');
   const selected = vendors.find((x) => x.id === selectedId) ?? null;
   const select = (id: string | null) => { if (id) params.set('v', id); else params.delete('v'); setParams(params, { replace: true }); };
   const closePanel = useCallback(() => select(null), [params]);
-  const create = useMut((b: typeof blank) => api.post('/shop/vendors', b), [['vendors']], { success: 'Vendor added', silentError: true });
+  const create = useMut((b: typeof blank) => api.post<Vendor>('/shop/vendors', b), [['vendors']], { success: 'Vendor added', silentError: true });
 
-  const start = () => { setVendor(blank); setTouched(false); setServerErr({}); setOpen(true); };
+  const start = () => { setVendor(blank); setTouched(false); setServerErr({}); setVendFile(null); setOpen(true); };
   useEffect(() => { if (params.get('new') && canWrite) { start(); setParams({}, { replace: true }); } }, [params]);
 
   const rows = useMemo(() => {
@@ -116,8 +127,13 @@ export default function Vendors() {
       <Modal open={open} onClose={() => setOpen(false)} title="New vendor" footer={<><button className="btn btn-secondary" onClick={() => setOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={create.isPending} onClick={() => {
         setTouched(true); setServerErr({});
         if (Object.values(errs).some(Boolean)) return;
-        create.mutate(vendor, { onSuccess: () => setOpen(false), onError: (e) => setServerErr(fieldErrors(e)) });
+        create.mutate(vendor, { onSuccess: (v) => { setOpen(false); if (vendFile) void attachFile('vendor', v.id, vendFile.file.name, vendFile.dataUrl).catch(() => undefined); }, onError: (e) => setServerErr(fieldErrors(e)) });
       }}>Save vendor</button></>}>
+        <div style={{ marginBottom: 16 }}>
+          <SmartUpload kind="vendor" title="Fill from a GST certificate, visiting card or bill" hint="Name, GSTIN, phone, email and state are read from the document."
+            toRows={(r) => partyRows(r.data.party, vendor, false)} onApply={(keys, r, file) => { setVendor((d) => applyParty({ ...d }, keys, r.data.party, false)); setVendFile(file); }} />
+          {vendFile && <div className="small muted" style={{ marginTop: 6 }}>{vendFile.file.name} will be kept on the vendor.</div>}
+        </div>
         <div className="form-grid">
           <Field label="Vendor name" required error={err('name')} className="span-all"><input className={`input ${err('name') ? 'invalid' : ''}`} value={vendor.name} onChange={(e) => setVendor({ ...vendor, name: e.target.value })} autoFocus placeholder="e.g. Sri Balaji Distributors" /></Field>
           <Field label="GSTIN" error={err('gstin')} hint="Needed to claim input tax credit"><input className={`input mono ${err('gstin') ? 'invalid' : ''}`} value={vendor.gstin} maxLength={15} onChange={(e) => setVendor({ ...vendor, gstin: e.target.value.toUpperCase() })} /></Field>

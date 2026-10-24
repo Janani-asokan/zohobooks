@@ -71,7 +71,7 @@ export default function Billing() {
 
   return (
     <div className="page" style={{ maxWidth: 1080 }}>
-      <PageHeader title="Subscription & billing" subtitle="Your Kanakku software license." />
+      <PageHeader title="Subscription & billing" subtitle="Your Corpus360 software license." />
       {me.shop.licenseExpired && (
         <div className="row" style={{ gap: 10, padding: '14px 16px', borderRadius: 8, background: 'var(--red-50)', color: 'var(--red-600)', marginBottom: 16, fontWeight: 600 }}>
           <AlertTriangle size={18} /> Your license expired on {fmtDate(me.shop.licenseEnd)}. Renew to unlock your workspace — your data is safe.

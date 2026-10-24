@@ -23,8 +23,8 @@ export function printInvoice(id: string, paper: PrintPaper): Promise<void> {
     }, 20_000);
     function onMessage(e: MessageEvent) {
       if (e.source !== frame.contentWindow || e.origin !== location.origin || settled) return;
-      if (e.data?.type === 'kanakku:print-error') { settled = true; clearTimeout(timer); cleanup(); reject(new Error(e.data.message)); }
-      if (e.data?.type !== 'kanakku:print-ready') return;
+      if (e.data?.type === 'corpus360:print-error') { settled = true; clearTimeout(timer); cleanup(); reject(new Error(e.data.message)); }
+      if (e.data?.type !== 'corpus360:print-ready') return;
       settled = true; clearTimeout(timer);
       const w = frame.contentWindow!;
       w.addEventListener('afterprint', cleanup, { once: true });

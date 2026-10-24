@@ -149,7 +149,7 @@ export default function AppLayout() {
   });
 
   useEffect(() => {
-    if (org.data?.companyName) document.title = `${org.data.companyName} · Kanakku`;
+    if (org.data?.companyName) document.title = `${org.data.companyName} · Corpus360`;
   }, [org.data?.companyName]);
 
   const name = org.data?.companyName ?? me.shop.name;

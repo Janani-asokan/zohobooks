@@ -71,6 +71,18 @@ await step('invoice print view and PDF use the same document', async () => {
   if (pdf.status() !== 200 || pdf.headers()['content-type'] !== 'application/pdf') throw new Error(`PDF failed: ${pdf.status()}`);
   if (!(await pdf.body()).subarray(0, 5).toString().startsWith('%PDF')) throw new Error('not a PDF');
 });
+await step('a product PDF fills the new-item form', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const os = await import('node:os');
+  const file = `${os.tmpdir()}/smoke-product.pdf`;
+  execFileSync('node', ['e2e/tools/make-pdf.mjs', file, 'Product Name: Smoke Test Router', 'HSN Code: 8517', 'Selling Price: 30k', 'GST 18%']);
+  await page.goto(BASE + '/app/items/new');
+  await page.locator('.smart-upload input[type=file]').first().setInputFiles(file);
+  await page.waitForSelector('text=Check what we read');
+  await page.click('button:has-text("Fill the form")');
+  if ((await page.inputValue('#item-name')) !== 'Smoke Test Router') throw new Error('name not filled');
+  if (!(await page.locator('input[value="30000"]').count())) throw new Error('selling price not filled');
+});
 await step('POS sale completes', async () => {
   await page.goto(BASE + '/app/pos');
   await page.waitForSelector('text=SanDisk 64GB Pen Drive'); // catalogue loaded, so the scan can match

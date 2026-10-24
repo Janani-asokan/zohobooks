@@ -15,6 +15,7 @@ import { moneyRouter } from './routes/shop/money';
 import { purchasingRouter } from './routes/shop/purchasing';
 import { reportsRouter } from './routes/shop/reports';
 import { salesRouter } from './routes/shop/sales';
+import { filesRouter } from './routes/shop/files';
 
 export function createApp() {
   const app = express();
@@ -37,7 +38,10 @@ export function createApp() {
       crossOriginEmbedderPolicy: false,
     }),
   );
-  app.use(express.json({ limit: '3mb' }));
+  // Uploads (files sent as base64) get a larger body limit than everything else.
+  const smallJson = express.json({ limit: '3mb' });
+  const uploadJson = express.json({ limit: '15mb' });
+  app.use((req, res, next) => (/^\/api\/shop\/(extract|attachments)$/.test(req.path) ? uploadJson : smallJson)(req, res, next));
 
   app.get('/api/health', async (_req, res) => {
     await query('SELECT 1');
@@ -49,7 +53,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter);
+  app.use('/api/shop', requireShopUser(), coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

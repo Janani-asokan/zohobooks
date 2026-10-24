@@ -271,7 +271,7 @@ billingRouter.post(
     const amount = Number(plan.price_per_year) * b.years;
     const order = await createOrder(amount, `lic_${c.shopId.slice(0, 8)}_${Date.now()}`, { shopId: c.shopId, planId: b.planId, years: String(b.years) });
     await query("INSERT INTO subscription_payments (shop_id, plan_id, years, amount, method, status, razorpay_order_id) VALUES ($1,$2,$3,$4,'razorpay','created',$5)", [c.shopId, b.planId, b.years, amount, order.orderId]);
-    return { ...order, name: 'Kanakku', description: `${plan.name} · ${b.years} year${b.years > 1 ? 's' : ''}` };
+    return { ...order, name: 'Corpus360', description: `${plan.name} · ${b.years} year${b.years > 1 ? 's' : ''}` };
   }),
 );
 

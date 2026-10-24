@@ -9,6 +9,13 @@ import { Badge, EmptyState, Field, Modal, PageHeader, SearchInput, StatCard } fr
 import { Hint, Thumb } from '@/components/kit';
 import { PurchaseLinesEditor, emptyPLine, pLineFor, pTotals, toPurchaseInput, type PLine } from '@/components/PurchaseLines';
 import { addDays, fmtDate, money, todayISO, uid } from '@/lib/format';
+import { useQueryClient } from '@tanstack/react-query';
+import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
+import { Attachments, attachFile } from '@/components/Attachments';
+import { useDocLines } from '@/lib/docLines';
+import { matchParty } from '@/lib/match';
+import { createVendorFrom } from '@/lib/autoCreate';
+import type { ExtractResult } from '../../../shared/extract';
 
 const STATUS = ['All', 'Draft', 'Issued', 'Partially Received', 'Received', 'Cancelled'] as const;
 const KEYS = [['purchaseOrders'], ['items'], ['bills'], ['vendors'], ['stockAlerts'], ['movements'], ['notifications'], ['dashboard']];
@@ -29,6 +36,33 @@ export default function PurchaseOrders() {
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const [openId, setOpenId] = useState<string | null>(null);
+  const [poFile, setPoFile] = useState<PendingFile | null>(null);
+  const docLines = useDocLines(true);
+  const qc = useQueryClient();
+  const poRows = (r: ExtractResult): FillRow[] => {
+    const v = matchParty(vendors, r.data.party);
+    const who = r.data.party.companyName || r.data.party.name;
+    return [
+      { key: 'vendor', label: 'Vendor', value: v?.name ?? (who ? `${who} (new vendor)` : null), display: v ? `${v.name} · matched` : who ? `${who}\nNot in your vendors yet: it will be added` : undefined, current: vendors.find((x) => x.id === form?.vendorId)?.name },
+      { key: 'ref', label: 'Their quote number (added to notes)', value: r.data.documentNumber, current: form?.notes },
+      { key: 'lines', label: 'Item lines', value: docLines.count(r) || null, display: `${docLines.count(r)} line${docLines.count(r) === 1 ? '' : 's'} (see below)` },
+    ];
+  };
+  const applyPo = async (keys: Set<string>, r: ExtractResult, file: PendingFile) => {
+    let vendorId = form?.vendorId ?? '';
+    if (keys.has('vendor')) {
+      const v = matchParty(vendors, r.data.party);
+      if (v) vendorId = v.id;
+      else if (r.data.party.companyName || r.data.party.name) { try { vendorId = (await createVendorFrom(r.data.party)).id; qc.invalidateQueries({ queryKey: ['vendors'] }); } catch { /* pick by hand */ } }
+    }
+    const got = keys.has('lines') ? (await docLines.resolve(r)).lines : [];
+    setForm((f) => f && ({
+      ...f, vendorId,
+      notes: keys.has('ref') && r.data.documentNumber ? [f.notes, `Vendor quote ${r.data.documentNumber}`].filter(Boolean).join('\n') : f.notes,
+      lines: got.length ? got.map((x) => ({ ...pLineFor(x.item, x.qty), key: uid('pl_'), rate: String(x.rate ?? x.item.cost ?? 0), taxRate: x.taxRate ?? x.item.taxRate })) : f.lines,
+    }));
+    setPoFile(file);
+  };
 
   const save = useMut((v: { id?: string; body: Record<string, unknown> }) => (v.id ? api.put<PurchaseOrder>(`/shop/purchase-orders/${v.id}`, v.body) : api.post<PurchaseOrder>('/shop/purchase-orders', v.body)), KEYS, {
     success: (po) => (po.status === 'Draft' ? `${po.number} saved as draft` : `${po.number} issued to ${po.vendorName}`), silentError: true,
@@ -66,7 +100,7 @@ export default function PurchaseOrders() {
     if (Object.values(errs).some(Boolean)) return;
     save.mutate(
       { id: form.id, body: { vendorId: form.vendorId, branchId: form.branchId || null, date: form.date, expectedDate: form.expectedDate || null, notes: form.notes, lines: toPurchaseInput(form.lines), issue } },
-      { onSuccess: (po) => { setForm(null); setOpenId(po.id); }, onError: (e) => setServerErr(fieldErrors(e)) },
+      { onSuccess: (po) => { setForm(null); setOpenId(po.id); if (poFile) { void attachFile('purchase_order', po.id, poFile.file.name, poFile.dataUrl).catch(() => undefined); setPoFile(null); } }, onError: (e) => setServerErr(fieldErrors(e)) },
     );
   };
 
@@ -140,6 +174,13 @@ export default function PurchaseOrders() {
         </>}>
         {form && (
           <>
+            {!form.id && (
+              <div style={{ marginBottom: 16 }}>
+                <SmartUpload kind="bill" toRows={poRows} onApply={(k, r, f) => void applyPo(k, r, f)} extra={docLines.extra}
+                  title="Fill from the vendor’s quote" hint="Upload their quotation, proforma or price list. The vendor and items are filled in; the file is kept with the order." />
+                {poFile && <div className="small muted" style={{ marginTop: 6 }}>{poFile.file.name} will be attached to this order.</div>}
+              </div>
+            )}
             <div className="form-grid cols-3">
               <Field label="Vendor" required error={err('vendorId')}>
                 <select className={`select ${err('vendorId') ? 'invalid' : ''}`} value={form.vendorId} onChange={(e) => setForm({ ...form, vendorId: e.target.value })}>
@@ -192,6 +233,7 @@ function PODrawer({ po, canWrite, onClose, onEdit }: { po: PurchaseOrder; canWri
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
         <div className="drawer-body">
+          <div style={{ marginBottom: 16 }}><Attachments entity="purchase_order" entityId={po.id} canWrite={canWrite} title="Files" /></div>
           {canWrite && (
             <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
               {po.status === 'Draft' && <button className="btn btn-primary btn-sm" disabled={issue.isPending} onClick={() => issue.mutate(undefined)}><Send size={14} /> Issue order</button>}

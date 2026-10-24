@@ -2,13 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ShoppingBag, CheckCircle2, Loader2, Package, Receipt, AlertTriangle, X } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
-import { useBankAccounts, useBills, useItems, useMut, useVendors } from '@/api/hooks';
+import { useBankAccounts, useBills, useItems, useMut, useTaxSlabs, useVendors } from '@/api/hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
+import { Attachments, attachFile } from '@/components/Attachments';
+import { matchItem, matchParty } from '@/lib/match';
+import { createItemFrom, createVendorFrom } from '@/lib/autoCreate';
+import type { ExtractResult } from '../../../shared/extract';
 import type { Bill } from '@/api/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useShopUser } from '@/context/AuthContext';
 import { Badge, EmptyState, Field, Modal, PageHeader, SearchInput, StatCard, Toggle } from '@/components/ui';
 import { Hint } from '@/components/kit';
-import { PurchaseLinesEditor, emptyPLine, pTotals, toPurchaseInput, type PLine } from '@/components/PurchaseLines';
+import { PurchaseLinesEditor, emptyPLine, pLineFor, pTotals, toPurchaseInput, type PLine } from '@/components/PurchaseLines';
+import { uid } from '@/lib/format';
 import { addDays, fmtDate, money, todayISO } from '@/lib/format';
 import { daysUntil } from '@/lib/fy';
 
@@ -25,6 +32,10 @@ export default function Purchases() {
   const { data: bills = [], isLoading } = useBills();
   const accounts = useBankAccounts().data ?? [];
   const items = useItems().data ?? [];
+  const slabs = useTaxSlabs().data ?? [];
+  const qc = useQueryClient();
+  const [billFile, setBillFile] = useState<PendingFile | null>(null);
+  const [createMissing, setCreateMissing] = useState(true);
   const [filter, setFilter] = useState<'All' | Bill['status']>('All');
   const [q, setQ] = useState('');
   const [billOpen, setBillOpen] = useState(false);
@@ -49,7 +60,72 @@ export default function Purchases() {
     pay.mutate({ id: payBill!.id, body: { accountId: payAccount, date: payForm.date, amount, tdsAmount: tds, mode: payForm.mode, reference: payForm.reference } }, { onSuccess: () => setPayBill(null), onError: (e) => setPayErr(e.message) });
   };
 
-  const start = () => { setBill(blankBill()); setMode('items'); setTouched(false); setServerErr({}); setBillOpen(true); };
+  const start = () => { setBill(blankBill()); setMode('items'); setTouched(false); setServerErr({}); setBillFile(null); setBillOpen(true); };
+
+  /* ---------- fill a bill from the vendor's PDF or a photo of it ---------- */
+  const billRows = (r: ExtractResult): FillRow[] => {
+    const d = r.data;
+    const v = matchParty(vendors, d.party);
+    const vname = d.party.companyName || d.party.name;
+    return [
+      { key: 'vendor', label: 'Vendor', value: v?.name ?? (vname ? `${vname} (new vendor)` : null), display: v ? `${v.name} · matched${v.gstin ? ` by ${v.gstin === d.party.gstin ? 'GSTIN' : 'name'}` : ''}` : vname ? `${vname}\nNot in your vendors yet: it will be added${d.party.gstin ? ` with GSTIN ${d.party.gstin}` : ''}` : undefined, current: vendors.find((x) => x.id === bill.vendorId)?.name },
+      { key: 'number', label: 'Vendor’s bill number', value: d.documentNumber, current: bill.vendorBillNo },
+      { key: 'date', label: 'Bill date', value: d.date, display: d.date ? fmtDate(d.date) : undefined, current: bill.date },
+      { key: 'due', label: 'Due date', value: d.dueDate, display: d.dueDate ? fmtDate(d.dueDate) : undefined, current: bill.dueDate },
+      { key: 'amounts', label: d.lines.length ? 'Total (from the bill)' : 'Taxable value + GST', value: d.lines.length ? d.total : d.subtotal ?? d.total, display: d.lines.length ? (d.total != null ? money(d.total) : undefined) : `${money(d.subtotal ?? d.total ?? 0)} + GST ${money(d.taxTotal ?? 0)}` },
+    ];
+  };
+  const billLines = (r: ExtractResult) => r.data.lines.map((l) => ({ l, item: matchItem(items, l) }));
+  const billExtra = (r: ExtractResult) => {
+    const rows = billLines(r);
+    if (!rows.length) return null;
+    const missing = rows.filter((x) => !x.item).length;
+    return (
+      <div className="stack" style={{ gap: 8 }}>
+        <div className="strong">Items on the bill</div>
+        <table className="table">
+          <thead><tr><th>On the bill</th><th className="num">Qty</th><th className="num">Rate</th><th>In your catalogue</th></tr></thead>
+          <tbody>{rows.map(({ l, item }, i) => <tr key={i}><td>{l.name}{l.hsn && <div className="muted">HSN {l.hsn}</div>}</td><td className="num">{l.qty ?? 1}</td><td className="num">{l.rate != null ? money(l.rate) : '—'}</td><td>{item ? item.name : <span className="muted">Not found</span>}</td></tr>)}</tbody>
+        </table>
+        {missing > 0 && <label className="row" style={{ gap: 8 }}><input type="checkbox" className="checkbox" checked={createMissing} onChange={(e) => setCreateMissing(e.target.checked)} /> Add the {missing} new item{missing > 1 ? 's' : ''} to the catalogue (cost from the bill, selling price +20% to start)</label>}
+      </div>
+    );
+  };
+  const applyBill = async (keys: Set<string>, r: ExtractResult, file: PendingFile) => {
+    const d = r.data;
+    let vendorId = bill.vendorId;
+    if (keys.has('vendor')) {
+      const v = matchParty(vendors, d.party);
+      if (v) vendorId = v.id;
+      else if (d.party.companyName || d.party.name) {
+        try { vendorId = (await createVendorFrom(d.party)).id; qc.invalidateQueries({ queryKey: ['vendors'] }); } catch (e) { setServerErr({ vendorId: (e as Error).message }); }
+      }
+    }
+    const rows = billLines(r);
+    const lines: PLine[] = [];
+    let created = 0;
+    for (const { l, item } of rows) {
+      let it = item;
+      if (!it && createMissing) { try { it = await createItemFrom(l, slabs, true); created++; } catch { /* left for the user */ } }
+      if (!it) continue;
+      const rate = l.rate ?? (l.amount && l.qty ? Math.round((l.amount / l.qty) * 100) / 100 : it.cost ?? 0);
+      lines.push({ ...pLineFor(it, l.qty ?? 1), key: uid('pl_'), rate: String(rate), taxRate: l.taxRate ?? it.taxRate });
+    }
+    if (created) qc.invalidateQueries({ queryKey: ['items'] });
+    const subtotal = d.subtotal ?? (d.total != null && d.taxTotal != null ? d.total - d.taxTotal : d.total);
+    setMode(lines.length ? 'items' : 'amount');
+    setBill((b) => ({
+      ...b, vendorId,
+      vendorBillNo: keys.has('number') && d.documentNumber ? d.documentNumber.slice(0, 60) : b.vendorBillNo,
+      date: keys.has('date') && d.date ? d.date : b.date,
+      dueDate: keys.has('due') && d.dueDate ? d.dueDate : b.dueDate,
+      lines: lines.length ? lines : b.lines,
+      taxableAmount: !lines.length && keys.has('amounts') && subtotal != null ? String(subtotal) : b.taxableAmount,
+      taxAmount: !lines.length && keys.has('amounts') && d.taxTotal != null ? String(d.taxTotal) : b.taxAmount,
+      description: b.description || d.lines.slice(0, 3).map((x) => x.name).join(', ').slice(0, 200),
+    }));
+    setBillFile(file);
+  };
   useEffect(() => { if (params.get('new') && canWrite) { start(); setParams({}, { replace: true }); } }, [params]);
 
   const statusOf = (b: Bill) => b.status;
@@ -75,7 +151,13 @@ export default function Purchases() {
     if (Object.values(errs).some(Boolean)) return;
     const base = { vendorId: bill.vendorId, vendorBillNo: bill.vendorBillNo, date: bill.date, dueDate: bill.dueDate, description: bill.description };
     const body = mode === 'items' ? { ...base, lines: toPurchaseInput(bill.lines), addStock: bill.addStock } : { ...base, taxableAmount: Number(bill.taxableAmount), taxAmount: Number(bill.taxAmount || 0) };
-    createBill.mutate(body, { onSuccess: () => setBillOpen(false), onError: (e) => setServerErr(fieldErrors(e)) });
+    createBill.mutate(body, {
+      onSuccess: (b) => {
+        setBillOpen(false);
+        if (billFile) void attachFile('bill', b.id, billFile.file.name, billFile.dataUrl).catch(() => undefined);
+      },
+      onError: (e) => setServerErr(fieldErrors(e)),
+    });
   };
 
   return (
@@ -127,6 +209,11 @@ export default function Purchases() {
 
       <Modal open={billOpen} onClose={() => setBillOpen(false)} size={mode === 'items' ? 'xl' : undefined} title="New bill" subtitle="Enter the bill exactly as your vendor gave it."
         footer={<><button className="btn btn-secondary" onClick={() => setBillOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={createBill.isPending} onClick={save}>{createBill.isPending && <Loader2 size={15} className="spin" />} Save bill</button></>}>
+        <div style={{ marginBottom: 16 }}>
+          <SmartUpload kind="bill" toRows={billRows} onApply={(k, r, f) => void applyBill(k, r, f)} extra={billExtra}
+            title="Fill from the vendor’s bill" hint="Upload the PDF or a photo of the bill. Vendor, bill number, dates, items and amounts are filled in; the file is kept with the bill." />
+          {billFile && <div className="small muted" style={{ marginTop: 6 }}>{billFile.file.name} will be attached to this bill.</div>}
+        </div>
         <div className="type-cards" style={{ marginBottom: 18 }}>
           <button type="button" className={`type-card ${mode === 'items' ? 'active' : ''}`} onClick={() => setMode('items')}><span className="stat-icon tone-blue"><Package size={18} /></span><div><strong>Itemised</strong><span>Stock you bought — adds to inventory</span></div></button>
           <button type="button" className={`type-card ${mode === 'amount' ? 'active' : ''}`} onClick={() => setMode('amount')}><span className="stat-icon tone-violet"><Receipt size={18} /></span><div><strong>Single amount</strong><span>No stock items on the bill</span></div></button>
@@ -193,6 +280,7 @@ export default function Purchases() {
                 <div className="grand"><span>Total</span><strong>{money(view.amount)}</strong></div>
               </div>
               {view.stockAdded && <p className="small muted mt-16"><Package size={13} style={{ verticalAlign: -2 }} /> {view.purchaseOrderId ? 'Goods were received on the purchase order.' : 'These goods were added to stock when the bill was saved.'}</p>}
+              <div className="mt-16"><Attachments entity="bill" entityId={view.id} canWrite={canWrite} /></div>
               {view.balance > 0 && canWrite && <button className="btn btn-primary mt-16" onClick={() => { startPay(view); setView(null); }}><CheckCircle2 size={15} /> Record payment</button>}
             </div>
           </aside>

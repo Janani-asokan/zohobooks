@@ -68,7 +68,7 @@ export default function PrintInvoice() {
         if (e.status === 401 && !embedded) return navigate(`/login?next=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
         setError(e.message);
         window.__PRINT_READY = e.message;
-        if (embedded) window.parent?.postMessage({ type: 'kanakku:print-error', message: e.message }, location.origin);
+        if (embedded) window.parent?.postMessage({ type: 'corpus360:print-error', message: e.message }, location.origin);
       });
     return () => { alive = false; };
   }, [id, rt, share]);
@@ -98,7 +98,7 @@ export default function PrintInvoice() {
     Promise.all([document.fonts?.ready, ...imgs.map((i) => (i.complete ? null : i.decode().catch(() => null)))]).then(() => {
       if (!alive) return;
       window.__PRINT_READY = true;
-      if (embedded && !rt) window.parent?.postMessage({ type: 'kanakku:print-ready' }, location.origin);
+      if (embedded && !rt) window.parent?.postMessage({ type: 'corpus360:print-ready' }, location.origin);
       if (params.get('autoprint') === '1') setTimeout(() => window.print(), 50);
     });
     return () => { alive = false; };

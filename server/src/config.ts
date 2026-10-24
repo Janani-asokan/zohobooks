@@ -27,7 +27,7 @@ export const config = {
   },
   jobs: { enabled: bool(env.JOBS_ENABLED, env.NODE_ENV !== 'test') },
   smtp: env.SMTP_HOST
-    ? { host: env.SMTP_HOST, port: Number(env.SMTP_PORT ?? 587), user: env.SMTP_USER ?? '', pass: env.SMTP_PASS ?? '', from: env.SMTP_FROM ?? 'Kanakku <no-reply@kanakku.app>' }
+    ? { host: env.SMTP_HOST, port: Number(env.SMTP_PORT ?? 587), user: env.SMTP_USER ?? '', pass: env.SMTP_PASS ?? '', from: env.SMTP_FROM ?? 'Corpus360 <no-reply@corpus360.app>' }
     : null,
   razorpay: env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET } : null,
   /** E-invoice (IRP) provider credentials — when absent, the app generates the JSON for manual upload only. */
@@ -38,6 +38,8 @@ export const config = {
    * On by default whenever demo data is seeded; set DEMO_SIMPLE_PASSWORDS=0 to turn it off.
    */
   demoSimplePasswords: bool(env.DEMO_SIMPLE_PASSWORDS, env.SEED_DEMO === '1'),
+  /** Reads uploaded PDFs and photos into form fields. Without a key, an offline text reader and OCR are used. */
+  ai: { apiKey: env.ANTHROPIC_API_KEY ?? '', model: env.AI_MODEL ?? 'claude-opus-5-5' },
   pdf: {
     /** Chromium used to print invoices to PDF. Empty = Playwright's own download (development). */
     chromiumPath: env.CHROMIUM_PATH ?? '',

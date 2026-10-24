@@ -19,7 +19,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
     "@tanstack/react-query": "^5.62.11",
+    "@tesseract.js-data/eng": "^1.0.0",
     "bcryptjs": "^2.4.3",
     "cookie": "^1.0.2",
     "express": "^4.21.2",
@@ -28,12 +30,14 @@
     "jsbarcode": "^3.11.6",
     "lucide-react": "^0.511.0",
     "nodemailer": "^6.9.16",
+    "pdfjs-dist": "^4.10.38",
     "pg": "^8.13.1",
     "playwright-core": "1.56.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.0",
+    "tesseract.js": "^5.1.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {

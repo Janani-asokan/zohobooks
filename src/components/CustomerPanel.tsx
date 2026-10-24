@@ -8,6 +8,7 @@ import { TIER_LABEL, type Customer } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { EmptyState } from '@/components/ui';
 import { PartyStatement } from '@/components/PartyStatement';
+import { Attachments } from '@/components/Attachments';
 import { money } from '@/lib/format';
 
 interface Activity { id: string; at: string; kind: string; body: string; by: string; refId: string | null; manual: boolean }
@@ -63,6 +64,7 @@ export function CustomerPanel({ customer: c, onClose, onEdit }: { customer: Cust
             </dl>
             <div className="small muted">Price level {c.tier} · {TIER_LABEL[c.tier]}</div>
             <Link className="small" to={`/app/sales/invoices?q=${encodeURIComponent(c.companyName || c.name)}`}>See all invoices →</Link>
+            <Attachments entity="customer" entityId={c.id} canWrite={me.can('customers.write')} title="Documents" />
           </div>
         )}
         {tab === 'statement' && <PartyStatement url={`/shop/customers/${c.id}/statement`} name={c.companyName || c.name} debitLabel="Invoiced" creditLabel="Received" linkFor={(e) => `/app/sales/invoices/${e.refId}`} />}

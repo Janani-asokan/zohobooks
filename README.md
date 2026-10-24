@@ -1,6 +1,8 @@
-# Ledgerly Books
+# Corpus360
 
-A multi-tenant GST billing, inventory and accounting SaaS for Indian businesses. Its menus and workflow follow **Zoho Books**; its look follows **Billbook** (clean white workspaces, soft shadows, Plus Jakarta Sans), with a full dark mode.
+*Billing and stock, without the paperwork.*
+
+A multi-tenant GST billing, inventory and accounting SaaS for Indian businesses. It covers what Zoho Books and Zoho Inventory do, with a calm, keyboard-friendly interface (Inter, ink blue, light and dark themes). Upload a PDF or photo of a bill, price list, GST certificate or receipt and the form fills itself.
 
 | Layer | Stack |
 |---|---|
@@ -58,6 +60,8 @@ In production the API serves the built web app too, so you deploy one process. M
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Sends password-reset, reminder and license emails. Without these, emails are only logged |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | Lets shop owners renew their license online |
 | `BACKUPS_ENABLED=1`, `BACKUP_DIR`, `BACKUP_KEEP` | Daily `pg_dump` backups (on by default in production) |
+| `ANTHROPIC_API_KEY` | Optional. Turns on the smart reader for uploads (scanned PDFs, handwriting, messy layouts). Without it, uploads use the built-in PDF text reader and OCR |
+| `AI_MODEL` | Model for the smart reader (default `claude-opus-5-5`) |
 | `CHROMIUM_PATH` | Chromium used to print invoices to PDF (the Docker image sets `/usr/bin/chromium`) |
 | `RENDER_ORIGIN` | Where that browser loads the print page from. Defaults to this server (`http://127.0.0.1:$PORT`) in production and Vite in development |
 | `EINVOICE_API_URL`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | Reserved for direct GSP/IRP filing and the WhatsApp Business API (see below) |
@@ -76,6 +80,22 @@ In production the API serves the built web app too, so you deploy one process. M
 - **Audit log** of every change, per shop and for the platform. **Backups** with `pg_dump`. They can't be downloaded from the console because they hold every shop's data.
 
 ## Features
+
+**Upload a PDF or photo, get a filled form.** Every create form has a *Fill from a PDF or photo* box (drop, pick, paste a screenshot, or take a photo on a phone). You see what was read, untick anything wrong, then apply.
+
+| Form | What it reads | What it fills |
+|---|---|---|
+| Item | Product sheet, supplier invoice, photo of the box or label | Name, brand, category, SKU, barcode, HSN, unit, MRP, selling price (e.g. "30k" → ₹30,000 on all price levels), cost, GST rate, description; a photo also becomes the product picture |
+| Items → *From price list* | Supplier price list or catalogue | Many items at once; products already in the catalogue are skipped |
+| Bill / purchase order | Vendor's tax invoice, quotation or proforma | Vendor (matched by GSTIN or name, or added), bill number, dates, line items (matched to the catalogue, or added), taxable value and GST |
+| Expense | Electricity, rent, fuel, internet or any receipt | Category (guessed from the merchant), date, amount, GST, vendor, reference |
+| Customer / vendor | GST certificate, visiting card, letterhead | Business name, GSTIN, state, phone, email, address |
+| Invoice / quote / sales order | Customer's purchase order, enquiry, photo of a handwritten list | Customer, items and quantities, their reference |
+
+The uploaded file is kept on the record it filled. Every record also has an **Attachments** panel (PDF, PNG, JPG, WebP; 10 MB each, 500 MB per business) for delivery challans, warranty cards, signed copies and so on. Files are type-checked by content, served with `nosniff` and a sandboxing CSP, and visible only to roles that can see the record.
+
+Without `ANTHROPIC_API_KEY`, reading runs entirely on the server: PDF text extraction (pdf.js) and English OCR (Tesseract, model bundled, no download). With the key, the smart reader (Claude) also handles scanned PDFs, handwriting and unusual layouts, and falls back to the built-in reader if it is unavailable.
+
 
 **Super Admin:** dashboard (active shops, new this month, subscription revenue, expiring licenses), creating shops with a temporary password, activate/deactivate (ends sessions immediately), license renewals with payment records, owner password-reset links, **plans & limits** (users, branches, invoices per month, enforced by the server), **configuration** (customer-ID prefix, FY auto-reset, **Tax Lab**), audit log, subscription payments, backups.
 

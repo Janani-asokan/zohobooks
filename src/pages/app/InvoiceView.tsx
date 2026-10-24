@@ -11,6 +11,7 @@ import { useToast } from '@/context/ToastContext';
 import { ConfirmModal, EmptyState, Field, Modal, Segmented } from '@/components/ui';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TaxInvoice } from '@/components/TaxInvoice';
+import { Attachments } from '@/components/Attachments';
 import { useClickOutside } from '@/components/useClickOutside';
 import { fmtDate, money, todayISO } from '@/lib/format';
 
@@ -245,6 +246,7 @@ export default function InvoiceView() {
               </div>
             </div>
           )}
+          <div className="card"><div className="card-body" style={{ padding: 14 }}><Attachments entity="invoice" entityId={inv.id} canWrite={canSell} title="Files" /></div></div>
           <div className="card">
             <div className="card-header"><h3>Activity</h3></div>
             <div className="card-body" style={{ padding: 14 }}>

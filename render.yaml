@@ -28,5 +28,8 @@ services:
         value: "1"
       - key: DEMO_PASSWORD
         generateValue: true
+      # Optional: set in the Render dashboard to turn on the smart reader for uploaded PDFs and photos.
+      - key: ANTHROPIC_API_KEY
+        sync: false
       - key: BACKUPS_ENABLED
         value: "0"

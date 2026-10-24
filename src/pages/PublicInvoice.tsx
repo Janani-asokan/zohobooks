@@ -47,7 +47,7 @@ export default function PublicInvoice() {
       <div className="paper-stage" style={{ maxWidth: 'calc(210mm + 50px)', margin: '0 auto', padding: 24 }}>
         <TaxInvoice inv={inv} org={org} branch={branch} s={settings.invoice} />
       </div>
-      <p className="small muted" style={{ textAlign: 'center', marginTop: 16 }}>Sent with Kanakku</p>
+      <p className="small muted" style={{ textAlign: 'center', marginTop: 16 }}>Sent with Corpus360</p>
     </div>
   );
 }

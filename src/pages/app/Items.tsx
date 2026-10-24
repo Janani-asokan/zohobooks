@@ -8,6 +8,8 @@ import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Badge, ConfirmModal, EmptyState, Field, PageHeader, Pagination, SearchInput, Segmented, usePagination } from '@/components/ui';
 import { CsvImport } from '@/components/CsvImport';
+import { PriceListImport } from '@/components/PriceListImport';
+import { FileUp } from 'lucide-react';
 import { SavedViewsMenu, useSavedViews } from '@/components/SavedViews';
 import { Hint, Thumb } from '@/components/kit';
 import { fmtDate, money, todayISO } from '@/lib/format';
@@ -43,6 +45,7 @@ export default function Items() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkTax, setBulkTax] = useState('');
   const [importOpen, setImportOpen] = useState(false);
+  const [pdfImportOpen, setPdfImportOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const setStockItem = (it: Item | null) => setOpenId(it?.id ?? null);
   const [view, setView] = useState<'list' | 'grid'>(() => { try { return (localStorage.getItem('ledgerly.items.view') as 'list' | 'grid') || 'list'; } catch { return 'list'; } });
@@ -149,6 +152,7 @@ export default function Items() {
               <input className="input" style={{ height: 38 }} placeholder="Quick scan: look up or add by barcode" value={scan} onChange={(ev) => setScan(ev.target.value.trim())} onKeyDown={(ev) => ev.key === 'Enter' && scan && handleScan(scan)} aria-label="Quick barcode scan" />
             </div>
             <button className="btn btn-secondary" onClick={() => download('/shop/items/export.csv', 'items.csv').catch((err) => toast('error', err.message))}><Download size={15} /> Export</button>
+            {canWrite && <button className="btn btn-secondary" onClick={() => setPdfImportOpen(true)} title="Supplier price list or catalogue as PDF or photo"><FileUp size={15} /> From price list</button>}
             {canWrite && <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={15} /> Import</button>}
             {canWrite && <button className="btn btn-primary" onClick={() => openNew()} title="Alt I"><Plus size={16} /> New Item</button>}
           </>
@@ -322,6 +326,7 @@ export default function Items() {
 
       {openId && items.find((i) => i.id === openId) && <StockDrawer item={items.find((i) => i.id === openId)!} onClose={() => setOpenId(null)} canWrite={canWrite} showCost={me.can('items.cost')} onEdit={(it) => openEdit(it)} />}
 
+      <PriceListImport open={pdfImportOpen} onClose={() => setPdfImportOpen(false)} />
       <CsvImport open={importOpen} onClose={() => setImportOpen(false)} endpoint="/shop/items/import" title="Import items" template={ITEM_TEMPLATE} invalidate={['items', 'stockAlerts']} />
 
       <ConfirmModal open={!!del} onClose={() => setDel(null)} title="Archive item?" confirmLabel="Archive"

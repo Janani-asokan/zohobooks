@@ -1,19 +1,19 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ShieldCheck, Check } from 'lucide-react';
-import { KanakkuLogo } from '@/components/Logo';
+import { BrandLogo } from '@/components/Logo';
 
 /** Split-screen frame shared by login, password reset and forced password change. */
 export function AuthShell({ children }: { children: ReactNode }) {
   return (
     <div className="login">
       <div className="login-left">
-        <Link to="/" aria-label="Kanakku home" style={{ color: 'var(--brand-600)', alignSelf: 'flex-start' }}>
-          <KanakkuLogo height={18} />
+        <Link to="/" aria-label="Corpus360 home" style={{ color: 'var(--brand-600)', alignSelf: 'flex-start' }}>
+          <BrandLogo height={18} />
         </Link>
         <div className="login-form-wrap">{children}</div>
         <div className="login-foot">
-          <span>© {new Date().getFullYear()} Kanakku</span>
+          <span>© {new Date().getFullYear()} Corpus360</span>
           <span className="row" style={{ gap: 6 }}><ShieldCheck size={14} /> Encrypted sessions. Each business sees only its own data.</span>
         </div>
       </div>

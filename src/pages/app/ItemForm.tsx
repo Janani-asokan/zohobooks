@@ -10,6 +10,9 @@ import { Field, Toggle } from '@/components/ui';
 import { BarcodeInput } from '@/components/BarcodeInput';
 import { Thumb, downscaleImage } from '@/components/kit';
 import { money } from '@/lib/format';
+import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
+import { Attachments, attachFile } from '@/components/Attachments';
+import type { ExtractResult } from '../../../shared/extract';
 
 type ItemType = Item['type'];
 interface Draft {
@@ -79,6 +82,8 @@ export default function ItemForm() {
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const [marginPct, setMarginPct] = useState('25');
   const [dragOver, setDragOver] = useState(false);
+  /** A PDF read by "Fill from a PDF", kept on the item once it is saved. */
+  const [keepFile, setKeepFile] = useState<PendingFile | null>(null);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
   // Initialise once reference data has loaded.
@@ -142,6 +147,57 @@ export default function ItemForm() {
     }
   };
 
+  /* ---------- fill from an uploaded PDF or photo ---------- */
+  const productOf = (r: ExtractResult) => r.data.lines[0];
+  const fillRows = (r: ExtractResult): FillRow[] => {
+    const l = productOf(r);
+    const price = l?.sellingPrice ?? l?.rate ?? null;
+    const slabFor = (rate: number | null | undefined) => (rate == null ? undefined : activeSlabs.find((x) => x.rate === rate));
+    const rows: FillRow[] = [
+      { key: 'name', label: 'Name', value: l?.name, current: draft.name },
+      { key: 'brand', label: 'Brand', value: l?.brand, current: draft.brand },
+      { key: 'category', label: 'Category', value: l?.category, current: draft.category },
+      { key: 'sku', label: 'SKU', value: l?.sku, current: draft.sku },
+      { key: 'barcode', label: 'Barcode', value: l?.barcode, current: draft.barcode },
+      { key: 'hsn', label: l?.hsn?.startsWith('99') ? 'SAC' : 'HSN', value: l?.hsn?.replace(/\D/g, '').slice(0, 8), current: draft.hsn },
+      { key: 'unit', label: 'Unit', value: l?.unit, current: draft.unit },
+      { key: 'mrp', label: 'MRP', value: l?.mrp, display: l?.mrp != null ? money(l.mrp) : undefined, current: draft.mrp },
+      { key: 'price', label: 'Selling price (all price levels)', value: price, display: price != null ? money(price) : undefined, current: draft.sp1 },
+      { key: 'cost', label: 'Cost price', value: l?.costPrice, display: l?.costPrice != null ? money(l.costPrice) : undefined, current: draft.cost },
+      { key: 'tax', label: 'GST rate', value: slabFor(l?.taxRate)?.name ?? (l?.taxRate != null ? `${l.taxRate}% (no matching slab)` : null), current: slab?.name },
+      { key: 'description', label: 'Description', value: l?.description, current: draft.description },
+    ];
+    return rows;
+  };
+  const applyFill = (keys: Set<string>, r: ExtractResult, file: PendingFile) => {
+    const l = productOf(r);
+    const price = l?.sellingPrice ?? l?.rate ?? null;
+    const slabMatch = l?.taxRate != null ? activeSlabs.find((x) => x.rate === l.taxRate) : undefined;
+    setDraft((d) => {
+      const n = { ...d };
+      if (l) {
+        if (keys.has('name') && l.name) n.name = l.name;
+        if (keys.has('brand') && l.brand) n.brand = l.brand;
+        if (keys.has('category') && l.category) n.category = l.category;
+        if (keys.has('sku') && l.sku) n.sku = l.sku;
+        if (keys.has('barcode') && l.barcode) n.barcode = l.barcode;
+        if (keys.has('hsn') && l.hsn) { n.hsn = l.hsn.replace(/\D/g, '').slice(0, 8); if (n.hsn.startsWith('99')) { n.type = 'Services'; if (GOODS_UNITS.includes(n.unit)) n.unit = 'job'; } }
+        if (keys.has('unit') && l.unit) n.unit = l.unit.toLowerCase();
+        if (keys.has('mrp') && l.mrp != null) n.mrp = String(l.mrp);
+        if (keys.has('price') && price != null) { n.sp1 = String(price); n.sp2 = String(price); n.sp3 = String(price); }
+        if (keys.has('cost') && l.costPrice != null) n.cost = String(l.costPrice);
+        if (keys.has('tax') && slabMatch) n.taxSlabId = slabMatch.id;
+        if (keys.has('description') && l.description) n.description = l.description;
+      }
+      return n;
+    });
+    if (keys.has('photo') || (file.file.type.startsWith('image/') && !draft.image)) void pickImage(file.file);
+    if (file.file.type === 'application/pdf') {
+      if (editing) void attachFile('item', id!, file.file.name, file.dataUrl).then(() => toast('success', 'PDF attached to the item', file.file.name)).catch(() => undefined);
+      else setKeepFile(file);
+    }
+  };
+
   const fillFromMargin = () => {
     const m = Number(marginPct);
     if (!(cost > 0) || !(m >= 0 && m < 95)) return toast('info', 'Enter the cost price first', 'Prices are calculated from cost + margin.');
@@ -176,6 +232,7 @@ export default function ItemForm() {
         {
           onSuccess: (it) => {
             toast('success', 'Item created', `${it.name} is ready to sell.`);
+            if (keepFile) { void attachFile('item', it.id, keepFile.file.name, keepFile.dataUrl).catch(() => toast('error', 'The PDF couldn’t be attached', 'Open the item and attach it again.')); setKeepFile(null); }
             if (next === 'another') {
               setDraft(blank(it.type, it.taxSlabId, draft.branchId));
               setTouched(false);
@@ -219,6 +276,12 @@ export default function ItemForm() {
 
       <div className="form-layout">
         <div className="card">
+          <div style={{ padding: '16px 20px 0' }}>
+            <SmartUpload kind="item" toRows={fillRows} onApply={applyFill}
+              title="Fill from a PDF or photo"
+              hint="Product sheet, price list, supplier invoice or a photo of the box or label. A photo also becomes the product picture." />
+            {keepFile && <div className="small muted" style={{ marginTop: 6 }}>{keepFile.file.name} will be attached to the item when you save. <button className="btn btn-ghost btn-sm" onClick={() => setKeepFile(null)}>Don’t attach</button></div>}
+          </div>
           <Section n={1} title="What are you adding?" sub="Goods have stock. Services (repairs, installation, AMC) don’t.">
             <div className="type-cards">
               {([['Goods', Package, 'Products you buy & sell', 'Tracks stock, batches & barcodes'], ['Services', Wrench, 'Work you charge for', 'No stock — billed per job, hour…']] as const).map(([t, Icon, title, sub]) => (
@@ -400,6 +463,8 @@ export default function ItemForm() {
               ))}
             </ul>
           </div>
+
+          {editing && <div className="card" style={{ marginTop: 16, padding: 18 }}><Attachments entity="item" entityId={id!} title="Files" /></div>}
 
           <div className="card tip-card" style={{ marginTop: 16 }}>
             <div className="row" style={{ gap: 8, marginBottom: 6 }}>{draft.type === 'Goods' ? <Boxes size={16} /> : <Tag size={16} />}<strong>Good to know</strong></div>

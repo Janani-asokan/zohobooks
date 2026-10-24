@@ -12,6 +12,9 @@ import { EMAIL_RE, initials, money } from '@/lib/format';
 import { GSTIN_RE, INDIAN_STATES, gstinMatchesState } from '../../../shared/gst';
 import { Hint } from '@/components/kit';
 import { CustomerPanel } from '@/components/CustomerPanel';
+import { SmartUpload, type PendingFile } from '@/components/SmartUpload';
+import { attachFile } from '@/components/Attachments';
+import { applyParty, partyRows } from '@/lib/partyFill';
 
 type Draft = Pick<Customer, 'type' | 'name' | 'companyName' | 'gstin' | 'email' | 'phone' | 'state' | 'address' | 'tier' | 'creditLimit'>;
 const blank = (state: string): Draft => ({ type: 'Individual', name: '', companyName: '', gstin: '', email: '', phone: '', state, address: '', tier: 'SP1', creditLimit: 0 });
@@ -34,6 +37,7 @@ export default function Customers() {
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const [del, setDel] = useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [custFile, setCustFile] = useState<PendingFile | null>(null);
   const nextId = useNextCustomerId(modal?.mode === 'new');
   const selectedId = params.get('c');
   const selected = customers.find((c) => c.id === selectedId) ?? null;
@@ -50,6 +54,7 @@ export default function Customers() {
     setDraft(blank(orgState));
     setTouched(false);
     setServerErr({});
+    setCustFile(null);
     setModal({ mode: 'new' });
   };
   useEffect(() => {
@@ -87,7 +92,7 @@ export default function Customers() {
     if (modal?.mode === 'edit' && modal.c) {
       update.mutate({ id: modal.c.id, body: clean }, { onSuccess: (c) => { toast('success', 'Customer updated', c.companyName || c.name); setModal(null); }, onError });
     } else {
-      create.mutate(clean, { onSuccess: (c) => { toast('success', 'Customer added', `${c.companyName || c.name} · ${c.customId}`); setModal(null); }, onError });
+      create.mutate(clean, { onSuccess: (c) => { toast('success', 'Customer added', `${c.companyName || c.name} · ${c.customId}`); setModal(null); if (custFile) void attachFile('customer', c.id, custFile.file.name, custFile.dataUrl).catch(() => undefined); }, onError });
     }
   };
 
@@ -195,6 +200,15 @@ export default function Customers() {
           </>
         }
       >
+        {modal?.mode === 'new' && (
+          <div style={{ marginBottom: 16 }}>
+            <SmartUpload kind="customer" title="Fill from a GST certificate or visiting card"
+              hint="Upload a GST certificate, visiting card, letterhead or their purchase order. Name, GSTIN, phone, email, state and address are filled in."
+              toRows={(r) => partyRows(r.data.party, { ...draft }, true)}
+              onApply={(keys, r, file) => { setDraft((d) => { const n = applyParty({ ...d }, keys, r.data.party, true); if (n.gstin) n.type = 'Business'; if (n.type === 'Business' && !n.companyName) n.companyName = n.name; return n; }); setCustFile(file); }} />
+            {custFile && <div className="small muted" style={{ marginTop: 6 }}>{custFile.file.name} will be kept on the customer.</div>}
+          </div>
+        )}
         <div className="form-grid">
           <Field label="Customer ID" hint={modal?.mode === 'edit' ? 'IDs are permanent' : `Auto-assigned using the “${me.platform.customerIdPrefix}” prefix`}>
             <div className="input-group">
