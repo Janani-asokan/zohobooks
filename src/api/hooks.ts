@@ -6,7 +6,7 @@ import type {
   ItemFacets, ItemSerial, PaymentRow, StockAdjustment, StockTransfer, Plan, PurchaseOrder, Expense, PlatformConfig, Recurring, SalesOrder, Shop, StaffUser, TaxSlab, Vendor,
 } from './types';
 import type { PrintSettings } from '../../shared/printSettings';
-import type { Journal, LedgerAccount, OrgSummary, RoleSetting } from './types';
+import type { DeliveryChallan, Journal, LedgerAccount, OrgSummary, RoleSetting } from './types';
 
 const S = '/shop';
 const q = <T,>(key: QueryKey, url: string, enabled = true) => ({ queryKey: key, queryFn: () => api.get<T>(url), enabled });
@@ -31,6 +31,7 @@ export const useVendors = (enabled = true) => useQuery(q<Vendor[]>(['vendors'], 
 export const useBills = (enabled = true) => useQuery(q<Bill[]>(['bills'], `${S}/bills`, enabled));
 export const useBillPayments = () => useQuery(q<BillPayment[]>(['billPayments'], `${S}/bill-payments`));
 export const useStockAdjustments = () => useQuery(q<StockAdjustment[]>(['stockAdjustments'], `${S}/stock/adjustments`));
+export const useChallans = () => useQuery(q<DeliveryChallan[]>(['challans'], `${S}/delivery-challans`));
 export const useStockTransfers = () => useQuery(q<StockTransfer[]>(['stockTransfers'], `${S}/stock/transfers`));
 export const useItemSerials = (id: string | undefined) => useQuery({ ...q<ItemSerial[]>(['serials', id], `${S}/items/${id}/serials`), enabled: !!id });
 export const useBankAccounts = () => useQuery(q<BankAccount[]>(['bankAccounts'], `${S}/bank-accounts`));

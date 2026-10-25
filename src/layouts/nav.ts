@@ -9,7 +9,7 @@ import type { Permission } from '../../shared/permissions';
 type Can = (p: Permission) => boolean;
 
 const CHILD_ICONS: Record<string, LucideIcon> = {
-  Customers: UserRound, Quotes: FileSignature, 'Sales Orders': ClipboardList, Invoices: FileText, 'Payments Received': IndianRupee,
+  Customers: UserRound, Quotes: FileSignature, 'Sales Orders': ClipboardList, Invoices: FileText, 'Delivery Challans': Truck, 'Payments Received': IndianRupee,
   'Credit Notes': FileMinus, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, Vendors: Truck, 'Purchase Orders': ClipboardList,
   Bills: Receipt, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Stock Adjustments': SlidersHorizontal,
   Transfers: ArrowLeftRight, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank,
@@ -24,6 +24,7 @@ export function buildNav(can: Can): NavItem[] {
       { label: 'Customers', to: '/app/sales/customers' },
       { label: 'Quotes', to: '/app/sales/quotes' },
       { label: 'Sales Orders', to: '/app/sales/orders' },
+      { label: 'Delivery Challans', to: '/app/sales/challans' },
       { label: 'Invoices', to: '/app/sales/invoices' },
       { label: 'Payments Received', to: '/app/sales/payments' },
       { label: 'Credit Notes', to: '/app/sales/credit-notes' },
@@ -73,6 +74,7 @@ export function buildCreate(can: Can): Array<{ title: string; links: CreateLink[
       can('sales.write') && { label: 'Invoice', icon: FileText, to: '/app/sales/invoices/new', keys: 'N' },
       can('sales.write') && { label: 'Quote', icon: FileSignature, to: '/app/sales/quotes?new=1' },
       can('sales.write') && { label: 'Sales order', icon: ClipboardList, to: '/app/sales/orders?new=1' },
+      can('sales.write') && { label: 'Delivery challan', icon: Truck, to: '/app/sales/challans?new=1' },
       can('customers.write') && { label: 'Customer', icon: UserRound, to: '/app/sales/customers?new=1' },
       can('sales.write') && { label: 'POS sale', icon: ScanLine, to: '/app/pos' },
     ] },
@@ -122,6 +124,7 @@ export function buildActions(can: Can): PaletteAction[] {
   add(true, 'Go to', 'Warehouses', Warehouse, '/app/inventory/warehouses', 'branches godown store locations');
   add(true, 'Go to', 'Stock adjustments', SlidersHorizontal, '/app/inventory/adjustments', 'stock count damaged expired write off');
   add(true, 'Go to', 'Transfers', ArrowLeftRight, '/app/inventory/transfers', 'move stock between branches in transit');
+  add(true, 'Go to', 'Delivery Challans', Truck, '/app/sales/challans', 'dispatch delivery order tracking vehicle');
   add(true, 'Go to', 'Stock summary', Boxes, '/app/inventory/stock-summary', 'inventory valuation closing stock report');
   add(can('items.write'), 'Create', 'Record stock count', SlidersHorizontal, '/app/inventory/adjustments?new=1&mode=count', 'physical count audit');
   add(true, 'Go to', 'Low stock', Boxes, '/app/items?tab=stock', 'reorder expiry batches alerts');

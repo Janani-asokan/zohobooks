@@ -73,6 +73,7 @@ const ENTITIES = {
   journal: { table: 'journals', read: 'accounting.read', write: 'accounting.write' },
   payment: { table: 'payments', read: null, write: 'payments.write' },
   bill_payment: { table: 'bill_payments', read: 'purchases.read', write: 'purchases.write' },
+  delivery_challan: { table: 'delivery_challans', read: null, write: 'sales.write' },
   bank_transaction: { table: 'bank_transactions', read: 'banking.read', write: 'banking.write' },
 } as const satisfies Record<string, { table: string; read: Permission | null; write: Permission }>;
 type Entity = keyof typeof ENTITIES;

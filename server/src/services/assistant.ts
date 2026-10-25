@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { betaZodTool } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod/v4';
-import type { UserCtx } from '../auth';
+import { todayISO, type UserCtx } from '../auth';
 import { config } from '../config';
 import { many, one, withTenant } from '../db';
 import { HttpError } from '../http';
@@ -45,7 +45,7 @@ function shopTools(c: UserCtx) {
         const pay = has('purchases.read') ? await one(db, `SELECT coalesce(sum(amount - amount_paid), 0) AS due, coalesce(sum(amount - amount_paid) FILTER (WHERE due_date < current_date), 0) AS overdue
             FROM bills WHERE shop_id = $1 AND amount > amount_paid`, [c.shopId]) : null;
         return JSON.stringify({
-          today: new Date().toISOString().slice(0, 10),
+          today: todayISO(),
           sales: salesOk() ? { today: num(s?.today), thisMonth: num(s?.this_month), lastMonth: num(s?.last_month) } : deny('sales figures'),
           customersOwe: { total: num(s?.receivable), overdue: num(s?.overdue), overdueInvoices: Number(s?.overdue_count ?? 0) },
           vendorsOwed: pay ? { total: num(pay.due), overdue: num(pay.overdue) } : deny('purchases'),
@@ -161,7 +161,7 @@ export async function askAssistant(c: UserCtx, shop: { name: string; state: stri
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
     output_config: { effort: 'low' },
-    system: `${ASSISTANT_SYSTEM}\nShop: ${shop.name}${shop.state ? `, ${shop.state}` : ''}. User role: ${c.role}. Today is ${new Date().toISOString().slice(0, 10)}.`,
+    system: `${ASSISTANT_SYSTEM}\nShop: ${shop.name}${shop.state ? `, ${shop.state}` : ''}. User role: ${c.role}. Today is ${todayISO()}.`,
     tools: shopTools(c),
     messages: history.map((m) => ({ role: m.role, content: m.content })),
   });

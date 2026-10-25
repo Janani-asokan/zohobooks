@@ -1,12 +1,14 @@
 import pg from 'pg';
 import { config } from './config';
+import { BUSINESS_TZ } from './tz';
 
 // numeric → number, date → 'YYYY-MM-DD' string (avoid timezone shifts)
 pg.types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)) as unknown as string);
 pg.types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10)) as unknown as string);
 pg.types.setTypeParser(1082, (v) => v);
 
-export const pool = new pg.Pool({ connectionString: config.databaseUrl, max: Number(process.env.PG_POOL_MAX ?? 10) });
+// Sessions use the business timezone too, so SQL current_date agrees with the app's idea of today.
+export const pool = new pg.Pool({ connectionString: config.databaseUrl, max: Number(process.env.PG_POOL_MAX ?? 10), options: `-c timezone=${BUSINESS_TZ}` });
 
 export type Db = pg.PoolClient;
 

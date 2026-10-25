@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { Db } from '../db';
 import { many, one } from '../db';
 import { badRequest, conflict, HttpError } from '../http';
-import { computeTotals, lineAmount, r2 } from '../../../shared/calc';
+import { applyBillAdjustments, computeTotals, lineAmount, r2 } from '../../../shared/calc';
 import { fyLabel, formatInvoiceNumber, invoiceCounterKey } from '../../../shared/fy';
 import { isInterState } from '../../../shared/gst';
 import { balanceDue, invoiceStatus } from '../../../shared/status';
@@ -41,6 +41,11 @@ export interface StoredLine {
   batchNo?: string;
   serials?: string[];
   batches?: Array<{ batchNo: string; qty: number; expiryDate: string | null }>;
+  /** Item cost when the line was saved, for bill-wise profit. */
+  cost?: number;
+  /** What the user typed, when the bill discount or MRP billing changed the effective rate/discount. */
+  enteredRate?: number;
+  enteredDiscount?: number;
 }
 
 /** Resolves item details, tier prices and the authoritative tax rate on the server. */
@@ -67,6 +72,7 @@ export async function buildLines(db: Db, shopId: string, input: LineInput[]): Pr
       taxRate: Number(it.tax_rate),
       discount: l.discount,
       amount: 0,
+      cost: Number(it.cost ?? 0),
       ...(l.batchNo ? { batchNo: l.batchNo } : {}),
       ...(it.track_serials && l.serials?.length ? { serials: [...new Set(l.serials.map((x) => x.trim()))] } : {}),
     };
@@ -110,16 +116,32 @@ export const invoiceInput = z.object({
   terms: z.string().max(1500).optional(),
   /** Issue even though it takes the customer past their credit limit (the user confirmed). */
   overrideCreditLimit: z.boolean().optional(),
+  /** MRP billing: the rates typed include GST. */
+  pricesIncludeTax: z.boolean().optional(),
+  billDiscount: z.object({ kind: z.enum(['percent', 'amount']), value: z.number().min(0).max(1e9) }).nullable().optional(),
 });
 export type InvoiceInput = z.infer<typeof invoiceInput>;
+
+/** Applies MRP billing and the bill discount, keeping what the user typed so the form can be reopened. */
+export function adjustLines(built: StoredLine[], input: { pricesIncludeTax?: boolean; billDiscount?: InvoiceInput['billDiscount'] }, withGst: boolean): StoredLine[] {
+  if (!(input.pricesIncludeTax && withGst) && !(input.billDiscount && input.billDiscount.value > 0)) return built;
+  const adj = applyBillAdjustments(built, { pricesIncludeTax: input.pricesIncludeTax, billDiscount: input.billDiscount, withGst });
+  return adj.map((l, i) => {
+    const typed = built[i]!;
+    const out = { ...l, enteredRate: typed.rate, enteredDiscount: typed.discount };
+    out.amount = lineAmount(out);
+    return out;
+  });
+}
 
 async function computeInvoiceFields(db: Db, shopId: string, input: InvoiceInput, source: string) {
   if (input.dueDate < input.date) throw badRequest('Due date can’t be before invoice date', { dueDate: 'Due date can’t be before invoice date' });
   if (!input.customerId && source !== 'pos') throw badRequest('Select a customer', { customerId: 'Select a customer' });
   const org = await getOrg(db, shopId);
-  const lines = await buildLines(db, shopId, input.lines);
+  const built = await buildLines(db, shopId, input.lines);
   const { snap, id: customerId } = await customerSnapshot(db, shopId, input.customerId, org.state);
-  const { withGst, docType } = taxTreatment(org, lines, input.withGst);
+  const { withGst, docType } = taxTreatment(org, built, input.withGst);
+  const lines = adjustLines(built, input, withGst);
   const pos = snap.state || org.state;
   const inter = isInterState(org.state, pos);
   const t = computeTotals(lines, withGst, inter, input.tcsRate);
@@ -212,6 +234,8 @@ async function checkCreditLimit(db: Db, req: Request | null, shopId: string, cus
 async function saveDeliveryFields(db: Db, shopId: string, id: string, input: InvoiceInput) {
   if (input.shipTo !== undefined) await db.query('UPDATE invoices SET ship_to = $3 WHERE shop_id = $1 AND id = $2', [shopId, id, input.shipTo && (input.shipTo.name || input.shipTo.address) ? JSON.stringify(input.shipTo) : null]);
   if (input.terms !== undefined) await db.query('UPDATE invoices SET terms = $3 WHERE shop_id = $1 AND id = $2', [shopId, id, input.terms]);
+  await db.query('UPDATE invoices SET bill_discount = $3, prices_include_tax = $4 WHERE shop_id = $1 AND id = $2',
+    [shopId, id, input.billDiscount && input.billDiscount.value > 0 ? JSON.stringify(input.billDiscount) : null, !!input.pricesIncludeTax]);
 }
 
 export async function updateInvoice(db: Db, req: Request, shopId: string, id: string, input: InvoiceInput, issueNow: boolean) {
@@ -286,7 +310,8 @@ export function serializeInvoice(r: any) {
     date: r.date,
     dueDate: r.due_date,
     branchId: r.branch_id,
-    lines: r.lines,
+    // Cost prices stay on the server: profit is served separately to roles that may see it.
+    lines: (r.lines as StoredLine[]).map(({ cost: _cost, ...l }) => l),
     withGst: r.with_gst,
     docType: r.doc_type,
     placeOfSupply: r.place_of_supply,
@@ -316,6 +341,8 @@ export function serializeInvoice(r: any) {
     shipTo: r.ship_to ?? null,
     terms: r.terms ?? '',
     eway: r.eway ?? null,
+    billDiscount: r.bill_discount ?? null,
+    pricesIncludeTax: !!r.prices_include_tax,
     lastReminderAt: r.last_reminder_at,
     cancelReason: r.cancel_reason,
     cancelledAt: r.cancelled_at,

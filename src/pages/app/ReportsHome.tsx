@@ -10,7 +10,7 @@ interface Entry { to: string; title: string; description: string; icon: LucideIc
 
 const ICON: Record<string, LucideIcon> = {
   'profit-loss': TrendingUp, 'balance-sheet': Scale, 'cash-flow': Wallet, 'trial-balance': Landmark,
-  'sales-by-customer': Users, 'sales-by-item': Package, receivables: Clock4, payables: Clock4,
+  'sales-by-customer': Users, 'sales-by-item': Package, 'bill-profit': TrendingUp, receivables: Clock4, payables: Clock4,
 };
 
 const EXTRA: Entry[] = [

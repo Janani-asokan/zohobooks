@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeTotals } from './calc';
+import { applyBillAdjustments, computeTotals, r2 } from './calc';
 import { formatInvoiceNumber, fyLabel, fyRange, invoiceCounterKey } from './fy';
 import { invoiceStatus } from './status';
 import { gstinMatchesState, isInterState } from './gst';
@@ -76,5 +76,30 @@ describe('csv', () => {
   it('round-trips quotes, commas and newlines', () => {
     const csv = toCsv([{ a: 'x, "y"', b: 'line1\nline2' }], [{ key: 'a', label: 'Name' }, { key: 'b', label: 'Notes' }]);
     expect(parseCsv(csv)).toEqual([{ name: 'x, "y"', notes: 'line1\nline2' }]);
+  });
+});
+
+describe('bill discount and MRP billing', () => {
+  const lines = [{ qty: 2, rate: 500, taxRate: 18 }, { qty: 1, rate: 1000, taxRate: 5 }];
+  it('a 10% bill discount takes 10% off the taxable value before GST', () => {
+    const t = computeTotals(applyBillAdjustments(lines, { withGst: true, billDiscount: { kind: 'percent', value: 10 } }), true);
+    expect(t.subTotal).toBe(1800);
+    expect(t.taxTotal).toBe(r2(900 * 0.18 + 900 * 0.05));
+  });
+  it('a rupee bill discount comes off the taxable value', () => {
+    const t = computeTotals(applyBillAdjustments(lines, { withGst: true, billDiscount: { kind: 'amount', value: 200 } }), true);
+    expect(t.subTotal).toBe(1800);
+  });
+  it('MRP billing: the customer pays the price typed, GST is inside it', () => {
+    const t = computeTotals(applyBillAdjustments([{ qty: 3, rate: 118, taxRate: 18 }, { qty: 1, rate: 105, taxRate: 5 }], { withGst: true, pricesIncludeTax: true }), true);
+    expect(t.total).toBe(459);
+    expect(t.subTotal).toBe(400);
+  });
+  it('MRP billing with a rupee discount reduces what the customer pays by that amount', () => {
+    const t = computeTotals(applyBillAdjustments([{ qty: 1, rate: 1180, taxRate: 18 }], { withGst: true, pricesIncludeTax: true, billDiscount: { kind: 'amount', value: 180 } }), true);
+    expect(t.total).toBe(1000);
+  });
+  it('without GST, inclusive prices are left alone', () => {
+    expect(applyBillAdjustments([{ qty: 1, rate: 118, taxRate: 18 }], { withGst: false, pricesIncludeTax: true })[0]!.rate).toBe(118);
   });
 });

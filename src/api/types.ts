@@ -57,6 +57,8 @@ export interface Customer {
 export interface Line {
   id: string; itemId: string; name: string; type: 'Goods' | 'Services'; hsn: string; unit: string; qty: number; rate: number; tier: PriceTier;
   taxRate: number; discount: number; amount: number; batchNo?: string; serials?: string[]; batches?: Array<{ batchNo: string; qty: number; expiryDate: string | null }>;
+  /** What was typed, when MRP billing or a bill discount changed the effective rate/discount. */
+  enteredRate?: number; enteredDiscount?: number;
 }
 export interface LineInput { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number; serials?: string[] }
 
@@ -72,7 +74,9 @@ export interface Invoice {
   shipTo?: ShipTo | null; terms?: string;
   einvoice?: { irn: string; ackNo: string; ackDate: string; signedQr: string } | null;
   eway?: { number: string; date: string; vehicleNo: string } | null;
+  billDiscount?: BillDiscount | null; pricesIncludeTax?: boolean;
 }
+export interface BillDiscount { kind: 'percent' | 'amount'; value: number }
 export interface ShipTo { name: string; address: string; state: string; gstin: string }
 export interface Payment { id: string; date: string; amount: number; tdsAmount: number; mode: string; reference: string; account: string | null; notes: string }
 export interface CreditNote {
@@ -147,4 +151,12 @@ export interface Ageing {
   kind: 'receivable' | 'payable'; asOf: string; buckets: string[]; total: number; totals: number[];
   parties: Array<{ id: string; name: string; buckets: number[]; total: number; documents: number }>;
   documents: Array<{ id: string; number: string; party: string; date: string; dueDate: string | null; balance: number; bucket: string; daysOverdue: number }>;
+}
+
+export type ChallanStatus = 'Packed' | 'Dispatched' | 'Delivered' | 'Invoiced' | 'Cancelled';
+export interface DeliveryChallan {
+  id: string; number: string; customerId: string; customer: CustomerSnapshot; date: string; purpose: 'Supply' | 'Job work' | 'On approval' | 'Sales return' | 'Other';
+  salesOrderId: string | null; salesOrderNumber: string | null; invoiceId: string | null; invoiceNumber: string | null;
+  lines: Array<{ itemId: string; name: string; hsn: string; unit: string; qty: number; rate: number }>; value: number; status: ChallanStatus;
+  transporter: string; vehicleNo: string; lrNo: string; receivedBy: string; notes: string; dispatchedAt: string | null; deliveredAt: string | null; createdAt: string;
 }

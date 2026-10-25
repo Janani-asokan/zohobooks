@@ -234,3 +234,45 @@ reportsRouter.get(
     return hsnSummary(db, c.shopId, from, to);
   }),
 );
+
+/* ---------- Bill-wise profit ---------- */
+// Cost is the item cost saved on the line when the bill was made; older bills fall back to today's cost.
+const PROFIT_SQL = `SELECT i.id, i.number, i.date, coalesce(nullif(i.customer->>'companyName', ''), i.customer->>'name') AS customer, i.source,
+    i.sub_total AS sales, i.total,
+    coalesce(sum((l->>'qty')::numeric * coalesce((l->>'cost')::numeric, it.cost, 0)) FILTER (WHERE l->>'type' = 'Goods' OR it.type = 'Goods'), 0) AS cost
+  FROM invoices i CROSS JOIN jsonb_array_elements(i.lines) l LEFT JOIN items it ON it.id = (l->>'itemId')::uuid
+  WHERE i.shop_id = $1 AND i.status = 'Issued'`;
+const profitRow = (r: any) => {
+  const sales = Number(r.sales); const cost = Math.round(Number(r.cost) * 100) / 100;
+  return { id: r.id, number: r.number, date: r.date, customer: r.customer, source: r.source, sales, total: Number(r.total), cost, profit: Math.round((sales - cost) * 100) / 100, margin: sales > 0 ? Math.round(((sales - cost) / sales) * 1000) / 10 : 0 };
+};
+
+reportsRouter.get(
+  '/invoices/:id/profit',
+  perm('items.cost'),
+  T(async (db, req, c) => {
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id!)) return { profit: null };
+    const r = await one(db, `${PROFIT_SQL} AND i.id = $2 GROUP BY i.id`, [c.shopId, req.params.id]);
+    const lines = await many(db, `SELECT l->>'name' AS name, (l->>'qty')::numeric AS qty, (l->>'amount')::numeric AS amount,
+        (l->>'qty')::numeric * coalesce((l->>'cost')::numeric, it.cost, 0) AS cost
+      FROM invoices i CROSS JOIN jsonb_array_elements(i.lines) l LEFT JOIN items it ON it.id = (l->>'itemId')::uuid WHERE i.shop_id = $1 AND i.id = $2`, [c.shopId, req.params.id]);
+    return {
+      profit: r ? profitRow(r) : null,
+      lines: lines.map((l) => ({ name: l.name, qty: Number(l.qty), amount: Number(l.amount), cost: Math.round(Number(l.cost) * 100) / 100, profit: Math.round((Number(l.amount) - Number(l.cost)) * 100) / 100 })),
+    };
+  }),
+);
+
+reportsRouter.get(
+  '/reports/bill-profit',
+  perm('reports.read'),
+  perm('items.cost'),
+  T(async (db, req, c) => {
+    const from = ISO.test(String(req.query.from)) ? String(req.query.from) : todayISO().slice(0, 8) + '01';
+    const to = ISO.test(String(req.query.to)) ? String(req.query.to) : todayISO();
+    if (from > to) throw badRequest('From date is after the to date');
+    const rows = (await many(db, `${PROFIT_SQL} AND i.date BETWEEN $2 AND $3 GROUP BY i.id ORDER BY i.date DESC, i.number DESC`, [c.shopId, from, to])).map(profitRow);
+    const sales = rows.reduce((s, r) => s + r.sales, 0); const cost = rows.reduce((s, r) => s + r.cost, 0);
+    return { from, to, rows, totals: { bills: rows.length, sales: Math.round(sales * 100) / 100, cost: Math.round(cost * 100) / 100, profit: Math.round((sales - cost) * 100) / 100, margin: sales > 0 ? Math.round(((sales - cost) / sales) * 1000) / 10 : 0 }, lossMaking: rows.filter((r) => r.profit < 0).length };
+  }),
+);

@@ -8,7 +8,7 @@ import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { ConfirmModal, Field, PageHeader, Toggle } from '@/components/ui';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
-import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type DraftLine } from '@/components/LineItems';
+import { BillOptionsCard, convertRates, LineItemsEditor, priceFor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type BillOptions, type DraftLine } from '@/components/LineItems';
 import { useShortcuts } from '@/components/useShortcuts';
 import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
 import { attachFile } from '@/components/Attachments';
@@ -57,6 +57,7 @@ function Form({ existing }: { existing?: Invoice }) {
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [docTerms, setDocTerms] = useState(existing?.terms ?? '');
   const [shipTo, setShipTo] = useState(existing?.shipTo ?? null);
+  const [billOpts, setBillOpts] = useState<BillOptions>({ pricesIncludeTax: existing?.pricesIncludeTax ?? false, billDiscount: existing?.billDiscount ?? null });
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const nextNo = useNextInvoiceNumber(date);
@@ -89,7 +90,7 @@ function Form({ existing }: { existing?: Invoice }) {
     // Re-price lines to the customer's default tier.
     setLines((ls) => ls.map((l) => {
       const it = items.find((i) => i.id === l.itemId);
-      return { ...l, tier: c.tier, rate: it ? (c.tier === 'SP1' ? it.sp1 : c.tier === 'SP2' ? it.sp2 : it.sp3) : l.rate };
+      return { ...l, tier: c.tier, rate: it ? priceFor(it, c.tier, withGst && billOpts.pricesIncludeTax) : l.rate };
     }));
     if (c.type === 'Business' && !gstBlocked) setWithGst(true);
   };
@@ -135,7 +136,7 @@ function Form({ existing }: { existing?: Invoice }) {
     setTouched(true);
     setServerErr({});
     if (Object.values(errs).some(Boolean)) return toast('error', 'Please fix the highlighted fields');
-    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit };
+    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount };
     const onSuccess = (inv: Invoice) => {
       toast('success', inv.status === 'Draft' ? 'Draft saved' : existing?.status === 'Issued' ? 'Invoice updated' : 'Invoice issued', inv.number ?? undefined);
       if (invFile) void attachFile('invoice', inv.id, invFile.file.name, invFile.dataUrl).catch(() => undefined);
@@ -225,7 +226,7 @@ function Form({ existing }: { existing?: Invoice }) {
               {gstBlocked ?? (withGst ? (interState ? 'Inter-state supply → IGST' : 'Intra-state supply → CGST + SGST') : 'Totals shown without any tax')}
             </span>
           </div>
-          <LineItemsEditor lines={lines} onChange={setLines} defaultTier={customer?.tier ?? 'SP1'} withGst={withGst} invalidKeys={touched ? invalidLines : undefined} branchId={branchId} />
+          <LineItemsEditor lines={lines} onChange={setLines} defaultTier={customer?.tier ?? 'SP1'} withGst={withGst} invalidKeys={touched ? invalidLines : undefined} branchId={branchId} inclusive={withGst && billOpts.pricesIncludeTax} />
           {touched && errs.lines && <div className="field-error" style={{ marginTop: 8 }}>{errs.lines}</div>}
 
           <div className="grid-2 mt-24" style={{ alignItems: 'start' }}>
@@ -263,7 +264,10 @@ function Form({ existing }: { existing?: Invoice }) {
                 </div>
               )}
             </div>
-            <TotalsPanel lines={calc} withGst={withGst} interState={interState} tcsRate={withGst ? tcsRate : 0} />
+            <div className="stack" style={{ gap: 14 }}>
+              <BillOptionsCard value={billOpts} withGst={withGst} onChange={(v) => { if (v.pricesIncludeTax !== billOpts.pricesIncludeTax) setLines((ls) => convertRates(ls, items, v.pricesIncludeTax)); setBillOpts(v); }} />
+              <TotalsPanel lines={calc} withGst={withGst} interState={interState} tcsRate={withGst ? tcsRate : 0} options={billOpts} />
+            </div>
           </div>
         </div>
 

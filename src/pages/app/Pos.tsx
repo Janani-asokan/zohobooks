@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound } from 'lucide-react';
+import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag } from 'lucide-react';
 import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
@@ -11,14 +11,14 @@ import { useToast } from '@/context/ToastContext';
 import { Field, Modal, Segmented, Toggle } from '@/components/ui';
 import { upiLink, useQr } from '@/components/qr';
 import { useShortcuts } from '@/components/useShortcuts';
-import { computeTotals, lineAmount } from '@/lib/calc';
+import { applyBillAdjustments, computeTotals, lineAmount, type BillDiscount } from '@/lib/calc';
+import { priceFor } from '@/components/LineItems';
 import { Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
 import { waLink } from './InvoiceView';
 
 interface CartLine { itemId: string; qty: number }
-const price = (it: Item, tier: PriceTier) => (tier === 'SP1' ? it.sp1 : tier === 'SP2' ? it.sp2 : it.sp3);
 
 /** Fast counter billing: scan → cart → charge. Each sale is an issued invoice with its payment. */
 export default function Pos() {
@@ -35,7 +35,12 @@ export default function Pos() {
   const [customerId, setCustomerId] = useState('');
   const [branchId, setBranchId] = useState(me.user.branchId ?? '');
   const [withGst, setWithGst] = useState(true);
-  const [mode, setMode] = useState<'Cash' | 'UPI' | 'Card'>('Cash');
+  const [mode, setMode] = useState<'Cash' | 'UPI' | 'Card' | 'Split'>('Cash');
+  const [split, setSplit] = useState({ Cash: '', UPI: '', Card: '' });
+  // MRP billing is a per-counter habit, so remember it on this device.
+  const [mrp, setMrpState] = useState(() => { try { return localStorage.getItem('c360.pos.mrp') === '1'; } catch { return false; } });
+  const setMrp = (v: boolean) => { setMrpState(v); try { localStorage.setItem('c360.pos.mrp', v ? '1' : '0'); } catch { /* private mode */ } };
+  const [disc, setDisc] = useState<BillDiscount>({ kind: 'percent', value: 0 });
   const [tendered, setTendered] = useState('');
   const [reference, setReference] = useState('');
   const [done, setDone] = useState<{ invoice: Invoice; change: number } | null>(null);
@@ -49,11 +54,19 @@ export default function Pos() {
   const tier: PriceTier = customer?.tier ?? 'SP1';
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const lines = cart.map((l) => ({ ...l, it: byId.get(l.itemId)! })).filter((l) => l.it);
-  const calc = lines.map((l) => ({ qty: l.qty, rate: price(l.it, tier), taxRate: l.it.taxRate, discount: 0 }));
+  const inclusive = withGst && mrp;
+  const unit = (it: Item) => priceFor(it, tier, inclusive);
+  const calc = lines.map((l) => ({ qty: l.qty, rate: unit(l.it), taxRate: l.it.taxRate, discount: 0 }));
   const inter = !!org && !!customer && isInterState(org.state, customer.state || org.state);
-  const totals = computeTotals(calc, withGst, inter);
+  const billDiscount = disc.value > 0 ? disc : null;
+  const totals = computeTotals(applyBillAdjustments(calc, { withGst, pricesIncludeTax: inclusive, billDiscount }), withGst, inter);
   const change = mode === 'Cash' && tendered ? Number(tendered) - totals.total : 0;
-  const qr = useQr(mode === 'UPI' && org?.upiId && totals.total > 0 ? upiLink(org, totals.total, 'POS sale') : null);
+  const splitPaid = (['Cash', 'UPI', 'Card'] as const).reduce((a, m) => a + (Number(split[m]) || 0), 0);
+  const splitLeft = Math.round((totals.total - splitPaid) * 100) / 100;
+  /** Fill the remaining amount into one part with a tap. */
+  const fillRest = (m: 'Cash' | 'UPI' | 'Card') => setSplit((sp) => ({ ...sp, [m]: String(Math.max(0, Math.round((totals.total - (['Cash', 'UPI', 'Card'] as const).filter((x) => x !== m).reduce((a, x) => a + (Number(sp[x]) || 0), 0)) * 100) / 100)) }));
+  const upiDue = mode === 'Split' ? Number(split.UPI) || 0 : totals.total;
+  const qr = useQr((mode === 'UPI' || (mode === 'Split' && upiDue > 0)) && org?.upiId && upiDue > 0 ? upiLink(org, upiDue, 'POS sale') : null);
 
   const add = (it: Item) => setCart((c) => (c.some((l) => l.itemId === it.id) ? c.map((l) => (l.itemId === it.id ? { ...l, qty: l.qty + 1 } : l)) : [...c, { itemId: it.id, qty: 1 }]));
   const setQty = (id: string, qty: number) => setCart((c) => (qty <= 0 ? c.filter((l) => l.itemId !== id) : c.map((l) => (l.itemId === id ? { ...l, qty } : l))));
@@ -76,12 +89,16 @@ export default function Pos() {
   const charge = () => {
     if (!lines.length || sale.isPending) return;
     if (mode === 'Cash' && tendered && Number(tendered) < totals.total) return toast('error', 'Cash tendered is less than the bill total');
+    const parts = (['Cash', 'UPI', 'Card'] as const).filter((m) => Number(split[m]) > 0).map((m) => ({ mode: m, amount: Number(split[m]), reference: m === 'Cash' ? '' : reference }));
+    if (mode === 'Split' && (parts.length < 2 || Math.abs(splitLeft) > 0.5)) return toast('error', parts.length < 2 ? 'Enter at least two payment parts' : splitLeft > 0 ? `₹${splitLeft} still to collect` : `Parts are ₹${-splitLeft} more than the bill`);
     sale.mutate(
-      { customerId: customerId || null, branchId: branchId || null, withGst, mode, reference, tendered: mode === 'Cash' && tendered ? Number(tendered) : undefined, lines: lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier, discount: 0 })) },
+      { customerId: customerId || null, branchId: branchId || null, withGst, mode: mode === 'Split' ? 'Cash' : mode, reference, tendered: mode === 'Cash' && tendered ? Number(tendered) : undefined,
+        ...(mode === 'Split' ? { split: parts } : {}), pricesIncludeTax: inclusive, billDiscount,
+        lines: lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier, discount: 0, rate: unit(l.it) })) },
       { onSuccess: (r) => setDone(r) },
     );
   };
-  const reset = () => { setCart([]); setTendered(''); setReference(''); setCustomerId(''); setDone(null); setTimeout(() => scanRef.current?.focus(), 50); };
+  const reset = () => { setCart([]); setTendered(''); setReference(''); setCustomerId(''); setDone(null); setSplit({ Cash: '', UPI: '', Card: '' }); setDisc({ kind: 'percent', value: 0 }); setTimeout(() => scanRef.current?.focus(), 50); };
   useShortcuts({ 'mod+enter': charge, f2: () => scanRef.current?.focus() });
 
   return (
@@ -102,7 +119,7 @@ export default function Pos() {
                 <Thumb name={it.name} image={it.image} size={40} />
                 <div className="n">{it.name}</div>
                 <div className="small muted">{it.type === 'Goods' ? `${st} ${it.unit} in stock` : 'Service'}</div>
-                <div className="p">{money(price(it, tier))}</div>
+                <div className="p">{money(unit(it))}</div>
               </button>
             );
           })}
@@ -122,7 +139,10 @@ export default function Pos() {
           </div>
           <div className="row between small muted">
             <span>Price tier: <strong style={{ color: 'var(--ink-800)' }}>{tier} · {TIER_LABEL[tier]}</strong></span>
-            <Toggle size="sm" checked={withGst} disabled={!!org && (org.compositionScheme || !org.gstin)} onChange={setWithGst} label={<span className="small">{withGst ? 'GST applied' : 'Net price (no tax)'}</span>} />
+            <span className="row" style={{ gap: 14 }}>
+              {withGst && <Toggle size="sm" checked={mrp} onChange={setMrp} label={<span className="small">MRP (incl. GST)</span>} />}
+              <Toggle size="sm" checked={withGst} disabled={!!org && (org.compositionScheme || !org.gstin)} onChange={setWithGst} label={<span className="small">{withGst ? 'GST applied' : 'Net price (no tax)'}</span>} />
+            </span>
           </div>
         </div>
         <div className="pos-cart">
@@ -131,7 +151,7 @@ export default function Pos() {
             <div key={l.itemId} className="pos-line">
               <div style={{ minWidth: 0 }}>
                 <div className="strong" style={{ color: 'var(--ink-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.it.name}</div>
-                <div className="small muted">{money(price(l.it, tier))}{withGst ? ` · GST ${l.it.taxRate}%` : ''}</div>
+                <div className="small muted">{money(unit(l.it))}{withGst ? ` · GST ${l.it.taxRate}%${inclusive ? ' incl.' : ''}` : ''}</div>
               </div>
               <div className="row" style={{ gap: 6 }}>
                 <button className="qty-btn" onClick={() => setQty(l.itemId, l.qty - 1)} aria-label="Decrease">−</button>
@@ -139,19 +159,40 @@ export default function Pos() {
                 <button className="qty-btn" onClick={() => setQty(l.itemId, l.qty + 1)} aria-label="Increase">+</button>
               </div>
               <div className="row" style={{ gap: 4 }}>
-                <strong style={{ minWidth: 80, textAlign: 'right' }}>{money(lineAmount({ qty: l.qty, rate: price(l.it, tier), taxRate: 0 }))}</strong>
+                <strong style={{ minWidth: 80, textAlign: 'right' }}>{money(lineAmount({ qty: l.qty, rate: unit(l.it), taxRate: 0 }))}</strong>
                 <button className="icon-btn sm danger" onClick={() => setQty(l.itemId, 0)} aria-label="Remove"><Trash2 size={13} /></button>
               </div>
             </div>
           ))}
         </div>
         <div style={{ padding: 14, borderTop: '1px solid var(--border)', background: 'var(--ink-50)' }} className="stack">
-          <div className="row between small"><span className="muted">Sub total</span><span>{money(totals.subTotal)}</span></div>
+          <div className="row between small" style={{ gap: 8 }}>
+            <span className="muted row" style={{ gap: 6 }}><Tag size={13} /> Bill discount</span>
+            <span className="row" style={{ gap: 4 }}>
+              <input className="input" type="number" min={0} step="any" style={{ width: 80, height: 30 }} aria-label="Bill discount" value={disc.value || ''} placeholder="0"
+                onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setDisc({ ...disc, value: disc.kind === 'percent' ? Math.min(100, v) : v }); }} />
+              <select className="select" style={{ width: 58, height: 30 }} aria-label="Bill discount type" value={disc.kind} onChange={(e) => setDisc({ ...disc, kind: e.target.value as BillDiscount['kind'] })}><option value="percent">%</option><option value="amount">₹</option></select>
+            </span>
+          </div>
+          <div className="row between small"><span className="muted">{inclusive ? 'Taxable value' : 'Sub total'}{totals.discount > 0 ? ' (after discount)' : ''}</span><span>{money(totals.subTotal)}</span></div>
           {withGst && <div className="row between small"><span className="muted">GST{inter ? ' (IGST)' : ' (CGST + SGST)'}</span><span>{money(totals.taxTotal)}</span></div>}
           <div className="row between"><strong style={{ fontSize: 14 }}>Total</strong><strong style={{ fontSize: 24, color: 'var(--brand-700)' }}>{money(totals.total)}</strong></div>
           <div className="pay-modes">
-            {([['Cash', Banknote], ['UPI', Smartphone], ['Card', CreditCard]] as const).map(([m, I]) => <button key={m} className={mode === m ? 'active' : ''} onClick={() => setMode(m)}><I size={16} /> {m}</button>)}
+            {([['Cash', Banknote], ['UPI', Smartphone], ['Card', CreditCard], ['Split', Split]] as const).map(([m, I]) => <button key={m} className={mode === m ? 'active' : ''} onClick={() => setMode(m)}><I size={16} /> {m}</button>)}
           </div>
+          {mode === 'Split' && (
+            <div className="split-pay">
+              {([['Cash', Banknote], ['UPI', Smartphone], ['Card', CreditCard]] as const).map(([m, I]) => (
+                <div key={m} className="split-row">
+                  <span className="row" style={{ gap: 6, width: 70 }}><I size={15} /> {m}</span>
+                  <div className="input-addon" style={{ flex: 1 }}><span>₹</span><input className="input" type="number" min={0} step="any" aria-label={`${m} amount`} value={split[m]} onChange={(e) => setSplit({ ...split, [m]: e.target.value })} /></div>
+                  <button type="button" className="btn btn-soft btn-sm" onClick={() => fillRest(m)}>Rest</button>
+                </div>
+              ))}
+              <div className={`small strong ${Math.abs(splitLeft) <= 0.5 ? 'ok' : 'due'}`}>{Math.abs(splitLeft) <= 0.5 ? 'Fully paid' : splitLeft > 0 ? `${money(splitLeft)} still to collect` : `${money(-splitLeft)} more than the bill`}</div>
+              {qr && <div className="row" style={{ gap: 10 }}><img src={qr} alt="UPI QR" style={{ width: 84, height: 84, borderRadius: 8, background: '#fff', padding: 4 }} /><span className="small muted">Scan to pay {money(upiDue)} by UPI</span></div>}
+            </div>
+          )}
           {mode === 'Cash' && (
             <div className="row" style={{ gap: 10 }}>
               <Field label="Cash tendered" className=""><div className="input-addon"><span>₹</span><input className="input" type="number" min={0} value={tendered} onChange={(e) => setTendered(e.target.value)} placeholder={String(totals.total)} /></div></Field>
@@ -185,7 +226,7 @@ export default function Pos() {
           <div className="print-area">
             {done.change > 0 && <div className="row" style={{ justifyContent: 'center', gap: 8, marginBottom: 12, fontSize: 16 }}>Give change: <strong style={{ color: 'var(--green-700)', fontSize: 20 }}>{money(done.change)}</strong></div>}
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', width: 'fit-content', margin: '0 auto' }}>
-              <ThermalReceipt data={receiptFromInvoice(done.invoice, items, customers.find((c) => c.id === done.invoice.customerId)?.due, mode)} org={org} s={printCfg.thermal} />
+              <ThermalReceipt data={receiptFromInvoice(done.invoice, items, customers.find((c) => c.id === done.invoice.customerId)?.due, mode === 'Split' ? 'Split' : mode)} org={org} s={printCfg.thermal} />
             </div>
           </div>
         )}

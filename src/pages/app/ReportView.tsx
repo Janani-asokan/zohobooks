@@ -9,7 +9,7 @@ import { EmptyState, PageHeader, StatCard } from '@/components/ui';
 import { BarChart } from '@/components/charts';
 import { DateRange, periodPresets, rangeLabel, type Range } from '@/components/DateRange';
 import { ExportMenu } from '@/components/ExportMenu';
-import { money, moneyShort, todayISO } from '@/lib/format';
+import { fmtDate, money, moneyShort, todayISO } from '@/lib/format';
 import type { ReportTable } from '@/lib/report';
 import type { Permission } from '../../../shared/permissions';
 
@@ -24,11 +24,12 @@ export const REPORTS: Record<string, { title: string; group: string; description
   'trial-balance': { title: 'Trial Balance', group: 'Accountant', description: 'Debit and credit balance of every account on a date.', asOf: true, perm: 'accounting.read' },
   'sales-by-customer': { title: 'Sales by Customer', group: 'Sales', description: 'Invoiced sales, tax and amount still due, per customer.', perm: 'reports.read' },
   'sales-by-item': { title: 'Sales by Item', group: 'Sales', description: 'Quantity sold, sales value and gross profit per item.', perm: 'reports.read' },
+  'bill-profit': { title: 'Bill-wise Profit', group: 'Sales', description: 'Profit and margin on every bill, using the item cost when it was sold. Loss-making bills are flagged.', perm: 'items.cost' },
   receivables: { title: 'Receivables Ageing', group: 'Sales', description: 'What customers owe, by how many days it is overdue.', asOf: true, perm: 'reports.read' },
   payables: { title: 'Payables Ageing', group: 'Purchases', description: 'What you owe vendors, by how many days it is overdue.', asOf: true, perm: 'purchases.read' },
 };
 
-const ICONS: Record<string, LucideIcon> = { 'profit-loss': TrendingUp, 'balance-sheet': Scale, 'cash-flow': Wallet, 'trial-balance': Landmark, 'sales-by-customer': Users, 'sales-by-item': Package, receivables: Clock4, payables: Clock4 };
+const ICONS: Record<string, LucideIcon> = { 'profit-loss': TrendingUp, 'balance-sheet': Scale, 'cash-flow': Wallet, 'trial-balance': Landmark, 'sales-by-customer': Users, 'sales-by-item': Package, 'bill-profit': TrendingUp, receivables: Clock4, payables: Clock4 };
 
 const ledgerLink = (key: string, r: Range) => (key === 'current_profit' ? `/app/reports/profit-loss?to=${r.to}` : `/app/accounting/ledger?account=${encodeURIComponent(key)}&from=${r.from}&to=${r.to}`);
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 1000) / 10}%` : '—');
@@ -154,6 +155,23 @@ function build(id: string, data: unknown, r: Range, canCost: boolean): Built {
         ],
       };
     }
+    case 'bill-profit': {
+      const d = data as { rows: Array<{ id: string; number: string; date: string; customer: string; source: string; sales: number; cost: number; profit: number; margin: number }>; totals: { bills: number; sales: number; cost: number; profit: number; margin: number }; lossMaking: number };
+      return {
+        columns: [{ label: 'Date' }, { label: 'Bill' }, { label: 'Customer' }, { label: 'Sales (net)', money: true }, { label: 'Cost', money: true }, { label: 'Profit', money: true }, { label: 'Margin', align: 'right' }],
+        rows: [
+          ...d.rows.map((x) => ({ cells: [fmtDate(x.date), x.number + (x.source === 'pos' ? ' · POS' : ''), x.customer, x.sales, x.cost, x.profit, `${x.margin}%`] as Cell[], link: `/app/sales/invoices/${x.id}` })),
+          { cells: ['Total', `${d.totals.bills} bills`, '', d.totals.sales, d.totals.cost, d.totals.profit, `${d.totals.margin}%`], kind: 'total' },
+        ],
+        note: 'Sales exclude GST. Cost is the item cost saved on the bill; bills made before cost tracking use today’s cost.',
+        stats: [
+          { label: 'Bills', value: String(d.totals.bills), tone: 'blue' },
+          { label: 'Profit', value: moneyShort(d.totals.profit), foot: `${d.totals.margin}% margin`, tone: 'green' },
+          { label: 'Best bill', value: d.rows.length ? moneyShort(Math.max(...d.rows.map((x) => x.profit))) : '—', tone: 'violet' },
+          { label: 'Loss-making bills', value: String(d.lossMaking), foot: d.lossMaking ? 'Sold below cost' : 'None', tone: d.lossMaking ? 'red' : 'amber' },
+        ],
+      };
+    }
     case 'receivables':
     case 'payables': {
       const d = data as Ageing;
@@ -181,6 +199,7 @@ const urlFor = (id: string, r: Range) => {
     case 'cash-flow': return `/shop/reports/cash-flow?from=${r.from}&to=${r.to}`;
     case 'trial-balance': return `/shop/accounting/trial-balance?asOf=${r.to}`;
     case 'sales-by-customer': case 'sales-by-item': return `/shop/reports/sales-by?from=${r.from}&to=${r.to}`;
+    case 'bill-profit': return `/shop/reports/bill-profit?from=${r.from}&to=${r.to}`;
     case 'receivables': return `/shop/reports/ageing?kind=receivable&asOf=${r.to}`;
     case 'payables': return `/shop/reports/ageing?kind=payable&asOf=${r.to}`;
   }

@@ -15,6 +15,7 @@ import { TaxInvoice } from '@/components/TaxInvoice';
 import { Attachments } from '@/components/Attachments';
 import { useClickOutside } from '@/components/useClickOutside';
 import { fmtDate, money, todayISO } from '@/lib/format';
+import { useQuery } from '@tanstack/react-query';
 
 const shareUrl = (token: string) => `${window.location.origin}/share/${token}`;
 
@@ -248,6 +249,7 @@ export default function InvoiceView() {
               </div>
             </div>
           )}
+          {me.can('items.cost') && inv.status !== 'Cancelled' && <BillProfit id={inv.id} />}
           <div className="card"><div className="card-body" style={{ padding: 14 }}><Attachments entity="invoice" entityId={inv.id} canWrite={canSell} title="Files" /></div></div>
           <div className="card">
             <div className="card-header"><h3>Activity</h3></div>
@@ -352,6 +354,26 @@ export default function InvoiceView() {
 
       <ConfirmModal open={delOpen} onClose={() => setDelOpen(false)} title="Delete draft?" text="Drafts have no invoice number yet, so deleting one leaves no gap in your series." onConfirm={() => delMut.mutate(undefined, { onSuccess: () => navigate('/app/sales/invoices') })} />
       <ConfirmModal open={!!delPayment} onClose={() => setDelPayment(null)} title="Remove payment?" confirmLabel="Remove" text="The invoice balance and the linked bank entry will be reversed." onConfirm={() => delPay.mutate(delPayment!)} />
+    </div>
+  );
+}
+
+/** Profit on this bill: sales (before GST) minus the item cost saved when it was billed. */
+function BillProfit({ id }: { id: string }) {
+  const q = useQuery({ queryKey: ['invoiceProfit', id], queryFn: () => api.get<{ profit: { sales: number; cost: number; profit: number; margin: number } | null; lines: Array<{ name: string; qty: number; amount: number; cost: number; profit: number }> }>(`/shop/invoices/${id}/profit`) });
+  const p = q.data?.profit;
+  if (!p) return null;
+  const loss = p.profit < 0;
+  return (
+    <div className="card">
+      <div className="card-header"><h3>Profit on this bill</h3><span className={`small strong ${loss ? 'text-red' : 'text-green'}`}>{money(p.profit)}</span></div>
+      <div className="card-body" style={{ padding: 14 }}>
+        <div className="profit-bar" aria-hidden><span style={{ width: `${Math.max(0, Math.min(100, p.margin))}%` }} className={loss ? 'loss' : ''} /></div>
+        <div className="row between small" style={{ marginTop: 8 }}><span className="muted">Sales (before GST)</span><span>{money(p.sales)}</span></div>
+        <div className="row between small"><span className="muted">Cost of items</span><span>{money(p.cost)}</span></div>
+        <div className="row between small strong"><span>{loss ? 'Loss' : 'Margin'}</span><span>{p.margin}%</span></div>
+        {q.data!.lines.filter((l) => l.profit < 0).map((l) => <div key={l.name} className="small text-red" style={{ marginTop: 6 }}>{l.name} is sold below cost ({money(l.profit)})</div>)}
+      </div>
     </div>
   );
 }

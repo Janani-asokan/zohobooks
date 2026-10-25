@@ -414,3 +414,23 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .login-photo { position: relative; z-index: 1; align-self: center; width: auto; max-width: 100%; height: min(42vh, 380px); margin-top: 18px; object-fit: contain; filter: drop-shadow(0 14px 24px rgba(40, 28, 24, .25)); -webkit-mask-image: linear-gradient(to bottom, #000 85%, transparent); mask-image: linear-gradient(to bottom, #000 85%, transparent); }
 @media (max-height: 760px) { .login-photo { height: 30vh; } }
 .lp-hero-photo { -webkit-mask-image: linear-gradient(to bottom, #000 86%, transparent); mask-image: linear-gradient(to bottom, #000 86%, transparent); }
+
+/* ---------- Bill options (MRP billing, bill discount) ---------- */
+.bill-options .bo-icon { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--brand-50); color: var(--brand-700); flex: none; }
+.checkbox { width: 18px; height: 18px; accent-color: var(--brand-500); flex: none; cursor: pointer; }
+.pay-modes { grid-template-columns: repeat(4, 1fr); }
+.split-pay { display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+.split-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-700); }
+.split-row .input { height: 34px; }
+.split-pay .ok { color: var(--green-700); } .split-pay .due { color: var(--red-600); }
+.text-red { color: var(--red-600); } .text-green { color: var(--green-700); }
+.profit-bar { height: 8px; border-radius: 99px; background: var(--ink-100); overflow: hidden; }
+.profit-bar span { display: block; height: 100%; border-radius: 99px; background: var(--sage-grad); }
+.profit-bar span.loss { background: var(--red-500); }
+
+/* ---------- Delivery challan progress ---------- */
+.track { display: flex; gap: 4px; align-items: center; margin-bottom: 4px; }
+.track-step { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-400); white-space: nowrap; }
+.track-step i { width: 18px; height: 4px; border-radius: 99px; background: var(--ink-150, var(--ink-100)); }
+.track-step.done { color: var(--ink-800); font-weight: 600; }
+.track-step.done i { background: var(--sage-grad); }

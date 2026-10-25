@@ -3,7 +3,7 @@ import { ExportMenu } from '@/components/ExportMenu';
 import { salesDocTable } from '@/lib/docPdf';
 import { PdfButton } from '@/components/PdfButton';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, ClipboardList, LayoutGrid, List, ArrowRight, FileText, Pencil, Trash2, Send, CheckCircle2, FilePen, FileSignature, XCircle } from 'lucide-react';
+import { Plus, ClipboardList, LayoutGrid, List, ArrowRight, FileText, Pencil, Trash2, Send, CheckCircle2, FilePen, FileSignature, XCircle, Truck } from 'lucide-react';
 import { api } from '@/api/client';
 import { useCustomers, useMut, useOrg, useSalesOrders } from '@/api/hooks';
 import type { SalesOrder } from '@/api/types';
@@ -166,6 +166,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
           ) : (
             <div className="row" style={{ gap: 6 }}>
               {kind === 'quote' && <button className="btn btn-secondary btn-sm" disabled={convertQuote.isPending} onClick={() => convertQuote.mutate(r.so.id)}><FileSignature size={13} /> To order</button>}
+              {kind === 'order' && <button className="btn btn-secondary btn-sm" title="Make a delivery challan with these items" onClick={() => navigate(`/app/sales/challans?fromSO=${r.so.id}`)}><Truck size={13} /> Challan</button>}
               <button className="btn btn-primary btn-sm" onClick={() => navigate(`/app/sales/invoices/new?fromSO=${r.so.id}`)}>
                 <FileText size={13} /> {kind === 'quote' ? 'To invoice' : 'Convert to invoice'}
               </button>
@@ -254,6 +255,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
                       {canWrite && !r.invoiced && <button className="icon-btn" title="Edit" onClick={() => open(r.so)}><Pencil size={15} /></button>}
                       {canWrite && kind === 'quote' && r.so.status === 'Accepted' && !r.invoiced && <button className="icon-btn" title="Convert to sales order" onClick={() => convertQuote.mutate(r.so.id)}><FileSignature size={15} /></button>}
                       {canWrite && r.so.status === 'Accepted' && !r.invoiced && <button className="icon-btn" title="Convert to invoice" onClick={() => navigate(`/app/sales/invoices/new?fromSO=${r.so.id}`)}><FileText size={15} /></button>}
+                      {canWrite && kind === 'order' && !r.invoiced && <button className="icon-btn" title="Delivery challan" onClick={() => navigate(`/app/sales/challans?fromSO=${r.so.id}`)}><Truck size={15} /></button>}
                       {canWrite && kind === 'quote' && r.so.status === 'Sent' && <button className="icon-btn" title="Mark declined" onClick={() => move(r.so, 'Declined')}><XCircle size={15} /></button>}
                     </td>
                   </tr>

@@ -1,4 +1,4 @@
-import type { Bill, CreditNote, Journal, Line, PurchaseOrder, SalesOrder, StockAdjustment, StockTransfer } from '@/api/types';
+import type { Bill, CreditNote, DeliveryChallan, Journal, Line, PurchaseOrder, SalesOrder, StockAdjustment, StockTransfer } from '@/api/types';
 import { fmtDate } from '@/lib/format';
 import type { ReportTable } from '@/lib/report';
 
@@ -104,6 +104,21 @@ export function transferTable(t: StockTransfer): ReportTable {
     columns: [{ label: '#' }, { label: 'Item' }, { label: 'Quantity', align: 'right' }, { label: 'Serial numbers' }],
     rows: t.lines.map((l, i) => ({ cells: [String(i + 1), l.name, `${l.qty} ${l.unit}`, l.serials?.join(', ') || '—'] })),
     note: [t.notes, 'Received by: ____________________   Date: ____________'].filter(Boolean).join('\n'),
+  };
+}
+
+export function challanTable(d: DeliveryChallan, showRates = true): ReportTable {
+  const c = d.customer;
+  return {
+    title: `Delivery challan ${d.number}`, filename: fileName(`challan-${d.number}`),
+    subtitle: [`To: ${c.companyName || c.name}${c.gstin ? ` · GSTIN ${c.gstin}` : ''}`, c.address, `${fmtDate(d.date)} · Purpose: ${d.purpose}`,
+      [d.transporter && `Transporter: ${d.transporter}`, d.vehicleNo && `Vehicle: ${d.vehicleNo}`, d.lrNo && `LR: ${d.lrNo}`].filter(Boolean).join(' · ')].filter(Boolean).join('\n'),
+    columns: [{ label: '#' }, { label: 'Item' }, { label: 'HSN' }, { label: 'Quantity', align: 'right' }, ...(showRates ? [{ label: 'Rate', money: true }, { label: 'Value', money: true }] : [])],
+    rows: [
+      ...d.lines.map((l, i) => ({ cells: [String(i + 1), l.name, l.hsn || '—', `${l.qty} ${l.unit}`, ...(showRates ? [l.rate, Math.round(l.qty * l.rate * 100) / 100] : [])] })),
+      ...(showRates ? [{ cells: ['', 'Total value (before GST)', '', '', '', d.value], kind: 'total' as const }] : []),
+    ],
+    note: [d.notes, 'Goods sent under delivery challan, not a tax invoice.', 'Received the above goods in good condition.', 'Receiver’s name & signature: ____________________   Date: ____________'].filter(Boolean).join('\n'),
   };
 }
 

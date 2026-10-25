@@ -5,7 +5,7 @@ import {
 
 /** Icon and colour for each page title, matched on the longest route prefix. */
 const ICONS: Array<[string, LucideIcon, string]> = [
-  ['/app/sales/customers', UserRound, 'blush'], ['/app/sales/quotes', FileSignature, 'gold'], ['/app/sales/orders', ClipboardList, 'sage'],
+  ['/app/sales/customers', UserRound, 'blush'], ['/app/sales/quotes', FileSignature, 'gold'], ['/app/sales/orders', ClipboardList, 'sage'], ['/app/sales/challans', Truck, 'gold'],
   ['/app/sales/invoices', FileText, 'rose'], ['/app/sales/payments', IndianRupee, 'sage'], ['/app/sales/credit-notes', FileMinus, 'cocoa'],
   ['/app/sales/recurring', Repeat, 'gold'], ['/app/pos', ScanLine, 'rose'],
   ['/app/purchases/vendors', Truck, 'cocoa'], ['/app/purchases/orders', ClipboardList, 'gold'], ['/app/purchases/bills', Receipt, 'rose'],

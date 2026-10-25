@@ -10,7 +10,7 @@ RUN npm run build && npm prune --omit=dev
 # ---- run ----
 FROM node:20-bookworm-slim
 WORKDIR /app
-ENV NODE_ENV=production PORT=10000 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV NODE_ENV=production PORT=10000 PLAYWRIGHT_BROWSERS_PATH=/ms-playwright TZ=Asia/Kolkata
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 # pg_dump for the backup job and fonts with ₹ and Indian scripts. PDFs are printed by Playwright's own headless

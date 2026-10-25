@@ -640,15 +640,32 @@ salesRouter.post(
         mode: z.enum(['Cash', 'UPI', 'Card']),
         tendered: z.number().min(0).optional(),
         reference: z.string().max(100).default(''),
+        /** Split payment: e.g. part cash, part UPI. The amounts must add up to the bill total. */
+        split: z.array(z.object({ mode: z.enum(['Cash', 'UPI', 'Card']), amount: z.number().positive(), reference: z.string().max(100).default('') })).min(2).max(3).optional(),
+        pricesIncludeTax: z.boolean().optional(),
+        billDiscount: z.object({ kind: z.enum(['percent', 'amount']), value: z.number().min(0).max(1e9) }).nullable().optional(),
       }),
       req.body,
     );
     const today = todayISO();
     const inv = await createInvoice(
       db, req, c.shopId,
-      { customerId: b.customerId, date: today, dueDate: today, branchId: b.branchId ?? c.branchId, lines: b.lines, withGst: b.withGst, reverseCharge: false, tcsRate: 0, notes: '' },
+      { customerId: b.customerId, date: today, dueDate: today, branchId: b.branchId ?? c.branchId, lines: b.lines, withGst: b.withGst, reverseCharge: false, tcsRate: 0, notes: '',
+        pricesIncludeTax: b.pricesIncludeTax, billDiscount: b.billDiscount },
       { issue: true, source: 'pos' },
     );
+    if (b.split) {
+      const paid = Math.round(b.split.reduce((s2, p) => s2 + p.amount, 0) * 100) / 100;
+      if (Math.abs(paid - inv.total) > 0.5) throw badRequest(`The split payments add up to ₹${paid}, but the bill is ₹${inv.total}`);
+      // The last part absorbs any paise left over from rounding, so the bill is exactly settled.
+      let left = inv.total;
+      for (const [i, p] of b.split.entries()) {
+        const amount = i === b.split.length - 1 ? Math.round(left * 100) / 100 : Math.min(p.amount, left);
+        left -= amount;
+        if (amount > 0) await recordPayment(db, req, c.shopId, inv.id, { date: today, amount, tdsAmount: 0, mode: p.mode, reference: p.reference, notes: 'POS · split' });
+      }
+      return { invoice: await getInvoice(db, c.shopId, inv.id), change: 0 };
+    }
     if (b.mode === 'Cash' && b.tendered !== undefined && b.tendered < inv.total) throw badRequest('Cash tendered is less than the bill total');
     await recordPayment(db, req, c.shopId, inv.id, { date: today, amount: inv.total, tdsAmount: 0, mode: b.mode, reference: b.reference, notes: 'POS' });
     return { invoice: await getInvoice(db, c.shopId, inv.id), change: b.mode === 'Cash' && b.tendered ? Math.max(0, b.tendered - inv.total) : 0 };

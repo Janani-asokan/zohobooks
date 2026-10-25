@@ -1,3 +1,4 @@
+import './tz';
 import { createApp } from './app';
 import { config } from './config';
 import { query } from './db';

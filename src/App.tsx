@@ -36,6 +36,7 @@ const PaymentsMade = lazy(() => import('./pages/app/PaymentsMade'));
 const Warehouses = lazy(() => import('./pages/app/Warehouses'));
 const StockAdjustments = lazy(() => import('./pages/app/StockAdjustments'));
 const Transfers = lazy(() => import('./pages/app/Transfers'));
+const DeliveryChallans = lazy(() => import('./pages/app/DeliveryChallans'));
 const StockSummary = lazy(() => import('./pages/app/StockSummary'));
 const Banking = lazy(() => import('./pages/app/Banking'));
 const Reports = lazy(() => import('./pages/app/Reports'));
@@ -94,6 +95,7 @@ export default function App() {
             <Route path="sales/customers" element={<Customers />} />
             <Route path="sales/quotes" element={<SalesOrders key="quote" kind="quote" />} />
             <Route path="sales/orders" element={<SalesOrders key="order" />} />
+            <Route path="sales/challans" element={<DeliveryChallans />} />
             <Route path="sales/invoices" element={<Invoices />} />
             <Route path="sales/invoices/new" element={<InvoiceForm />} />
             <Route path="sales/invoices/:id" element={<InvoiceView />} />

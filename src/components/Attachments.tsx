@@ -5,7 +5,7 @@ import { api } from '@/api/client';
 import { useToast } from '@/context/ToastContext';
 import { ACCEPT_UPLOADS, fileToDataUrl, fmtBytes } from '@/lib/files';
 
-export type AttachEntity = 'invoice' | 'bill' | 'item' | 'customer' | 'vendor' | 'expense' | 'purchase_order' | 'sales_order' | 'credit_note' | 'stock_adjustment' | 'stock_transfer' | 'journal' | 'payment' | 'bill_payment' | 'bank_transaction';
+export type AttachEntity = 'invoice' | 'bill' | 'item' | 'customer' | 'vendor' | 'expense' | 'purchase_order' | 'sales_order' | 'credit_note' | 'stock_adjustment' | 'stock_transfer' | 'journal' | 'payment' | 'bill_payment' | 'bank_transaction' | 'delivery_challan';
 export interface Attachment { id: string; filename: string; mime: string; size: number; uploadedBy: string; createdAt: string }
 
 const fileUrl = (id: string, download = false) => `/api/shop/attachments/${id}${download ? '?download=1' : ''}`;
