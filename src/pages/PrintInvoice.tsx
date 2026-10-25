@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Download, FileX, Loader2, Printer } from 'lucide-react';
+import { download } from '@/api/client';
 import type { Invoice } from '@/api/types';
 import { TaxInvoice, type PrintBranch, type PrintOrg } from '@/components/TaxInvoice';
 import { ThermalReceipt, receiptFromInvoice } from '@/components/printing';
@@ -45,6 +46,7 @@ export default function PrintInvoice() {
   const [data, setData] = useState<Bundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [readyFor, setReadyFor] = useState<Paper | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const paper = (['a4', 'a5', 'thermal'].includes(params.get('paper') ?? '') ? params.get('paper') : data?.settings.invoice.paper ?? 'a4') as Paper;
 
   useLayoutEffect(() => {
@@ -123,7 +125,12 @@ export default function PrintInvoice() {
       </div>
     );
 
-  const pdfHref = share ? `/api/public/invoices/${share}/pdf` : `/api/shop/invoices/${id}/pdf?paper=${paper}`;
+  const pdfHref = share ? `/public/invoices/${share}/pdf` : `/shop/invoices/${id}/pdf?paper=${paper}`;
+  // The server PDF matches this page exactly; if it can't be made right now, the browser's own print-to-PDF is used.
+  const savePdf = () => {
+    setPdfBusy(true);
+    download(pdfHref, `${inv?.number ?? 'invoice'}.pdf`).catch(() => window.print()).finally(() => setPdfBusy(false));
+  };
   return (
     <div className="print-shell">
       {!embedded && (
@@ -132,7 +139,7 @@ export default function PrintInvoice() {
           <div className="strong" style={{ fontSize: 14 }}>{inv?.number ?? (inv ? 'Draft invoice' : '')}</div>
           <div className="grow" />
           {!share && <Segmented value={paper} onChange={(v) => { params.set('paper', v); setParams(params, { replace: true }); }} options={[{ value: 'a4', label: 'A4' }, { value: 'a5', label: 'A5' }, { value: 'thermal', label: '80mm' }]} />}
-          <a className="btn btn-secondary" href={pdfHref}><Download size={15} /> PDF</a>
+          <button className="btn btn-secondary" disabled={!data || pdfBusy} onClick={savePdf}>{pdfBusy ? <Loader2 size={15} className="spin" /> : <Download size={15} />} PDF</button>
           <button className="btn btn-primary" onClick={() => window.print()} disabled={!data}><Printer size={15} /> Print</button>
         </div>
       )}

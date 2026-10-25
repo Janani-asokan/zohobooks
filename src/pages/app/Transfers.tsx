@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { transferTable } from '@/lib/docPdf';
+import { AttachButton } from '@/components/AttachButton';
+import { ExportMenu } from '@/components/ExportMenu';
+import { PdfButton } from '@/components/PdfButton';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, ArrowLeftRight, Loader2, PackageCheck, Ban, ArrowRight } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
@@ -62,7 +66,11 @@ export default function Transfers() {
   return (
     <div className="page">
       <PageHeader title="Transfers" crumbs={<>Inventory <span>/</span> Transfers</>} subtitle="Move stock between warehouses. Stock leaves when you dispatch and arrives when the other side receives it."
-        actions={canWrite && <button className="btn btn-primary" onClick={start}><Plus size={16} /> New transfer</button>} />
+        actions={<><ExportMenu disabled={!rows.length} table={() => ({
+          title: 'Stock transfers', subtitle: `${rows.length} transfers`, filename: 'stock-transfers',
+          columns: [{ label: 'Date' }, { label: 'Number' }, { label: 'From' }, { label: 'To' }, { label: 'Items' }, { label: 'Status' }],
+          rows: rows.map((t) => ({ cells: [fmtDate(t.date), t.number, t.fromName, t.toName, t.lines.map((l) => `${l.name} × ${l.qty}`).join(', '), t.status] })),
+        })} />{canWrite && <button className="btn btn-primary" onClick={start}><Plus size={16} /> New transfer</button>}</>} />
       <div className="stat-grid">
         <StatCard label="In transit" value={inTransit.length} icon={ArrowLeftRight} tone="amber" foot={`${inTransit.reduce((s, t) => s + t.lines.length, 0)} item lines on the way`} />
         <StatCard label="Received this month" value={data.filter((t) => t.status === 'Received' && (t.receivedAt ?? '') >= todayISO().slice(0, 8) + '01').length} icon={PackageCheck} tone="green" foot="Transfers completed" />
@@ -92,6 +100,8 @@ export default function Transfers() {
                   <td className="muted">{t.lines.map((l) => `${l.name} × ${l.qty}`).slice(0, 2).join(', ')}{t.lines.length > 2 ? ` +${t.lines.length - 2}` : ''}</td>
                   <td><StatusBadge status={t.status} />{t.receivedAt && <div className="muted small">{fmtDate(t.receivedAt.slice(0, 10))}</div>}</td>
                   <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                    <PdfButton iconOnly table={() => transferTable(t)} />
+                    <AttachButton entity="stock_transfer" entityId={t.id} title={t.number} canWrite={canWrite} />
                     {canWrite && t.status === 'In transit' && <>
                       <button className="btn btn-primary btn-sm" disabled={receive.isPending} onClick={() => receive.mutate(t.id)}><PackageCheck size={14} /> Receive</button>
                       <button className="icon-btn danger" title="Cancel transfer" onClick={() => setCancel(t)}><Ban size={15} /></button>

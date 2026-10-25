@@ -1,5 +1,7 @@
 import { cloneElement, isValidElement, useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
+import { pageIcon } from './pageIcons';
 import { ChevronLeft, ChevronRight, X, AlertCircle, type LucideIcon } from 'lucide-react';
 
 export function Modal({
@@ -200,13 +202,19 @@ export function StatCard({
   );
 }
 
-export function PageHeader({ title, subtitle, actions, crumbs }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; crumbs?: ReactNode }) {
+export function PageHeader({ title, subtitle, actions, crumbs, icon }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; crumbs?: ReactNode; icon?: LucideIcon | false }) {
+  const { pathname } = useLocation();
+  const auto = icon === undefined ? pageIcon(pathname) : null;
+  const Icon = icon || auto?.icon;
   return (
     <div className="page-header">
-      <div>
-        {crumbs && <div className="breadcrumb">{crumbs}</div>}
-        <h1>{title}</h1>
-        {subtitle && <p>{subtitle}</p>}
+      <div className="page-title-row">
+        {Icon && pathname !== '/app' && <span className={`page-icon tone-${auto?.tone ?? 'rose'}`} aria-hidden="true"><Icon size={22} /></span>}
+        <div style={{ minWidth: 0 }}>
+          {crumbs && <div className="breadcrumb">{crumbs}</div>}
+          <h1>{title}</h1>
+          {subtitle && <p>{subtitle}</p>}
+        </div>
       </div>
       {actions && <div className="page-actions">{actions}</div>}
     </div>

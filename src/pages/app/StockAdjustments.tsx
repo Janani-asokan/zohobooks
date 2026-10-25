@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { adjustmentTable } from '@/lib/docPdf';
+import { Attachments } from '@/components/Attachments';
+import { ExportMenu } from '@/components/ExportMenu';
+import { PdfButton } from '@/components/PdfButton';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, SlidersHorizontal, Loader2, X } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
@@ -49,7 +53,11 @@ export default function StockAdjustments() {
   return (
     <div className="page">
       <PageHeader title="Stock Adjustments" crumbs={<>Inventory <span>/</span> Stock Adjustments</>} subtitle="Correct stock after a count, or record damaged, expired and lost goods. Each adjustment keeps who, when and why."
-        actions={canWrite && <><button className="btn btn-secondary" onClick={() => start('count')}>Record a stock count</button><button className="btn btn-primary" onClick={() => start()}><Plus size={16} /> New adjustment</button></>} />
+        actions={<><ExportMenu disabled={!rows.length} table={() => ({
+          title: 'Stock adjustments', subtitle: `${rows.length} adjustments`, filename: 'stock-adjustments',
+          columns: [{ label: 'Date' }, { label: 'Number' }, { label: 'Warehouse' }, { label: 'Reason' }, { label: 'Items' }, { label: 'Value', money: true }, { label: 'By' }],
+          rows: rows.map((a) => ({ cells: [fmtDate(a.date), a.number, a.branchName, a.reason, a.lines.map((l) => `${l.name} ${l.change > 0 ? '+' : ''}${l.change}`).join(', '), a.value, a.createdBy] })),
+        })} />{canWrite && <><button className="btn btn-secondary" onClick={() => start('count')}>Record a stock count</button><button className="btn btn-primary" onClick={() => start()}><Plus size={16} /> New adjustment</button></>}</>} />
       <div className="card">
         <div className="toolbar"><div className="toolbar-left"><SearchInput value={q} onChange={setQ} placeholder="Search number, reason, item…" /></div></div>
         <div className="table-wrap">
@@ -94,7 +102,7 @@ export default function StockAdjustments() {
       </Modal>
 
       <Modal open={!!view} onClose={() => setView(null)} size="lg" title={view?.number ?? ''} subtitle={view ? `${view.branchName} · ${fmtDate(view.date)} · ${view.reason}${view.createdBy ? ` · by ${view.createdBy}` : ''}` : ''}
-        footer={<button className="btn btn-secondary" onClick={() => setView(null)}><X size={15} /> Close</button>}>
+        footer={<>{view && <PdfButton className="btn btn-secondary" table={() => adjustmentTable(view)} label="Download PDF" />}<button className="btn btn-secondary" onClick={() => setView(null)}><X size={15} /> Close</button></>}>
         {view && (
           <>
             <table className="table">
@@ -103,6 +111,7 @@ export default function StockAdjustments() {
               <tfoot><tr><td colSpan={4} className="strong">Total value</td><td className="num strong">{money(view.value)}</td></tr></tfoot>
             </table>
             {view.notes && <p className="small muted" style={{ marginTop: 12, whiteSpace: 'pre-line' }}>{view.notes}</p>}
+            <div style={{ marginTop: 16 }}><Attachments entity="stock_adjustment" entityId={view.id} canWrite={canWrite} title="Files (count sheets, photos of damaged goods)" /></div>
           </>
         )}
       </Modal>

@@ -83,3 +83,16 @@ describe('price list', () => {
     ]);
   });
 });
+
+describe('business name on receipts', () => {
+  it('uses the heading without document words, never a labelled line', () => {
+    const r = parseDocumentText('Tata Power Receipt\nReceipt No: TP-99812\nDate: 21/10/2026\nTotal Amount 2,450.00', 'expense');
+    expect(r.data.party.companyName).toBe('Tata Power');
+    expect(r.data.total).toBe(2450);
+    expect(r.data.documentNumber).toBe('TP-99812');
+  });
+  it('skips a date-only first line', () => {
+    const r = parseDocumentText('Date: 05/10/2026\nSri Murugan Electricals\nAmount 1,200', 'expense');
+    expect(r.data.party.companyName).toBe('Sri Murugan Electricals');
+  });
+});

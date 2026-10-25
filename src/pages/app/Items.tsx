@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ExportMenu } from '@/components/ExportMenu';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Package, Wrench, Pencil, Trash2, ScanBarcode, Download, Upload, Boxes, Tag, ArrowLeftRight, SlidersHorizontal, X, CalendarClock, Archive, List, LayoutGrid, ExternalLink } from 'lucide-react';
+import { Plus, Package, Wrench, Pencil, Trash2, ScanBarcode, Upload, Boxes, Tag, ArrowLeftRight, SlidersHorizontal, X, CalendarClock, Archive, List, LayoutGrid, ExternalLink } from 'lucide-react';
 import { api, download } from '@/api/client';
 import { useBranches, useItemFacets, useItems, useMovements, useMut, useStockAlerts, useTaxSlabs } from '@/api/hooks';
 import type { Item } from '@/api/types';
@@ -151,7 +152,14 @@ export default function Items() {
               <span className="lead" style={{ color: 'var(--brand-600)' }}><ScanBarcode size={16} /></span>
               <input className="input" style={{ height: 38 }} placeholder="Quick scan: look up or add by barcode" value={scan} onChange={(ev) => setScan(ev.target.value.trim())} onKeyDown={(ev) => ev.key === 'Enter' && scan && handleScan(scan)} aria-label="Quick barcode scan" />
             </div>
-            <button className="btn btn-secondary" onClick={() => download('/shop/items/export.csv', 'items.csv').catch((err) => toast('error', err.message))}><Download size={15} /> Export</button>
+            <ExportMenu table={() => {
+              const list = tab === 'stock' ? items.filter((i) => i.type === 'Goods') : rows;
+              return {
+                title: tab === 'Services' ? 'Services' : 'Items', subtitle: `${list.length} items`, filename: 'items', landscape: true,
+                columns: [{ label: 'Item' }, { label: 'SKU' }, { label: 'HSN' }, { label: 'Category' }, ...(me.can('items.cost') ? [{ label: 'Cost', money: true }] : []), { label: 'SP1', money: true }, { label: 'SP2', money: true }, { label: 'SP3', money: true }, { label: 'GST', align: 'right' as const }, { label: 'Stock', align: 'right' as const }],
+                rows: list.map((i) => ({ cells: [i.name, i.sku, i.hsn, i.category ?? '', ...(me.can('items.cost') ? [i.cost ?? 0] : []), i.sp1, i.sp2, i.sp3, `${slabs.find((x) => x.id === i.taxSlabId)?.rate ?? 0}%`, i.type === 'Goods' ? `${i.stock} ${i.unit}` : '—'] })),
+              };
+            }} extra={[{ label: 'CSV for re-import', onClick: () => { download('/shop/items/export.csv', 'items.csv').catch((err) => toast('error', err.message)); } }]} />
             {canWrite && <button className="btn btn-secondary" onClick={() => setPdfImportOpen(true)} title="Supplier price list or catalogue as PDF or photo"><FileUp size={15} /> From price list</button>}
             {canWrite && <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={15} /> Import</button>}
             {canWrite && <button className="btn btn-primary" onClick={() => openNew()} title="Alt I"><Plus size={16} /> New Item</button>}

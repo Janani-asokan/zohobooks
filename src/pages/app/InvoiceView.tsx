@@ -6,6 +6,7 @@ import { SALES_KEYS, useBankAccounts, useBranches, useInvoice, useMut, useOrg, u
 import { printInvoice, printRoute, type PrintPaper } from '@/lib/printInvoice';
 import { withPrintDefaults } from '../../../shared/printSettings';
 import type { InvoiceDetail, Organization } from '@/api/types';
+import { downloadInvoicePdf } from '@/lib/report';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { ConfirmModal, EmptyState, Field, Modal, Segmented } from '@/components/ui';
@@ -105,7 +106,8 @@ export default function InvoiceView() {
   }
   const downloadPdf = (paper: PrintPaper = 'a4') => {
     setPdfBusy(true);
-    download(`/shop/invoices/${id}/pdf?paper=${paper}`, `${inv?.number ?? 'draft-invoice'}.pdf`)
+    downloadInvoicePdf(id!, `${inv?.number ?? 'draft-invoice'}.pdf`, paper)
+      .then((how) => how === 'print' ? toast('info', 'Print window opened', 'Choose “Save as PDF” as the printer to keep a copy.') : toast('success', 'PDF downloaded'))
       .catch((e) => toast('error', 'PDF not ready', e.message))
       .finally(() => setPdfBusy(false));
   };

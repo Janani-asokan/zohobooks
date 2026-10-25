@@ -1,7 +1,8 @@
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Download, FileX, Printer, Smartphone } from 'lucide-react';
-import { api } from '@/api/client';
+import { api, download } from '@/api/client';
+import { printPage } from '@/lib/report';
 import type { Invoice } from '@/api/types';
 import { upiLink } from '@/components/qr';
 import { TaxInvoice, type PrintBranch, type PrintOrg } from '@/components/TaxInvoice';
@@ -39,7 +40,7 @@ export default function PublicInvoice() {
           </div>
           <div className="row" style={{ flexWrap: 'wrap' }}>
             {canPay && <a className="btn btn-primary" href={upiLink(org, inv.balance, inv.number ?? '')}><Smartphone size={15} /> Pay {money(inv.balance)} by UPI</a>}
-            <a className="btn btn-secondary" href={`/api/public/invoices/${token}/pdf`}><Download size={15} /> Download PDF</a>
+            <button className="btn btn-secondary" onClick={() => download(`/public/invoices/${token}/pdf`, `${inv.number}.pdf`).catch(() => printPage(`/invoices/${inv.id}/print?share=${token}&paper=${settings.invoice.paper}`))}><Download size={15} /> Download PDF</button>
             <a className="btn btn-ghost" href={`/invoices/${inv.id}/print?share=${token}&paper=${settings.invoice.paper}`}><Printer size={15} /> Print</a>
           </div>
         </div>

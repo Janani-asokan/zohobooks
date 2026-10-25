@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ExportMenu } from '@/components/ExportMenu';
 import { useSearchParams } from 'react-router-dom';
 import { Paperclip } from 'lucide-react';
 import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
@@ -132,7 +133,11 @@ export default function Expenses() {
   return (
     <div className="page">
       <PageHeader title="Expenses" subtitle="Day-to-day running costs — rent, salaries, electricity, travel and more."
-        actions={canWrite && <button className="btn btn-primary" onClick={() => start()}><Plus size={16} /> Record Expense</button>} />
+        actions={<><ExportMenu disabled={!rows.length} table={() => ({
+          title: 'Expenses', subtitle: `${rows.length} expenses`, filename: 'expenses',
+          columns: [{ label: 'Date' }, { label: 'Category' }, { label: 'Description' }, { label: 'Vendor' }, { label: 'Paid from' }, { label: 'Amount', money: true }, { label: 'GST', money: true }, { label: 'Total', money: true }],
+          rows: [...rows.map((e) => ({ cells: [fmtDate(e.date), e.category, e.description, e.vendorName ?? '', e.accountName ?? '', e.amount, e.taxAmount, e.total] as Array<string | number | null> })), { cells: ['Total', '', '', '', '', rows.reduce((a, e) => a + e.amount, 0), rows.reduce((a, e) => a + e.taxAmount, 0), rows.reduce((a, e) => a + e.total, 0)], kind: 'total' as const }],
+        })} />{canWrite && <button className="btn btn-primary" onClick={() => start()}><Plus size={16} /> Record Expense</button>}</>} />
       <Hint id="expenses" title="Track where your money goes">
         <p>Record each expense as you pay it. It’s deducted from the bank/cash account you choose, shows up in <strong>Profit &amp; Loss</strong>, and GST paid to registered vendors is added to your input tax credit.</p>
       </Hint>

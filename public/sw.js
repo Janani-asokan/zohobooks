@@ -3,7 +3,7 @@
  * - GET /api/shop/* : network-first, falling back to the last cached response when offline.
  * - Auth, platform, public links and all writes: never cached.
  */
-const VERSION = 'v12';
+const VERSION = 'v13';
 const SHELL = `ledgerly-shell-${VERSION}`;
 const DATA = `ledgerly-data-${VERSION}`;
 
@@ -28,11 +28,12 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
 
   if (url.pathname.startsWith('/api/')) {
-    if (!url.pathname.startsWith('/api/shop/') || url.pathname.endsWith('.csv') || url.pathname.endsWith('.json')) return;
+    // Downloads (PDFs, attachments, exports) always go straight to the network and are never stored.
+    if (!url.pathname.startsWith('/api/shop/') || /\/(pdf|download|export|attachments)\b/.test(url.pathname) || url.search.includes('download=') || url.pathname.endsWith('.csv') || url.pathname.endsWith('.json')) return;
     e.respondWith(
       fetch(req)
         .then((res) => {
-          if (res.ok) {
+          if (res.ok && (res.headers.get('content-type') || '').includes('application/json')) {
             const copy = res.clone();
             caches.open(DATA).then((c) => c.put(req, copy));
           }

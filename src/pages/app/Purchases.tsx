@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ExportMenu } from '@/components/ExportMenu';
+import { billTable } from '@/lib/docPdf';
+import { PdfButton } from '@/components/PdfButton';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ShoppingBag, CheckCircle2, Loader2, Package, Receipt, AlertTriangle, X } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
@@ -163,7 +166,11 @@ export default function Purchases() {
   return (
     <div className="page">
       <PageHeader title="Bills" subtitle="Vendor bills you need to pay, and the GST input credit they carry."
-        actions={canWrite && <button className="btn btn-primary" onClick={start}><Plus size={16} /> New Bill</button>} />
+        actions={<><ExportMenu disabled={!rows.length} table={() => ({
+          title: 'Bills', subtitle: `${rows.length} bills`, filename: 'bills', landscape: true,
+          columns: [{ label: 'Date' }, { label: 'Bill #' }, { label: 'Vendor' }, { label: 'Vendor bill no.' }, { label: 'Due' }, { label: 'Status' }, { label: 'Taxable', money: true }, { label: 'GST', money: true }, { label: 'Total', money: true }, { label: 'Balance', money: true }],
+          rows: rows.map((b) => ({ cells: [fmtDate(b.date), b.number, b.vendorName, b.vendorBillNo, fmtDate(b.dueDate), statusOf(b), b.taxableAmount, b.taxAmount, b.amount, b.balance] })),
+        })} />{canWrite && <button className="btn btn-primary" onClick={start}><Plus size={16} /> New Bill</button>}</>} />
       <Hint id="bills" title="Recording purchases">
         <p>Enter a bill <strong>item by item</strong> to add the goods to stock straight away (no purchase order needed), or as a <strong>single amount</strong> when the vendor bill has no stock items. Record rent, salaries and other running costs under <strong>Expenses</strong> so they show in Profit &amp; Loss. Click <strong>Pay</strong> when you settle it — the money leaves the bank or cash account you choose.</p>
       </Hint>
@@ -267,7 +274,7 @@ export default function Purchases() {
           <aside className="drawer" role="dialog" aria-label={view.number}>
             <div className="drawer-head">
               <div><div className="row" style={{ gap: 8 }}><h3 style={{ fontSize: 16 }}>{view.number}</h3><Badge>{statusOf(view)}</Badge></div><p className="small muted">{view.vendorName} · {fmtDate(view.date)} · due {fmtDate(view.dueDate)}</p></div>
-              <button className="icon-btn" onClick={() => setView(null)} aria-label="Close"><X size={18} /></button>
+              <div className="row" style={{ gap: 4 }}><PdfButton table={() => billTable(view)} /><button className="icon-btn" onClick={() => setView(null)} aria-label="Close"><X size={18} /></button></div>
             </div>
             <div className="drawer-body">
               {view.lines.length > 0 ? (

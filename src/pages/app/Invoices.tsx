@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, FileText, Printer, Download, Send, X, MessageCircle } from 'lucide-react';
+import { Plus, FileText, Printer, Send, X, MessageCircle } from 'lucide-react';
 import { api } from '@/api/client';
 import { useBranches, useInvoices, useOrg } from '@/api/hooks';
 import type { Invoice, InvoiceStatus } from '@/api/types';
@@ -12,7 +12,8 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { SavedViewsMenu, useSavedViews } from '@/components/SavedViews';
 import { fmtDate, money } from '@/lib/format';
 import { daysUntil, fyLabel } from '@/lib/fy';
-import { toCsv } from '../../../shared/csv';
+import { ExportMenu } from '@/components/ExportMenu';
+import type { ReportTable } from '@/lib/report';
 import { waLink } from './InvoiceView';
 import { Hint } from '@/components/kit';
 import { InvoicePanel } from '@/components/InvoicePanel';
@@ -20,18 +21,16 @@ import { printInvoice } from '@/lib/printInvoice';
 
 const TABS: Array<'All' | InvoiceStatus> = ['All', 'Draft', 'Sent', 'Partially Paid', 'Overdue', 'Paid', 'Void'];
 
-function exportCsv(rows: Invoice[]) {
-  const csv = toCsv(
-    rows.map((i) => ({ number: i.number ?? 'Draft', date: i.date, due: i.dueDate, customer: i.customer.companyName || i.customer.name, gstin: i.customer.gstin, status: i.paymentStatus, taxable: i.subTotal, tax: i.taxTotal, total: i.total, paid: i.amountPaid, balance: i.balance })),
-    [
-      { key: 'number', label: 'Invoice #' }, { key: 'date', label: 'Date' }, { key: 'due', label: 'Due date' }, { key: 'customer', label: 'Customer' }, { key: 'gstin', label: 'GSTIN' },
-      { key: 'status', label: 'Status' }, { key: 'taxable', label: 'Taxable value' }, { key: 'tax', label: 'GST' }, { key: 'total', label: 'Total' }, { key: 'paid', label: 'Paid' }, { key: 'balance', label: 'Balance' },
+function invoiceTable(rows: Invoice[], title = 'Invoices'): ReportTable {
+  const sum = (f: (i: Invoice) => number) => rows.reduce((s, i) => s + f(i), 0);
+  return {
+    title, subtitle: `${rows.length} invoice${rows.length === 1 ? '' : 's'}`, filename: `invoices-${new Date().toISOString().slice(0, 10)}`, landscape: true,
+    columns: [{ label: 'Invoice #' }, { label: 'Date' }, { label: 'Due' }, { label: 'Customer' }, { label: 'GSTIN' }, { label: 'Status' }, { label: 'Taxable', money: true }, { label: 'GST', money: true }, { label: 'Total', money: true }, { label: 'Paid', money: true }, { label: 'Balance', money: true }],
+    rows: [
+      ...rows.map((i) => ({ cells: [i.number ?? 'Draft', i.date, i.dueDate, i.customer.companyName || i.customer.name, i.customer.gstin || '', i.paymentStatus, i.subTotal, i.taxTotal, i.total, i.amountPaid, i.balance] as Array<string | number | null> })),
+      { cells: ['Total', '', '', '', '', '', sum((i) => i.subTotal), sum((i) => i.taxTotal), sum((i) => i.total), sum((i) => i.amountPaid), sum((i) => i.balance)], kind: 'total' },
     ],
-  );
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
-  a.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
+  };
 }
 
 export default function Invoices() {
@@ -134,13 +133,13 @@ export default function Invoices() {
           </div>
           <div className="toolbar-right">
             <SavedViewsMenu sv={sv} isActive={(f) => JSON.stringify(f) === JSON.stringify(sv.filters)} />
-            <button className="btn btn-secondary btn-sm" onClick={() => exportCsv(rows)} disabled={!rows.length}><Download size={14} /> Export</button>
+            <ExportMenu size="sm" disabled={!rows.length} table={() => invoiceTable(rows)} />
           </div>
         </div>
         {selected.size > 0 && (
           <div className="bulk-bar">
             {selected.size} selected · {money(sel.reduce((s, i) => s + i.total, 0))}
-            <button className="btn btn-secondary btn-sm" onClick={() => exportCsv(sel)}><Download size={14} /> Export selected</button>
+            <ExportMenu size="sm" table={() => invoiceTable(sel, 'Selected invoices')} />
             {me.can('sales.write') && <button className="btn btn-secondary btn-sm" disabled={sending} onClick={emailReminders}><Send size={14} /> Email reminders</button>}
             <button className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}><X size={14} /> Clear</button>
           </div>

@@ -133,7 +133,12 @@ export function parseDocumentText(text: string, kind: ExtractKind, ownGstin = ''
   // A name on the line after "Bill to" / "Sold by" / "From"
   const after = (re: RegExp) => { const i = lines.findIndex((l) => re.test(l)); return i >= 0 ? (lines[i]!.replace(re, '').replace(/^[:\s-]+/, '').trim() || lines[i + 1] || null) : null; };
   const partyName = legal ?? (kind === 'bill' || kind === 'expense' || kind === 'vendor' ? after(/^(sold by|from|supplier|vendor|seller)\b[:\s]*/i) : after(/^(bill(ed)? to|buyer|customer|consignee|ship(ped)? to)\b[:\s]*/i));
-  const firstLine = lines.find((l) => /[a-z]{3}/i.test(l) && !/invoice|bill|receipt|quotation|order|gst|tax|page/i.test(l)) ?? null;
+  // The business name is usually the first line of the document, minus words like "Receipt" or "Tax Invoice".
+  // Labelled lines ("Date: …", "Receipt No: …") and number-heavy lines are never names.
+  const LABEL = /^(date|dated|invoice|bill|receipt|no\b|no\.|number|total|amount|grand|sub|gstin|gst|phone|mobile|tel|email|page|due|place|state|hsn|qty)\b/i;
+  const firstLine = lines
+    .map((l) => l.replace(/\b(tax\s+invoice|invoice|bill\s+of\s+supply|cash\s+memo|receipt|quotation|estimate|proforma)\b/gi, '').replace(/[\s|·-]{2,}/g, ' ').trim())
+    .find((l) => /[a-z]{3}/i.test(l) && !LABEL.test(l) && !l.includes(':') && !/\b(gst|tax|page|order)\b/i.test(l) && (l.match(/\d/g)?.length ?? 0) < 4) ?? null;
   const name = partyName ?? (kind === 'vendor' || kind === 'bill' || kind === 'expense' ? firstLine : null);
   if (name) { out.party.companyName = name.slice(0, 120); hits++; }
   const contact = labelledText(t, ['contact person', 'attn', 'proprietor', 'contact']);

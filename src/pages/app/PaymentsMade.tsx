@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { AttachButton } from '@/components/AttachButton';
+import { ExportMenu } from '@/components/ExportMenu';
 import { Link } from 'react-router-dom';
 import { Wallet, Smartphone, Banknote, CreditCard, Landmark, Trash2, Clock } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -33,7 +35,12 @@ export default function PaymentsMade() {
 
   return (
     <div className="page">
-      <PageHeader title="Payments Made" crumbs={<>Purchases <span>/</span> Payments Made</>} subtitle="What you have paid vendors, and what is still owed by age." />
+      <PageHeader title="Payments Made" crumbs={<>Purchases <span>/</span> Payments Made</>} subtitle="What you have paid vendors, and what is still owed by age."
+        actions={<ExportMenu disabled={!rows.length} table={() => ({
+          title: 'Payments made', subtitle: `${rows.length} payments`, filename: 'payments-made',
+          columns: [{ label: 'Date' }, { label: 'Number' }, { label: 'Bill' }, { label: 'Vendor' }, { label: 'Mode' }, { label: 'Paid from' }, { label: 'TDS', money: true }, { label: 'Amount', money: true }],
+          rows: [...rows.map((p) => ({ cells: [fmtDate(p.date), p.number, p.billNumber, p.vendorName, p.mode, p.accountName ?? '', p.tdsAmount, p.amount] as Array<string | number | null> })), { cells: ['Total', '', '', '', '', '', rows.reduce((a, p) => a + p.tdsAmount, 0), rows.reduce((a, p) => a + p.amount, 0)], kind: 'total' as const }],
+        })} />} />
       <div className="stat-grid">
         <StatCard label="Paid this month" value={money(thisMonth.reduce((s, p) => s + p.amount, 0))} icon={Wallet} tone="blue" foot={<>{thisMonth.length} payments</>} />
         <StatCard label="Still owed" value={money(a?.totals.total ?? 0)} icon={Landmark} tone="amber" foot={<>{a?.vendors.length ?? 0} vendors</>} />
@@ -67,7 +74,7 @@ export default function PaymentsMade() {
                           <td className="muted">{p.accountName ?? '—'}</td>
                           <td className="num muted">{p.tdsAmount ? money(p.tdsAmount) : '—'}</td>
                           <td className="num strong">{money(p.amount)}</td>
-                          <td className="num">{me.can('purchases.write') && <button className="icon-btn danger" title="Remove payment" onClick={() => setDel(p)}><Trash2 size={15} /></button>}</td>
+                          <td className="num" style={{ whiteSpace: 'nowrap' }}><AttachButton entity="bill_payment" entityId={p.id} title={p.number} canWrite={me.can('purchases.write')} />{me.can('purchases.write') && <button className="icon-btn danger" title="Remove payment" onClick={() => setDel(p)}><Trash2 size={15} /></button>}</td>
                         </tr>
                       );
                     })}

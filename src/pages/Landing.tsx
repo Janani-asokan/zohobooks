@@ -20,9 +20,9 @@ const FEATURES = [
 ] as const;
 
 const AUDIENCE = [
-  { img: '/img/owner.jpg', tone: 'rose' as const, icon: <Store size={44} />, title: 'For shop owners', text: 'See sales, dues and stock on one screen every morning.', cta: 'See the dashboard' },
-  { img: '/img/counter.jpg', tone: 'sage' as const, icon: <ScanLine size={44} />, title: 'For the billing counter', text: 'Scan, bill and print — even during the evening rush.', cta: 'Try POS billing' },
-  { img: '/img/accountant.jpg', tone: 'cocoa' as const, icon: <Calculator size={44} />, title: 'For your accountant', text: 'Clean books, GST returns and exports ready to file.', cta: 'View reports' },
+  { img: '/img/owner.webp', tone: 'rose' as const, icon: <Store size={44} />, title: 'For shop owners', text: 'See sales, dues and stock on one screen every morning.', cta: 'See the dashboard' },
+  { img: '/img/counter.webp', tone: 'sage' as const, icon: <ScanLine size={44} />, title: 'For the billing counter', text: 'Scan, bill and print — even during the evening rush.', cta: 'Try POS billing' },
+  { img: '/img/accountant.webp', tone: 'cocoa' as const, icon: <Calculator size={44} />, title: 'For your accountant', text: 'Clean books, GST returns and exports ready to file.', cta: 'View reports' },
 ];
 
 const STEPS = [
@@ -100,7 +100,7 @@ export default function Landing() {
         </div>
         <div className="lp-hero-art">
           <div className="lp-blob" />
-          <Photo className="lp-hero-photo" src="/img/hero.png" alt="Smiling shop owner holding a tablet" fallback={<HeroArt />} />
+          <Photo className="lp-hero-photo" src="/img/hero.webp" alt="Smiling shop owner holding a tablet" fallback={<HeroArt />} />
           <div className="lp-float f1"><span className="ic rose"><IndianRupee size={16} /></span><div><strong>₹15,947</strong><span>Collected this month</span></div></div>
           <div className="lp-float f2"><span className="ic sage"><Check size={16} /></span><div><strong>Invoice sent</strong><span>INV-0012 on WhatsApp</span></div></div>
           <div className="lp-float f3"><span className="ic gold"><BellRing size={16} /></span><div><strong>Low stock</strong><span>HP 680 ink · reorder</span></div><Link to="/login" className="lp-mini">View</Link></div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ExportMenu } from '@/components/ExportMenu';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Users, Building2, UserRound, Pencil, Trash2, Lock, Mail, Phone, FileText, Download, Upload, Loader2 } from 'lucide-react';
+import { Plus, Users, Building2, UserRound, Pencil, Trash2, Lock, Mail, Phone, FileText, Upload, Loader2 } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
 import { useCustomers, useMut, useNextCustomerId, useOrg } from '@/api/hooks';
 import { TIER_LABEL, type Customer, type PriceTier } from '@/api/types';
@@ -106,7 +107,11 @@ export default function Customers() {
         crumbs={<>Sales <span>/</span> Customers</>}
         actions={
           <>
-            <button className="btn btn-secondary" onClick={() => download('/shop/customers/export.csv', 'customers.csv').catch((err) => toast('error', err.message))}><Download size={15} /> Export</button>
+            <ExportMenu disabled={!rows.length} table={() => ({
+              title: 'Customers', subtitle: `${rows.length} customers`, filename: 'customers', landscape: true,
+              columns: [{ label: 'ID' }, { label: 'Customer' }, { label: 'Type' }, { label: 'GSTIN' }, { label: 'Phone' }, { label: 'Email' }, { label: 'State' }, { label: 'Billed', money: true }, { label: 'Due', money: true }],
+              rows: rows.map((c) => ({ cells: [c.customId, c.companyName || c.name, c.type, c.gstin || '', c.phone, c.email, c.state, c.billed, c.due] })),
+            })} extra={[{ label: 'CSV for re-import', onClick: () => { download('/shop/customers/export.csv', 'customers.csv').catch((err) => toast('error', err.message)); } }]} />
             {canWrite && <button className="btn btn-secondary" onClick={() => setImportOpen(true)}><Upload size={15} /> Import</button>}
             {canWrite && <button className="btn btn-primary" onClick={openNew} title="Alt C"><Plus size={16} /> New Customer</button>}
           </>

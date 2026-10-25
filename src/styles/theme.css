@@ -348,3 +348,11 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .settings-shell > .page { margin: 0; width: 100%; }
 .radio-card > div { min-width: 0; }
 .radio-card strong, .radio-card strong.row { flex-wrap: wrap; white-space: normal; overflow-wrap: anywhere; }
+
+/* Page title icon */
+.page-title-row { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.page-icon { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; flex-shrink: 0; color: #fff; box-shadow: 0 10px 20px rgba(84, 70, 58, .14); animation: pop-in .45s cubic-bezier(.2, .7, .2, 1) backwards; }
+.page-header:hover .page-icon { animation: wiggle .5s ease; }
+.tone-gold { background: var(--gold-grad); color: #fff; }
+@media (max-width: 640px) { .page-icon { width: 40px; height: 40px; border-radius: 13px; } .page-icon svg { width: 19px; height: 19px; } }
+@media print { .page-icon { display: none; } }

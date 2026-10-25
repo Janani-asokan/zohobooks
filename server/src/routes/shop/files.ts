@@ -38,6 +38,12 @@ const ENTITIES = {
   vendor: { table: 'vendors', read: 'purchases.read', write: 'purchases.write' },
   expense: { table: 'expenses', read: 'purchases.read', write: 'purchases.write' },
   purchase_order: { table: 'purchase_orders', read: 'purchases.read', write: 'purchases.write' },
+  stock_adjustment: { table: 'stock_adjustments', read: null, write: 'items.write' },
+  stock_transfer: { table: 'stock_transfers', read: null, write: 'items.write' },
+  journal: { table: 'journals', read: 'accounting.read', write: 'accounting.write' },
+  payment: { table: 'payments', read: null, write: 'payments.write' },
+  bill_payment: { table: 'bill_payments', read: 'purchases.read', write: 'purchases.write' },
+  bank_transaction: { table: 'bank_transactions', read: 'banking.read', write: 'banking.write' },
 } as const satisfies Record<string, { table: string; read: Permission | null; write: Permission }>;
 type Entity = keyof typeof ENTITIES;
 const entityEnum = z.enum(Object.keys(ENTITIES) as [Entity, ...Entity[]]);

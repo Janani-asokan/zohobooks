@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ExportMenu } from '@/components/ExportMenu';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Truck, Phone, Mail, ClipboardList, FileText, X } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
@@ -84,7 +85,11 @@ export default function Vendors() {
   return (
     <div className="page">
       <PageHeader title="Vendors" subtitle="The suppliers you buy from — with what you owe each of them."
-        actions={canWrite && <button className="btn btn-primary" onClick={start}><Plus size={16} /> New Vendor</button>} />
+        actions={<><ExportMenu disabled={!rows.length} table={() => ({
+          title: 'Vendors', subtitle: `${rows.length} vendors`, filename: 'vendors',
+          columns: [{ label: 'Vendor' }, { label: 'GSTIN' }, { label: 'State' }, { label: 'Phone' }, { label: 'Email' }, { label: 'Payable', money: true }],
+          rows: rows.map((v) => ({ cells: [v.name, v.gstin, v.state, v.phone, v.email, v.payable] })),
+        })} />{canWrite && <button className="btn btn-primary" onClick={start}><Plus size={16} /> New Vendor</button>}</>} />
       <Hint id="vendors" title="Why add vendors?">
         <p>Vendors are needed for purchase orders, bills and expenses. Add their <strong>GSTIN</strong> so the GST you pay them is counted as input tax credit in GSTR-3B.</p>
       </Hint>

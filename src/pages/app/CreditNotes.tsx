@@ -6,6 +6,10 @@ import { usePrefs } from '@/context/PrefsContext';
 import { Badge, EmptyState, PageHeader, Pagination, SearchInput, usePagination } from '@/components/ui';
 import { fmtDate, money } from '@/lib/format';
 import { Hint } from '@/components/kit';
+import { ExportMenu } from '@/components/ExportMenu';
+import { PdfButton } from '@/components/PdfButton';
+import { AttachButton } from '@/components/AttachButton';
+import { creditNoteTable } from '@/lib/docPdf';
 
 export default function CreditNotes() {
   const { t } = usePrefs();
@@ -18,7 +22,12 @@ export default function CreditNotes() {
   const pg = usePagination(rows, 15);
   return (
     <div className="page">
-      <PageHeader title={t('nav.creditNotes')} crumbs={<>{t('nav.sales')} <span>/</span> {t('nav.creditNotes')}</>} subtitle="Returns and post-sale corrections. Raise one from the invoice’s “More” menu; they’re reported in GSTR-1 (CDNR) automatically." />
+      <PageHeader title={t('nav.creditNotes')} crumbs={<>{t('nav.sales')} <span>/</span> {t('nav.creditNotes')}</>} subtitle="Returns and post-sale corrections. Raise one from the invoice’s “More” menu; they’re reported in GSTR-1 (CDNR) automatically."
+        actions={<ExportMenu disabled={!rows.length} table={() => ({
+          title: 'Credit notes', subtitle: `${rows.length} credit notes`, filename: 'credit-notes',
+          columns: [{ label: 'Date' }, { label: 'Number' }, { label: 'Invoice' }, { label: 'Customer' }, { label: 'Reason' }, { label: 'GST', money: true }, { label: 'Total', money: true }],
+          rows: [...rows.map((c) => ({ cells: [fmtDate(c.date), c.number, c.invoiceNumber, c.customer.companyName || c.customer.name, c.reason, c.taxTotal, c.total] })), { cells: ['Total', '', '', '', '', rows.reduce((a, c) => a + c.taxTotal, 0), rows.reduce((a, c) => a + c.total, 0)], kind: 'total' as const }],
+        })} />} />
       <Hint id="creditnotes" title="Returns & corrections">
         <p>Open an issued invoice and choose <strong>More → Credit note</strong> to return goods or correct a price. Returned goods can go back into stock, and the note reduces what the customer owes.</p>
       </Hint>
@@ -27,7 +36,7 @@ export default function CreditNotes() {
         <div className="table-wrap">
           {isLoading ? <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 160 }} /></div> : rows.length === 0 ? <EmptyState icon={Undo2} title="No credit notes" text="Open an issued invoice → More → Create credit note." /> : (
             <table className="table">
-              <thead><tr><th>{t('common.date')}</th><th>Credit note #</th><th>Against invoice</th><th>{t('common.customer')}</th><th>Reason</th><th>Stock</th><th className="num">GST</th><th className="num">{t('common.total')}</th></tr></thead>
+              <thead><tr><th>{t('common.date')}</th><th>Credit note #</th><th>Against invoice</th><th>{t('common.customer')}</th><th>Reason</th><th>Stock</th><th className="num">GST</th><th className="num">{t('common.total')}</th><th style={{ width: 84 }} /></tr></thead>
               <tbody>
                 {pg.slice.map((c) => (
                   <tr key={c.id}>
@@ -39,6 +48,7 @@ export default function CreditNotes() {
                     <td>{c.restock ? <Badge tone="green" plain>Restocked</Badge> : <Badge tone="gray" plain>—</Badge>}</td>
                     <td className="num">{money(c.taxTotal)}</td>
                     <td className="num strong">{money(c.total)}</td>
+                    <td className="num" style={{ whiteSpace: 'nowrap' }}><PdfButton iconOnly table={() => creditNoteTable(c)} /><AttachButton entity="credit_note" entityId={c.id} title={c.number} /></td>
                   </tr>
                 ))}
               </tbody>

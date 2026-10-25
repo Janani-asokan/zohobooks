@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ExportMenu } from '@/components/ExportMenu';
+import { salesDocTable } from '@/lib/docPdf';
+import { PdfButton } from '@/components/PdfButton';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ClipboardList, LayoutGrid, List, ArrowRight, FileText, Pencil, Trash2, Send, CheckCircle2, FilePen, FileSignature, XCircle } from 'lucide-react';
 import { api } from '@/api/client';
@@ -148,6 +151,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
         <div className="row" style={{ marginTop: 12, gap: 6, borderTop: '1px solid var(--ink-150)', paddingTop: 10 }}>
           {canWrite && !r.invoiced && <button className="icon-btn sm" title="Edit" onClick={() => open(r.so)}><Pencil size={14} /></button>}
           {canWrite && !r.invoiced && <button className="icon-btn sm danger" title="Delete" onClick={() => setDel(r.so)}><Trash2 size={14} /></button>}
+          <PdfButton iconOnly table={() => salesDocTable(r.so, r.c?.companyName || r.c?.name || 'Customer')} />
           <span style={{ marginLeft: 'auto' }} />
           {!canWrite ? null : idx < STAGES.length - 1 ? (
             <button className="btn btn-secondary btn-sm" onClick={() => move(r.so, STAGES[idx + 1]!.status)}>
@@ -176,7 +180,11 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
         title={L.title}
         crumbs={<>Sales <span>/</span> {L.title}</>}
         subtitle={L.subtitle}
-        actions={canWrite && <button className="btn btn-primary" onClick={() => open()}><Plus size={16} /> {L.newLabel}</button>}
+        actions={<><ExportMenu disabled={!rows.length} table={() => ({
+          title: L.title, subtitle: `${rows.length} ${L.title.toLowerCase()}`, filename: L.title.toLowerCase().replace(/\s+/g, '-'),
+          columns: [{ label: 'Date' }, { label: 'Number' }, { label: 'Customer' }, { label: kind === 'quote' ? 'Valid till' : 'Deliver by' }, { label: 'Status' }, { label: 'Items' }, { label: 'Total', money: true }],
+          rows: rows.map((r) => ({ cells: [fmtDate(r.so.date), r.so.number, r.c?.companyName || r.c?.name || '', fmtDate(r.so.expiryDate), r.so.status, String(r.so.lines.length), r.total] })),
+        })} />{canWrite && <button className="btn btn-primary" onClick={() => open()}><Plus size={16} /> {L.newLabel}</button>}</>}
       />
       {kind === 'quote' && (
         <Hint id="quotes" title="Quote, order, invoice">

@@ -1,4 +1,5 @@
 import { BANK_CATEGORIES } from '../../../shared/accounting';
+import { ExportMenu } from '@/components/ExportMenu';
 import { useMemo, useState } from 'react';
 import { Plus, Landmark, Wallet, CreditCard, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { api } from '@/api/client';
@@ -8,6 +9,11 @@ import { useShopUser } from '@/context/AuthContext';
 import { EmptyState, Field, Modal, PageHeader, Segmented } from '@/components/ui';
 import { fmtDate, money, todayISO } from '@/lib/format';
 import { Hint } from '@/components/kit';
+import { AttachButton } from '@/components/AttachButton';
+import { attachFile } from '@/components/Attachments';
+import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
+import { useToast } from '@/context/ToastContext';
+import type { ExtractResult } from '../../../shared/extract';
 
 const ICON = { Bank: Landmark, Cash: Wallet, Card: CreditCard };
 const CATEGORIES = BANK_CATEGORIES.map((c) => c.name);
@@ -18,7 +24,19 @@ export default function Banking() {
   const accounts = useBankAccounts().data ?? [];
   const allTxns = useBankTxns().data ?? [];
   const keys = [['bankAccounts'], ['bankTxns']];
-  const addTxn = useMut((b: Record<string, unknown>) => api.post('/shop/bank-transactions', b), keys, { success: 'Transaction recorded' });
+  const addTxn = useMut((b: Record<string, unknown>) => api.post<{ id: string }>('/shop/bank-transactions', b), keys, { success: 'Transaction recorded' });
+  const [txFile, setTxFile] = useState<PendingFile | null>(null);
+  const toast = useToast();
+  const txRows = (r: ExtractResult): FillRow[] => [
+    { key: 'date', label: 'Date', value: r.data.date, display: r.data.date ? fmtDate(r.data.date) : undefined, current: tx.date },
+    { key: 'amount', label: 'Amount', value: r.data.total, display: r.data.total != null ? money(r.data.total) : undefined, current: tx.amount },
+    { key: 'description', label: 'Description', value: [r.data.party.companyName || r.data.party.name, r.data.documentNumber].filter(Boolean).join(' · ').slice(0, 200) || null, current: tx.description },
+  ];
+  const applyTx = (keep: Set<string>, r: ExtractResult, file: PendingFile) => {
+    const v = Object.fromEntries(txRows(r).map((x) => [x.key, x.value]));
+    setTx((t) => ({ ...t, date: keep.has('date') && v.date ? String(v.date) : t.date, amount: keep.has('amount') && v.amount != null ? String(v.amount) : t.amount, description: keep.has('description') && v.description ? String(v.description) : t.description }));
+    setTxFile(file);
+  };
   const addAcc = useMut((b: Record<string, unknown>) => api.post('/shop/bank-accounts', b), keys, { success: 'Account added' });
   const [selected, setSelected] = useState<string>('all');
   const [txOpen, setTxOpen] = useState(false);
@@ -38,10 +56,15 @@ export default function Banking() {
       <PageHeader
         title="Banking"
         subtitle="Bank, cash and card accounts with every deposit and withdrawal."
-        actions={canWrite && (
+        actions={(
           <>
-            <button className="btn btn-secondary" onClick={() => { setAcc({ name: '', bank: '', accountNo: '', type: 'Bank', openingBalance: '' }); setTouched(false); setAccOpen(true); }}><Plus size={16} /> Add Account</button>
-            <button className="btn btn-primary" onClick={() => { setTx({ accountId: selected !== 'all' ? selected : accounts[0]?.id ?? '', date: todayISO(), description: '', amount: '', dir: 'in', category: 'Sales' }); setTouched(false); setTxOpen(true); }}><Plus size={16} /> Record Transaction</button>
+            <ExportMenu disabled={!txns.length} table={() => ({
+              title: 'Bank transactions', subtitle: selected === 'all' ? 'All accounts' : accounts.find((a) => a.id === selected)?.name ?? '', filename: 'bank-transactions',
+              columns: [{ label: 'Date' }, { label: 'Description' }, { label: 'Account' }, { label: 'Category' }, { label: 'Deposit', money: true }, { label: 'Withdrawal', money: true }],
+              rows: txns.map((t) => ({ cells: [fmtDate(t.date), t.description, accounts.find((a) => a.id === t.accountId)?.name ?? '', t.category, t.amount > 0 ? t.amount : null, t.amount < 0 ? -t.amount : null] })),
+            })} />
+            {canWrite && <><button className="btn btn-secondary" onClick={() => { setAcc({ name: '', bank: '', accountNo: '', type: 'Bank', openingBalance: '' }); setTouched(false); setAccOpen(true); }}><Plus size={16} /> Add Account</button>
+            <button className="btn btn-primary" onClick={() => { setTx({ accountId: selected !== 'all' ? selected : accounts[0]?.id ?? '', date: todayISO(), description: '', amount: '', dir: 'in', category: 'Sales' }); setTouched(false); setTxOpen(true); }}><Plus size={16} /> Record Transaction</button></>}
           </>
         )}
       />
@@ -82,7 +105,7 @@ export default function Banking() {
         <div className="table-wrap">
           {txns.length === 0 ? <EmptyState icon={Landmark} title="No transactions" text="Record deposits and withdrawals to keep balances accurate." /> : (
             <table className="table">
-              <thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th className="num">Deposit</th><th className="num">Withdrawal</th></tr></thead>
+              <thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Category</th><th className="num">Deposit</th><th className="num">Withdrawal</th><th style={{ width: 44 }} /></tr></thead>
               <tbody>
                 {txns.map((t) => (
                   <tr key={t.id}>
@@ -97,6 +120,7 @@ export default function Banking() {
                     <td><span className="chip">{t.category}</span></td>
                     <td className="num" style={{ color: 'var(--green-700)', fontWeight: 600 }}>{t.amount >= 0 ? money(t.amount) : ''}</td>
                     <td className="num" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{t.amount < 0 ? money(-t.amount) : ''}</td>
+                    <td>{!t.refType && <AttachButton entity="bank_transaction" entityId={t.id} title={t.description} canWrite={canWrite} />}</td>
                   </tr>
                 ))}
               </tbody>
@@ -112,9 +136,19 @@ export default function Banking() {
         footer={<><button className="btn btn-secondary" onClick={() => setTxOpen(false)}>Cancel</button><button className="btn btn-primary" onClick={() => {
           setTouched(true);
           if (Object.values(txErr).some(Boolean)) return;
-          addTxn.mutate({ accountId: tx.accountId, date: tx.date, description: tx.description.trim(), amount: (tx.dir === 'in' ? 1 : -1) * Number(tx.amount), category: tx.category }, { onSuccess: () => setTxOpen(false) });
+          addTxn.mutate({ accountId: tx.accountId, date: tx.date, description: tx.description.trim(), amount: (tx.dir === 'in' ? 1 : -1) * Number(tx.amount), category: tx.category }, {
+            onSuccess: (t) => {
+              setTxOpen(false);
+              if (txFile) attachFile('bank_transaction', t.id, txFile.file.name, txFile.dataUrl).then(() => toast('success', 'Receipt attached')).catch((e) => toast('error', 'Couldn’t attach the receipt', (e as Error).message));
+              setTxFile(null);
+            },
+          });
         }}>Save</button></>}
       >
+        <div style={{ marginBottom: 14 }}>
+          <SmartUpload kind="expense" toRows={txRows} onApply={applyTx} title="Fill from a receipt or slip" hint="Upload or photograph a bank slip, cash receipt or payment screenshot. It’s kept with the transaction." />
+          {txFile && <div className="small muted" style={{ marginTop: 6 }}>{txFile.file.name} will be attached to this transaction.</div>}
+        </div>
         <div style={{ marginBottom: 16 }}>
           <Segmented value={tx.dir} onChange={(v) => setTx({ ...tx, dir: v })} options={[{ value: 'in', label: 'Money in', icon: ArrowDownLeft }, { value: 'out', label: 'Money out', icon: ArrowUpRight }]} />
         </div>

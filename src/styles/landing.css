@@ -44,7 +44,7 @@
 .lp-hero-art { position: relative; min-height: 480px; display: grid; place-items: center; animation: pop-in .9s .1s cubic-bezier(.2, .7, .2, 1) backwards; }
 .lp-blob { position: absolute; inset: 6% 8%; border-radius: 46% 54% 52% 48% / 52% 44% 56% 48%; background: linear-gradient(135deg, #f0b8b8 0%, #f7d4cf 50%, #cfd8c9 100%); animation: morph 12s ease-in-out infinite; }
 @keyframes morph { 0%, 100% { border-radius: 46% 54% 52% 48% / 52% 44% 56% 48%; } 50% { border-radius: 56% 44% 42% 58% / 44% 58% 42% 56%; } }
-.lp-hero-photo { position: relative; width: 88%; max-width: 480px; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 32px; }
+.lp-hero-photo { position: relative; width: 92%; max-width: 470px; height: auto; object-fit: contain; filter: drop-shadow(0 24px 34px rgba(84, 70, 58, .22)); animation: rise-in .9s .2s cubic-bezier(.2, .7, .2, 1) backwards; }
 .lp-art { position: relative; width: 92%; max-width: 500px; height: auto; }
 .lp-bob { animation: float-y 5s ease-in-out infinite; transform-box: fill-box; }
 .lp-twinkle { animation: twinkle 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }

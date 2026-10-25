@@ -10,12 +10,27 @@ let active = 0;
 const waiting: Array<() => void> = [];
 const MAX_PAGES = 2;
 
+const ARGS = ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--font-render-hinting=none', '--no-zygote', '--disable-extensions', '--mute-audio', '--no-first-run'];
+
+/**
+ * Starts headless Chromium. Tries Playwright's own headless shell first (always the version this library expects),
+ * then the configured or system Chromium, so a distro browser update can't break PDFs.
+ */
+async function launch(): Promise<Browser> {
+  const candidates = [...new Set(['bundled', config.pdf.chromiumPath, '/usr/bin/chromium', '/usr/bin/chromium-browser'].filter(Boolean))];
+  const errors: string[] = [];
+  for (const c of candidates) {
+    try { return await chromium.launch({ args: ARGS, timeout: 45_000, ...(c === 'bundled' ? {} : { executablePath: c }) }); }
+    catch (e) { errors.push(`${c}: ${(e as Error).message.split('\n')[0]}`); }
+  }
+  throw new Error(errors.join(' | '));
+}
+
 function getBrowser() {
   if (!browser) {
-    const launching = chromium
-      .launch({ executablePath: config.pdf.chromiumPath || undefined, args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--font-render-hinting=none'] })
+    const launching = launch()
       .then((b) => { b.on('disconnected', () => { if (browser === launching) browser = null; }); return b; })
-      .catch((e) => { if (browser === launching) browser = null; throw e; });
+      .catch((e) => { if (browser === launching) browser = null; console.error('[pdf] could not start Chromium:', (e as Error).message); throw e; });
     browser = launching;
   }
   return browser;

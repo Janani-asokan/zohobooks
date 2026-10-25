@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { AttachButton } from '@/components/AttachButton';
+import { ExportMenu } from '@/components/ExportMenu';
 import { Link } from 'react-router-dom';
 import { Wallet, Smartphone, Banknote, CreditCard, Landmark } from 'lucide-react';
 import { usePayments } from '@/api/hooks';
@@ -25,7 +27,12 @@ export default function PaymentsReceived() {
 
   return (
     <div className="page">
-      <PageHeader title={t('nav.payments')} crumbs={<>{t('nav.sales')} <span>/</span> {t('nav.payments')}</>} subtitle="Every payment recorded against your invoices, including POS sales." />
+      <PageHeader title={t('nav.payments')} crumbs={<>{t('nav.sales')} <span>/</span> {t('nav.payments')}</>} subtitle="Every payment recorded against your invoices, including POS sales."
+        actions={<ExportMenu disabled={!rows.length} table={() => ({
+          title: 'Payments received', subtitle: `${rows.length} payments`, filename: 'payments-received',
+          columns: [{ label: 'Date' }, { label: 'Invoice' }, { label: 'Customer' }, { label: 'Mode' }, { label: 'Reference' }, { label: 'Deposited to' }, { label: 'TDS', money: true }, { label: 'Amount', money: true }],
+          rows: [...rows.map((p) => ({ cells: [fmtDate(p.date), p.invoiceNumber, p.customer, p.mode, p.reference, p.account ?? '', p.tdsAmount, p.amount] as Array<string | number | null> })), { cells: ['Total', '', '', '', '', '', rows.reduce((a, p) => a + p.tdsAmount, 0), rows.reduce((a, p) => a + p.amount, 0)], kind: 'total' as const }],
+        })} />} />
       <Hint id="payments" title="Money in">
         <p>Record a payment from any invoice’s <strong>Record payment</strong> button — part-payments and TDS deductions are supported. Each payment is posted to the bank or cash account you choose, so Banking always matches.</p>
       </Hint>
@@ -45,7 +52,7 @@ export default function PaymentsReceived() {
         <div className="table-wrap">
           {isLoading ? <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 200 }} /></div> : rows.length === 0 ? <EmptyState icon={Wallet} title="No payments yet" text="Record a payment from any issued invoice." /> : (
             <table className="table">
-              <thead><tr><th>{t('common.date')}</th><th>Invoice</th><th>{t('common.customer')}</th><th>Mode</th><th>Reference</th><th>Deposited to</th><th className="num">TDS</th><th className="num">{t('common.amount')}</th></tr></thead>
+              <thead><tr><th>{t('common.date')}</th><th>Invoice</th><th>{t('common.customer')}</th><th>Mode</th><th>Reference</th><th>Deposited to</th><th className="num">TDS</th><th className="num">{t('common.amount')}</th><th style={{ width: 44 }} /></tr></thead>
               <tbody>
                 {pg.slice.map((p) => {
                   const I = MODE_ICON[p.mode] ?? Wallet;
@@ -59,6 +66,7 @@ export default function PaymentsReceived() {
                       <td className="muted">{p.account ?? '—'}</td>
                       <td className="num muted">{p.tdsAmount ? money(p.tdsAmount) : '—'}</td>
                       <td className="num strong" style={{ color: 'var(--green-700)' }}>{money(p.amount)}</td>
+                      <td><AttachButton entity="payment" entityId={p.id} title={`Payment · ${p.invoiceNumber}`} /></td>
                     </tr>
                   );
                 })}

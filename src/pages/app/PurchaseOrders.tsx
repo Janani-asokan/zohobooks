@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ExportMenu } from '@/components/ExportMenu';
+import { purchaseOrderTable } from '@/lib/docPdf';
+import { PdfButton } from '@/components/PdfButton';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, ClipboardList, PackageCheck, FileText, Ban, X, Loader2, Truck, Send, Pencil, CalendarClock } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
@@ -109,7 +112,11 @@ export default function PurchaseOrders() {
   return (
     <div className="page">
       <PageHeader title="Purchase Orders" subtitle="Order stock from vendors, receive it into inventory, then convert to a bill."
-        actions={canWrite && <button className="btn btn-primary" onClick={() => newForm()}><Plus size={16} /> New Purchase Order</button>} />
+        actions={<><ExportMenu disabled={!rows.length} table={() => ({
+          title: 'Purchase orders', subtitle: `${rows.length} orders`, filename: 'purchase-orders',
+          columns: [{ label: 'Date' }, { label: 'Number' }, { label: 'Vendor' }, { label: 'Expected' }, { label: 'Status' }, { label: 'Items' }, { label: 'Total', money: true }],
+          rows: rows.map((o) => ({ cells: [fmtDate(o.date), o.number, o.vendorName, o.expectedDate ? fmtDate(o.expectedDate) : '', o.status, String(o.lines.length), o.total] })),
+        })} />{canWrite && <button className="btn btn-primary" onClick={() => newForm()}><Plus size={16} /> New Purchase Order</button>}</>} />
 
       <Hint id="po" title="How purchase orders work">
         <ol>
@@ -230,7 +237,7 @@ function PODrawer({ po, canWrite, onClose, onEdit }: { po: PurchaseOrder; canWri
             <div className="row" style={{ gap: 8 }}><h3 style={{ fontSize: 16 }}>{po.number}</h3><Badge tone={tone(po.status)}>{po.status}</Badge></div>
             <p className="small muted">{po.vendorName} · ordered {fmtDate(po.date)}{po.expectedDate ? ` · expected ${fmtDate(po.expectedDate)}` : ''}</p>
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
+          <div className="row" style={{ gap: 4 }}><PdfButton table={() => purchaseOrderTable(po)} /><button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
         </div>
         <div className="drawer-body">
           <div style={{ marginBottom: 16 }}><Attachments entity="purchase_order" entityId={po.id} canWrite={canWrite} title="Files" /></div>

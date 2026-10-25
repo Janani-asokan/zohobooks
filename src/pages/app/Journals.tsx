@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { journalTable } from '@/lib/docPdf';
+import { Attachments } from '@/components/Attachments';
+import { PdfButton } from '@/components/PdfButton';
 import { Link, useSearchParams } from 'react-router-dom';
 import { NotebookPen, Plus, Trash2, Loader2, X } from 'lucide-react';
 import { api } from '@/api/client';
@@ -134,6 +137,7 @@ export default function Journals() {
       <Modal open={!!view} onClose={() => setView(null)} size="lg" title={view?.number ?? ''} subtitle={view ? `${fmtDate(view.date)}${view.reference ? ` · ${view.reference}` : ''}${view.createdBy ? ` · by ${view.createdBy}` : ''}` : ''}
         footer={<>
           {canWrite && view && <button className="btn btn-ghost danger" style={{ marginRight: 'auto' }} onClick={() => { setDel(view); setView(null); }}><Trash2 size={15} /> Delete</button>}
+          {view && <PdfButton className="btn btn-secondary" table={() => journalTable(view)} label="Download PDF" />}
           <button className="btn btn-secondary" onClick={() => setView(null)}><X size={15} /> Close</button>
         </>}>
         {view && (
@@ -144,6 +148,7 @@ export default function Journals() {
               <tfoot><tr><td colSpan={2} className="strong">Total</td><td className="num strong">{money(view.total)}</td><td className="num strong">{money(view.total)}</td></tr></tfoot>
             </table>
             {view.notes && <p className="small muted" style={{ marginTop: 12, whiteSpace: 'pre-line' }}>{view.notes}</p>}
+            <div style={{ marginTop: 16 }}><Attachments entity="journal" entityId={view.id} canWrite={canWrite} title="Supporting documents" /></div>
           </>
         )}
       </Modal>
