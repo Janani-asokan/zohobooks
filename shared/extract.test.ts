@@ -96,3 +96,20 @@ describe('business name on receipts', () => {
     expect(r.data.party.companyName).toBe('Sri Murugan Electricals');
   });
 });
+
+describe('orders read without colons (tables and OCR)', () => {
+  const text = 'Unico Plastics Inc\nSALES ORDER\nSAL-ORD-2026-00003\nCustomer Name Mia Jones Date 19-06-2026\nDelivery Date 21-06-2026\n' +
+    'Sr Item Code Description Quantity Rate Amount\n1 Leather Wallet Tan 12 Nos ₹ 250.00 ₹ 3,000.00\nGrand Total ₹ 3,000.00';
+  it('finds the customer, reference, date, total and the item row', () => {
+    const { data } = parseDocumentText(text, 'order');
+    expect(data.party.companyName).toBe('Mia Jones');
+    expect(data.documentNumber).toBe('SAL-ORD-2026-00003');
+    expect(data.date).toBe('2026-06-19');
+    expect(data.total).toBe(3000);
+    expect(data.lines.map((l) => [l.name, l.qty, l.unit, l.rate, l.amount])).toEqual([['Leather Wallet Tan', 12, 'nos', 250, 3000]]);
+  });
+  it('ignores number rows where qty × rate doesn’t match the amount', () => {
+    const { data } = parseDocumentText('Customer Name Mia Jones\n1 Phone 2026 10 3,000.00', 'order');
+    expect(data.lines).toEqual([]);
+  });
+});

@@ -51,7 +51,7 @@ await step('add a product with a photo', async () => {
   const cost = p.locator('.field', { hasText: 'Cost price' }).locator('input').first();
   await cost.fill('700');
   await p.getByRole('button', { name: /Auto-fill/ }).click();
-  await p.locator('.field', { hasText: 'HSN code' }).locator('input').first().fill('8471');
+  await p.locator('input[placeholder="e.g. 8471"]').fill('8471');
   await p.getByRole('button', { name: 'Save item', exact: true }).click();
   await p.waitForURL(/\/app\/items(\?|$)/, { timeout: 10000 });
 });

@@ -14,6 +14,7 @@ import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartU
 import { Attachments, attachFile } from '@/components/Attachments';
 import { SerialsCard, VariantsSection } from '@/components/ItemExtras';
 import type { ExtractResult } from '../../../shared/extract';
+import { useAiEnabled } from '@/components/Assistant';
 
 type ItemType = Item['type'];
 interface Draft {
@@ -200,6 +201,37 @@ export default function ItemForm() {
     }
   };
 
+  /* ---------- AI: HSN, GST rate, unit, category and description from the name ---------- */
+  const aiOn = useAiEnabled();
+  const [aiBusy, setAiBusy] = useState(false);
+  const aiFill = async () => {
+    if (draft.name.trim().length < 2) { toast('info', 'Type the item name first'); document.getElementById('item-name')?.focus(); return; }
+    setAiBusy(true);
+    try {
+      const r = await api.post<{ type: ItemType; hsn: string; gstRate: number; unit: string; category: string; brand: string | null; description: string; note: string | null }>(
+        '/shop/ai/item-suggest', { name: draft.name.trim(), hint: [draft.brand, draft.category].filter(Boolean).join(', ') });
+      const slabMatch = activeSlabs.find((x) => x.rate === r.gstRate);
+      const d = draft;
+      const n = { ...d };
+      const filled: string[] = [];
+      const hsn = r.hsn.replace(/\D/g, '').slice(0, 8);
+      if (!d.hsn && /^\d{4,8}$/.test(hsn)) { n.hsn = hsn; filled.push(hsn.startsWith('99') ? 'SAC' : 'HSN'); }
+      if (!editing && r.type !== d.type && !d.sp1) n.type = r.type;
+      if (slabMatch && (!editing || !d.taxSlabId) && slabMatch.id !== d.taxSlabId) { n.taxSlabId = slabMatch.id; filled.push('GST rate'); }
+      if (!d.category && r.category) { n.category = r.category; filled.push('category'); }
+      if (!d.brand && r.brand) { n.brand = r.brand; filled.push('brand'); }
+      if (!d.description && r.description) { n.description = r.description; filled.push('description'); }
+      const unit = r.unit.toLowerCase();
+      if (!editing && unit && (d.unit === 'pcs' || d.unit === 'job') && unit !== d.unit) { n.unit = unit; filled.push('unit'); }
+      setDraft((cur) => ({ ...cur, ...Object.fromEntries(Object.entries(n).filter(([k, v]) => (d as unknown as Record<string, unknown>)[k] !== v)) }));
+      toast('success', filled.length ? `Filled ${[...new Set(filled)].join(', ')}` : 'Nothing to fill — those fields already have values', r.note ?? 'Check the HSN and GST rate against your purchase bill.');
+    } catch (err) {
+      toast('error', (err as Error).message);
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   const fillFromMargin = () => {
     const m = Number(marginPct);
     if (!(cost > 0) || !(m >= 0 && m < 95)) return toast('info', 'Enter the cost price first', 'Prices are calculated from cost + margin.');
@@ -318,8 +350,12 @@ export default function ItemForm() {
                 <input ref={fileRef} type="file" accept="image/*" hidden onChange={(ev) => { pickImage(ev.target.files?.[0]); ev.target.value = ''; }} />
               </div>
               <div className="form-grid" style={{ flex: 1 }}>
-                <Field label="Item name" required error={e('name')} className="span-all">
-                  <input id="item-name" className={`input input-lg ${e('name') ? 'invalid' : ''}`} value={draft.name} onChange={(ev) => set('name', ev.target.value)} placeholder={draft.type === 'Goods' ? 'e.g. Logitech M331 Silent Mouse' : 'e.g. Laptop Servicing'} autoFocus={!editing} />
+                <Field label="Item name" required error={e('name')} className="span-all"
+                  hint={aiOn ? 'Type the name, then “Fill with AI” suggests the HSN code, GST rate, category and description.' : undefined}>
+                  <div className={aiOn ? 'input-with-btn' : undefined}>
+                    <input id="item-name" className={`input input-lg ${e('name') ? 'invalid' : ''}`} value={draft.name} onChange={(ev) => set('name', ev.target.value)} placeholder={draft.type === 'Goods' ? 'e.g. Logitech M331 Silent Mouse' : 'e.g. Laptop Servicing'} autoFocus={!editing} />
+                    {aiOn && <button type="button" className="btn btn-soft btn-sm addon-btn ai-suggest" onClick={aiFill} disabled={aiBusy} title="Suggest HSN, GST rate, category and description">{aiBusy ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />} Fill with AI</button>}
+                  </div>
                 </Field>
                 <Field label="Category" hint={!draft.category && facets?.categories.length ? undefined : 'Group similar items for filters & reports'}>
                   <input className="input" list="dl-categories" value={draft.category} onChange={(ev) => set('category', ev.target.value)} placeholder="e.g. Accessories" />

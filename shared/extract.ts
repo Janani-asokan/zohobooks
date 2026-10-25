@@ -86,10 +86,19 @@ function labelled(text: string, labels: string[]): number | null {
   }
   return null;
 }
+/** Where the next field starts on a line read without colons: "Customer Name Mia Jones Date 19-06-2026". */
+const NEXT_FIELD = /\s+(?:date|dated|delivery|due|tax\s*id|gstin|gst\s*no|phone|mobile|tel|email|invoice|order|bill|place|state|pan|ref)\b.*$/i;
 function labelledText(text: string, labels: string[], max = 120): string | null {
   for (const label of labels) {
     const m = text.match(new RegExp(String.raw`(?:^|\n)\s*${label}\s*[:\-–]\s*([^\n]{1,${max}})`, 'i'));
     if (m && m[1]!.trim()) return m[1]!.trim();
+  }
+  // Tables and OCR often drop the colon. Only multi-word labels are trusted without one.
+  for (const label of labels) {
+    if (!/\s/.test(label)) continue;
+    const m = text.match(new RegExp(String.raw`(?:^|\n|\s{2})\s*${label}\s+([^\n]{1,${max}})`, 'i'));
+    const v = m?.[1]!.replace(NEXT_FIELD, '').trim();
+    if (v && /[a-z]{2}/i.test(v)) return v;
   }
   return null;
 }
@@ -114,7 +123,7 @@ export function parseDocumentText(text: string, kind: ExtractKind, ownGstin = ''
   out.documentType =
     /gst\s*reg(istration)?\s*certificate|form\s*gst\s*reg-06/i.test(t) ? 'gst_certificate'
     : /purchase\s*order|\bp\.?o\.?\s*(no|number)/i.test(t) ? 'purchase_order'
-    : /quotation|estimate|proforma/i.test(t) ? 'quotation'
+    : /quotation|estimate|proforma|sales\s*order/i.test(t) ? 'quotation'
     : /price\s*list|rate\s*card|catalogue/i.test(t) ? 'price_list'
     : /tax\s*invoice|invoice|bill\s*of\s*supply/i.test(t) ? (kind === 'bill' || kind === 'expense' ? 'bill' : 'invoice')
     : /receipt|cash\s*memo/i.test(t) ? 'receipt'
@@ -152,7 +161,9 @@ export function parseDocumentText(text: string, kind: ExtractKind, ownGstin = ''
 
   // Number and dates
   const num = t.match(/\b(?:invoice|inv|bill|quotation|quote|order|p\.?o\.?|receipt|voucher)\s*(?:no\.?|number|#)\s*[:.\-]?\s*([A-Z0-9][A-Z0-9/\-_.]{1,30})/i);
-  if (num) { out.documentNumber = num[1]!.replace(/[.,]$/, ''); hits++; }
+  // Otherwise a stand-alone reference like "SAL-ORD-2026-00003" or "INV/24-25/0012".
+  const ref = num ? null : t.match(/\b([A-Z]{2,6}(?:[-/][A-Z]{2,6})?[-/](?:\d{2}-\d{2}[-/])?\d{2,6}(?:[-/]\d{1,6})?)\b/);
+  if (num || ref) { out.documentNumber = (num?.[1] ?? ref![1]!).replace(/[.,]$/, ''); hits++; }
   const dateLine = t.match(/\b(?:invoice|bill|order|quotation|document|receipt)?\s*date\s*[:\-]?\s*([^\n]{6,20})/i);
   out.date = (dateLine && parseDate(dateLine[1])) ?? parseDate(t);
   if (out.date) hits++;
@@ -198,6 +209,20 @@ export function parseDocumentText(text: string, kind: ExtractKind, ownGstin = ''
     const rate = parseAmount(m[5]); const amount = parseAmount(m[6]);
     const pct = l.match(/\b(\d{1,2}(?:\.\d+)?)\s*%/);
     out.lines.push({ ...emptyLine(m[1]!.trim()), hsn: m[2]!, qty: Number(m[3]), unit: m[4]?.toLowerCase() ?? null, rate, sellingPrice: rate, amount, taxRate: pct ? Number(pct[1]) : null });
+  }
+  // Rows without an HSN column: "<sr> <name> <qty> [unit] <rate> … <amount>", kept only when qty × rate ≈ amount
+  // (less any discount), so stray lines of numbers aren't taken as items.
+  if (!out.lines.length && kind !== 'items') {
+    const plain = /^(?:\d{1,3}[.)|\]]?\s+)?\[?([A-Za-z][A-Za-z0-9 &'()./,-]{2,80}?)\s+(\d+(?:\.\d+)?)\s*(nos|no|pcs|pc|kg|g|ltr|l|m|box|set|pair|unit|units)?\s+(?:₹\s*)?([\d,]+(?:\.\d{1,2})?)\b.*?(?:₹\s*)?([\d,]+\.\d{2})\s*$/i;
+    for (const l of lines) {
+      if (/\b(total|sub\s*total|grand|balance|tax|gst|cgst|sgst|igst|round)\b/i.test(l)) continue;
+      const m = l.match(plain);
+      if (!m) continue;
+      const qty = Number(m[2]); const rate = parseAmount(m[4]); const amount = parseAmount(m[5]);
+      if (!qty || rate === null || amount === null || amount <= 0 || amount > qty * rate * 1.0001 || amount < qty * rate * 0.5) continue;
+      const pct = l.match(/\b(\d{1,2}(?:\.\d+)?)\s*%/);
+      out.lines.push({ ...emptyLine(m[1]!.trim()), qty, unit: m[3]?.toLowerCase() ?? null, rate, sellingPrice: rate, amount, taxRate: pct ? Number(pct[1]) : null });
+    }
   }
   // Price lists: "<name> [HSN] [GST%] <price>" on each row.
   if (kind === 'items' && !out.lines.length) {

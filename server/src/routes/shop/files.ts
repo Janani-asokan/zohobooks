@@ -6,6 +6,10 @@ import { many, one } from '../../db';
 import { forbidden, HttpError, notFound, parse } from '../../http';
 import { getOrg } from '../../services/common';
 import { aiEnabled, decodeDataUrl, extractDocument } from '../../services/extract';
+import { aiError, askAssistant, suggestItem } from '../../services/assistant';
+import { withTenant } from '../../db';
+import { h } from '../../http';
+import { userCtx } from '../../auth';
 import type { Permission } from '../../../../shared/permissions';
 import { T, allowed } from './ctx';
 
@@ -24,6 +28,32 @@ filesRouter.post(
     const result = await extractDocument(b.file, b.kind, { name: org.company_name, gstin: org.gstin ?? '' });
     await audit(db, req, c.shopId, 'extract', b.kind, c.shopId, { file: b.filename, method: result.method, lines: result.data.lines.length });
     return result;
+  }),
+);
+
+/* ---------- AI: business assistant and item suggestions ---------- */
+filesRouter.get('/ai/status', T(async () => ({ enabled: aiEnabled() })));
+// The assistant runs several tool calls over tens of seconds, so it must not hold one DB transaction open:
+// each tool opens its own tenant-scoped transaction.
+filesRouter.post(
+  '/ai/ask',
+  rateLimit('ai-ask', 20, 60_000),
+  h(async (req, res) => {
+    const c = userCtx(req);
+    const b = parse(z.object({ messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(4000) })).min(1).max(20) }), req.body);
+    if (b.messages[b.messages.length - 1]!.role !== 'user') throw new HttpError(400, 'The last message must be a question', 'bad_chat');
+    const org = await withTenant(c.shopId, (db) => getOrg(db, c.shopId));
+    const answer = await askAssistant(c, { name: org.company_name, state: org.state ?? '' }, b.messages).catch(aiError);
+    res.json({ answer });
+  }),
+);
+filesRouter.post(
+  '/ai/item-suggest',
+  rateLimit('ai-item', 30, 60_000),
+  h(async (req, res) => {
+    userCtx(req);
+    const b = parse(z.object({ name: z.string().trim().min(2).max(200), hint: z.string().max(500).default('') }), req.body);
+    res.json(await suggestItem(b.name, b.hint).catch(aiError));
   }),
 );
 

@@ -107,7 +107,7 @@ export function SmartUpload({ kind, toRows, onApply, title = 'Fill from a PDF or
             <div className="stack" style={{ gap: 12, minWidth: 0 }}>
               {review.r.warnings.map((w) => <div key={w} className="hint-inline"><AlertTriangle size={14} /> {w}</div>)}
               {review.r.method !== 'ai' && <div className="small muted">Confidence: {Math.round(review.r.confidence * 100)}%. Untick anything that looks wrong.</div>}
-              {review.rows.length === 0 ? (review.r.data.lines.length && extra ? null : <p className="muted">We couldn’t find form details in this file.{review.preview && kind === 'item' ? ' You can still use it as the product picture.' : ''}</p>) : (
+              {review.rows.length === 0 ? (review.r.data.lines.length && extra ? null : <p className="muted">We couldn’t find form details in this file.{review.preview && kind === 'item' ? ' You can still use it as the product picture.' : ''}{review.r.method !== 'ai' ? ' Try a sharper, closer photo, or the original PDF.' : ''}</p>) : (
                 <table className="table su-table">
                   <thead><tr><th style={{ width: 32 }} /><th>Field</th><th>Found</th><th>Now in the form</th></tr></thead>
                   <tbody>

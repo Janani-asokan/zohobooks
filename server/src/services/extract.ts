@@ -59,16 +59,78 @@ export async function pdfText(bytes: Buffer, maxPages = 10): Promise<string> {
 }
 
 let ocrWorker: Promise<import('tesseract.js').Worker> | null = null;
-/** OCR with the English model shipped in node_modules, so no download is needed at run time. */
-export async function imageText(bytes: Buffer): Promise<string> {
+async function ocr(png: Buffer): Promise<string> {
   const { createWorker } = await import('tesseract.js');
   // Resolve from the app root: works for tsx in development and the esbuild bundle in production.
   const require = createRequire(path.join(process.cwd(), 'package.json'));
   const langPath = path.join(path.dirname(require.resolve('@tesseract.js-data/eng/package.json')), '4.0.0_best_int');
   ocrWorker ??= createWorker('eng', 1, { langPath, gzip: true, cachePath: path.join(os.tmpdir(), 'tesseract-cache') }).catch((e) => { ocrWorker = null; throw e; });
   const w = await ocrWorker;
-  const { data } = await w.recognize(bytes);
+  const { data } = await w.recognize(png);
   return data.text;
+}
+
+/**
+ * Screenshots and phone photos are often too small or low-contrast for OCR: scale the text up to
+ * roughly 3000px wide, flatten transparency onto white and boost contrast in greyscale.
+ */
+export async function prepareForOcr(bytes: Buffer): Promise<Buffer> {
+  try {
+    const { createCanvas, loadImage } = await import('@napi-rs/canvas');
+    const img = await loadImage(bytes);
+    const scale = Math.max(1, Math.min(4, 3000 / img.width, 6000 / img.height));
+    const c = createCanvas(Math.round(img.width * scale), Math.round(img.height * scale));
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, c.width, c.height);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, 0, 0, c.width, c.height);
+    const px = g.getImageData(0, 0, c.width, c.height);
+    const a = px.data;
+    for (let i = 0; i < a.length; i += 4) {
+      const y = 0.299 * a[i]! + 0.587 * a[i + 1]! + 0.114 * a[i + 2]!;
+      a[i] = a[i + 1] = a[i + 2] = Math.max(0, Math.min(255, (y - 128) * 1.4 + 128));
+    }
+    g.putImageData(px, 0, 0);
+    return c.toBuffer('image/png');
+  } catch (e) {
+    console.error('[extract] image prep failed, reading the original:', (e as Error).message);
+    return bytes;
+  }
+}
+
+/** OCR reads "₹" as "2", "?", "%" or "¥" in front of amounts: "Total 2 3,000.00" → "Total ₹3,000.00". */
+export function fixRupee(text: string): string {
+  return text.replace(/(^|\s)[2?%¥z]\s(?=\d{1,3}(?:,\d{2,3})*\.\d{2}\b)/gm, '$1₹');
+}
+
+/** OCR with the English model shipped in node_modules, so no download is needed at run time. */
+export async function imageText(bytes: Buffer): Promise<string> {
+  return fixRupee(await ocr(await prepareForOcr(bytes)));
+}
+
+/** Scanned PDFs have no text layer: draw the first pages and OCR them. */
+export async function scannedPdfText(bytes: Buffer, maxPages = 3): Promise<string> {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const { createCanvas } = await import('@napi-rs/canvas');
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), isEvalSupported: false }).promise;
+  const out: string[] = [];
+  try {
+    for (let p = 1; p <= Math.min(doc.numPages, maxPages); p++) {
+      const page = await doc.getPage(p);
+      const vp = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: Math.min(4, 2500 / vp.width) });
+      const c = createCanvas(Math.round(viewport.width), Math.round(viewport.height));
+      const g = c.getContext('2d');
+      g.fillStyle = '#fff';
+      g.fillRect(0, 0, c.width, c.height);
+      await page.render({ canvasContext: g as never, viewport }).promise;
+      out.push(await ocr(c.toBuffer('image/png')));
+    }
+  } finally {
+    await doc.destroy();
+  }
+  return fixRupee(out.join('\n'));
 }
 
 /* ---------------- AI extraction (when an Anthropic API key is configured) ---------------- */
@@ -105,6 +167,7 @@ Rules:
 - Dates are YYYY-MM-DD. Indian documents write the day first (05/04/2026 is 5 April 2026).
 - GSTIN is the 15-character code. state is the Indian state name for the party.
 - taxRate is the GST percentage (e.g. 18). rate is the unit price before tax; amount is the line amount as printed.
+- sku is a separate item/product code printed on the document; leave it null when the only identifier is the item name.
 - The shop using this app is the other side of the document; never return the shop's own details as the party.`;
 
 let client: Anthropic | null = null;
@@ -155,7 +218,11 @@ export async function extractDocument(dataUrl: string, kind: ExtractKind, shop: 
   let method: ExtractResult['method'] = 'pdf-text';
   if (mime === 'application/pdf') {
     text = await pdfText(bytes).catch(() => '');
-    if (text.replace(/\s/g, '').length < 20) warnings.push('This PDF looks scanned (no text layer). Upload a photo of the page instead, or set up the smart reader for scanned files.');
+    if (text.replace(/\s/g, '').length < 20) {
+      method = 'ocr';
+      text = await scannedPdfText(bytes).catch((e) => { console.error('[extract] scanned PDF OCR failed:', (e as Error).message); return ''; });
+      if (text.replace(/\s/g, '').length < 20) warnings.push('This PDF looks scanned and no text could be read from it. Try a sharper scan or a photo of the page.');
+    }
   } else {
     method = 'ocr';
     text = await imageText(bytes).catch((e) => { console.error('[extract] OCR failed:', (e as Error).message); return ''; });

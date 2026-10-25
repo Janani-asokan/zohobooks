@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
+    "@napi-rs/canvas": "^0.1.100",
     "@tanstack/react-query": "^5.62.11",
     "@tesseract.js-data/eng": "^1.0.0",
     "bcryptjs": "^2.4.3",

@@ -19,6 +19,7 @@ import { useClickOutside } from '@/components/useClickOutside';
 import { useShortcuts } from '@/components/useShortcuts';
 import { useOnline } from '@/components/useOnline';
 import { initials } from '@/lib/format';
+import { AssistantButton } from '@/components/Assistant';
 
 export function OrgLogo({ logo, name, size = 36 }: { logo?: string; name: string; size?: number }) {
   return (
@@ -241,6 +242,7 @@ export default function AppLayout() {
           <SearchTrigger onOpen={() => setPalette(true)} />
           <div className="topbar-actions">
             <button className="icon-btn mobile-only" onClick={() => setPalette(true)} aria-label="Search"><Search size={18} /></button>
+            <AssistantButton />
             <QuickCreate me={me} />
             <NotificationBell />
             <ProfileMenu name={me.user.name} sub={`${me.user.role} · ${me.shop.name}`} email={me.user.email}>

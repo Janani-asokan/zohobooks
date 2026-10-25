@@ -80,6 +80,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
     return [
       { key: 'customer', label: 'Customer', value: c ? c.companyName || c.name : who ? `${who} (not found)` : null, display: c ? `${c.companyName || c.name} · matched` : who ? `${who}\nNot in your customers. Add them first, or pick one.` : undefined, current: customer ? customer.companyName || customer.name : '' },
       { key: 'ref', label: 'Their reference (added to notes)', value: r.data.documentNumber, current: notes },
+      { key: 'expiry', label: kind === 'quote' ? 'Valid till' : 'Deliver by', value: r.data.dueDate && r.data.dueDate >= todayISO() ? r.data.dueDate : null, display: r.data.dueDate ? fmtDate(r.data.dueDate) : undefined, current: fmtDate(expiry) },
       { key: 'lines', label: 'Item lines', value: docLines.count(r) || null, display: `${docLines.count(r)} line${docLines.count(r) === 1 ? '' : 's'} (see below)` },
     ];
   };
@@ -87,6 +88,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
     const c = keys.has('customer') ? matchParty(customerList, r.data.party) : null;
     if (c) setCustomerId(c.id);
     const tier = (c ?? customer)?.tier ?? 'SP1';
+    if (keys.has('expiry') && r.data.dueDate && r.data.dueDate >= todayISO()) setExpiry(r.data.dueDate);
     if (keys.has('ref') && r.data.documentNumber) setNotes((n) => [n, `Your ref: ${r.data.documentNumber}`].filter(Boolean).join('\n'));
     if (keys.has('lines')) {
       const { lines: got } = await docLines.resolve(r);

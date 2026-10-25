@@ -98,7 +98,15 @@ In production the API serves the built web app too, so you deploy one process. M
 
 The uploaded file is kept on the record it filled. Every record also has an **Attachments** panel (PDF, PNG, JPG, WebP; 10 MB each, 500 MB per business) for delivery challans, warranty cards, signed copies and so on. Files are type-checked by content, served with `nosniff` and a sandboxing CSP, and visible only to roles that can see the record.
 
-Without `ANTHROPIC_API_KEY`, reading runs entirely on the server: PDF text extraction (pdf.js) and English OCR (Tesseract, model bundled, no download). With the key, the smart reader (Claude) also handles scanned PDFs, handwriting and unusual layouts, and falls back to the built-in reader if it is unavailable.
+Without `ANTHROPIC_API_KEY`, reading runs entirely on the server: PDF text extraction (pdf.js) and English OCR (Tesseract, model bundled, no download). Photos and screenshots are scaled up and contrast-boosted before OCR, and scanned PDFs (no text layer) are rendered and OCR'd page by page. With the key, the smart reader (Claude) also handles handwriting, small screenshots and unusual layouts, and falls back to the built-in reader if it is unavailable.
+
+**AI features (with `ANTHROPIC_API_KEY`):**
+
+- **Smart reader** for every upload box above.
+- **Ask AI** (top bar): ask about sales, dues, customers, stock, bills and expenses in plain words. It answers from the shop's live data through read-only lookups that respect the user's role (sales staff can't see purchases, cost prices need `items.cost`), and it can't change anything.
+- **Fill with AI** on the new-item form: suggests the HSN/SAC code, GST rate, unit, category, brand and a short description from the item name. It only fills empty fields.
+
+Without the key these buttons are hidden and everything else works as before. Set the key in the Render dashboard (Environment → `ANTHROPIC_API_KEY`); never commit it.
 
 
 **Super Admin:** dashboard (active shops, new this month, subscription revenue, expiring licenses), creating shops with a temporary password, activate/deactivate (ends sessions immediately), license renewals with payment records, owner password-reset links, **plans & limits** (users, branches, invoices per month, enforced by the server), **configuration** (customer-ID prefix, FY auto-reset, **Tax Lab**), audit log, subscription payments, backups.
