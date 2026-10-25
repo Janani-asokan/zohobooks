@@ -26,6 +26,7 @@ const itemBody = z.object({
   taxSlabId: z.string().min(1, 'Select a tax slab'),
   reorderLevel: money.default(10),
   trackBatches: z.boolean().default(false),
+  trackSerials: z.boolean().default(false),
   description: z.string().max(1000).default(''),
   category: z.string().trim().max(60).default(''),
   brand: z.string().trim().max(60).default(''),
@@ -61,6 +62,11 @@ export async function listItems(db: Db, shopId: string, showCost: boolean, ids?:
     taxRate: Number(r.tax_rate),
     reorderLevel: Number(r.reorder_level),
     trackBatches: r.track_batches,
+    trackSerials: r.track_serials,
+    parentId: r.parent_id,
+    isGroup: r.is_group,
+    variantAttrs: r.variant_attrs ?? {},
+    attributes: r.attributes ?? [],
     description: r.description,
     category: r.category,
     brand: r.brand,
@@ -92,9 +98,9 @@ catalogRouter.post(
     if (!slab.active) throw badRequest('This tax slab is disabled', { taxSlabId: 'Disabled slab' });
     const it = await one(
       db,
-      `INSERT INTO items (shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, track_batches, description, category, brand, image, mrp)
-       VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
-      [c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.type === 'Goods' && b.trackBatches, b.description, b.category, b.brand, b.image, b.mrp],
+      `INSERT INTO items (shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, track_batches, description, category, brand, image, mrp, track_serials)
+       VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id`,
+      [c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.type === 'Goods' && b.trackBatches, b.description, b.category, b.brand, b.image, b.mrp, b.type === 'Goods' && b.trackSerials],
     );
     if (b.type === 'Goods' && b.openingStock > 0) {
       const branchId = await primaryBranchId(db, c.shopId, b.branchId);
@@ -115,11 +121,11 @@ catalogRouter.patch(
     const merged = { ...cur, ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)) } as any;
     await db.query(
       `UPDATE items SET type=$3, name=$4, sku=upper($5), barcode=$6, unit=$7, hsn=$8, cost=$9, sp1=$10, sp2=$11, sp3=$12, tax_slab_id=$13,
-              reorder_level=$14, track_batches=$15, description=$16, category=$17, brand=$18, image=$19, mrp=$20 WHERE shop_id=$1 AND id=$2`,
+              reorder_level=$14, track_batches=$15, description=$16, category=$17, brand=$18, image=$19, mrp=$20, track_serials=$21 WHERE shop_id=$1 AND id=$2`,
       [
         c.shopId, cur.id, merged.type, merged.name, merged.sku, merged.barcode, merged.unit, merged.hsn, merged.cost, merged.sp1, merged.sp2, merged.sp3,
         b.taxSlabId ?? cur.tax_slab_id, b.reorderLevel ?? cur.reorder_level, b.trackBatches ?? cur.track_batches, merged.description,
-        merged.category, merged.brand, merged.image, b.mrp !== undefined ? b.mrp : cur.mrp,
+        merged.category, merged.brand, merged.image, b.mrp !== undefined ? b.mrp : cur.mrp, merged.type === 'Goods' && (b.trackSerials ?? cur.track_serials),
       ],
     );
     await audit(db, req, c.shopId, 'update', 'item', cur.id, b);

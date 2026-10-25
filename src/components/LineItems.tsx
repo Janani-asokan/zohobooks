@@ -6,6 +6,7 @@ import { computeTotals, lineAmount } from '@/lib/calc';
 import { money, uid } from '@/lib/format';
 import { TIER_LABEL, type Item, type LineInput, type PriceTier } from '@/api/types';
 import { ItemPicker } from './ItemPicker';
+import { SerialField } from './SerialField';
 
 /** Editable line held in form state (key is client-only). */
 export interface DraftLine extends LineInput {
@@ -14,8 +15,8 @@ export interface DraftLine extends LineInput {
 
 export const priceFor = (it: Item, tier: PriceTier) => (tier === 'SP1' ? it.sp1 : tier === 'SP2' ? it.sp2 : it.sp3);
 export const emptyLine = (tier: PriceTier): DraftLine => ({ key: uid('ln_'), itemId: '', qty: 1, rate: 0, tier, discount: 0 });
-export const toDraft = (l: { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number }): DraftLine => ({ key: uid('ln_'), itemId: l.itemId, qty: l.qty, tier: l.tier, rate: l.rate, discount: l.discount });
-export const toInput = (lines: DraftLine[]): LineInput[] => lines.filter((l) => l.itemId).map(({ itemId, qty, tier, rate, discount }) => ({ itemId, qty, tier, rate, discount }));
+export const toDraft = (l: { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number; serials?: string[] }): DraftLine => ({ key: uid('ln_'), itemId: l.itemId, qty: l.qty, tier: l.tier, rate: l.rate, discount: l.discount, serials: l.serials });
+export const toInput = (lines: DraftLine[]): LineInput[] => lines.filter((l) => l.itemId).map(({ itemId, qty, tier, rate, discount, serials }) => ({ itemId, qty, tier, rate, discount, ...(serials?.length ? { serials } : {}) }));
 
 /** Lines enriched with item tax rate for live totals (server recomputes authoritatively). */
 export function useCalcLines(lines: DraftLine[]) {
@@ -31,7 +32,7 @@ export function useCalcLines(lines: DraftLine[]) {
 export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalidKeys, branchId }: {
   lines: DraftLine[]; onChange: (l: DraftLine[]) => void; defaultTier: PriceTier; withGst: boolean; invalidKeys?: Set<string>; branchId?: string | null;
 }) {
-  const { data: items = [] } = useItems();
+  const items = (useItems().data ?? []).filter((i) => !i.isGroup);
   const toast = useToast();
   const [scan, setScan] = useState('');
 
@@ -102,6 +103,7 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
                         {it.trackBatches && <span>· batch-tracked (FEFO)</span>}
                       </div>
                     )}
+                    {it?.trackSerials && <SerialField itemId={it.id} branchId={branchId} qty={l.qty} value={l.serials ?? []} onChange={(serials) => set(l.key, { serials })} />}
                   </td>
                   <td><input className="input" style={{ textAlign: 'right' }} type="number" min={1} value={l.qty} onChange={(e) => set(l.key, { qty: Math.max(0, Number(e.target.value)) })} aria-label="Quantity" /></td>
                   <td>

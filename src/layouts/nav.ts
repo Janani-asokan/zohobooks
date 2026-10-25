@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, FileSignature, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, type LucideIcon,
+  Truck, Package, ScanLine, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, type LucideIcon,
 } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import type { PaletteAction } from './CommandPalette';
@@ -36,7 +36,16 @@ export function buildNav(can: Can): NavItem[] {
       ],
     });
   }
-  items.push({ label: 'Inventory', icon: Boxes, children: [{ label: 'Items', to: '/app/items' }] });
+  items.push({
+    label: 'Inventory', icon: Boxes,
+    children: [
+      { label: 'Items', to: '/app/items' },
+      { label: 'Warehouses', to: '/app/inventory/warehouses' },
+      { label: 'Stock Adjustments', to: '/app/inventory/adjustments' },
+      { label: 'Transfers', to: '/app/inventory/transfers' },
+      { label: 'Stock Summary', to: '/app/inventory/stock-summary' },
+    ],
+  });
   if (can('banking.read')) items.push({ label: 'Accounting', icon: Landmark, children: [{ label: 'Banking', to: '/app/banking' }] });
   if (can('reports.read')) items.push({ label: 'Reports', icon: BarChart3, to: '/app/reports' });
   if (can('admin')) items.push({ label: 'Settings', icon: Settings, to: '/app/organization' });
@@ -64,6 +73,8 @@ export function buildCreate(can: Can): Array<{ title: string; links: CreateLink[
     { title: 'Inventory', links: [
       can('items.write') && { label: 'Item', icon: Package, to: '/app/items/new' },
       can('items.write') && { label: 'Service', icon: Wrench, to: '/app/items/new?type=Services' },
+      can('items.write') && { label: 'Stock adjustment', icon: SlidersHorizontal, to: '/app/inventory/adjustments?new=1' },
+      can('items.write') && { label: 'Transfer', icon: ArrowLeftRight, to: '/app/inventory/transfers?new=1' },
     ] },
   ];
   return cols.map((c) => ({ ...c, links: c.links.filter(Boolean) as CreateLink[] })).filter((c) => c.links.length);
@@ -96,6 +107,11 @@ export function buildActions(can: Can): PaletteAction[] {
   add(can('purchases.read'), 'Go to', 'Payments made', IndianRupee, '/app/purchases/payments', 'vendor payments payables ageing');
   add(can('purchases.read'), 'Go to', 'Expenses', Wallet, '/app/purchases/expenses');
   add(true, 'Go to', 'Items', Package, '/app/items', 'inventory products catalogue stock');
+  add(true, 'Go to', 'Warehouses', Warehouse, '/app/inventory/warehouses', 'branches godown store locations');
+  add(true, 'Go to', 'Stock adjustments', SlidersHorizontal, '/app/inventory/adjustments', 'stock count damaged expired write off');
+  add(true, 'Go to', 'Transfers', ArrowLeftRight, '/app/inventory/transfers', 'move stock between branches in transit');
+  add(true, 'Go to', 'Stock summary', Boxes, '/app/inventory/stock-summary', 'inventory valuation closing stock report');
+  add(can('items.write'), 'Create', 'Record stock count', SlidersHorizontal, '/app/inventory/adjustments?new=1&mode=count', 'physical count audit');
   add(true, 'Go to', 'Low stock', Boxes, '/app/items?tab=stock', 'reorder expiry batches alerts');
   add(can('banking.read'), 'Go to', 'Banking', Landmark, '/app/banking', 'cash bank accounts');
   add(can('reports.read'), 'Go to', 'Reports', BarChart3, '/app/reports', 'gstr-1 gstr-3b profit loss hsn');

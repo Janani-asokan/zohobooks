@@ -128,7 +128,13 @@ Without `ANTHROPIC_API_KEY`, reading runs entirely on the server: PDF text extra
 
 **Shop: inventory**
 - Items with SP1/SP2/SP3 price tiers, barcode scanning (USB scanner or camera), inline editing, and bulk tax-slab changes or archiving.
-- **Stock per branch** with adjustments, **transfers between branches** and full movement history.
+- **Warehouses**: every shop, godown or branch holds its own stock, with stock value per warehouse.
+- **Stock adjustments** as numbered documents (reason, who, when), including a **stock count** mode that posts the difference between what is on the shelf and what is on record.
+- **Transfers between warehouses** that stay *in transit* until the other side receives them, and can be cancelled back to the source.
+- **Variants**: turn an item into a group (Size × Colour …) with one sellable item per combination, each with its own SKU, price and stock.
+- **Serial / IMEI numbers**: register serials for stock on hand, pick them on the invoice (sale is blocked without them), print them on the invoice, and they return to stock if the invoice is cancelled or edited.
+- **Stock summary & valuation**: opening, in, out and closing for any period and warehouse, valued at cost, by item or by category, with CSV and print.
+- Full movement history per item.
 - **Batches & expiry** with first-expiry-first-out on sale, reorder-level alerts, and expiring-batch alerts.
 - **Barcode label sheets** (A4, 24 per page).
 - **CSV import/export** for items and customers (Excel → Save as CSV).

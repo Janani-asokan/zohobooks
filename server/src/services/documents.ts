@@ -9,7 +9,7 @@ import { fyLabel, formatInvoiceNumber, invoiceCounterKey } from '../../../shared
 import { isInterState } from '../../../shared/gst';
 import { balanceDue, invoiceStatus } from '../../../shared/status';
 import { getOrg, nextSeq, planLimits, platformConfig, primaryBranchId } from './common';
-import { moveStock } from './stock';
+import { moveStock, releaseSerials, sellSerials } from './stock';
 import { audit } from '../audit';
 import { todayISO, type UserCtx } from '../auth';
 
@@ -20,6 +20,8 @@ export const lineInput = z.object({
   rate: z.number().min(0).optional(), // omitted → price for tier
   discount: z.number().min(0).max(100).default(0),
   batchNo: z.string().max(60).optional(),
+  /** Serial numbers sold on this line (serial-tracked items need one per unit). */
+  serials: z.array(z.string().trim().min(1).max(60)).max(1000).optional(),
 });
 export type LineInput = z.infer<typeof lineInput>;
 
@@ -37,6 +39,7 @@ export interface StoredLine {
   discount: number;
   amount: number;
   batchNo?: string;
+  serials?: string[];
   batches?: Array<{ batchNo: string; qty: number; expiryDate: string | null }>;
 }
 
@@ -49,6 +52,7 @@ export async function buildLines(db: Db, shopId: string, input: LineInput[]): Pr
   return input.map((l) => {
     const it = byId.get(l.itemId);
     if (!it) throw badRequest('One of the selected items no longer exists');
+    if (it.is_group) throw badRequest(`${it.name} has variants. Pick a size or colour instead.`);
     const tierPrice = l.tier === 'SP1' ? it.sp1 : l.tier === 'SP2' ? it.sp2 : it.sp3;
     const line: StoredLine = {
       id: crypto.randomUUID(),
@@ -64,6 +68,7 @@ export async function buildLines(db: Db, shopId: string, input: LineInput[]): Pr
       discount: l.discount,
       amount: 0,
       ...(l.batchNo ? { batchNo: l.batchNo } : {}),
+      ...(it.track_serials && l.serials?.length ? { serials: [...new Set(l.serials.map((x) => x.trim()))] } : {}),
     };
     line.amount = lineAmount(line);
     return line;
@@ -138,6 +143,7 @@ async function issue(db: Db, req: Request | null, shopId: string, inv: any) {
     if (l.type !== 'Goods') continue;
     const used = await moveStock(db, { shopId, itemId: l.itemId, branchId: inv.branch_id, qty: -l.qty, reason: 'sale', refType: 'invoice', refId: inv.id, userId: req?.ctx?.id, batchNo: l.batchNo, note: number });
     if (used.length) l.batches = used;
+    await sellSerials(db, shopId, l, inv.branch_id, inv.id);
   }
   await db.query("UPDATE invoices SET status = 'Issued', number = $3, fy = $4, lines = $5, issued_at = now() WHERE shop_id = $1 AND id = $2", [shopId, inv.id, number, fy, JSON.stringify(lines)]);
   await db.query('INSERT INTO public_links (token, shop_id, invoice_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [inv.public_token, shopId, inv.id]);
@@ -145,6 +151,7 @@ async function issue(db: Db, req: Request | null, shopId: string, inv: any) {
 }
 
 async function restock(db: Db, req: Request | null, shopId: string, inv: any, reason: 'sale_cancel' | 'adjustment', note: string) {
+  await releaseSerials(db, shopId, inv.id);
   for (const l of inv.lines as StoredLine[]) {
     if (l.type !== 'Goods') continue;
     if (l.batches?.length) {
@@ -222,6 +229,7 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
       if (l.type === 'Goods') {
         const used = await moveStock(db, { shopId, itemId: l.itemId, branchId: f.branchId, qty: -l.qty, reason: 'sale', refType: 'invoice', refId: id, userId: req.ctx?.id, batchNo: l.batchNo, note: inv.number });
         if (used.length) l.batches = used;
+        await sellSerials(db, shopId, l, f.branchId, id);
       }
   }
   await db.query(

@@ -37,7 +37,7 @@ export function PurchaseLinesEditor({ lines, onChange, items, error }: { lines: 
                       <select className="select" value={l.itemId} aria-label="Item"
                         onChange={(e) => { const n = items.find((i) => i.id === e.target.value); upd(l.key, n ? { itemId: n.id, rate: String(n.cost ?? 0), taxRate: n.taxRate } : { itemId: '' }); }}>
                         <option value="">Select an item…</option>
-                        {items.map((i) => <option key={i.id} value={i.id}>{i.name}{i.sku ? ` · ${i.sku}` : ''}{i.type === 'Goods' ? ` (${i.stock} in stock)` : ''}</option>)}
+                        {items.filter((i) => !i.isGroup).map((i) => <option key={i.id} value={i.id}>{i.name}{i.sku ? ` · ${i.sku}` : ''}{i.type === 'Goods' ? ` (${i.stock} in stock)` : ''}</option>)}
                       </select>
                     </div>
                   </td>

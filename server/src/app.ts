@@ -16,6 +16,7 @@ import { purchasingRouter } from './routes/shop/purchasing';
 import { reportsRouter } from './routes/shop/reports';
 import { salesRouter } from './routes/shop/sales';
 import { filesRouter } from './routes/shop/files';
+import { inventoryRouter } from './routes/shop/inventory';
 
 export function createApp() {
   const app = express();
@@ -53,7 +54,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter);
+  app.use('/api/shop', requireShopUser(), coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, inventoryRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

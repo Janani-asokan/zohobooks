@@ -12,13 +12,14 @@ import { Thumb, downscaleImage } from '@/components/kit';
 import { money } from '@/lib/format';
 import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
 import { Attachments, attachFile } from '@/components/Attachments';
+import { SerialsCard, VariantsSection } from '@/components/ItemExtras';
 import type { ExtractResult } from '../../../shared/extract';
 
 type ItemType = Item['type'];
 interface Draft {
   type: ItemType; name: string; sku: string; barcode: string; unit: string; hsn: string; category: string; brand: string; image: string; description: string;
   cost: string; mrp: string; sp1: string; sp2: string; sp3: string; taxSlabId: string;
-  reorderLevel: string; trackBatches: boolean; openingStock: string; branchId: string; batchNo: string; expiryDate: string;
+  reorderLevel: string; trackBatches: boolean; trackSerials: boolean; openingStock: string; branchId: string; batchNo: string; expiryDate: string;
 }
 
 const GOODS_UNITS = ['pcs', 'nos', 'box', 'pack', 'kg', 'g', 'ltr', 'ml', 'mtr', 'ream', 'dozen', 'set', 'pair'];
@@ -43,7 +44,7 @@ const skuFrom = (name: string, brand: string) => {
 
 const blank = (type: ItemType, taxSlabId: string, branchId: string, barcode = ''): Draft => ({
   type, name: '', sku: '', barcode, unit: type === 'Goods' ? 'pcs' : 'job', hsn: '', category: '', brand: '', image: '', description: '',
-  cost: '', mrp: '', sp1: '', sp2: '', sp3: '', taxSlabId, reorderLevel: '10', trackBatches: false, openingStock: '', branchId, batchNo: '', expiryDate: '',
+  cost: '', mrp: '', sp1: '', sp2: '', sp3: '', taxSlabId, reorderLevel: '10', trackBatches: false, trackSerials: false, openingStock: '', branchId, batchNo: '', expiryDate: '',
 });
 
 function Section({ n, title, sub, children, right }: { n: number; title: string; sub: string; children: React.ReactNode; right?: React.ReactNode }) {
@@ -68,6 +69,7 @@ export default function ItemForm() {
   const me = useShopUser();
   const itemsQ = useItems();
   const items = itemsQ.data ?? [];
+  const current = editing ? items.find((i) => i.id === id) : undefined;
   const facets = useItemFacets().data;
   const slabsQ = useTaxSlabs();
   const activeSlabs = (slabsQ.data ?? []).filter((s) => s.active);
@@ -95,7 +97,7 @@ export default function ItemForm() {
       setDraft({
         ...blank(it.type, it.taxSlabId, primaryBranch), type: it.type, name: it.name, sku: it.sku, barcode: it.barcode, unit: it.unit, hsn: it.hsn, category: it.category ?? '', brand: it.brand ?? '',
         image: it.image ?? '', description: it.description, cost: String(it.cost ?? 0), mrp: it.mrp == null ? '' : String(it.mrp), sp1: String(it.sp1), sp2: String(it.sp2), sp3: String(it.sp3),
-        reorderLevel: String(it.reorderLevel), trackBatches: it.trackBatches,
+        reorderLevel: String(it.reorderLevel), trackBatches: it.trackBatches, trackSerials: it.trackSerials,
       });
     } else setDraft((d) => ({ ...d, taxSlabId: d.taxSlabId || defaultSlab, branchId: d.branchId || primaryBranch }));
     setReady(true);
@@ -216,7 +218,7 @@ export default function ItemForm() {
     const body: Record<string, unknown> = {
       type: draft.type, name: draft.name.trim(), sku: draft.sku.trim(), barcode: draft.barcode, unit: draft.unit, hsn: draft.hsn, cost,
       sp1: num(draft.sp1), sp2: num(draft.sp2), sp3: num(draft.sp3), taxSlabId: draft.taxSlabId, reorderLevel: Number(draft.reorderLevel || 0),
-      trackBatches: draft.type === 'Goods' && draft.trackBatches, description: draft.description, category: draft.category.trim(), brand: draft.brand.trim(),
+      trackBatches: draft.type === 'Goods' && draft.trackBatches, trackSerials: draft.type === 'Goods' && draft.trackSerials, description: draft.description, category: draft.category.trim(), brand: draft.brand.trim(),
       image: draft.image, mrp: draft.mrp.trim() === '' ? null : num(draft.mrp),
     };
     const onError = (err: Error) => {
@@ -426,7 +428,17 @@ export default function ItemForm() {
                   <Field label="Expiry date"><input className="input" type="date" value={draft.expiryDate} onChange={(ev) => set('expiryDate', ev.target.value)} /></Field>
                 </div>
               )}
+              <div className="toggle-row">
+                <div><div className="strong">Track serial numbers</div><div className="small muted">For phones, laptops and appliances. Each unit sold is picked by its serial or IMEI number and printed on the invoice.</div></div>
+                <Toggle checked={draft.trackSerials} onChange={(v) => set('trackSerials', v)} />
+              </div>
               {editing && <p className="small muted" style={{ marginTop: 12 }}><Info size={13} style={{ verticalAlign: -2 }} /> To change stock, open the item and use <strong>Adjust stock</strong>. Every change keeps a history.</p>}
+            </Section>
+          )}
+
+          {editing && current && current.type === 'Goods' && !current.parentId && (
+            <Section n={5} title="Variants" sub="Sizes, colours or other options, each with its own stock, SKU and price.">
+              <VariantsSection item={current} items={items} />
             </Section>
           )}
         </div>
@@ -463,6 +475,8 @@ export default function ItemForm() {
               ))}
             </ul>
           </div>
+
+          {editing && current?.trackSerials && !current.isGroup && <div className="card" style={{ marginTop: 16, padding: 18 }}><SerialsCard item={current} canWrite /></div>}
 
           {editing && <div className="card" style={{ marginTop: 16, padding: 18 }}><Attachments entity="item" entityId={id!} title="Files" /></div>}
 

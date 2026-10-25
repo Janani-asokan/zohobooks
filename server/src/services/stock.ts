@@ -1,7 +1,8 @@
 import type { Db } from '../db';
 import { many, one } from '../db';
+import { HttpError } from '../http';
 
-export type StockReason = 'opening' | 'sale' | 'sale_cancel' | 'credit_note' | 'adjustment' | 'transfer_in' | 'transfer_out' | 'purchase';
+export type StockReason = 'opening' | 'sale' | 'sale_cancel' | 'credit_note' | 'adjustment' | 'transfer_in' | 'transfer_out' | 'transfer_cancel' | 'purchase';
 
 interface Move {
   shopId: string;
@@ -63,4 +64,25 @@ export async function moveStock(db: Db, m: Move): Promise<Array<{ batchNo: strin
     [m.shopId, m.itemId, m.branchId, m.qty, m.reason, batchLabel, m.refType ?? '', m.refId ?? null, m.note ?? '', m.userId ?? null],
   );
   return used;
+}
+
+/* ---------------- Serial numbers ---------------- */
+
+/** Marks the serials on an invoice line as sold. Serial-tracked items need exactly one serial per unit, in stock at the branch. */
+export async function sellSerials(db: Db, shopId: string, line: { itemId: string; name: string; qty: number; serials?: string[] }, branchId: string, invoiceId: string) {
+  const item = await one(db, 'SELECT track_serials FROM items WHERE shop_id = $1 AND id = $2', [shopId, line.itemId]);
+  if (!item?.track_serials) return;
+  const serials = [...new Set((line.serials ?? []).map((s) => s.trim()).filter(Boolean))];
+  if (!Number.isInteger(line.qty) || serials.length !== line.qty)
+    throw new HttpError(400, `${line.name} needs ${line.qty} serial number${line.qty === 1 ? '' : 's'} (${serials.length} entered)`, 'serials_required');
+  const rows = await many(db, "SELECT id, serial FROM item_serials WHERE shop_id = $1 AND item_id = $2 AND branch_id = $3 AND status = 'In stock' AND serial = ANY($4::text[]) FOR UPDATE", [shopId, line.itemId, branchId, serials]);
+  const found = new Set(rows.map((r) => r.serial));
+  const missing = serials.filter((s) => !found.has(s));
+  if (missing.length) throw new HttpError(400, `Not in stock at this branch for ${line.name}: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''}`, 'serials_unavailable');
+  await db.query("UPDATE item_serials SET status = 'Sold', invoice_id = $3, updated_at = now() WHERE shop_id = $1 AND id = ANY($2::uuid[])", [shopId, rows.map((r) => r.id), invoiceId]);
+}
+
+/** Puts an invoice's sold serials back in stock (invoice cancelled or edited). */
+export async function releaseSerials(db: Db, shopId: string, invoiceId: string) {
+  await db.query("UPDATE item_serials SET status = 'In stock', invoice_id = NULL, updated_at = now() WHERE shop_id = $1 AND invoice_id = $2 AND status = 'Sold'", [shopId, invoiceId]);
 }

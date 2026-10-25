@@ -27,6 +27,24 @@ export interface Item {
   sp1: number; sp2: number; sp3: number; taxSlabId: string; taxRate: number; reorderLevel: number; trackBatches: boolean; description: string;
   stock: number; stockByBranch: Record<string, number>; createdAt: string;
   category: string; brand: string; image: string; mrp: number | null;
+  trackSerials: boolean; parentId: string | null; isGroup: boolean; variantAttrs: Record<string, string>; attributes: Array<{ name: string; values: string[] }>;
+}
+export interface StockAdjustment {
+  id: string; number: string; branchId: string; branchName: string; date: string; reason: string; mode: 'change' | 'count'; value: number; notes: string; createdBy: string; createdAt: string;
+  lines: Array<{ itemId: string; name: string; unit: string; before: number; change: number; after: number; cost: number; value: number }>;
+}
+export interface StockTransfer {
+  id: string; number: string; fromBranchId: string; fromName: string; toBranchId: string; toName: string; date: string; status: 'In transit' | 'Received' | 'Cancelled';
+  notes: string; receivedAt: string | null; createdBy: string; createdAt: string;
+  lines: Array<{ itemId: string; name: string; unit: string; qty: number; serials: string[] }>;
+}
+export interface ItemSerial { id: string; itemId: string; itemName: string; serial: string; status: 'In stock' | 'Sold' | 'In transit' | 'Written off'; branchId: string | null; branchName: string | null; invoiceId: string | null; invoiceNumber: string | null; note: string; updatedAt: string }
+export interface StockSummary {
+  from: string; to: string; branchId: string | null; inTransit: number;
+  items: Array<{ itemId: string; name: string; sku: string; unit: string; category: string; opening: number; in: number; out: number; closing: number; sold: number; reorderLevel: number; cost: number | null; value: number | null }>;
+  byCategory: Array<{ category: string; items: number; qty: number; value: number }>;
+  byBranch: Array<{ branchId: string; name: string; value: number; qty: number; items: number }>;
+  totals: { qty: number; value: number | null; items: number; lowStock: number };
 }
 export interface ItemFacets { categories: Array<{ name: string; count: number }>; brands: Array<{ name: string; count: number }>; units: string[] }
 
@@ -37,9 +55,9 @@ export interface Customer {
 
 export interface Line {
   id: string; itemId: string; name: string; type: 'Goods' | 'Services'; hsn: string; unit: string; qty: number; rate: number; tier: PriceTier;
-  taxRate: number; discount: number; amount: number; batchNo?: string; batches?: Array<{ batchNo: string; qty: number; expiryDate: string | null }>;
+  taxRate: number; discount: number; amount: number; batchNo?: string; serials?: string[]; batches?: Array<{ batchNo: string; qty: number; expiryDate: string | null }>;
 }
-export interface LineInput { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number }
+export interface LineInput { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number; serials?: string[] }
 
 export interface CustomerSnapshot { customId: string; type: string; name: string; companyName: string; gstin: string; email: string; phone: string; state: string; address: string }
 

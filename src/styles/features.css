@@ -101,7 +101,8 @@
 .pnl-table tr.grp td { font-weight: 600; color: var(--ink-900); background: var(--ink-50); font-size: var(--fs-12); }
 .pnl-table tr.sub td { font-weight: 600; color: var(--ink-900); border-top: 1px solid var(--border-strong); }
 .pnl-table tr.total td { font-weight: 600; font-size: var(--fs-14); color: var(--ink-900); background: var(--ink-50); border-top: 1px solid var(--ink-900); }
-.report-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-end; }
+.report-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-4); }
+.report-filters > .input, .report-filters > .select { width: auto; min-width: 160px; }
 
 /* ---------- Print settings ---------- */
 .ps-layout { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: var(--sp-5); align-items: start; }
@@ -198,3 +199,19 @@
 .attach-meta { font-size: var(--fs-12); color: var(--ink-500); }
 .attach-drop { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-3); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--ink-600); font-size: var(--fs-13); cursor: pointer; background: none; width: 100%; }
 .attach-drop:hover, .attach-drop.drag { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+/* Warehouses */
+.wh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sp-4); }
+.wh-card { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+.serial-field { margin-top: 6px; display: grid; gap: 4px; }
+.serial-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.serial-chips .chip { cursor: pointer; border: 1px solid var(--border); background: var(--surface); }
+.serial-chips .chip:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Variants & serial numbers */
+.variant-builder { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.variant-attr { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr auto; gap: var(--sp-3); align-items: end; }
+@media (max-width: 640px) { .variant-attr { grid-template-columns: 1fr; } }
+.serial-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow: auto; border-top: 1px solid var(--border); }
+.serial-list li { display: grid; grid-template-columns: 1fr auto auto; gap: var(--sp-2); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.variant-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); margin-left: 6px; vertical-align: 1px; }

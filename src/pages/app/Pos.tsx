@@ -23,7 +23,7 @@ const price = (it: Item, tier: PriceTier) => (tier === 'SP1' ? it.sp1 : tier ===
 export default function Pos() {
   const me = useShopUser();
   const toast = useToast();
-  const { data: items = [] } = useItems();
+  const items = (useItems().data ?? []).filter((i) => !i.isGroup);
   const { data: customers = [] } = useCustomers();
   const branches = useBranches().data ?? [];
   const org = useOrg().data;

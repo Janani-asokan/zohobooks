@@ -156,6 +156,7 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady }: {
               <td className="c-item">
                 <div className="ti-strong">{l.name}</div>
                 {l.batches?.length ? <div className="ti-muted">Batch {l.batches.map((b) => `${b.batchNo}${b.expiryDate ? ` · exp ${fmtDate(b.expiryDate)}` : ''}`).join(', ')}</div> : null}
+                {l.serials?.length ? <div className="ti-muted">S/N {l.serials.join(", ")}</div> : null}
               </td>
               {f.hsn && <td>{l.hsn || '—'}</td>}
               <td className="r">{l.qty}{!f.unit && l.unit ? ` ${l.unit}` : ''}</td>

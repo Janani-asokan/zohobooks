@@ -4,6 +4,7 @@ import { usePrefs } from '@/context/PrefsContext';
 const TONE: Record<string, string> = {
   Paid: 'green', 'Partially Paid': 'amber', Sent: 'blue', Overdue: 'red', Draft: 'gray', Void: 'gray', Unpaid: 'amber', Cancelled: 'gray',
   Accepted: 'green', Declined: 'red', Expired: 'gray', Invoiced: 'green', Confirmed: 'blue',
+  'In transit': 'amber', Received: 'green', 'In stock': 'green', Sold: 'blue', 'Written off': 'gray', Open: 'blue',
 };
 
 /** Payment-status badge with translated label. */

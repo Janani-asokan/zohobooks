@@ -289,8 +289,8 @@ export default function Items() {
                             <div className="name-cell">
                               <button className="thumb-btn" onClick={() => setOpenId(it.id)} title="Open item"><Thumb name={it.name} image={it.image} /></button>
                               <div>
-                                <div className="title">{cell(it, 'name')}</div>
-                                <div className="sub">{[it.sku, it.category, it.barcode || (it.hsn ? `${it.type === 'Goods' ? 'HSN' : 'SAC'} ${it.hsn}` : ''), it.trackBatches ? 'batches' : ''].filter(Boolean).join(' · ') || 'No barcode'}</div>
+                                <div className="title">{cell(it, 'name')}{it.isGroup && <span className="variant-tag">{items.filter((c) => c.parentId === it.id).length} variants</span>}</div>
+                                <div className="sub">{[it.sku, it.category, it.barcode || (it.hsn ? `${it.type === 'Goods' ? 'HSN' : 'SAC'} ${it.hsn}` : ''), it.trackBatches ? 'batches' : '', it.trackSerials ? 'serial nos.' : ''].filter(Boolean).join(' · ') || 'No barcode'}</div>
                               </div>
                             </div>
                           </td>

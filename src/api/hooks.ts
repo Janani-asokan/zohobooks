@@ -3,7 +3,7 @@ import { api, ApiError } from './client';
 import { useToast } from '@/context/ToastContext';
 import type {
   AuditEntry, BankAccount, BankTxn, Bill, BillPayment, Branch, CreditNote, Customer, Dashboard, Invoice, InvoiceDetail, Item, Notification, Organization,
-  ItemFacets, PaymentRow, Plan, PurchaseOrder, Expense, PlatformConfig, Recurring, SalesOrder, Shop, StaffUser, TaxSlab, Vendor,
+  ItemFacets, ItemSerial, PaymentRow, StockAdjustment, StockTransfer, Plan, PurchaseOrder, Expense, PlatformConfig, Recurring, SalesOrder, Shop, StaffUser, TaxSlab, Vendor,
 } from './types';
 import type { PrintSettings } from '../../shared/printSettings';
 
@@ -29,6 +29,9 @@ export const useRecurring = () => useQuery(q<Recurring[]>(['recurring'], `${S}/r
 export const useVendors = (enabled = true) => useQuery(q<Vendor[]>(['vendors'], `${S}/vendors`, enabled));
 export const useBills = (enabled = true) => useQuery(q<Bill[]>(['bills'], `${S}/bills`, enabled));
 export const useBillPayments = () => useQuery(q<BillPayment[]>(['billPayments'], `${S}/bill-payments`));
+export const useStockAdjustments = () => useQuery(q<StockAdjustment[]>(['stockAdjustments'], `${S}/stock/adjustments`));
+export const useStockTransfers = () => useQuery(q<StockTransfer[]>(['stockTransfers'], `${S}/stock/transfers`));
+export const useItemSerials = (id: string | undefined) => useQuery({ ...q<ItemSerial[]>(['serials', id], `${S}/items/${id}/serials`), enabled: !!id });
 export const useBankAccounts = () => useQuery(q<BankAccount[]>(['bankAccounts'], `${S}/bank-accounts`));
 export const useBankTxns = (enabled = true) => useQuery(q<BankTxn[]>(['bankTxns'], `${S}/bank-transactions`, enabled));
 export const useStaff = (enabled = true) => useQuery(q<StaffUser[]>(['staff'], `${S}/staff`, enabled));
