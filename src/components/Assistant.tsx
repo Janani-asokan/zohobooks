@@ -58,9 +58,17 @@ export function Markdown({ text }: { text: string }) {
   return <>{out}</>;
 }
 
+/** Opens the Ask AI panel from anywhere (e.g. the dashboard banner). */
+export const openAssistant = () => window.dispatchEvent(new Event('c360:ask-ai'));
+
 export function AssistantButton() {
   const enabled = useAiEnabled();
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener('c360:ask-ai', show);
+    return () => window.removeEventListener('c360:ask-ai', show);
+  }, []);
   if (!enabled) return null;
   return (
     <>

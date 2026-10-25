@@ -26,8 +26,8 @@ export function AuthShell({ children }: { children: ReactNode }) {
             <li><Check size={16} /><div><strong>Stock that keeps itself up to date</strong>Invoices reduce it, bills add to it, and every movement is recorded per item and warehouse.</div></li>
             <li><Check size={16} /><div><strong>Returns ready when you are</strong>GSTR-1 and GSTR-3B summaries, P&amp;L and balance sheet, exportable to PDF, Excel and CSV.</div></li>
           </ul>
-          <div className="login-quote">Financial year April–March. Invoice numbers restart every 1 April.</div>
         </div>
+        <img className="login-photo" src="/img/hero.webp" alt="" decoding="async" />
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
-import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays, Receipt, Landmark } from 'lucide-react';
+import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays, Receipt, Landmark, Sparkles } from 'lucide-react';
 import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
 import { useLocalFlag } from '@/components/kit';
 import { useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
-import { EmptyState, PageHeader, StatCard } from '@/components/ui';
+import { EmptyState, StatCard } from '@/components/ui';
+import { openAssistant, useAiEnabled } from '@/components/Assistant';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AreaChart, Donut, MeterList } from '@/components/charts';
 import { fmtDate, money, moneyShort } from '@/lib/format';
@@ -29,6 +30,7 @@ export default function Home() {
   const canSell = me.can('sales.write');
 
   const now = new Date();
+  const aiOn = useAiEnabled();
   const ym = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
   const thisM = ym(now);
   const prevM = ym(new Date(now.getFullYear(), now.getMonth() - 1, 1));
@@ -72,11 +74,17 @@ export default function Home() {
   const fyStart = d ? `1 Apr ${d.fy.slice(0, 4)}` : '';
   return (
     <div className="page">
-      <PageHeader
-        title={<>{greet}, {me.user.name.split(' ')[0]}</>}
-        subtitle="Here’s what’s happening with your business today."
-        actions={<span className="date-pill"><CalendarDays size={15} /> {fyStart} – {now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
-      />
+      <section className="welcome">
+        <div className="welcome-text">
+          <h1>{greet}, {me.user.name.split(' ')[0]}</h1>
+          <p>Here’s what’s happening with your business today.</p>
+          <div className="welcome-row">
+            <span className="date-pill"><CalendarDays size={15} /> {fyStart} – {now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            {aiOn && <button className="welcome-ai" onClick={openAssistant}><Sparkles size={15} /> Ask AI about your business</button>}
+          </div>
+        </div>
+        <img className="welcome-photo" src="/img/hero.webp" alt="" aria-hidden="true" decoding="async" />
+      </section>
 
       {actions.length > 0 && (
         <nav className="big-actions" aria-label="Quick actions">

@@ -392,3 +392,25 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .ai-foot { padding: 0 16px 12px; text-align: center; }
 @media (max-width: 640px) { .ai-panel { border-radius: 0; } .ai-btn { padding: 0 11px; } }
 .ai-suggest { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------- Photos: dashboard welcome banner and login panel ---------- */
+.welcome { position: relative; display: flex; align-items: center; min-height: 168px; margin: 8px 0 20px; padding: 26px 30px; padding-right: 250px; border-radius: var(--radius-lg); background: var(--blush-grad); border: 1px solid var(--border); box-shadow: var(--shadow-xs); animation: rise-in .5s cubic-bezier(.2, .7, .2, 1) backwards; }
+.welcome::after { content: ''; position: absolute; right: 40px; bottom: 0; width: 210px; height: 150px; border-radius: 120px 120px 0 0; background: rgba(199, 95, 113, .16); }
+.welcome h1 { font-size: 28px; line-height: 1.2; color: var(--ink-900); margin: 0; }
+.welcome p { margin: 6px 0 0; color: var(--ink-600); }
+.welcome-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; align-items: center; }
+.welcome-ai { height: 36px; padding: 0 14px; border-radius: 99px; border: none; background: var(--accent-grad); color: #fff; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; box-shadow: var(--shadow-rose); transition: transform .15s; }
+.welcome-ai:hover { transform: translateY(-1px); }
+.welcome-photo { position: absolute; right: 34px; bottom: 0; height: 196px; width: auto; z-index: 1; filter: drop-shadow(0 10px 18px rgba(84, 70, 58, .22)); -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent); mask-image: linear-gradient(to bottom, #000 82%, transparent); pointer-events: none; }
+@media (max-width: 760px) {
+  .welcome { padding: 20px 18px; padding-right: 130px; min-height: 140px; }
+  .welcome h1 { font-size: 22px; }
+  .welcome::after { right: 10px; width: 120px; height: 100px; }
+  .welcome-photo { right: 6px; height: 132px; }
+}
+@media (max-width: 420px) { .welcome { padding-right: 18px; } .welcome-photo, .welcome::after { display: none; } }
+
+.login-right { justify-content: space-between; padding-bottom: 0; }
+.login-photo { position: relative; z-index: 1; align-self: center; width: auto; max-width: 100%; height: min(42vh, 380px); margin-top: 18px; object-fit: contain; filter: drop-shadow(0 14px 24px rgba(40, 28, 24, .25)); -webkit-mask-image: linear-gradient(to bottom, #000 85%, transparent); mask-image: linear-gradient(to bottom, #000 85%, transparent); }
+@media (max-height: 760px) { .login-photo { height: 30vh; } }
+.lp-hero-photo { -webkit-mask-image: linear-gradient(to bottom, #000 86%, transparent); mask-image: linear-gradient(to bottom, #000 86%, transparent); }
