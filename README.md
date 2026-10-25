@@ -32,7 +32,7 @@ npm run dev         # API on :4000, web on http://localhost:5173 (proxied)
 |---|---|---|
 | Shop owner | owner@shop.com | owner123 |
 | Super admin | admin@ledgerly.in | admin123 |
-| Manager / Sales staff / Accountant | manager@ / sales@ / accounts@shop.com | manager123 / sales123 / accounts123 |
+| Manager / Sales staff / Accountant / Warehouse | manager@ / sales@ / accounts@ / warehouse@shop.com | manager123 / sales123 / accounts123 / warehouse123 |
 
 There's no role picker on the login page: the server works out who you are from your account.
 
@@ -139,9 +139,16 @@ Without `ANTHROPIC_API_KEY`, reading runs entirely on the server: PDF text extra
 - **Barcode label sheets** (A4, 24 per page).
 - **CSV import/export** for items and customers (Excel → Save as CSV).
 
-**Shop: team**
-- **Staff logins** with the roles Manager, Accountant, Sales Staff and Viewer. **Permissions are enforced on the server**, and Sales Staff can't see cost prices.
-- Multiple branches and an activity log.
+**Shop: accounting & reports**
+- **Double-entry ledger built from your documents**: invoices, payments, credit notes, bills, payments made, expenses, banking and every stock movement post automatically, so the books can't drift from the source records.
+- **Chart of accounts** with live balances (built-in accounts, one per bank account and expense category, plus your own), **manual journals** that must balance, and a **general ledger** with running balance per account.
+- **Profit & Loss, Balance Sheet, Cash Flow, Trial Balance, Sales by Customer, Sales by Item, Receivables and Payables Ageing**, Stock Summary and Inventory Valuation. Every report has date presets (this month, quarter, financial year…) and exports to **PDF** (rendered on the server), **Excel (.xlsx)** and **CSV**.
+
+**Shop: team & control**
+- **Roles**: Owner, Manager, Accountant, Sales Staff, Warehouse and Viewer, with a **permissions matrix per module** the owner can change. **Permissions are enforced on the server** on every request.
+- **Audit log of every change**: who, what, which record, when and from which IP, searchable and exportable. Changes a route doesn't log itself are still recorded.
+- **Organisation switcher**: run several businesses from one login, each with its own data, books and settings.
+- Multiple branches.
 - License renewal, through Razorpay when configured.
 
 **Polish**
@@ -163,7 +170,7 @@ npm test            # shared unit tests + API integration tests (uses the ledger
 npm run test:e2e    # Playwright smoke test against a running `npm run dev`
 npm run typecheck
 ```
-The API tests cover login and lock-out, CSRF, password reset, forced password change, role permissions, **shop isolation (including database-level row-level security)**, concurrent invoice numbering, FY reset, tax treatment, stock deduction and restock, payments with TDS, credit-note limits, POS sales, plan limits, recurring generation, public links, GSTR-1/3B, HSN, and e-invoice/e-way bill payloads.
+The API tests cover login and lock-out, CSRF, password reset, forced password change, role permissions, **shop isolation (including database-level row-level security)**, concurrent invoice numbering, FY reset, tax treatment, stock deduction and restock, payments with TDS, credit-note limits, POS sales, plan limits, recurring generation, public links, GSTR-1/3B, HSN, and e-invoice/e-way bill payloads, the ledger (trial balance, balance sheet, cash-flow reconciliation, journals), the roles matrix, the audit log and organisation switching.
 
 ## Project layout
 

@@ -6,7 +6,7 @@ import { many, one } from '../../db';
 import { forbidden, HttpError, notFound, parse } from '../../http';
 import { getOrg } from '../../services/common';
 import { aiEnabled, decodeDataUrl, extractDocument } from '../../services/extract';
-import { can, type Permission } from '../../../../shared/permissions';
+import type { Permission } from '../../../../shared/permissions';
 import { T, allowed } from './ctx';
 
 export const filesRouter = Router();
@@ -61,7 +61,7 @@ filesRouter.post(
   T(async (db, req, c) => {
     const b = parse(z.object({ entity: entityEnum, entityId: z.string().uuid(), filename: z.string().trim().min(1).max(200), file: z.string().min(20) }), req.body);
     const rule = ENTITIES[b.entity];
-    if (!can(c.role, rule.write)) throw forbidden();
+    if (!c.permissions.includes(rule.write)) throw forbidden();
     if (!(await one(db, `SELECT 1 FROM ${rule.table} WHERE shop_id = $1 AND id = $2`, [c.shopId, b.entityId]))) throw notFound('Record');
     const { mime, bytes } = decodeDataUrl(b.file);
     const used = await one(db, 'SELECT coalesce(sum(size), 0)::bigint AS n FROM attachments WHERE shop_id = $1', [c.shopId]);
@@ -99,7 +99,7 @@ filesRouter.delete(
   T(async (db, req, c) => {
     const a = await one(db, 'SELECT id, entity, entity_id, filename FROM attachments WHERE shop_id = $1 AND id = $2', [c.shopId, req.params.id]);
     if (!a) throw notFound('File');
-    if (!can(c.role, ENTITIES[a.entity as Entity].write)) throw forbidden();
+    if (!c.permissions.includes(ENTITIES[a.entity as Entity].write)) throw forbidden();
     await db.query('DELETE FROM attachments WHERE shop_id = $1 AND id = $2', [c.shopId, a.id]);
     await audit(db, req, c.shopId, 'detach', a.entity, a.entity_id, { file: a.filename });
   }),

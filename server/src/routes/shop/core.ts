@@ -149,7 +149,13 @@ coreRouter.put(
 /* ---------- Staff (logins with roles) ---------- */
 const serializeUser = (u: any) => ({ id: u.id, name: u.name, email: u.email, role: u.role, branchId: u.branch_id, active: u.active, mustChangePassword: u.must_change_password, lastLoginAt: u.last_login_at });
 
-coreRouter.get('/staff', perm('admin'), T(async (db, _req, c) => (await many(db, 'SELECT * FROM users WHERE shop_id = $1 ORDER BY (role = \'Owner\') DESC, created_at', [c.shopId])).map(serializeUser)));
+coreRouter.get('/staff', perm('admin'), T(async (db, _req, c) => {
+  const own = (await many(db, 'SELECT * FROM users WHERE shop_id = $1 ORDER BY (role = \'Owner\') DESC, created_at', [c.shopId])).map(serializeUser);
+  // Owners of other organisations who also manage this one.
+  const linked = (await query('SELECT u.*, us.role AS linked_role FROM user_shops us JOIN users u ON u.id = us.user_id WHERE us.shop_id = $1', [c.shopId]))
+    .map((u) => ({ ...serializeUser({ ...u, role: u.linked_role, branch_id: null }), linked: true }));
+  return [...linked, ...own];
+}));
 
 coreRouter.post(
   '/staff',
@@ -205,17 +211,6 @@ coreRouter.patch(
     if (b.active === false || b.password || b.role) await query("DELETE FROM sessions WHERE principal_type = 'user' AND principal_id = $1", [u.id]);
     await audit(db, req, c.shopId, 'update', 'user', u.id, { role: b.role, active: b.active, passwordReset: !!b.password });
     return serializeUser(row);
-  }),
-);
-
-/* ---------- Activity log (owner) ---------- */
-coreRouter.get(
-  '/audit',
-  perm('admin'),
-  T(async (db, req, c) => {
-    const limit = Math.min(500, Number(req.query.limit ?? 200));
-    const rows = await many(db, 'SELECT * FROM audit_log WHERE shop_id = $1 ORDER BY at DESC LIMIT $2', [c.shopId, limit]);
-    return rows.map((r) => ({ id: r.id, actor: r.actor_name, actorType: r.actor_type, action: r.action, entity: r.entity, entityId: r.entity_id, details: r.details, ip: r.ip, at: r.at }));
   }),
 );
 

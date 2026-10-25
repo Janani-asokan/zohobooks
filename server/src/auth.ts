@@ -5,7 +5,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { config } from './config';
 import { query } from './db';
 import { forbidden, HttpError } from './http';
-import { can, type Permission, type UserRole } from '../../shared/permissions';
+import { rolePermissions, type Permission, type UserRole } from '../../shared/permissions';
 
 export const SESSION_COOKIE = 'lb_session';
 
@@ -19,6 +19,10 @@ export type UserCtx = {
   shopId: string;
   branchId: string | null;
   mustChangePassword: boolean;
+  /** What this user may do in the active shop (role defaults or the shop's own matrix). */
+  permissions: Permission[];
+  /** The shop the login belongs to; shopId differs when the user switched organisation. */
+  homeShopId: string;
 };
 export type Ctx = SuperCtx | UserCtx;
 
@@ -66,23 +70,43 @@ export function clearSessionCookie(res: Response) {
   res.setHeader('Set-Cookie', serialize(SESSION_COOKIE, '', { httpOnly: true, secure: config.cookieSecure, sameSite: 'lax', path: '/', maxAge: 0 }));
 }
 
+/** A role's permissions in one shop, honouring the shop's own roles matrix. */
+export async function permissionsFor(shopId: string, role: UserRole): Promise<Permission[]> {
+  if (role === 'Owner') return rolePermissions(role);
+  const [rp] = await query('SELECT permissions FROM role_permissions WHERE shop_id = $1 AND role = $2', [shopId, role]);
+  return rolePermissions(role, rp?.permissions ?? null);
+}
+
+/** The signed-in user as seen from the organisation they are working in (their own or one shared with them). */
+export async function resolveUserCtx(userId: string, activeShopId: string | null): Promise<UserCtx | null> {
+  const [u] = await query('SELECT id, name, email, role, shop_id, branch_id, active, must_change_password FROM users WHERE id = $1', [userId]);
+  if (!u?.active) return null;
+  let shopId: string = u.shop_id, role: UserRole = u.role, branchId: string | null = u.branch_id;
+  if (activeShopId && activeShopId !== u.shop_id) {
+    const [m] = await query('SELECT role FROM user_shops WHERE user_id = $1 AND shop_id = $2', [u.id, activeShopId]);
+    if (m) { shopId = activeShopId; role = m.role; branchId = null; }
+  }
+  return {
+    kind: 'user', id: u.id, name: u.name, email: u.email, role, shopId, branchId, mustChangePassword: u.must_change_password,
+    permissions: await permissionsFor(shopId, role), homeShopId: u.shop_id,
+  };
+}
+
 /** Resolves the session cookie into req.ctx (or leaves it undefined). */
 export async function loadSession(req: Request, _res: Response, next: NextFunction) {
   try {
     const token = parseCookie(req.headers.cookie ?? '')[SESSION_COOKIE];
     if (!token) return next();
     const hash = sha256(token);
-    const [s] = await query('SELECT principal_type, principal_id FROM sessions WHERE token_hash = $1 AND expires_at > now()', [hash]);
+    const [s] = await query('SELECT principal_type, principal_id, active_shop_id FROM sessions WHERE token_hash = $1 AND expires_at > now()', [hash]);
     if (!s) return next();
     req.sessionHash = hash;
     if (s.principal_type === 'super') {
       const [a] = await query('SELECT id, name, email FROM super_admins WHERE id = $1', [s.principal_id]);
       if (a) req.ctx = { kind: 'super', id: a.id, name: a.name, email: a.email };
     } else {
-      const [u] = await query('SELECT id, name, email, role, shop_id, branch_id, active, must_change_password FROM users WHERE id = $1', [s.principal_id]);
-      if (u?.active) {
-        req.ctx = { kind: 'user', id: u.id, name: u.name, email: u.email, role: u.role, shopId: u.shop_id, branchId: u.branch_id, mustChangePassword: u.must_change_password };
-      }
+      const u = await resolveUserCtx(s.principal_id, s.active_shop_id);
+      if (u) req.ctx = u;
     }
     next();
   } catch (e) {
@@ -130,7 +154,7 @@ export const perm =
   (p: Permission) =>
   (req: Request, _res: Response, next: NextFunction) => {
     const ctx = req.ctx;
-    if (ctx?.kind !== 'user' || !can(ctx.role, p)) return next(forbidden());
+    if (ctx?.kind !== 'user' || !ctx.permissions.includes(p)) return next(forbidden());
     next();
   };
 

@@ -1,18 +1,19 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, BarChart3, Percent, Users, Package, Clock4, Printer, Download, FileJson, Info, Landmark } from 'lucide-react';
+import { BarChart3, Percent, Printer, Download, FileJson, Info, Landmark } from 'lucide-react';
 import { api, download } from '@/api/client';
 import { useInvoices } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { useToast } from '@/context/ToastContext';
 import { PageHeader } from '@/components/ui';
-import { AreaChart, BarChart } from '@/components/charts';
+import { AreaChart } from '@/components/charts';
 import { money, moneyShort } from '@/lib/format';
 import { fyLabel } from '@/lib/fy';
 import { Hint } from '@/components/kit';
 
-type Tab = 'pnl' | 'sales' | 'gst' | 'customers' | 'items' | 'aging';
+type Tab = 'sales' | 'gst';
 
 interface SalesReport {
   monthly: Array<{ month: string; count: number; net: number; tax: number; total: number }>;
@@ -33,11 +34,6 @@ interface Gstr3b {
   payable: { iamt: number; camt: number; samt: number };
   note: string;
 }
-interface Pnl {
-  income: { sales: number; returns: number; net: number }; costOfGoods: number | null; grossProfit: number | null;
-  expenses: Array<{ category: string; amount: number }>; totalExpenses: number; netProfit: number | null;
-  monthly: Array<{ month: string; income: number; expenses: number; profit: number | null }>;
-}
 interface HsnRow { hsn: string; description: string; unit: string; rate: number; qty: number; taxable: number; igst: number; cgst: number; sgst: number }
 
 const monthName = (ym: string) => new Date(ym + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' });
@@ -47,7 +43,7 @@ export default function Reports() {
   const me = useShopUser();
   const { t } = usePrefs();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>('pnl');
+  const [tab, setTab] = useState<Tab>('gst');
   const invoices = useInvoices().data ?? [];
   const currentFy = fyLabel(new Date(), me.platform.fyStartMonth);
   const fys = [...new Set([currentFy, ...invoices.map((i) => i.fy)])].sort().reverse();
@@ -57,7 +53,6 @@ export default function Reports() {
   const [period, setPeriod] = useState(`${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`);
 
   const sales = useQuery({ queryKey: ['report', 'sales', fy], queryFn: () => api.get<SalesReport>(`/shop/reports/sales?fy=${fy}`) });
-  const pnl = useQuery({ queryKey: ['report', 'pnl', fy], queryFn: () => api.get<Pnl>(`/shop/reports/pnl?fy=${fy}`), enabled: tab === 'pnl' });
   const g1 = useQuery({ queryKey: ['report', 'gstr1', period], queryFn: () => api.get<Gstr1Summary>(`/shop/gst/gstr1?period=${period}`), enabled: tab === 'gst' });
   const g3 = useQuery({ queryKey: ['report', 'gstr3b', period], queryFn: () => api.get<Gstr3b>(`/shop/gst/gstr3b?period=${period}`), enabled: tab === 'gst' });
   const [y, m] = period.split('-').map(Number) as [number, number];
@@ -75,12 +70,8 @@ export default function Reports() {
   const periods = useMemo(() => Array.from({ length: 15 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }), []);
 
   const TABS: Array<{ id: Tab; label: string; icon: typeof BarChart3 }> = [
-    { id: 'pnl', label: 'Profit & loss', icon: TrendingUp },
-    { id: 'sales', label: 'Sales summary', icon: BarChart3 },
     { id: 'gst', label: 'GST returns', icon: Percent },
-    { id: 'customers', label: 'Sales by customer', icon: Users },
-    { id: 'items', label: 'Sales by item', icon: Package },
-    { id: 'aging', label: 'Receivables aging', icon: Clock4 },
+    { id: 'sales', label: 'Monthly sales', icon: BarChart3 },
   ];
 
   const dl = (url: string, name: string, what: string) => download(url, name).then(() => toast('success', `${what} downloaded`, 'Upload it on the GST portal’s offline tool / returns page.')).catch((e) => toast('error', e.message));
@@ -88,7 +79,8 @@ export default function Reports() {
   return (
     <div className="page">
       <PageHeader
-        title={t('nav.reports')}
+        title="GST Returns"
+        crumbs={<><Link to="/app/reports">Reports</Link> <span>/</span> Taxes</>}
         subtitle={tab === 'gst' ? `GST returns for ${monthName(period)} · GSTIN ${g1.data?.gstin || '—'}` : `Financial year ${fy} · 1 April ${fy.slice(0, 4)} – 31 March ${Number(fy.slice(0, 4)) + 1}`}
         actions={
           <>
@@ -107,45 +99,6 @@ export default function Reports() {
       <div className="tabs no-print">{TABS.map((x) => <button key={x.id} className={tab === x.id ? 'active' : ''} onClick={() => setTab(x.id)}><x.icon size={15} /> {x.label}</button>)}</div>
 
       <div className="print-area">
-        {tab === 'pnl' && (
-          pnl.isLoading || !pnl.data ? <div className="skeleton" style={{ height: 320 }} /> : (
-            <div className="stack">
-              <div className="stat-grid">
-                <div className="stat-card"><div className="stat-label">Net income</div><div className="stat-value">{moneyShort(pnl.data.income.net)}</div><div className="stat-foot">Sales {money(pnl.data.income.sales)} − returns {money(pnl.data.income.returns)}</div></div>
-                <div className="stat-card"><div className="stat-label">Cost of goods sold</div><div className="stat-value">{pnl.data.costOfGoods === null ? '—' : moneyShort(pnl.data.costOfGoods)}</div><div className="stat-foot">At current item cost</div></div>
-                <div className="stat-card"><div className="stat-label">Expenses</div><div className="stat-value">{moneyShort(pnl.data.totalExpenses)}</div><div className="stat-foot">{pnl.data.expenses.length} categories</div></div>
-                <div className="stat-card" style={{ background: pnl.data.netProfit !== null && pnl.data.netProfit < 0 ? 'var(--red-50)' : 'var(--green-50)' }}><div className="stat-label">Net profit</div><div className="stat-value" style={{ color: pnl.data.netProfit !== null && pnl.data.netProfit < 0 ? 'var(--red-600)' : 'var(--green-700)' }}>{pnl.data.netProfit === null ? '—' : moneyShort(pnl.data.netProfit)}</div><div className="stat-foot">{pnl.data.netProfit !== null && pnl.data.income.net > 0 ? `${Math.round((pnl.data.netProfit / pnl.data.income.net) * 100)}% net margin` : 'Income − costs − expenses'}</div></div>
-              </div>
-              <div className="grid-2" style={{ alignItems: 'start' }}>
-                <div className="card">
-                  <div className="card-header"><div><h3>Profit &amp; loss statement</h3><p>FY {fy} · amounts exclude GST · running costs come from Expenses</p></div></div>
-                  <table className="table pnl-table">
-                    <tbody>
-                      <tr className="grp"><td>Income</td><td /></tr>
-                      <tr><td>Sales</td><td className="num">{money(pnl.data.income.sales)}</td></tr>
-                      <tr><td>Less: sales returns (credit notes)</td><td className="num">− {money(pnl.data.income.returns)}</td></tr>
-                      <tr className="sub"><td>Net income</td><td className="num">{money(pnl.data.income.net)}</td></tr>
-                      {pnl.data.costOfGoods !== null && (<>
-                        <tr><td>Less: cost of goods sold</td><td className="num">− {money(pnl.data.costOfGoods)}</td></tr>
-                        <tr className="sub"><td>Gross profit</td><td className="num">{money(pnl.data.grossProfit ?? 0)}</td></tr>
-                      </>)}
-                      <tr className="grp"><td>Operating expenses</td><td /></tr>
-                      {pnl.data.expenses.length === 0 && <tr><td className="muted">No expenses recorded</td><td className="num">—</td></tr>}
-                      {pnl.data.expenses.map((e) => <tr key={e.category}><td>{e.category}</td><td className="num">{money(e.amount)}</td></tr>)}
-                      <tr className="sub"><td>Total expenses</td><td className="num">{money(pnl.data.totalExpenses)}</td></tr>
-                      {pnl.data.netProfit !== null && <tr className="total"><td>{pnl.data.netProfit < 0 ? 'Net loss' : 'Net profit'}</td><td className="num">{money(pnl.data.netProfit)}</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="card">
-                  <div className="card-header"><div><h3>Income vs. costs</h3><p>Month by month</p></div></div>
-                  <div className="card-body"><BarChart labels={pnl.data.monthly.map((m) => new Date(m.month + '-01').toLocaleString('en-IN', { month: 'short' }))} series={[{ name: 'Income', values: pnl.data.monthly.map((m) => m.income) }, { name: 'Costs & expenses', values: pnl.data.monthly.map((m) => m.expenses) }]} format={moneyShort} /></div>
-                </div>
-              </div>
-            </div>
-          )
-        )}
-
         {tab === 'sales' && (
           <div className="stack">
             <div className="card">
@@ -223,49 +176,6 @@ export default function Reports() {
           </div>
         )}
 
-        {tab === 'customers' && (
-          <div className="card table-wrap">
-            <table className="table">
-              <thead><tr><th>Customer</th><th>ID</th><th>Type</th><th className="num">Invoices</th><th className="num">Sales</th></tr></thead>
-              <tbody>
-                {(sales.data?.byCustomer ?? []).map((r) => <tr key={r.id}><td className="strong">{r.name}</td><td><span className="chip mono">{r.customId || 'Walk-in'}</span></td><td className="muted">{r.type}</td><td className="num">{r.count}</td><td className="num strong">{money(r.total)}</td></tr>)}
-                {sales.data?.byCustomer.length === 0 && <tr><td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 32 }}>No sales in FY {fy}</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {tab === 'items' && (
-          <div className="card table-wrap">
-            <table className="table">
-              <thead><tr><th>Item</th><th className="num">Qty sold</th><th className="num">Sales (net)</th>{me.can('items.cost') && <><th className="num">Cost</th><th className="num">Gross profit</th><th className="num">Margin</th></>}</tr></thead>
-              <tbody>
-                {(sales.data?.byItem ?? []).map((r) => (
-                  <tr key={r.itemId}>
-                    <td className="strong">{r.name}</td><td className="num">{r.qty}</td><td className="num">{money(r.amount)}</td>
-                    {r.cost !== null && <><td className="num muted">{money(r.cost)}</td><td className="num strong" style={{ color: r.amount - r.cost >= 0 ? 'var(--green-700)' : 'var(--red-600)' }}>{money(r.amount - r.cost)}</td><td className="num">{r.amount ? Math.round(((r.amount - r.cost) / r.amount) * 100) : 0}%</td></>}
-                  </tr>
-                ))}
-                {sales.data?.byItem.length === 0 && <tr><td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 32 }}>No sales in FY {fy}</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {tab === 'aging' && (
-          <div className="grid-2" style={{ alignItems: 'start' }}>
-            <div className="card">
-              <div className="card-header"><div><h3>Outstanding by age</h3><p>All open invoices, by days past due</p></div></div>
-              <div className="card-body">{sales.data && <BarChart labels={sales.data.aging.map((a) => a.label)} series={[{ name: 'Outstanding', values: sales.data.aging.map((a) => a.amount) }]} format={moneyShort} />}</div>
-            </div>
-            <div className="card table-wrap">
-              <table className="table">
-                <thead><tr><th>Bucket</th><th className="num">Invoices</th><th className="num">Amount</th></tr></thead>
-                <tbody>{(sales.data?.aging ?? []).map((a) => <tr key={a.label}><td className="strong">{a.label}</td><td className="num">{a.count}</td><td className="num strong">{money(a.amount)}</td></tr>)}</tbody>
-              </table>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ export type Me =
       kind: 'user';
       user: { id: string; name: string; email: string; role: UserRole; branchId: string | null; mustChangePassword: boolean };
       permissions: Permission[];
+      orgCount: number;
       shop: { id: string; name: string; planId: string; planName: string; licenseStart: string; licenseEnd: string; licenseExpired: boolean; active: boolean; limits: { users: number; branches: number; invoicesPerMonth: number | null } };
       platform: { customerIdPrefix: string; fyStartMonth: number; autoResetInvoiceNumbering: boolean };
     };
@@ -109,13 +110,18 @@ export interface Expense { id: string; date: string; category: string; descripti
 export interface BankAccount { id: string; name: string; bank: string; accountNo: string; type: 'Bank' | 'Cash' | 'Card'; openingBalance: number; balance: number }
 export interface BankTxn { id: string; accountId: string; date: string; description: string; amount: number; category: string; refType: string; refId: string | null }
 
-export interface StaffUser { id: string; name: string; email: string; role: UserRole; branchId: string | null; active: boolean; mustChangePassword: boolean; lastLoginAt: string | null }
+export interface StaffUser { id: string; name: string; email: string; role: UserRole; branchId: string | null; active: boolean; mustChangePassword: boolean; lastLoginAt: string | null; linked?: boolean }
 export interface AuditEntry { id: number; actor: string; actorType?: string; action: string; entity: string; entityId: string; details: Record<string, unknown>; ip: string; at: string }
 export interface Notification { kind: string; tone: 'red' | 'amber' | 'blue'; text: string; link: string }
 
 export interface Dashboard {
   fy: string; receivable: number; overdue: number; overdueCount: number; openCount: number; fySales: number; todaySales: number; lowStock: number;
   monthly: Array<{ month: string; invoiced: number; collected: number }>; topItems: Array<{ name: string; amount: number }>;
+  thisMonthSales: number; lastMonthSales: number; lastMonthToDate: number;
+  payable: number | null; payableOverdue: number | null; payableOverdueCount: number | null;
+  cash: Array<{ id: string; name: string; type: string; balance: number }> | null;
+  overdueList: Array<{ id: string; number: string; customer: string; dueDate: string; balance: number; days: number }>;
+  lowStockList: Array<{ id: string; name: string; unit: string; stock: number; reorderLevel: number }>;
 }
 
 /* ---- platform ---- */
@@ -127,3 +133,18 @@ export interface Plan { id: string; name: string; pricePerYear: number; trialDay
 export interface PlatformConfig { customerIdPrefix: string; fyStartMonth: number; autoResetInvoiceNumbering: boolean; taxSlabs: TaxSlab[] }
 
 export type { InvoiceStatus };
+
+export type { BalanceSheet, CashFlow, GeneralLedger, Journal, LedgerAccount, ProfitAndLoss, TrialBalance } from '../../shared/accounting';
+export interface OrgSummary { id: string; name: string; role: UserRole; gstin: string; state: string; active: boolean; licenseExpired: boolean; current: boolean; home: boolean }
+export interface RoleSetting { role: UserRole; permissions: Permission[]; defaults: Permission[]; customized: boolean; updatedAt: string | null; members: number }
+export interface AuditPage { rows: AuditEntry[]; nextCursor: string | null; facets: { entities: Array<{ value: string; count: number }>; actors: Array<{ value: string; count: number }> } | null }
+export interface SalesBy {
+  from: string; to: string;
+  byCustomer: Array<{ id: string; name: string; gstin: string; count: number; net: number; tax: number; total: number; due: number }>;
+  byItem: Array<{ itemId: string; name: string; hsn: string; unit: string; qty: number; amount: number; invoices: number; cost: number | null; profit: number | null }>;
+}
+export interface Ageing {
+  kind: 'receivable' | 'payable'; asOf: string; buckets: string[]; total: number; totals: number[];
+  parties: Array<{ id: string; name: string; buckets: number[]; total: number; documents: number }>;
+  documents: Array<{ id: string; number: string; party: string; date: string; dueDate: string | null; balance: number; bucket: string; daysOverdue: number }>;
+}

@@ -46,8 +46,33 @@ reportsRouter.get(
       [c.shopId, fy],
     );
     const low = await one(db, "SELECT count(*)::int AS n FROM (SELECT i.id FROM items i LEFT JOIN item_stock s ON s.item_id = i.id WHERE i.shop_id = $1 AND i.type = 'Goods' AND NOT i.archived GROUP BY i.id HAVING coalesce(sum(s.qty),0) <= max(i.reorder_level)) x", [c.shopId]);
+    const month = await one(db, `SELECT
+        coalesce(sum(total) FILTER (WHERE date >= date_trunc('month', current_date)), 0) AS this_month,
+        coalesce(sum(total) FILTER (WHERE date >= date_trunc('month', current_date) - interval '1 month' AND date < date_trunc('month', current_date)), 0) AS last_month,
+        coalesce(sum(total) FILTER (WHERE date >= date_trunc('month', current_date) - interval '1 month' AND date <= current_date - interval '1 month'), 0) AS last_month_to_date
+      FROM invoices WHERE shop_id = $1 AND status = 'Issued'`, [c.shopId]);
+    const overdueList = await many(db, `SELECT id, number, due_date, coalesce(nullif(customer->>'companyName', ''), customer->>'name') AS customer, total - amount_paid - amount_credited AS balance
+        FROM invoices WHERE shop_id = $1 AND status = 'Issued' AND due_date < current_date AND total - amount_paid - amount_credited > 0 ORDER BY due_date LIMIT 5`, [c.shopId]);
+    const lowList = await many(db, `SELECT i.id, i.name, i.unit, i.reorder_level, coalesce(sum(s.qty), 0) AS stock FROM items i LEFT JOIN item_stock s ON s.item_id = i.id
+        WHERE i.shop_id = $1 AND i.type = 'Goods' AND NOT i.archived AND NOT i.is_group GROUP BY i.id HAVING coalesce(sum(s.qty), 0) <= max(i.reorder_level) ORDER BY coalesce(sum(s.qty), 0) - max(i.reorder_level), i.name LIMIT 6`, [c.shopId]);
+    const pay = allowed(c, 'purchases.read')
+      ? await one(db, `SELECT coalesce(sum(amount - amount_paid), 0) AS due, coalesce(sum(amount - amount_paid) FILTER (WHERE due_date < current_date), 0) AS overdue, count(*) FILTER (WHERE due_date < current_date AND amount > amount_paid) AS overdue_n
+          FROM bills WHERE shop_id = $1 AND amount > amount_paid`, [c.shopId])
+      : null;
+    const cash = allowed(c, 'banking.read')
+      ? await many(db, `SELECT a.id, a.name, a.type, a.opening_balance + coalesce((SELECT sum(amount) FROM bank_transactions t WHERE t.account_id = a.id), 0) AS balance FROM bank_accounts a WHERE a.shop_id = $1 ORDER BY a.created_at`, [c.shopId])
+      : null;
     return {
       fy,
+      thisMonthSales: Number(month.this_month),
+      lastMonthSales: Number(month.last_month),
+      lastMonthToDate: Number(month.last_month_to_date),
+      payable: pay ? Number(pay.due) : null,
+      payableOverdue: pay ? Number(pay.overdue) : null,
+      payableOverdueCount: pay ? Number(pay.overdue_n) : null,
+      cash: cash ? cash.map((a) => ({ id: a.id, name: a.name, type: a.type, balance: Number(a.balance) })) : null,
+      overdueList: overdueList.map((r) => ({ id: r.id, number: r.number, customer: r.customer || 'Walk-in customer', dueDate: r.due_date, balance: Number(r.balance), days: Math.floor((Date.parse(todayISO()) - Date.parse(r.due_date)) / 86400000) })),
+      lowStockList: lowList.map((r) => ({ id: r.id, name: r.name, unit: r.unit, stock: Number(r.stock), reorderLevel: Number(r.reorder_level) })),
       receivable: Number(k.receivable),
       overdue: Number(k.overdue),
       overdueCount: Number(k.overdue_count),

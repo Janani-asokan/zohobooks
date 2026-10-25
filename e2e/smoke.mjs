@@ -94,8 +94,17 @@ await step('POS sale completes', async () => {
 });
 await step('GST returns load', async () => {
   await page.goto(BASE + '/app/reports');
-  await page.click('text=GST returns');
+  await page.click('text=GST Returns');
   await page.waitForSelector('text=GSTR-3B');
+});
+await step('balance sheet balances and P&L exports', async () => {
+  await page.goto(BASE + '/app/reports/balance-sheet');
+  await page.waitForSelector('text=Assets equal liabilities plus equity.');
+  await page.goto(BASE + '/app/reports/profit-loss');
+  await page.waitForSelector('text=Gross profit');
+  await page.click('button:has-text("Export")');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[role=menuitem]:has-text("Excel")')]);
+  if (!dl.suggestedFilename().endsWith('.xlsx')) throw new Error('Unexpected export ' + dl.suggestedFilename());
 });
 await step('sales staff cannot see reports or purchases', async () => {
   await logout();

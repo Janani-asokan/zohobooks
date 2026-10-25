@@ -46,7 +46,7 @@ export function useShortcuts(map: Record<string, Handler>) {
 
 export const SHORTCUT_HELP: Array<[string, string]> = [
   ['Ctrl K  or  /', 'Search everything'],
-  ['Alt N', 'New invoice'],
+  ['N  or  Alt N', 'New invoice'],
   ['Alt P', 'Open POS billing'],
   ['Alt C', 'New customer'],
   ['Alt I', 'New item'],
@@ -55,6 +55,9 @@ export const SHORTCUT_HELP: Array<[string, string]> = [
   ['g c', 'Go to Customers'],
   ['g t', 'Go to Items'],
   ['g r', 'Go to Reports'],
+  ['g p', 'Go to Profit & Loss'],
+  ['g a', 'Go to Chart of Accounts'],
+  ['g b', 'Go to Bills'],
   ['Ctrl Enter', 'Save the open form (invoice, POS)'],
   ['Esc', 'Close a dialog'],
   ['?', 'Show this list'],

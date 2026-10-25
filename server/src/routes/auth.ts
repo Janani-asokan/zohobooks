@@ -1,12 +1,12 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
-import { burnPasswordCheck, clearSessionCookie, createSession, hashPassword, randomToken, rateLimit, sha256, todayISO, verifyPassword } from '../auth';
+import { burnPasswordCheck, permissionsFor, resolveUserCtx, clearSessionCookie, createSession, hashPassword, randomToken, rateLimit, sha256, todayISO, verifyPassword } from '../auth';
 import { audit } from '../audit';
 import { config } from '../config';
 import { query, tx, withTenant } from '../db';
 import { h, HttpError, parse } from '../http';
 import { sendMail } from '../mailer';
-import { isStrongPassword, PASSWORD_RULE, ROLE_PERMISSIONS, type UserRole } from '../../../shared/permissions';
+import { isStrongPassword, PASSWORD_RULE, type UserRole } from '../../../shared/permissions';
 
 export const authRouter = Router();
 
@@ -29,7 +29,8 @@ export async function mePayload(req: Request) {
   return {
     kind: 'user' as const,
     user: { id: ctx.id, name: ctx.name, email: ctx.email, role: ctx.role, branchId: ctx.branchId, mustChangePassword: ctx.mustChangePassword },
-    permissions: ROLE_PERMISSIONS[ctx.role],
+    permissions: ctx.permissions,
+    orgCount: (await query('SELECT count(*)::int AS n FROM user_shops WHERE user_id = $1', [ctx.id]))[0].n + 1,
     shop: {
       id: shop.id,
       name: shop.name,
@@ -99,7 +100,10 @@ authRouter.post(
     req.ctx =
       p.type === 'super'
         ? { kind: 'super', id: r.id, name: r.name, email: r.email }
-        : { kind: 'user', id: r.id, name: r.name, email: r.email, role: r.role as UserRole, shopId: r.shop_id, branchId: r.branch_id, mustChangePassword: r.must_change_password };
+        : {
+            kind: 'user', id: r.id, name: r.name, email: r.email, role: r.role as UserRole, shopId: r.shop_id, branchId: r.branch_id, mustChangePassword: r.must_change_password,
+            permissions: await permissionsFor(r.shop_id, r.role as UserRole), homeShopId: r.shop_id,
+          };
     if (p.type === 'user') await withTenant(r.shop_id, (db) => audit(db, req, r.shop_id, 'login', 'user', r.id));
     else await tx((db) => audit(db, req, null, 'login', 'super_admin', r.id));
     res.json(await mePayload(req));
@@ -131,6 +135,49 @@ authRouter.get(
     const me = await mePayload(req);
     if (!me) throw new HttpError(401, 'Not signed in', 'unauthenticated');
     res.json(me);
+  }),
+);
+
+/** Organisations this login can work in: its own and any it created or was given. */
+async function orgList(userId: string, homeShopId: string, activeShopId: string) {
+  const rows = await query(
+    `SELECT s.id, s.name, s.active, s.license_end, x.role
+       FROM (SELECT $2::uuid AS shop_id, (SELECT role FROM users WHERE id = $1) AS role UNION SELECT shop_id, role FROM user_shops WHERE user_id = $1) x
+       JOIN shops s ON s.id = x.shop_id`,
+    [userId, homeShopId],
+  );
+  // Organisation profiles are tenant rows, so each is read inside its own shop scope.
+  const list = await Promise.all(rows.map(async (r) => {
+    const o = await withTenant(r.id, async (db) => (await db.query('SELECT company_name, gstin, state FROM organizations WHERE shop_id = $1', [r.id])).rows[0]);
+    return { id: r.id, name: o?.company_name || r.name, role: r.role, gstin: o?.gstin ?? '', state: o?.state ?? '', active: r.active, licenseExpired: r.license_end < todayISO(), current: r.id === activeShopId, home: r.id === homeShopId };
+  }));
+  return list.sort((a, b) => Number(b.home) - Number(a.home) || a.name.localeCompare(b.name));
+}
+
+authRouter.get(
+  '/orgs',
+  h(async (req, res) => {
+    const ctx = req.ctx;
+    if (ctx?.kind !== 'user') throw new HttpError(401, 'Please sign in', 'unauthenticated');
+    res.json(await orgList(ctx.id, ctx.homeShopId, ctx.shopId));
+  }),
+);
+
+authRouter.post(
+  '/switch',
+  h(async (req, res) => {
+    const ctx = req.ctx;
+    if (ctx?.kind !== 'user' || !req.sessionHash) throw new HttpError(401, 'Please sign in', 'unauthenticated');
+    const { shopId } = parse(z.object({ shopId: z.string().uuid() }), req.body);
+    const org = (await orgList(ctx.id, ctx.homeShopId, ctx.shopId)).find((o) => o.id === shopId);
+    if (!org) throw new HttpError(403, 'You don’t have access to that organisation', 'forbidden');
+    if (!org.active) throw new HttpError(403, 'That organisation has been deactivated', 'workspace_inactive');
+    await query('UPDATE sessions SET active_shop_id = $2 WHERE token_hash = $1', [req.sessionHash, shopId === ctx.homeShopId ? null : shopId]);
+    const next = await resolveUserCtx(ctx.id, shopId);
+    if (!next) throw new HttpError(401, 'Please sign in', 'unauthenticated');
+    req.ctx = next;
+    await withTenant(shopId, (db) => audit(db, req, shopId, 'switch_organization', 'user', ctx.id, { from: ctx.shopId }));
+    res.json(await mePayload(req));
   }),
 );
 

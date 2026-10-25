@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, UserRound, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check } from 'lucide-react';
+import { LayoutDashboard, Package, UserRound, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { buildActions, buildCreate, buildNav } from './nav';
 import { CommandPalette } from './CommandPalette';
 import { resetHints } from '@/components/kit';
@@ -10,7 +10,11 @@ import { PrefsMenu } from './PrefsMenu';
 import { ShortcutsModal } from './ShortcutsModal';
 import { useAuth, useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
-import { useNotifications, useOrg } from '@/api/hooks';
+import { useNotifications, useOrg, useOrgs } from '@/api/hooks';
+import { api, fieldErrors } from '@/api/client';
+import { useToast } from '@/context/ToastContext';
+import { Field, Modal } from '@/components/ui';
+import { GSTIN_RE, INDIAN_STATES } from '../../shared/gst';
 import { useClickOutside } from '@/components/useClickOutside';
 import { useShortcuts } from '@/components/useShortcuts';
 import { useOnline } from '@/components/useOnline';
@@ -61,12 +65,21 @@ function QuickCreate({ me }: { me: ReturnType<typeof useShopUser> }) {
   );
 }
 
-/** Organisation switcher. Lists the organisations this person can open (memberships) and the current org's settings. */
-function OrgSwitcher({ name, logo, gstin, isAdmin }: { name: string; logo?: string; gstin?: string; isAdmin: boolean }) {
+/** Organisation switcher: every business this login can open, plus adding another one (owner only). */
+function OrgSwitcher({ name, logo, gstin, isAdmin, isOwner }: { name: string; logo?: string; gstin?: string; isAdmin: boolean; isOwner: boolean }) {
   const navigate = useNavigate();
+  const toast = useToast();
+  const { switchOrg } = useAuth();
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const close = useCallback(() => setOpen(false), []);
   const ref = useClickOutside<HTMLDivElement>(close, open);
+  const orgs = useOrgs();
+  const go = async (id: string, label: string) => {
+    setBusy(id);
+    try { await switchOrg(id); close(); navigate('/app'); toast('success', `Switched to ${label}`); } catch (e) { toast('error', (e as Error).message); } finally { setBusy(null); }
+  };
   return (
     <div ref={ref} className="topbar-org">
       <button className="org-switch" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -78,13 +91,58 @@ function OrgSwitcher({ name, logo, gstin, isAdmin }: { name: string; logo?: stri
         <ChevronDown size={14} className="muted" />
       </button>
       {open && (
-        <div className="dropdown" role="menu" style={{ left: 0, right: 'auto', width: 280 }}>
+        <div className="dropdown" role="menu" style={{ left: 0, right: 'auto', width: 300 }} onKeyDown={(e) => e.key === 'Escape' && close()}>
           <div className="small muted" style={{ padding: '4px 8px' }}>Organisations</div>
-          <button className="dropdown-item" role="menuitem" onClick={close}><OrgLogo logo={logo} name={name} size={20} /> <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span> <Check size={14} /></button>
-          {isAdmin && <><div className="dropdown-sep" /><button className="dropdown-item" role="menuitem" onClick={() => { close(); navigate('/app/organization'); }}><Building2 size={15} /> Organisation settings</button></>}
+          {(orgs.data ?? [{ id: 'current', name, role: '', gstin: gstin ?? '', current: true, active: true, licenseExpired: false }]).map((o) => (
+            <button key={o.id} className="dropdown-item" role="menuitem" disabled={o.current || !o.active || !!busy} onClick={() => go(o.id, o.name)} style={{ height: 'auto', padding: '6px 8px' }}>
+              <OrgLogo logo={o.current ? logo : undefined} name={o.name} size={22} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ink-900)', fontWeight: 500 }}>{o.name}</span>
+                <span className="small muted">{[o.role, o.gstin || 'No GSTIN', !o.active ? 'Deactivated' : o.licenseExpired ? 'License expired' : ''].filter(Boolean).join(' · ')}</span>
+              </span>
+              {busy === o.id ? <Loader2 size={14} className="spin" /> : o.current && <Check size={14} />}
+            </button>
+          ))}
+          {(isAdmin || isOwner) && <div className="dropdown-sep" />}
+          {isOwner && <button className="dropdown-item" role="menuitem" onClick={() => { close(); setAdding(true); }}><Plus size={15} /> Add an organisation</button>}
+          {isAdmin && <button className="dropdown-item" role="menuitem" onClick={() => { close(); navigate('/app/organization'); }}><Building2 size={15} /> Organisation settings</button>}
         </div>
       )}
+      {adding && <NewOrgModal onClose={() => setAdding(false)} onCreated={(id, label) => { setAdding(false); go(id, label); }} />}
     </div>
+  );
+}
+
+function NewOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated: (shopId: string, name: string) => void }) {
+  const [f, setF] = useState({ companyName: '', gstin: '', state: 'Tamil Nadu', address: '', phone: '' });
+  const [err, setErr] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    const e: Record<string, string> = {};
+    if (f.companyName.trim().length < 2) e.companyName = 'Enter the business name';
+    if (f.gstin && !GSTIN_RE.test(f.gstin.toUpperCase())) e.gstin = 'Enter a valid 15-character GSTIN';
+    setErr(e);
+    if (Object.keys(e).length) return;
+    setSaving(true);
+    try {
+      const r = await api.post<{ shopId: string }>('/shop/organizations', { ...f, gstin: f.gstin.toUpperCase() });
+      onCreated(r.shopId, f.companyName.trim());
+    } catch (x) { setErr({ ...fieldErrors(x), form: (x as Error).message }); } finally { setSaving(false); }
+  };
+  return (
+    <Modal open onClose={onClose} title="Add an organisation" subtitle="A separate business with its own customers, items, invoices and books. It shares this login and your current plan."
+      footer={<><button className="btn btn-secondary" onClick={onClose}>Cancel</button><button className="btn btn-primary" disabled={saving} onClick={submit}>{saving && <Loader2 size={15} className="spin" />} Create and open</button></>}>
+      <div className="stack" style={{ gap: 14 }}>
+        <Field label="Business name" required error={err.companyName}><input className={`input ${err.companyName ? 'invalid' : ''}`} autoFocus value={f.companyName} maxLength={120} onChange={(e) => setF({ ...f, companyName: e.target.value })} placeholder="e.g. Aravind Mobiles" /></Field>
+        <div className="form-grid">
+          <Field label="GSTIN" error={err.gstin}><input className={`input mono ${err.gstin ? 'invalid' : ''}`} value={f.gstin} maxLength={15} onChange={(e) => setF({ ...f, gstin: e.target.value.toUpperCase() })} placeholder="Optional" /></Field>
+          <Field label="State" required><select className="select" value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })}>{INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}</select></Field>
+        </div>
+        <Field label="Address"><input className="input" value={f.address} maxLength={300} onChange={(e) => setF({ ...f, address: e.target.value })} /></Field>
+        <Field label="Phone"><input className="input" value={f.phone} maxLength={20} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
+        {err.form && <div className="field-error">{err.form}</div>}
+      </div>
+    </Modal>
   );
 }
 
@@ -146,6 +204,9 @@ export default function AppLayout() {
     'g c': () => navigate('/app/sales/customers'),
     'g t': () => navigate('/app/items'),
     'g r': () => me.can('reports.read') && navigate('/app/reports'),
+    'g a': () => me.can('accounting.read') && navigate('/app/accounting/accounts'),
+    'g b': () => me.can('purchases.read') && navigate('/app/purchases/bills'),
+    'g p': () => me.can('reports.read') && navigate('/app/reports/profit-loss'),
   });
 
   useEffect(() => {
@@ -176,7 +237,7 @@ export default function AppLayout() {
           <button className="icon-btn mobile-only" onClick={() => sb.setMobileOpen(true)} aria-label="Open menu">
             <Menu size={20} />
           </button>
-          <OrgSwitcher name={name} logo={org.data?.logo} gstin={org.data?.gstin} isAdmin={me.can('admin')} />
+          <OrgSwitcher name={name} logo={org.data?.logo} gstin={org.data?.gstin} isAdmin={me.can('admin')} isOwner={me.user.role === 'Owner'} />
           <SearchTrigger onOpen={() => setPalette(true)} />
           <div className="topbar-actions">
             <button className="icon-btn mobile-only" onClick={() => setPalette(true)} aria-label="Search"><Search size={18} /></button>

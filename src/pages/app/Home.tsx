@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
-import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays } from 'lucide-react';
+import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays, Receipt, Landmark } from 'lucide-react';
 import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
 import { useLocalFlag } from '@/components/kit';
 import { useShopUser } from '@/context/AuthContext';
@@ -34,10 +34,6 @@ export default function Home() {
   const prevM = ym(new Date(now.getFullYear(), now.getMonth() - 1, 1));
   const inM = (iso: string, m: string) => iso.slice(0, 7) === m;
   const monthly = d?.monthly ?? [];
-  const revCur = monthly.find((m) => m.month === thisM)?.invoiced ?? 0;
-  const revPrev = monthly.find((m) => m.month === prevM)?.invoiced ?? 0;
-  const invCur = issued.filter((i) => inM(i.date, thisM)).length;
-  const invPrev = issued.filter((i) => inM(i.date, prevM)).length;
   const custList = customers.data ?? [];
   const custCur = custList.filter((c) => inM(c.createdAt, thisM)).length;
   const custPrev = custList.filter((c) => inM(c.createdAt, prevM)).length;
@@ -83,10 +79,14 @@ export default function Home() {
       <GettingStarted />
 
       <div className="stat-grid">
-        <StatCard label="Total Revenue" value={d ? money(d.fySales) : '—'} icon={IndianRupee} tone="green" trend={{ pct: pctChange(revCur, revPrev) }} foot={d && <>FY {d.fy}</>} />
-        <StatCard label="Total Invoices" value={invoices.data ? issued.length : '—'} icon={FileText} tone="blue" trend={{ pct: pctChange(invCur, invPrev) }} foot="Issued this FY" />
-        <StatCard label="Pending Payments" value={d ? money(d.receivable) : '—'} icon={Wallet} tone="amber" foot={d && (d.overdueCount ? <Link to="/app/sales/invoices?status=Overdue" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{d.overdueCount} overdue · {money(d.overdue)} →</Link> : <>{d.openCount} invoices awaiting payment</>)} />
-        <StatCard label="Total Customers" value={customers.data ? custList.length : '—'} icon={Users} tone="violet" trend={{ pct: pctChange(custCur, custPrev), label: 'new vs last month' }} foot={`${custCur} new this month`} />
+        <StatCard label="Receivables" value={d ? money(d.receivable) : '—'} icon={Wallet} tone="amber" foot={d && (d.overdueCount ? <Link to="/app/reports/receivables" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{money(d.overdue)} overdue · {d.overdueCount} invoice{d.overdueCount === 1 ? '' : 's'}</Link> : `${d.openCount} open invoice${d.openCount === 1 ? '' : 's'}`)} />
+        {d?.payable != null ? (
+          <StatCard label="Payables" value={money(d.payable)} icon={Receipt} tone="red" foot={d.payableOverdueCount ? <Link to="/app/reports/payables" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{money(d.payableOverdue ?? 0)} overdue</Link> : 'Nothing overdue'} />
+        ) : <StatCard label="Total Revenue" value={d ? money(d.fySales) : '—'} icon={IndianRupee} tone="green" foot={d && <>FY {d.fy}</>} />}
+        {d?.cash ? (
+          <StatCard label="Cash in bank" value={money(d.cash.reduce((s2, a2) => s2 + a2.balance, 0))} icon={Landmark} tone="blue" foot={<Link to="/app/banking">{d.cash.length} account{d.cash.length === 1 ? '' : 's'}</Link>} />
+        ) : <StatCard label="Total Customers" value={customers.data ? custList.length : '—'} icon={Users} tone="violet" trend={{ pct: pctChange(custCur, custPrev), label: 'new vs last month' }} foot={`${custCur} new this month`} />}
+        <StatCard label="Sales this month" value={d ? money(d.thisMonthSales) : '—'} icon={IndianRupee} tone="green" trend={d ? { pct: pctChange(d.thisMonthSales, d.lastMonthToDate), label: 'vs same days last month' } : undefined} foot={d && `Last month ${money(d.lastMonthSales)}`} />
       </div>
 
       <div className="dash-row mt-16">
@@ -159,6 +159,39 @@ export default function Home() {
             <Link to="/app/sales/invoices?status=Overdue" className="glance"><span className="stat-icon tone-red"><Clock4 size={16} /></span><div><span>Overdue invoices</span><strong>{d ? d.overdueCount : '—'}</strong></div><ArrowRight size={14} className="muted" /></Link>
             <Link to="/app/items?tab=stock" className="glance"><span className="stat-icon tone-amber"><PackageX size={16} /></span><div><span>Low-stock items</span><strong>{d ? d.lowStock : '—'}</strong></div><ArrowRight size={14} className="muted" /></Link>
           </div>
+        </div>
+      </div>
+
+      <div className="grid-3 mt-16">
+        <div className="card">
+          <div className="card-header"><div><h3>Overdue invoices</h3><p>Oldest first</p></div><Link to="/app/reports/receivables" className="btn btn-ghost btn-sm">Ageing <ArrowRight size={14} /></Link></div>
+          {!d ? <div className="skeleton" style={{ height: 150, margin: 16 }} /> : d.overdueList.length === 0 ? <div className="card-body muted small"><Check size={14} style={{ verticalAlign: -2, color: 'var(--green-600)' }} /> Nothing overdue. Every invoice is within its due date.</div> : (
+            <ul className="dash-list">{d.overdueList.map((o) => (
+              <li key={o.id}><Link to={`/app/sales/invoices/${o.id}`}><span><strong>{o.customer}</strong><span className="muted small">{o.number} · {o.days} day{o.days === 1 ? '' : 's'} overdue</span></span><span className="num strong" style={{ color: 'var(--red-600)' }}>{money(o.balance)}</span></Link></li>
+            ))}</ul>
+          )}
+        </div>
+        <div className="card">
+          <div className="card-header"><div><h3>Low stock</h3><p>At or below the reorder level</p></div><Link to="/app/items?tab=stock" className="btn btn-ghost btn-sm">All alerts <ArrowRight size={14} /></Link></div>
+          {!d ? <div className="skeleton" style={{ height: 150, margin: 16 }} /> : d.lowStockList.length === 0 ? <div className="card-body muted small"><Check size={14} style={{ verticalAlign: -2, color: 'var(--green-600)' }} /> Every item is above its reorder level.</div> : (
+            <ul className="dash-list">{d.lowStockList.map((x) => (
+              <li key={x.id}><Link to={`/app/items?open=${x.id}`}><span><strong>{x.name}</strong><span className="muted small">Reorder at {x.reorderLevel} {x.unit}</span></span><span className="num strong" style={{ color: x.stock <= 0 ? 'var(--red-600)' : 'var(--amber-700)' }}>{x.stock} {x.unit}</span></Link></li>
+            ))}</ul>
+          )}
+        </div>
+        <div className="card">
+          {d?.cash ? (<>
+            <div className="card-header"><div><h3>Cash &amp; bank</h3><p>Current balances</p></div><Link to="/app/reports/cash-flow" className="btn btn-ghost btn-sm">Cash flow <ArrowRight size={14} /></Link></div>
+            <ul className="dash-list">{d.cash.map((a) => (
+              <li key={a.id}><Link to="/app/banking"><span><strong>{a.name}</strong><span className="muted small">{a.type}</span></span><span className="num strong" style={a.balance < 0 ? { color: 'var(--red-600)' } : undefined}>{money(a.balance)}</span></Link></li>
+            ))}</ul>
+          </>) : (<>
+            <div className="card-header"><div><h3>This FY</h3><p>FY {d?.fy}</p></div></div>
+            <div className="card-body stack" style={{ gap: 12 }}>
+              <div className="glance"><span className="stat-icon tone-green"><IndianRupee size={16} /></span><div><span>Sales</span><strong>{d ? money(d.fySales) : '—'}</strong></div></div>
+              <div className="glance"><span className="stat-icon tone-blue"><FileText size={16} /></span><div><span>Invoices issued</span><strong>{invoices.data ? issued.length : '—'}</strong></div></div>
+            </div>
+          </>)}
         </div>
       </div>
     </div>

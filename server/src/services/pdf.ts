@@ -82,3 +82,26 @@ async function render(url: string, paper: PdfPaper): Promise<Buffer> {
     await ctx.close().catch(() => {});
   }
 }
+
+/** Prints a self-contained HTML document (reports, statements) to an A4 PDF with page numbers. */
+export async function htmlPdf(html: string, landscape = false): Promise<Buffer> {
+  const run = async () => {
+    let b: Browser;
+    try { b = await getBrowser(); } catch (e) { throw new PdfUnavailableError(`PDF renderer not available: ${(e as Error).message.split('\n')[0]}`); }
+    const ctx = await b.newContext({ colorScheme: 'light', serviceWorkers: 'block', javaScriptEnabled: false, offline: true });
+    try {
+      const page = await ctx.newPage();
+      await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
+      return await page.pdf({
+        format: 'A4', landscape, printBackground: true, margin: { top: '14mm', bottom: '16mm', left: '12mm', right: '12mm' },
+        displayHeaderFooter: true, headerTemplate: '<span></span>',
+        footerTemplate: '<div style="width:100%;font:8px sans-serif;color:#666;padding:0 12mm;display:flex;justify-content:space-between"><span>Corpus360</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>',
+      });
+    } finally {
+      await ctx.close().catch(() => {});
+    }
+  };
+  return slot(async () => {
+    try { return await run(); } catch (e) { if (e instanceof PdfUnavailableError) throw e; browser = null; return run(); }
+  });
+}

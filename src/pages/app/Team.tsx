@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Plus, Users, Building2, Star, Check, Minus, Pencil, History, KeyRound, Wand2, Loader2 } from 'lucide-react';
+import { Plus, Users, Building2, Star, Pencil, History, KeyRound, Wand2, Loader2 } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
-import { useAudit, useBranches, useMut, useStaff } from '@/api/hooks';
+import { useBranches, useMut, useStaff } from '@/api/hooks';
+import { Link } from 'react-router-dom';
+import { RolesMatrix } from '@/components/RolesMatrix';
 import type { Branch, StaffUser } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { Badge, EmptyState, Field, Modal, PageHeader, Toggle } from '@/components/ui';
+import { Badge, Field, Modal, PageHeader, Toggle } from '@/components/ui';
 import { EMAIL_RE, initials } from '@/lib/format';
 import { PERMISSIONS, ROLE_PERMISSIONS, STAFF_ROLES, isStrongPassword, PASSWORD_RULE, type StaffRole } from '../../../shared/permissions';
-import { humanAction } from '../super/Activity';
 
 const genPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -19,10 +20,9 @@ const genPassword = () => {
 export default function Team() {
   const me = useShopUser();
   const toast = useToast();
-  const [tab, setTab] = useState<'staff' | 'roles' | 'branches' | 'activity'>('staff');
+  const [tab, setTab] = useState<'staff' | 'roles' | 'branches'>('staff');
   const staff = useStaff().data ?? [];
   const branches = useBranches().data ?? [];
-  const audit = useAudit(tab === 'activity');
   const [staffModal, setStaffModal] = useState<{ id?: string } | null>(null);
   const [form, setForm] = useState({ name: '', email: '', role: 'Sales Staff' as StaffRole, branchId: '', password: '' });
   const [branchModal, setBranchModal] = useState<{ id?: string } | null>(null);
@@ -78,7 +78,7 @@ export default function Team() {
         <button className={tab === 'staff' ? 'active' : ''} onClick={() => setTab('staff')}><Users size={15} /> Staff <span className="count">{staff.length}</span></button>
         <button className={tab === 'roles' ? 'active' : ''} onClick={() => setTab('roles')}>Roles &amp; permissions</button>
         <button className={tab === 'branches' ? 'active' : ''} onClick={() => setTab('branches')}><Building2 size={15} /> Branches <span className="count">{branches.length}</span></button>
-        <button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}><History size={15} /> Activity log</button>
+        <Link className="tab-link" to="/app/audit"><History size={15} /> Audit log</Link>
       </div>
 
       {tab === 'staff' && (
@@ -112,23 +112,7 @@ export default function Team() {
         </div>
       )}
 
-      {tab === 'roles' && (
-        <div className="card table-wrap">
-          <table className="table">
-            <thead><tr><th>Permission</th><th style={{ textAlign: 'center' }}>Owner</th>{STAFF_ROLES.map((r) => <th key={r} style={{ textAlign: 'center' }}>{r}</th>)}</tr></thead>
-            <tbody>
-              {(Object.entries(PERMISSIONS) as Array<[keyof typeof PERMISSIONS, string]>).map(([p, label]) => (
-                <tr key={p}>
-                  <td className="strong">{label}</td>
-                  <td style={{ textAlign: 'center' }}><Check size={16} style={{ color: 'var(--green-600)' }} /></td>
-                  {STAFF_ROLES.map((r) => <td key={r} style={{ textAlign: 'center' }}>{ROLE_PERMISSIONS[r].includes(p) ? <Check size={16} style={{ color: 'var(--green-600)' }} aria-label="Allowed" /> : <Minus size={16} style={{ color: 'var(--ink-300)' }} aria-label="Not allowed" />}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="card-body small muted" style={{ borderTop: '1px solid var(--border)' }}>These rules are enforced by the server, not just hidden in the screens. Platform settings (tax slabs, ID prefixes, financial year) are managed by your service provider.</div>
-        </div>
-      )}
+      {tab === 'roles' && <RolesMatrix />}
 
       {tab === 'branches' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
@@ -150,24 +134,6 @@ export default function Team() {
         </div>
       )}
 
-      {tab === 'activity' && (
-        <div className="card table-wrap">
-          <table className="table">
-            <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead>
-            <tbody>
-              {(audit.data ?? []).map((a) => (
-                <tr key={a.id}>
-                  <td className="muted" style={{ whiteSpace: 'nowrap' }}>{new Date(a.at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                  <td className="strong">{a.actor}</td>
-                  <td>{humanAction(a.action)} <span className="muted">· {a.entity.replace(/_/g, ' ')}</span></td>
-                  <td className="muted small" style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{Object.entries(a.details).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => `${k}: ${String(v)}`).join(' · ') || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {audit.data?.length === 0 && <EmptyState icon={History} title="No activity yet" text="Every change in your workspace is recorded here." />}
-        </div>
-      )}
 
       <Modal open={!!staffModal} onClose={() => setStaffModal(null)} title={staffModal?.id ? 'Edit staff member' : 'Add staff member'} subtitle={staffModal?.id ? undefined : 'They’ll sign in with this email and must choose a new password the first time.'}
         footer={<><button className="btn btn-secondary" onClick={() => setStaffModal(null)}>Cancel</button><button className="btn btn-primary" disabled={createStaff.isPending || patchStaff.isPending} onClick={saveStaff}>{createStaff.isPending && <Loader2 size={15} className="spin" />} {staffModal?.id ? 'Save' : 'Create login'}</button></>}>

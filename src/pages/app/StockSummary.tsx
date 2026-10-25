@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Boxes, Download, Printer, AlertTriangle } from 'lucide-react';
+import { Boxes, AlertTriangle } from 'lucide-react';
+import { ExportMenu } from '@/components/ExportMenu';
 import { api } from '@/api/client';
 import { useBranches } from '@/api/hooks';
 import type { StockSummary as Summary } from '@/api/types';
 import { EmptyState, PageHeader, SearchInput, StatCard } from '@/components/ui';
 import { money, todayISO } from '@/lib/format';
-import { toCsv } from '../../../shared/csv';
 
 const fyStart = () => { const t = todayISO(); return `${Number(t.slice(0, 4)) - (t.slice(5, 7) < '04' ? 1 : 0)}-04-01`; };
 const n3 = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, ''));
@@ -19,7 +19,7 @@ export default function StockSummary() {
   const [from, setFrom] = useState(fyStart());
   const [to, setTo] = useState(todayISO());
   const [q, setQ] = useState('');
-  const [view, setView] = useState<'items' | 'category'>('items');
+  const [view, setView] = useState<'items' | 'category'>(params.get('view') === 'category' ? 'category' : 'items');
   const branch = params.get('branch') ?? '';
   const s = useQuery({ queryKey: ['stockSummary', from, to, branch], queryFn: () => api.get<Summary>(`/shop/stock/summary?from=${from}&to=${to}${branch ? `&branchId=${branch}` : ''}`) });
   const data = s.data;
@@ -28,23 +28,20 @@ export default function StockSummary() {
     return (data?.items ?? []).filter((i) => !t || [i.name, i.sku, i.category].some((v) => v.toLowerCase().includes(t)));
   }, [data, q]);
 
-  const exportCsv = () => {
-    if (!data) return;
-    const csv = toCsv(rows.map((r) => ({ ...r, value: r.value ?? '', cost: r.cost ?? '' })), [
-      { key: 'name', label: 'Item' }, { key: 'sku', label: 'SKU' }, { key: 'category', label: 'Category' }, { key: 'unit', label: 'Unit' },
-      { key: 'opening', label: 'Opening' }, { key: 'in', label: 'In' }, { key: 'out', label: 'Out' }, { key: 'closing', label: 'Closing' },
-      { key: 'cost', label: 'Unit cost' }, { key: 'value', label: 'Value' },
-    ]);
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv' }));
-    a.download = `stock-summary-${from}-${to}.csv`;
-    a.click();
-  };
+  const table = () => data && (view === 'category' ? {
+    title: 'Inventory valuation', subtitle: `${from} to ${to}`, filename: `inventory-valuation-${to}`,
+    columns: [{ label: 'Category' }, { label: 'Items', align: 'right' as const }, { label: 'Units', align: 'right' as const }, { label: 'Value', money: true }],
+    rows: [...data.byCategory.map((c) => ({ cells: [c.category, String(c.items), n3(c.qty), c.value] })), { cells: ['Total', String(data.totals.items), n3(data.totals.qty), data.totals.value], kind: 'total' as const }],
+  } : {
+    title: 'Stock summary', subtitle: `${from} to ${to}`, filename: `stock-summary-${from}-${to}`, landscape: true,
+    columns: [{ label: 'Item' }, { label: 'SKU' }, { label: 'Category' }, { label: 'Opening', align: 'right' as const }, { label: 'In', align: 'right' as const }, { label: 'Out', align: 'right' as const }, { label: 'Closing', align: 'right' as const }, { label: 'Unit cost', money: true }, { label: 'Value', money: true }],
+    rows: [...rows.map((r) => ({ cells: [r.name, r.sku, r.category, n3(r.opening), n3(r.in), n3(r.out), `${n3(r.closing)} ${r.unit}`, r.cost, r.value] })), { cells: ['Total', '', '', '', '', '', n3(rows.reduce((a, r) => a + r.closing, 0)), null, rows.reduce((a, r) => a + (r.value ?? 0), 0)], kind: 'total' as const }],
+  });
 
   return (
     <div className="page">
       <PageHeader title="Stock Summary" crumbs={<>Inventory <span>/</span> Stock Summary</>} subtitle="Opening, received, issued and closing stock for the period, valued at current cost."
-        actions={<><button className="btn btn-secondary" disabled={!data} onClick={exportCsv}><Download size={15} /> CSV</button><button className="btn btn-secondary" disabled={!data} onClick={() => window.print()}><Printer size={15} /> Print</button></>} />
+        actions={<ExportMenu disabled={!data} table={() => table() ?? null} />} />
       <div className="report-filters no-print">
         <input className="input" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} aria-label="From" />
         <span className="muted">to</span>

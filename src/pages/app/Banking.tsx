@@ -1,3 +1,4 @@
+import { BANK_CATEGORIES } from '../../../shared/accounting';
 import { useMemo, useState } from 'react';
 import { Plus, Landmark, Wallet, CreditCard, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { api } from '@/api/client';
@@ -9,7 +10,7 @@ import { fmtDate, money, todayISO } from '@/lib/format';
 import { Hint } from '@/components/kit';
 
 const ICON = { Bank: Landmark, Cash: Wallet, Card: CreditCard };
-const CATEGORIES = ['Customer Receipt', 'Sales', 'Vendor Payment', 'Rent', 'Salaries', 'Utilities', 'Office Expense', 'Other'];
+const CATEGORIES = BANK_CATEGORIES.map((c) => c.name);
 
 export default function Banking() {
   const me = useShopUser();

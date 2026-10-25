@@ -11,6 +11,8 @@ interface AuthValue {
   logout: () => Promise<void>;
   refresh: () => Promise<unknown>;
   can: (p: Permission) => boolean;
+  /** Open another organisation this login has access to. */
+  switchOrg: (shopId: string) => Promise<Me>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -60,6 +62,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [qc],
   );
 
+  const switchOrg = useCallback(
+    async (shopId: string) => {
+      const me = await api.post<Me>('/auth/switch', { shopId });
+      dropDataCache(qc);
+      qc.setQueryData(['me'], me);
+      return me;
+    },
+    [qc],
+  );
+
   const logout = useCallback(async () => {
     await api.post('/auth/logout').catch(() => {});
     navigator.serviceWorker?.controller?.postMessage('clear-data');
@@ -74,9 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       refresh: refetch,
+      switchOrg,
       can: (p) => data?.kind === 'user' && data.permissions.includes(p),
     }),
-    [data, isLoading, login, logout, refetch],
+    [data, isLoading, login, logout, refetch, switchOrg],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

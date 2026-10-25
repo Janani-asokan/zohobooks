@@ -1,12 +1,17 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, Printer, Users } from 'lucide-react';
+import { useShopUser } from '@/context/AuthContext';
+import { Building2, History, Printer, Users } from 'lucide-react';
 
 /** Settings pages share a left sub-navigation, like a classic settings screen. */
 export default function SettingsLayout() {
+  const me = useShopUser();
   const links = [
-    { to: '/app/organization', label: 'Business profile', icon: Building2 },
-    { to: '/app/print-settings', label: 'Print settings', icon: Printer },
-    { to: '/app/team', label: 'Users, roles & branches', icon: Users },
+    ...(me.can('admin') ? [
+      { to: '/app/organization', label: 'Business profile', icon: Building2 },
+      { to: '/app/print-settings', label: 'Print settings', icon: Printer },
+      { to: '/app/team', label: 'Users, roles & branches', icon: Users },
+    ] : []),
+    ...(me.can('audit.read') ? [{ to: '/app/audit', label: 'Audit log', icon: History }] : []),
   ];
   return (
     <div className="settings-shell">

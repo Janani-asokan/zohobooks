@@ -6,6 +6,7 @@ import { csrfGuard, loadSession, requireShopUser } from './auth';
 import { config } from './config';
 import { query } from './db';
 import { errorHandler, HttpError } from './http';
+import { auditWrites } from './audit';
 import { authRouter } from './routes/auth';
 import { platformRouter } from './routes/platform';
 import { publicRouter } from './routes/public';
@@ -17,6 +18,8 @@ import { reportsRouter } from './routes/shop/reports';
 import { salesRouter } from './routes/shop/sales';
 import { filesRouter } from './routes/shop/files';
 import { inventoryRouter } from './routes/shop/inventory';
+import { accountingRouter } from './routes/shop/accounting';
+import { adminRouter } from './routes/shop/admin';
 
 export function createApp() {
   const app = express();
@@ -54,7 +57,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, inventoryRouter);
+  app.use('/api/shop', requireShopUser(), auditWrites, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

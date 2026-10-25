@@ -31,6 +31,7 @@ export const DEMO_ACCOUNTS: Array<{ label: string; email: string; password: stri
   { label: 'Manager', email: 'manager@shop.com', password: 'manager123', kind: 'user' },
   { label: 'Sales staff', email: 'sales@shop.com', password: 'sales123', kind: 'user' },
   { label: 'Accountant', email: 'accounts@shop.com', password: 'accounts123', kind: 'user' },
+  { label: 'Warehouse', email: 'warehouse@shop.com', password: 'warehouse123', kind: 'user' },
 ];
 
 /** Demo mode on an existing database: put the demo logins back on their simple passwords. */
@@ -38,7 +39,13 @@ export async function resetDemoPasswords() {
   for (const a of DEMO_ACCOUNTS) {
     const hash = await hashPassword(a.password);
     if (a.kind === 'super') await query('UPDATE super_admins SET password_hash = $2, failed_attempts = 0, locked_until = NULL WHERE lower(email) = $1', [a.email, hash]);
-    else await query('UPDATE users SET password_hash = $2, failed_attempts = 0, locked_until = NULL, must_change_password = false WHERE lower(email) = $1', [a.email, hash]);
+    else {
+      const done = await query('UPDATE users SET password_hash = $2, failed_attempts = 0, locked_until = NULL, must_change_password = false WHERE lower(email) = $1 RETURNING id', [a.email, hash]);
+      // Demo logins added in later releases are created in the demo shop of an existing database.
+      if (!done.length && a.label === 'Warehouse')
+        await query(`INSERT INTO users (shop_id, name, email, password_hash, role, branch_id)
+          SELECT u.shop_id, 'Murugan P', $1, $2, 'Warehouse', u.branch_id FROM users u WHERE lower(u.email) = 'owner@shop.com' AND u.role = 'Owner'`, [a.email, hash]);
+    }
   }
 }
 
@@ -200,30 +207,43 @@ export async function seed({ quiet = false } = {}) {
         ($1,'Chennai Paper Mart','33AAFFC7788Q1Z6','+91 98410 22110','cpm@papermart.in','Tamil Nadu') RETURNING id`,
       [shopId],
     )).rows.map((r) => r.id);
-    const bills: Array<[number, number, number, number, number, 'Open' | 'Paid', string]> = [
-      [0, -35, -5, 83051, 14949, 'Paid', 'Monitors ×10'], [1, -20, 10, 39407, 7093, 'Open', 'Peripherals restock'], [2, -8, 22, 21429, 2571, 'Open', 'A4 paper ×100 reams'],
+    // Itemised stock purchases: each bill brings in goods at cost (moved out of opening stock, so stock levels stay as above).
+    const { buildPurchaseLines: billLines, purchaseTotals: billTotals } = await import('./routes/shop/purchasing');
+    const bills: Array<[number, number, number, Array<[number, number]>, 'Open' | 'Paid', string]> = [
+      [0, -35, -5, [[4, 10]], 'Paid', 'Monitors ×10'], [1, -20, 10, [[0, 30], [2, 40]], 'Open', 'Peripherals restock'], [2, -8, 22, [[3, 100]], 'Open', 'A4 paper ×100 reams'],
     ];
-    for (const [i, [vi, d, due, tax, gst, , desc]] of bills.entries())
-      await db.query("INSERT INTO bills (shop_id, number, vendor_id, date, due_date, taxable_amount, tax_amount, amount, status, description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [
-        shopId, `BILL-${String(i + 1).padStart(4, '0')}`, v[vi], day(d), day(due), tax, gst, tax + gst, 'Open', desc,
-      ]);
+    for (const [i, [vi, d, due, picks, , desc]] of bills.entries()) {
+      const lines = await billLines(db, shopId, picks.map(([ix, qty]) => ({ itemId: ids[ix]!, qty })));
+      const t = billTotals(lines);
+      const number = `BILL-${String(i + 1).padStart(4, '0')}`;
+      const bill = (await db.query(
+        `INSERT INTO bills (shop_id, number, vendor_id, date, due_date, taxable_amount, tax_amount, amount, status, description, lines, branch_id, stock_added)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Open',$9,$10,$11,true) RETURNING id`,
+        [shopId, number, v[vi], day(d), day(due), t.sub, t.tax, t.total, desc, JSON.stringify(lines.map((l) => ({ ...l, received: l.qty }))), head],
+      )).rows[0].id;
+      for (const [ix, qty] of picks) {
+        await moveStock(db, { shopId, itemId: ids[ix]!, branchId: head, qty: -qty, reason: 'opening', note: 'Opening stock moved to purchase' });
+        await moveStock(db, { shopId, itemId: ids[ix]!, branchId: head, qty, reason: 'purchase', refType: 'bill', refId: bill, note: number });
+      }
+    }
     await db.query("INSERT INTO counters (shop_id, key, value) VALUES ($1,'bill',3)", [shopId]);
     // Bill 1 paid in full, bill 2 in part; each payment is a bank withdrawal.
     const { payBill } = await import('./routes/shop/money');
     const billIds = (await db.query('SELECT id, status FROM bills WHERE shop_id = $1 ORDER BY number', [shopId])).rows.map((r) => r.id);
-    for (const [i, [, d, , , , st]] of bills.entries())
+    for (const [i, [, d, , , st]] of bills.entries())
       if (st === 'Paid') await payBill(db, null, shopId, billIds[i], { accountId: hdfc, date: day(d + 1), tdsAmount: 0, mode: 'Bank Transfer', reference: 'NEFT', notes: '' }, null);
     await payBill(db, null, shopId, billIds[1], { accountId: hdfc, date: day(-6), amount: 20000, tdsAmount: 0, mode: 'UPI', reference: '', notes: 'Part payment' }, null);
     for (const [acc, d, desc, amt, cat] of [
-      [hdfc, -25, 'Shop rent — this month', -35000, 'Rent'],
+      [hdfc, -25, 'Godown rent — Ambattur', -12000, 'Rent'],
       [hdfc, -9, 'Electricity bill', -6240, 'Utilities'],
     ] as const)
       await db.query('INSERT INTO bank_transactions (shop_id, account_id, date, description, amount, category) VALUES ($1,$2,$3,$4,$5,$6)', [shopId, acc, day(d), desc, amt, cat]);
 
     await db.query(
       `INSERT INTO users (shop_id, name, email, password_hash, role, branch_id) VALUES
-        ($1,'Meena Krishnan','manager@shop.com',$3,'Manager',$2), ($1,'Vignesh R','sales@shop.com',$4,'Sales Staff',$5), ($1,'Anitha S','accounts@shop.com',$6,'Accountant',$2)`,
-      [shopId, head, await hashPassword(pw('manager123')), await hashPassword(pw('sales123')), vel, await hashPassword(pw('accounts123'))],
+        ($1,'Meena Krishnan','manager@shop.com',$3,'Manager',$2), ($1,'Vignesh R','sales@shop.com',$4,'Sales Staff',$5), ($1,'Anitha S','accounts@shop.com',$6,'Accountant',$2),
+        ($1,'Murugan P','warehouse@shop.com',$7,'Warehouse',$2)`,
+      [shopId, head, await hashPassword(pw('manager123')), await hashPassword(pw('sales123')), vel, await hashPassword(pw('accounts123')), await hashPassword(pw('warehouse123'))],
     );
     // A purchase order half-received, and a few expenses
     const { buildPurchaseLines, purchaseTotals } = await import('./routes/shop/purchasing');
@@ -257,7 +277,7 @@ export async function seed({ quiet = false } = {}) {
   else {
     log('  Super admin : admin@ledgerly.in / admin123');
     log('  Shop owner  : owner@shop.com / owner123');
-    log('  Staff       : manager@shop.com / manager123 · sales@shop.com / sales123 · accounts@shop.com / accounts123');
+    log('  Staff       : manager@shop.com / manager123 · sales@shop.com / sales123 · accounts@shop.com / accounts123 · warehouse@shop.com / warehouse123');
   }
 }
 

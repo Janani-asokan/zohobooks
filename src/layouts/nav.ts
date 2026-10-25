@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, type LucideIcon,
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, type LucideIcon,
 } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import type { PaletteAction } from './CommandPalette';
@@ -46,9 +46,14 @@ export function buildNav(can: Can): NavItem[] {
       { label: 'Stock Summary', to: '/app/inventory/stock-summary' },
     ],
   });
-  if (can('banking.read')) items.push({ label: 'Accounting', icon: Landmark, children: [{ label: 'Banking', to: '/app/banking' }] });
+  const accounting = [
+    ...(can('accounting.read') ? [{ label: 'Chart of Accounts', to: '/app/accounting/accounts' }, { label: 'Manual Journals', to: '/app/accounting/journals' }, { label: 'General Ledger', to: '/app/accounting/ledger' }] : []),
+    ...(can('banking.read') ? [{ label: 'Banking', to: '/app/banking' }] : []),
+  ];
+  if (accounting.length) items.push({ label: 'Accounting', icon: Landmark, children: accounting });
   if (can('reports.read')) items.push({ label: 'Reports', icon: BarChart3, to: '/app/reports' });
   if (can('admin')) items.push({ label: 'Settings', icon: Settings, to: '/app/organization' });
+  else if (can('audit.read')) items.push({ label: 'Audit Log', icon: Settings, to: '/app/audit' });
   return items;
 }
 
@@ -114,7 +119,21 @@ export function buildActions(can: Can): PaletteAction[] {
   add(can('items.write'), 'Create', 'Record stock count', SlidersHorizontal, '/app/inventory/adjustments?new=1&mode=count', 'physical count audit');
   add(true, 'Go to', 'Low stock', Boxes, '/app/items?tab=stock', 'reorder expiry batches alerts');
   add(can('banking.read'), 'Go to', 'Banking', Landmark, '/app/banking', 'cash bank accounts');
-  add(can('reports.read'), 'Go to', 'Reports', BarChart3, '/app/reports', 'gstr-1 gstr-3b profit loss hsn');
+  add(can('reports.read'), 'Go to', 'Reports', BarChart3, '/app/reports', 'all reports export pdf excel');
+  add(can('reports.read'), 'Reports', 'Profit & Loss', BarChart3, '/app/reports/profit-loss', 'pnl income statement profit loss');
+  add(can('reports.read'), 'Reports', 'Balance Sheet', BarChart3, '/app/reports/balance-sheet', 'assets liabilities equity');
+  add(can('reports.read'), 'Reports', 'Cash Flow', BarChart3, '/app/reports/cash-flow', 'cash bank money in out');
+  add(can('reports.read'), 'Reports', 'Sales by Customer', BarChart3, '/app/reports/sales-by-customer', 'top customers');
+  add(can('reports.read'), 'Reports', 'Sales by Item', BarChart3, '/app/reports/sales-by-item', 'best sellers products');
+  add(can('reports.read'), 'Reports', 'Receivables Ageing', BarChart3, '/app/reports/receivables', 'outstanding overdue aging');
+  add(can('reports.read') && can('purchases.read'), 'Reports', 'Payables Ageing', BarChart3, '/app/reports/payables', 'vendor outstanding aging');
+  add(can('reports.read'), 'Reports', 'GST returns', BarChart3, '/app/reports/gst', 'gstr-1 gstr-3b hsn');
+  add(can('accounting.read'), 'Reports', 'Trial Balance', BarChart3, '/app/reports/trial-balance', 'debit credit');
+  add(can('accounting.read'), 'Go to', 'Chart of accounts', BookOpen, '/app/accounting/accounts', 'ledger accounts coa');
+  add(can('accounting.read'), 'Go to', 'Manual journals', NotebookPen, '/app/accounting/journals', 'journal entry jv adjustment');
+  add(can('accounting.read'), 'Go to', 'General ledger', BookOpen, '/app/accounting/ledger', 'account statement');
+  add(can('accounting.write'), 'Create', 'New journal entry', NotebookPen, '/app/accounting/journals?new=1', 'jv manual');
+  add(can('audit.read'), 'Settings', 'Audit log', History, '/app/audit', 'activity changes who history');
   add(can('admin'), 'Settings', 'Organisation profile', Building2, '/app/organization', 'logo gstin upi address');
   add(can('admin'), 'Settings', 'Print settings', Printer, '/app/print-settings', 'invoice template thermal barcode label');
   add(can('admin'), 'Settings', 'Users & roles', Users, '/app/team', 'staff team branch warehouse');

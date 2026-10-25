@@ -6,6 +6,7 @@ import type {
   ItemFacets, ItemSerial, PaymentRow, StockAdjustment, StockTransfer, Plan, PurchaseOrder, Expense, PlatformConfig, Recurring, SalesOrder, Shop, StaffUser, TaxSlab, Vendor,
 } from './types';
 import type { PrintSettings } from '../../shared/printSettings';
+import type { Journal, LedgerAccount, OrgSummary, RoleSetting } from './types';
 
 const S = '/shop';
 const q = <T,>(key: QueryKey, url: string, enabled = true) => ({ queryKey: key, queryFn: () => api.get<T>(url), enabled });
@@ -35,7 +36,10 @@ export const useItemSerials = (id: string | undefined) => useQuery({ ...q<ItemSe
 export const useBankAccounts = () => useQuery(q<BankAccount[]>(['bankAccounts'], `${S}/bank-accounts`));
 export const useBankTxns = (enabled = true) => useQuery(q<BankTxn[]>(['bankTxns'], `${S}/bank-transactions`, enabled));
 export const useStaff = (enabled = true) => useQuery(q<StaffUser[]>(['staff'], `${S}/staff`, enabled));
-export const useAudit = (enabled = true) => useQuery(q<AuditEntry[]>(['audit'], `${S}/audit`, enabled));
+export const useAccounts = (enabled = true) => useQuery(q<LedgerAccount[]>(['accounts'], `${S}/accounting/accounts`, enabled));
+export const useJournals = () => useQuery(q<Journal[]>(['journals'], `${S}/accounting/journals`));
+export const useRoles = (enabled = true) => useQuery(q<RoleSetting[]>(['roles'], `${S}/roles`, enabled));
+export const useOrgs = () => useQuery(q<OrgSummary[]>(['orgs'], '/auth/orgs'));
 export const useDashboard = () => useQuery(q<Dashboard>(['dashboard'], `${S}/dashboard`));
 export const useNotifications = () => useQuery({ ...q<Notification[]>(['notifications'], `${S}/notifications`), refetchInterval: 5 * 60_000 });
 export const useNextCustomerId = (enabled: boolean) => useQuery({ ...q<{ customId: string }>(['nextCustomerId'], `${S}/customers/next-id`, enabled), staleTime: 0 });

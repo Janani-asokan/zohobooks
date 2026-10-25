@@ -39,6 +39,12 @@ const Transfers = lazy(() => import('./pages/app/Transfers'));
 const StockSummary = lazy(() => import('./pages/app/StockSummary'));
 const Banking = lazy(() => import('./pages/app/Banking'));
 const Reports = lazy(() => import('./pages/app/Reports'));
+const ReportsHome = lazy(() => import('./pages/app/ReportsHome'));
+const ReportView = lazy(() => import('./pages/app/ReportView'));
+const Accounts = lazy(() => import('./pages/app/Accounts'));
+const Journals = lazy(() => import('./pages/app/Journals'));
+const Ledger = lazy(() => import('./pages/app/Ledger'));
+const AuditLog = lazy(() => import('./pages/app/AuditLog'));
 const Organization = lazy(() => import('./pages/app/Organization'));
 const Team = lazy(() => import('./pages/app/Team'));
 const Billing = lazy(() => import('./pages/app/Billing'));
@@ -106,12 +112,18 @@ export default function App() {
             <Route path="inventory/stock-summary" element={<StockSummary />} />
             <Route path="purchases/expenses" element={<Expenses />} />
             <Route path="banking" element={<Banking />} />
-            <Route path="reports" element={<Reports />} />
+            <Route path="accounting/accounts" element={<Accounts />} />
+            <Route path="accounting/journals" element={<Journals />} />
+            <Route path="accounting/ledger" element={<Ledger />} />
+            <Route path="reports" element={<ReportsHome />} />
+            <Route path="reports/gst" element={<Reports />} />
+            <Route path="reports/:id" element={<ReportView />} />
             <Route element={<SettingsLayout />}>
               <Route path="organization" element={<Organization />} />
               <Route path="team" element={<Team />} />
               <Route path="print-settings" element={<PrintSettings />} />
               <Route path="billing" element={<Billing />} />
+              <Route path="audit" element={<AuditLog />} />
             </Route>
           </Route>
         </Route>

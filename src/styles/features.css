@@ -215,3 +215,42 @@
 .serial-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow: auto; border-top: 1px solid var(--border); }
 .serial-list li { display: grid; grid-template-columns: 1fr auto auto; gap: var(--sp-2); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .variant-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); margin-left: 6px; vertical-align: 1px; }
+
+/* Roles matrix */
+.tabs .tab-link { flex-shrink: 0; white-space: nowrap; height: 36px; padding: 0 var(--sp-3); font-weight: 500; font-size: var(--fs-13); color: var(--ink-500); display: inline-flex; gap: 6px; align-items: center; margin-left: auto; text-decoration: none; }
+.tabs .tab-link:hover { color: var(--ink-900); }
+.table th.center, .table td.center { text-align: center; }
+.roles-matrix .group-row td, .table tr.group-row td { background: var(--ink-50); font-weight: 600; font-size: var(--fs-12); color: var(--ink-700); text-transform: uppercase; letter-spacing: .04em; height: 32px; }
+.roles-matrix tfoot td { background: var(--surface); }
+.audit-detail td { background: var(--ink-50); }
+.audit-dl { display: grid; grid-template-columns: 140px 1fr; gap: 4px 16px; margin: 4px 0; font-size: var(--fs-12); }
+.audit-dl dt { color: var(--ink-500); text-transform: capitalize; }
+.audit-dl dd { margin: 0; color: var(--ink-800); word-break: break-word; }
+
+/* Financial reports */
+.report-table tr.rk-group td { background: var(--ink-50); font-weight: 600; color: var(--ink-900); font-size: var(--fs-12); text-transform: uppercase; letter-spacing: .04em; }
+.report-table tr.rk-sub td { font-weight: 600; color: var(--ink-900); border-top: 1px solid var(--border-strong); }
+.report-table tr.rk-total td { font-weight: 700; color: var(--ink-900); background: var(--ink-50); border-top: 1px solid var(--ink-900); font-size: var(--fs-14); }
+.report-table.statement { max-width: 760px; }
+.report-table.statement td:first-child { width: 70%; }
+.report-banner { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: var(--radius); font-size: var(--fs-13); font-weight: 500; }
+.report-banner.ok { background: var(--green-50); color: var(--green-700); }
+.report-banner.bad { background: var(--red-50); color: var(--red-600); }
+.report-print-head h2 { margin: 0 0 4px; font-size: 18px; }
+.report-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-4); }
+.report-group h3 { font-size: var(--fs-13); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-500); margin: 0 0 var(--sp-2); font-weight: 600; }
+.report-link { display: flex; gap: var(--sp-3); align-items: flex-start; padding: 10px 12px; border-radius: var(--radius-sm); text-decoration: none !important; color: inherit; }
+.report-link:hover, .report-link:focus-visible { background: var(--row-hover, var(--ink-50)); }
+.report-link svg { color: var(--brand-600); flex-shrink: 0; margin-top: 2px; }
+.report-link strong { display: block; color: var(--ink-900); font-size: var(--fs-14); font-weight: 600; }
+.report-link span { color: var(--ink-500); font-size: var(--fs-12); }
+@media print { .report-table tr.clickable { cursor: auto; } }
+
+/* Dashboard lists */
+.dash-list { list-style: none; margin: 0; padding: 0 0 6px; }
+.dash-list li a { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); padding: 8px 16px; color: inherit; text-decoration: none !important; border-top: 1px solid var(--ink-100, var(--border)); min-height: 44px; }
+.dash-list li:first-child a { border-top: none; }
+.dash-list li a:hover, .dash-list li a:focus-visible { background: var(--row-hover); }
+.dash-list li a > span:first-child { min-width: 0; display: flex; flex-direction: column; }
+.dash-list strong { color: var(--ink-900); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .stat-grid .stat-value { font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: clip; } }

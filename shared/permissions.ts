@@ -1,4 +1,4 @@
-export const STAFF_ROLES = ['Manager', 'Accountant', 'Sales Staff', 'Viewer'] as const;
+export const STAFF_ROLES = ['Manager', 'Accountant', 'Sales Staff', 'Warehouse', 'Viewer'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 export type UserRole = 'Owner' | StaffRole;
 
@@ -12,7 +12,10 @@ export const PERMISSIONS = {
   'purchases.write': 'Record purchases & vendors',
   'banking.read': 'View banking',
   'banking.write': 'Record bank transactions',
+  'accounting.read': 'View chart of accounts, journals & ledgers',
+  'accounting.write': 'Add accounts & post manual journals',
   'reports.read': 'View reports & GST returns',
+  'audit.read': 'View the audit log',
   'admin': 'Organization profile, staff, branches, recurring & settings',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
@@ -22,10 +25,31 @@ const ALL = Object.keys(PERMISSIONS) as Permission[];
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   Owner: ALL,
   Manager: ALL.filter((p) => p !== 'admin'),
-  Accountant: ['sales.write', 'payments.write', 'customers.write', 'items.cost', 'purchases.read', 'purchases.write', 'banking.read', 'banking.write', 'reports.read'],
+  Accountant: ['sales.write', 'payments.write', 'customers.write', 'items.cost', 'purchases.read', 'purchases.write', 'banking.read', 'banking.write', 'accounting.read', 'accounting.write', 'reports.read', 'audit.read'],
   'Sales Staff': ['sales.write', 'payments.write', 'customers.write'],
-  Viewer: ['items.cost', 'purchases.read', 'banking.read', 'reports.read'],
+  Warehouse: ['items.write', 'purchases.read'],
+  Viewer: ['items.cost', 'purchases.read', 'banking.read', 'accounting.read', 'reports.read'],
 };
+
+/** Permission groups for the roles matrix, in the order of the sidebar. */
+export const PERMISSION_GROUPS: Array<{ module: string; permissions: Permission[] }> = [
+  { module: 'Sales', permissions: ['sales.write', 'payments.write', 'customers.write'] },
+  { module: 'Inventory', permissions: ['items.write', 'items.cost'] },
+  { module: 'Purchases', permissions: ['purchases.read', 'purchases.write'] },
+  { module: 'Accounting', permissions: ['banking.read', 'banking.write', 'accounting.read', 'accounting.write'] },
+  { module: 'Reports', permissions: ['reports.read'] },
+  { module: 'Administration', permissions: ['audit.read', 'admin'] },
+];
+
+/** Only the owner holds admin; it lets a user manage staff and permissions, so it can't be granted. */
+export const GRANTABLE: Permission[] = ALL.filter((p) => p !== 'admin');
+
+/** A role's permissions in one shop: the shop's own setting when it has one, else the defaults. */
+export function rolePermissions(role: UserRole, custom?: readonly string[] | null): Permission[] {
+  if (role === 'Owner') return ALL;
+  if (!custom) return ROLE_PERMISSIONS[role] ?? [];
+  return GRANTABLE.filter((p) => custom.includes(p));
+}
 
 export const can = (role: UserRole, p: Permission) => ROLE_PERMISSIONS[role]?.includes(p) ?? false;
 
