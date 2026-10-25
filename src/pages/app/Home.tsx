@@ -11,7 +11,7 @@ import { AreaChart, Donut, MeterList } from '@/components/charts';
 import { fmtDate, money, moneyShort } from '@/lib/format';
 
 const pctChange = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : cur > 0 ? 100 : null);
-const STATUS_COLORS = { Paid: '#1f7a4d', 'Partially Paid': '#b7791f', Sent: '#3b6ea8', Overdue: '#c22f2f' } as const;
+const STATUS_COLORS = { Paid: '#7d8c77', 'Partially Paid': '#c98a3c', Sent: '#e398a4', Overdue: '#b53a3a' } as const;
 
 export default function Home() {
   const me = useShopUser();
@@ -52,12 +52,14 @@ export default function Home() {
     color: STATUS_COLORS[st],
   }));
 
-  const quick = [
-    ...(canSell ? [{ label: 'Create Invoice', sub: 'Generate a new invoice', icon: FileText, to: '/app/sales/invoices/new', tone: 'blue' }] : []),
-    ...(me.can('items.write') ? [{ label: 'Add Product', sub: 'Add a new product', icon: PackagePlus, to: '/app/items/new', tone: 'green' }] : []),
-    ...(me.can('customers.write') ? [{ label: 'Add Customer', sub: 'Add a new customer', icon: UserPlus, to: '/app/sales/customers?new=1', tone: 'amber' }] : []),
-    ...(me.can('reports.read') ? [{ label: 'View Reports', sub: 'Analyse your business', icon: BarChart3, to: '/app/reports', tone: 'violet' }] : canSell ? [{ label: 'POS Billing', sub: 'Bill at the counter', icon: ScanLine, to: '/app/pos', tone: 'violet' }] : []),
-  ];
+  const actions = [
+    canSell && { label: 'New Invoice', sub: 'GST bill in seconds', icon: FileText, to: '/app/sales/invoices/new', tone: 'rose' },
+    canSell && { label: 'POS Billing', sub: 'Scan & sell at counter', icon: ScanLine, to: '/app/pos', tone: 'plum' },
+    me.can('items.write') && { label: 'Add Product', sub: 'With photo & price', icon: PackagePlus, to: '/app/items/new', tone: 'sage' },
+    me.can('customers.write') && { label: 'Add Customer', sub: 'Name & phone', icon: UserPlus, to: '/app/sales/customers?new=1', tone: 'blush' },
+    me.can('purchases.write') && { label: 'Purchase Bill', sub: 'Upload a photo of it', icon: Receipt, to: '/app/purchases/bills?new=1', tone: 'gold' },
+    me.can('reports.read') && { label: 'Reports', sub: 'Profit, GST, stock', icon: BarChart3, to: '/app/reports', tone: 'cocoa' },
+  ].filter(Boolean) as Array<{ label: string; sub: string; icon: typeof FileText; to: string; tone: string }>;
 
   if (dash.isError) {
     return (
@@ -75,6 +77,18 @@ export default function Home() {
         subtitle="Here’s what’s happening with your business today."
         actions={<span className="date-pill"><CalendarDays size={15} /> {fyStart} – {now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
       />
+
+      {actions.length > 0 && (
+        <nav className="big-actions" aria-label="Quick actions">
+          {actions.map((a) => (
+            <Link key={a.label} to={a.to} className={`big-action ba-${a.tone}`}>
+              <span className="ba-icon"><a.icon size={22} /></span>
+              <strong>{a.label}</strong>
+              <span className="ba-sub">{a.sub}</span>
+            </Link>
+          ))}
+        </nav>
+      )}
 
       <GettingStarted />
 
@@ -127,19 +141,6 @@ export default function Home() {
         </div>
       </div>
 
-      {quick.length > 0 && (
-        <>
-          <h3 className="mt-24" style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Quick actions</h3>
-          <div className="qa-grid">
-            {quick.map((q) => (
-              <Link key={q.label} to={q.to} className="qa-card">
-                <span className={`stat-icon tone-${q.tone}`}><q.icon size={18} /></span>
-                <div><strong>{q.label}</strong><span className="qa-sub">{q.sub}</span></div>
-              </Link>
-            ))}
-          </div>
-        </>
-      )}
 
       <div className="grid-3 mt-16">
         <div className="card">

@@ -8,7 +8,7 @@ export interface NavItem {
   icon: LucideIcon;
   to?: string;
   end?: boolean;
-  children?: Array<{ label: string; to: string }>;
+  children?: Array<{ label: string; to: string; icon?: LucideIcon }>;
   /** Caption rendered above this item to start a new group. */
   section?: string;
 }
@@ -84,6 +84,7 @@ export function Sidebar({
                 <div className="nav-sub">
                   {it.children.map((c) => (
                     <NavLink key={c.to} to={c.to} className={({ isActive }) => `nav-link ${isActive || pathname.startsWith(c.to + '/') ? 'active' : ''}`} onClick={onNavigate}>
+                      {c.icon && <c.icon size={15} />}
                       <span className="nav-text">{c.label}</span>
                     </NavLink>
                   ))}

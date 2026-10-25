@@ -75,14 +75,20 @@ export function SmartUpload({ kind, toRows, onApply, title = 'Fill from a PDF or
     <>
       <div
         className={`smart-upload ${drag ? 'drag' : ''} ${busy ? 'busy' : ''}`}
+        role="button"
+        tabIndex={0}
+        aria-label={title}
+        onClick={(e) => { if (!busy && !(e.target as HTMLElement).closest('button')) pickRef.current?.click(); }}
+        onKeyDown={(e) => { if (!busy && (e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); pickRef.current?.click(); } }}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); take(e.dataTransfer.files); }}
       >
-        <span className="su-icon">{busy ? <Loader2 size={18} className="spin" /> : <Sparkles size={18} />}</span>
+        <span className="su-icon">{busy ? <Loader2 size={26} className="spin" /> : <><Camera size={26} /><span className="su-badge"><Sparkles size={12} /></span></>}</span>
         <div className="su-text">
           <strong>{busy ? `Reading ${busy}…` : title}</strong>
           <span>{busy ? 'This takes a few seconds.' : hint}</span>
+          {!busy && <span className="su-click">Click here, drag a file in, or take a photo</span>}
         </div>
         <div className="su-actions">
           <button type="button" className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => pickRef.current?.click()}><FileUp size={14} /> Upload</button>

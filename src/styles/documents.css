@@ -4,7 +4,7 @@
 /* ---------- Invoice document (A4) ---------- */
 .doc-stage { background: var(--canvas); border-radius: var(--radius); padding: 28px; overflow-x: auto; }
 .a4 { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; box-shadow: 0 1px 3px rgba(17,24,39,.12), 0 0 0 1px #e6e8ec; padding: 16mm 15mm; color: #1f2937; font-size: 12px; display: flex; flex-direction: column; }
-.a4 .doc-head { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 16px; border-bottom: 3px solid #1f3a5f; }
+.a4 .doc-head { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 16px; border-bottom: 3px solid #a9475a; }
 .a4 .doc-logo { width: 64px; height: 64px; border-radius: 12px; object-fit: contain; display: grid; place-items: center; background: #eef3f9; color: #172d4a; font-weight: 800; font-size: 22px; overflow: hidden; }
 .a4 .doc-logo img { width: 100%; height: 100%; object-fit: contain; }
 .a4 .doc-company { display: flex; gap: 14px; }

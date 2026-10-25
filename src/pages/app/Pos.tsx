@@ -12,6 +12,7 @@ import { Field, Modal, Segmented, Toggle } from '@/components/ui';
 import { upiLink, useQr } from '@/components/qr';
 import { useShortcuts } from '@/components/useShortcuts';
 import { computeTotals, lineAmount } from '@/lib/calc';
+import { Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
 import { waLink } from './InvoiceView';
@@ -98,6 +99,7 @@ export default function Pos() {
             const st = branchId ? it.stockByBranch[branchId] ?? 0 : it.stock;
             return (
               <button key={it.id} className="pos-tile" onClick={() => add(it)}>
+                <Thumb name={it.name} image={it.image} size={40} />
                 <div className="n">{it.name}</div>
                 <div className="small muted">{it.type === 'Goods' ? `${st} ${it.unit} in stock` : 'Service'}</div>
                 <div className="p">{money(price(it, tier))}</div>

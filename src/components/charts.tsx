@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export const SERIES = ['#3b6ea8', '#b7791f'] as const;
+export const SERIES = ['#c75f71', '#7d8c77'] as const;
 
 interface Series {
   name: string;
@@ -114,7 +114,7 @@ export function AreaChart({ labels, values, format, height = 220, name }: { labe
       <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={name}>
         <defs>
           <linearGradient id="area-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={SERIES[0]} stopOpacity="0.18" />
+            <stop offset="0%" stopColor={SERIES[0]} stopOpacity="0.32" />
             <stop offset="100%" stopColor={SERIES[0]} stopOpacity="0" />
           </linearGradient>
         </defs>
@@ -129,7 +129,7 @@ export function AreaChart({ labels, values, format, height = 220, name }: { labe
           ))}
         </g>
         <path d={area} fill="url(#area-fill)" />
-        <path d={line} fill="none" stroke={SERIES[0]} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={line} fill="none" stroke={SERIES[0]} strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
         {labels.map((l, i) => (
           <text key={l + i} x={x(i)} y={H - 8} textAnchor="middle">
             {l}

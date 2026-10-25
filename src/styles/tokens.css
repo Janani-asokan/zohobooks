@@ -1,72 +1,91 @@
 /* ==========================================================================
-   Corpus360 design tokens
-   Ink blue carries the brand; a muted teal marks primary actions and status;
-   neutral greys do the rest. Dark mode is tuned separately, not inverted.
-   Type scale: 12 / 13 / 14 / 16 / 20 / 24 / 32. Spacing: 4px grid.
+   Corpus360 design tokens — "Rose & Sage"
+   Rose #C75F71 leads, blush #F0B8B8 softens, sage #A2AE9D calms, cocoa #54463A
+   carries the text. Buttons use a slightly deeper rose so white text passes WCAG AA.
+   Dark mode is a warm cocoa theme, tuned separately rather than inverted.
    ========================================================================== */
 :root,
 .light-scope {
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-display: var(--font);
+  --font-display: 'Poppins', var(--font);
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
 
   --fs-12: 12px; --fs-13: 13px; --fs-14: 14px; --fs-16: 16px; --fs-20: 20px; --fs-24: 24px; --fs-32: 32px;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
-  --radius-sm: 6px;
-  --radius: 8px;
-  --radius-lg: 8px;
-  --row-h: 40px;
-  --sidebar-w: 232px;
-  --sidebar-w-collapsed: 60px;
-  --topbar-h: 56px;
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --row-h: 44px;
+  --sidebar-w: 244px;
+  --sidebar-w-collapsed: 68px;
+  --topbar-h: 64px;
 
-  /* Brand: ink blue */
-  --brand-50: #eef3f9;
-  --brand-100: #dbe5f1;
-  --brand-200: #b6c9e0;
-  --brand-300: #8aa6c8;
-  --brand-500: #31527c;
-  --brand-600: #1f3a5f;
-  --brand-700: #172d4a;
-  --brand-900: #0b1726;
-  --brand-grad: var(--brand-600);
+  /* Palette */
+  --rose: #c75f71;
+  --blush: #f0b8b8;
+  --sage: #a2ae9d;
+  --cocoa: #54463a;
+  --sage-ink: #56654f;
+  --sage-soft: #eef2eb;
+  --blush-soft: #fcecec;
 
-  /* Accent: muted teal — primary actions and status only */
-  --accent: #0f766e;
-  --accent-hover: #0b5f58;
+  /* Brand: rose */
+  --brand-50: #fdf2f3;
+  --brand-100: #fbe3e5;
+  --brand-200: #f0b8b8;
+  --brand-300: #e398a4;
+  --brand-500: #c75f71;
+  --brand-600: #a9475a;
+  --brand-700: #8a3747;
+  --brand-900: #4a1f28;
+  --brand-grad: linear-gradient(135deg, #b04d60 0%, #c75f71 55%, #d98290 100%);
+
+  /* Primary actions: deep rose (AA with white text) */
+  --accent: #b04d60;
+  --accent-hover: #963f51;
   --accent-ink: #ffffff;
-  --accent-soft: #e6f4f2;
+  --accent-soft: #fbe3e5;
+  --accent-grad: linear-gradient(135deg, #a9475a 0%, #c25a6d 100%);
+  --sage-grad: linear-gradient(135deg, #7d8c77 0%, #a2ae9d 100%);
+  --blush-grad: linear-gradient(135deg, #f0b8b8 0%, #f7d4cf 100%);
+  --cocoa-grad: linear-gradient(135deg, #54463a 0%, #7a6656 100%);
+  --gold-grad: linear-gradient(135deg, #c98a3c 0%, #e2b062 100%);
 
-  /* Neutrals */
-  --ink-900: #111827;
-  --ink-800: #1f2937;
-  --ink-700: #374151;
-  --ink-600: #4b5563;
-  --ink-500: #6b7280;
-  --ink-400: #9ca3af;
-  --ink-300: #d1d5db;
-  --ink-200: #e5e7eb;
-  --ink-150: #eceef1;
-  --ink-100: #f3f4f6;
-  --ink-50: #f9fafb;
+  /* Neutrals: warm cocoa greys */
+  --ink-900: #3a2f27;
+  --ink-800: #54463a;
+  --ink-700: #66574a;
+  --ink-600: #7a6a5c;
+  --ink-500: #8c7c6e;
+  --ink-400: #b3a596;
+  --ink-300: #dccfc3;
+  --ink-200: #ece2d9;
+  --ink-150: #f2eae2;
+  --ink-100: #f7f0ea;
+  --ink-50: #fbf7f3;
 
   /* Status */
-  --green-50: #ecf8f1; --green-600: #15803d; --green-700: #166534;
-  --amber-50: #fdf6e7; --amber-600: #b45309; --amber-700: #92400e;
-  --red-50: #fdf0f0;   --red-500: #dc2626;   --red-600: #b91c1c;
-  --violet-50: var(--ink-100); --violet-600: var(--ink-600);
-  --teal-50: var(--accent-soft); --teal-600: var(--accent);
+  --green-50: #edf3ea; --green-600: #4f7a4a; --green-700: #3e6339;
+  --amber-50: #fbf1e2; --amber-600: #b26b18; --amber-700: #8f5512;
+  --red-50: #fdeeee;   --red-500: #d24b4b;   --red-600: #b53a3a;
+  --violet-50: var(--blush-soft); --violet-600: var(--brand-600);
+  --teal-50: var(--sage-soft); --teal-600: var(--sage-ink);
 
   /* Surfaces */
-  --bg: #ffffff;
-  --canvas: #f7f8fa;
+  --bg: #fdf8f6;
+  --app-bg: radial-gradient(1200px 600px at 0% 0%, rgba(240, 184, 184, .38), transparent 60%),
+            radial-gradient(900px 600px at 100% 0%, rgba(162, 174, 157, .30), transparent 60%),
+            radial-gradient(900px 700px at 50% 100%, rgba(247, 212, 207, .35), transparent 60%),
+            linear-gradient(180deg, #fdf6f4 0%, #fbf7f2 100%);
+  --canvas: #faf3f0;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --row-hover: #f7f9fc;
-  --row-selected: #eef3f9;
-  --border: #e6e8ec;
-  --border-strong: #d3d7de;
-  --tip-bg: #111827;
+  --surface-glass: rgba(255, 255, 255, .82);
+  --row-hover: #fdf2f3;
+  --row-selected: #fbe3e5;
+  --border: #f0e1dd;
+  --border-strong: #e6cfcb;
+  --tip-bg: #3a2f27;
   --tip-fg: #ffffff;
 
   /* Legacy aliases used by older components */
@@ -75,55 +94,68 @@
   --action-ink: var(--accent-ink);
   --gold: var(--accent);
   --gold-soft: var(--accent-soft);
-  --side-bg: #fbfbfc;
+  --side-bg: rgba(255, 255, 255, .78);
   --side-active: var(--brand-50);
   --side-ink: var(--ink-700);
   --side-muted: var(--ink-500);
   --side-line: var(--border);
 
-  --focus: 0 0 0 2px var(--bg), 0 0 0 4px #4a74a8;
-  --ring: 0 0 0 3px rgba(31, 58, 95, 0.18);
-  --shadow-xs: none;
-  --shadow-sm: none;
-  --shadow-md: 0 4px 16px rgba(17, 24, 39, 0.10), 0 1px 3px rgba(17, 24, 39, 0.06);
-  --shadow-lg: 0 16px 40px rgba(17, 24, 39, 0.16), 0 2px 6px rgba(17, 24, 39, 0.06);
+  --focus: 0 0 0 2px #fff, 0 0 0 4px #c75f71;
+  --ring: 0 0 0 4px rgba(199, 95, 113, 0.18);
+  --shadow-xs: 0 1px 2px rgba(84, 70, 58, 0.05);
+  --shadow-sm: 0 6px 18px rgba(84, 70, 58, 0.06), 0 1px 3px rgba(84, 70, 58, 0.05);
+  --shadow-md: 0 14px 34px rgba(84, 70, 58, 0.12), 0 2px 6px rgba(84, 70, 58, 0.06);
+  --shadow-lg: 0 24px 60px rgba(84, 70, 58, 0.18), 0 4px 12px rgba(84, 70, 58, 0.08);
+  --shadow-rose: 0 10px 24px rgba(176, 77, 96, 0.28);
   color-scheme: light;
 }
 
-/* Dark: low-glare slate surfaces, lifted ink-blue for links, brighter teal for actions. */
+/* Dark: warm cocoa surfaces, lifted rose and sage. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --brand-50: #16233a; --brand-100: #1c2d48; --brand-200: #2a4266; --brand-300: #46638f; --brand-500: #7fa3d4; --brand-600: #9ab9e3; --brand-700: #c3d6f0; --brand-900: #e6eef9;
-    --accent: #4fbfb2; --accent-hover: #6fd0c4; --accent-ink: #06201d; --accent-soft: #10302d;
-    --ink-900: #eef1f5; --ink-800: #d9dee6; --ink-700: #bcc4cf; --ink-600: #9aa4b2; --ink-500: #7e8897; --ink-400: #5f6877; --ink-300: #3c4451;
-    --ink-200: #2b323d; --ink-150: #242a34; --ink-100: #1e242d; --ink-50: #181d25;
-    --green-50: #10281b; --green-600: #4cc27a; --green-700: #7dd8a1;
-    --amber-50: #2b2111; --amber-600: #e5a83c; --amber-700: #f0c06a;
-    --red-50: #2e1618; --red-500: #f07272; --red-600: #f07272;
-    --bg: #0f1217; --canvas: #0c0f13; --surface: #151a21; --surface-raised: #1b212a; --row-hover: #1a2029; --row-selected: #1a2a40;
-    --border: #262d38; --border-strong: #343c49; --tip-bg: #e6eaf0; --tip-fg: #111827;
-    --side-bg: #12161c;
-    --focus: 0 0 0 2px var(--bg), 0 0 0 4px #7fa3d4;
-    --ring: 0 0 0 3px rgba(127, 163, 212, 0.28);
-    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
-    --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.55);
+    --brand-50: #3a2227; --brand-100: #4a2a31; --brand-200: #6b3a45; --brand-300: #a05a69; --brand-500: #e48a9a; --brand-600: #f0a3b0; --brand-700: #f7c7cf; --brand-900: #fde8ec;
+    --accent: #e48a9a; --accent-hover: #f0a3b0; --accent-ink: #2a1418; --accent-soft: #3a2227;
+    --accent-grad: linear-gradient(135deg, #d97888 0%, #eba0ac 100%);
+    --sage-soft: #26302a; --sage-ink: #b9c7b3; --blush-soft: #33232a;
+    --ink-900: #f6ede6; --ink-800: #e7dbd1; --ink-700: #cdbfb3; --ink-600: #b0a194; --ink-500: #958677; --ink-400: #6e6155; --ink-300: #4a3f37;
+    --ink-200: #3a302a; --ink-150: #322924; --ink-100: #2c2420; --ink-50: #261f1c;
+    --green-50: #1e2b1f; --green-600: #8fc489; --green-700: #a9d6a3;
+    --amber-50: #33261a; --amber-600: #e8a95a; --amber-700: #f2c283;
+    --red-50: #3a1f1f; --red-500: #f08a8a; --red-600: #f08a8a;
+    --bg: #1c1614; --canvas: #181311; --surface: #251d1a; --surface-raised: #2c2320; --surface-glass: rgba(37, 29, 26, .86);
+    --app-bg: radial-gradient(1000px 600px at 0% 0%, rgba(199, 95, 113, .18), transparent 60%), radial-gradient(900px 600px at 100% 0%, rgba(162, 174, 157, .12), transparent 60%), linear-gradient(180deg, #1d1715 0%, #181311 100%);
+    --row-hover: #2e2421; --row-selected: #3a2227;
+    --border: #3a2f2a; --border-strong: #4a3d36; --tip-bg: #f6ede6; --tip-fg: #2a201c;
+    --side-bg: rgba(31, 24, 22, .9);
+    --focus: 0 0 0 2px #1c1614, 0 0 0 4px #e48a9a;
+    --ring: 0 0 0 4px rgba(228, 138, 154, 0.25);
+    --shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 14px 34px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+    --shadow-rose: 0 10px 24px rgba(0, 0, 0, 0.35);
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --brand-50: #16233a; --brand-100: #1c2d48; --brand-200: #2a4266; --brand-300: #46638f; --brand-500: #7fa3d4; --brand-600: #9ab9e3; --brand-700: #c3d6f0; --brand-900: #e6eef9;
-  --accent: #4fbfb2; --accent-hover: #6fd0c4; --accent-ink: #06201d; --accent-soft: #10302d;
-  --ink-900: #eef1f5; --ink-800: #d9dee6; --ink-700: #bcc4cf; --ink-600: #9aa4b2; --ink-500: #7e8897; --ink-400: #5f6877; --ink-300: #3c4451;
-  --ink-200: #2b323d; --ink-150: #242a34; --ink-100: #1e242d; --ink-50: #181d25;
-  --green-50: #10281b; --green-600: #4cc27a; --green-700: #7dd8a1;
-  --amber-50: #2b2111; --amber-600: #e5a83c; --amber-700: #f0c06a;
-  --red-50: #2e1618; --red-500: #f07272; --red-600: #f07272;
-  --bg: #0f1217; --canvas: #0c0f13; --surface: #151a21; --surface-raised: #1b212a; --row-hover: #1a2029; --row-selected: #1a2a40;
-  --border: #262d38; --border-strong: #343c49; --tip-bg: #e6eaf0; --tip-fg: #111827;
-  --side-bg: #12161c;
-  --focus: 0 0 0 2px var(--bg), 0 0 0 4px #7fa3d4;
-  --ring: 0 0 0 3px rgba(127, 163, 212, 0.28);
-  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.55);
+  --brand-50: #3a2227; --brand-100: #4a2a31; --brand-200: #6b3a45; --brand-300: #a05a69; --brand-500: #e48a9a; --brand-600: #f0a3b0; --brand-700: #f7c7cf; --brand-900: #fde8ec;
+  --accent: #e48a9a; --accent-hover: #f0a3b0; --accent-ink: #2a1418; --accent-soft: #3a2227;
+  --accent-grad: linear-gradient(135deg, #d97888 0%, #eba0ac 100%);
+  --sage-soft: #26302a; --sage-ink: #b9c7b3; --blush-soft: #33232a;
+  --ink-900: #f6ede6; --ink-800: #e7dbd1; --ink-700: #cdbfb3; --ink-600: #b0a194; --ink-500: #958677; --ink-400: #6e6155; --ink-300: #4a3f37;
+  --ink-200: #3a302a; --ink-150: #322924; --ink-100: #2c2420; --ink-50: #261f1c;
+  --green-50: #1e2b1f; --green-600: #8fc489; --green-700: #a9d6a3;
+  --amber-50: #33261a; --amber-600: #e8a95a; --amber-700: #f2c283;
+  --red-50: #3a1f1f; --red-500: #f08a8a; --red-600: #f08a8a;
+  --bg: #1c1614; --canvas: #181311; --surface: #251d1a; --surface-raised: #2c2320; --surface-glass: rgba(37, 29, 26, .86);
+  --app-bg: radial-gradient(1000px 600px at 0% 0%, rgba(199, 95, 113, .18), transparent 60%), radial-gradient(900px 600px at 100% 0%, rgba(162, 174, 157, .12), transparent 60%), linear-gradient(180deg, #1d1715 0%, #181311 100%);
+  --row-hover: #2e2421; --row-selected: #3a2227;
+  --border: #3a2f2a; --border-strong: #4a3d36; --tip-bg: #f6ede6; --tip-fg: #2a201c;
+  --side-bg: rgba(31, 24, 22, .9);
+  --focus: 0 0 0 2px #1c1614, 0 0 0 4px #e48a9a;
+  --ring: 0 0 0 4px rgba(228, 138, 154, 0.25);
+  --shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 14px 34px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --shadow-rose: 0 10px 24px rgba(0, 0, 0, 0.35);
   color-scheme: dark;
 }

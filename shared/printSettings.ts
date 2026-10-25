@@ -92,7 +92,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
     ],
   },
   invoice: {
-    template: 'standard', paper: 'a4', color: '#1F3A5F',
+    template: 'standard', paper: 'a4', color: '#A9475A',
     fields: Object.fromEntries(INVOICE_FIELDS.map((k) => [k, true])) as Record<InvoiceFieldKey, boolean>,
     terms: 'Goods once sold will not be taken back.\nInterest at 18% p.a. is charged on payments received after the due date.\nSubject to local jurisdiction.',
     signatoryLabel: 'Authorised Signatory',

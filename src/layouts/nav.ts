@@ -1,12 +1,19 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, type LucideIcon,
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, type LucideIcon,
 } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import type { PaletteAction } from './CommandPalette';
 import type { Permission } from '../../shared/permissions';
 
 type Can = (p: Permission) => boolean;
+
+const CHILD_ICONS: Record<string, LucideIcon> = {
+  Customers: UserRound, Quotes: FileSignature, 'Sales Orders': ClipboardList, Invoices: FileText, 'Payments Received': IndianRupee,
+  'Credit Notes': FileMinus, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, Vendors: Truck, 'Purchase Orders': ClipboardList,
+  Bills: Receipt, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Stock Adjustments': SlidersHorizontal,
+  Transfers: ArrowLeftRight, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank,
+};
 
 /** Sidebar information architecture. Order and grouping follow how a shop actually works through a day. */
 export function buildNav(can: Can): NavItem[] {
@@ -53,8 +60,8 @@ export function buildNav(can: Can): NavItem[] {
   if (accounting.length) items.push({ label: 'Accounting', icon: Landmark, children: accounting });
   if (can('reports.read')) items.push({ label: 'Reports', icon: BarChart3, to: '/app/reports' });
   if (can('admin')) items.push({ label: 'Settings', icon: Settings, to: '/app/organization' });
-  else if (can('audit.read')) items.push({ label: 'Audit Log', icon: Settings, to: '/app/audit' });
-  return items;
+  else if (can('audit.read')) items.push({ label: 'Audit Log', icon: History, to: '/app/audit' });
+  return items.map((it) => (it.children ? { ...it, children: it.children.map((c) => ({ ...c, icon: CHILD_ICONS[c.label] })) } : it));
 }
 
 export interface CreateLink { label: string; icon: LucideIcon; to: string; keys?: string }

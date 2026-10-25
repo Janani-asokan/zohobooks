@@ -20,7 +20,7 @@ const INVOICE_TEMPLATES: Array<{ id: InvoiceTemplate; label: string; tip: string
   { id: 'modern', label: 'Modern', tip: 'Table head in your colour.' },
   { id: 'compact', label: 'Compact', tip: 'Smaller type for long invoices.' },
 ];
-const COLOURS = ['#1F3A5F', '#0F766E', '#7C2D12', '#374151', '#111111'];
+const COLOURS = ['#A9475A', '#54463A', '#5F6E59', '#1F3A5F', '#111111'];
 
 const THEMES: Array<{ id: ThermalTheme; label: string; tip: string; isNew?: boolean }> = [
   { id: 'compact', label: 'Compact', tip: 'For businesses with shorter item names and fewer columns; clean and efficient.' },

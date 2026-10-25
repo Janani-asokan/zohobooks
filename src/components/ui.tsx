@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X, AlertCircle, type LucideIcon } from 'lucide-react';
 
 export function Modal({
@@ -29,7 +30,8 @@ export function Modal({
     };
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  // Rendered at the end of <body> so page animations and stacking never clip the dialog.
+  return createPortal(
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${size ?? ''}`} role="dialog" aria-modal="true">
         <div className="modal-header">
@@ -44,7 +46,8 @@ export function Modal({
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -63,13 +66,22 @@ export function Field({
   children: ReactNode;
   className?: string;
 }) {
+  // Link the label to a single native control so screen readers announce it and clicking the label focuses it.
+  const autoId = useId();
+  let control = children;
+  let htmlFor: string | undefined;
+  if (isValidElement(children) && typeof children.type === 'string' && ['input', 'select', 'textarea'].includes(children.type)) {
+    const el = children as ReactElement<{ id?: string }>;
+    htmlFor = el.props.id ?? autoId;
+    if (!el.props.id) control = cloneElement(el, { id: htmlFor });
+  }
   return (
     <div className={`field ${className ?? ''}`}>
-      <label>
+      <label htmlFor={htmlFor}>
         {label}
         {required && <span className="req">*</span>}
       </label>
-      {children}
+      {control}
       {error ? (
         <span className="field-error">
           <AlertCircle size={13} /> {error}

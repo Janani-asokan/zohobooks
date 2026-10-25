@@ -8,7 +8,7 @@ for (const [file, size, pad] of [['icon-192.png', 192, 0], ['icon-512.png', 512,
   await p.setViewportSize({ width: size, height: size });
   const inner = Math.round(size * (1 - pad * 2));
   // Maskable icons keep the mark inside the safe zone on a full-bleed background.
-  await p.setContent(`<body style="margin:0;background:${pad ? '#1F3A5F' : 'transparent'};display:grid;place-items:center;width:${size}px;height:${size}px">${icon.replace('<svg', `<svg width="${inner}" height="${inner}"`)}</body>`);
+  await p.setContent(`<body style="margin:0;background:${pad ? '#A9475A' : 'transparent'};display:grid;place-items:center;width:${size}px;height:${size}px">${icon.replace('<svg', `<svg width="${inner}" height="${inner}"`)}</body>`);
   await p.screenshot({ path: `public/${file}`, omitBackground: !pad });
 }
 await b.close();

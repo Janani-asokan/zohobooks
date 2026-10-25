@@ -1,7 +1,7 @@
 /* Printable tax invoice (.ti). One stylesheet for the screen preview, the print dialog and the server PDF.
    Colour is used only for the title and rules (--ti-color); text is black so B/W printers stay legible. */
 .ti {
-  --ti-color: #1f3a5f;
+  --ti-color: #a9475a;
   --ti-ink: #111;
   --ti-muted: #555;
   --ti-rule: #c9ccd1;

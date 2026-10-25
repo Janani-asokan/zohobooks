@@ -16,18 +16,18 @@ import { Hint } from '@/components/kit';
 import { fmtDate, money, moneyShort, todayISO } from '@/lib/format';
 
 export const EXPENSE_CATEGORIES: Array<{ name: string; icon: typeof Zap; color: string }> = [
-  { name: 'Rent', icon: Home, color: '#5b5bf0' },
-  { name: 'Salaries & Wages', icon: Users, color: '#10b981' },
-  { name: 'Electricity', icon: Zap, color: '#f59e0b' },
-  { name: 'Internet & Phone', icon: Wifi, color: '#0ea5e9' },
-  { name: 'Fuel & Travel', icon: Fuel, color: '#ef4444' },
-  { name: 'Repairs & Maintenance', icon: Wrench, color: '#8b5cf6' },
-  { name: 'Office Supplies', icon: PenTool, color: '#14b8a6' },
-  { name: 'Marketing', icon: Megaphone, color: '#ec4899' },
-  { name: 'Bank Charges', icon: Landmark, color: '#71717a' },
-  { name: 'Professional Fees', icon: Briefcase, color: '#7b4ff0' },
-  { name: 'Food & Refreshments', icon: Coffee, color: '#f97316' },
-  { name: 'Other', icon: MoreHorizontal, color: '#a1a1aa' },
+  { name: 'Rent', icon: Home, color: '#c75f71' },
+  { name: 'Salaries & Wages', icon: Users, color: '#7d8c77' },
+  { name: 'Electricity', icon: Zap, color: '#c98a3c' },
+  { name: 'Internet & Phone', icon: Wifi, color: '#a9475a' },
+  { name: 'Fuel & Travel', icon: Fuel, color: '#d98290' },
+  { name: 'Repairs & Maintenance', icon: Wrench, color: '#54463a' },
+  { name: 'Office Supplies', icon: PenTool, color: '#8fa088' },
+  { name: 'Marketing', icon: Megaphone, color: '#e398a4' },
+  { name: 'Bank Charges', icon: Landmark, color: '#7a6656' },
+  { name: 'Professional Fees', icon: Briefcase, color: '#b04d60' },
+  { name: 'Food & Refreshments', icon: Coffee, color: '#d4a05a' },
+  { name: 'Other', icon: MoreHorizontal, color: '#b3a596' },
 ];
 /** Category from the merchant and the receipt text: TNEB → Electricity, Airtel → Internet & Phone, Swiggy → Food… */
 export function guessExpenseCategory(text: string): string | null {

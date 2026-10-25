@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Package, Wrench, ImagePlus, Trash2, Wand2, Sparkles, Loader2, CheckCircle2, Circle, Percent, Info, Boxes, Tag, IndianRupee, ScanBarcode } from 'lucide-react';
+import { ArrowLeft, Camera, Package, Wrench, Trash2, Wand2, Sparkles, Loader2, CheckCircle2, Circle, Percent, Info, Boxes, Tag, IndianRupee, ScanBarcode } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
 import { useBranches, useItemFacets, useItems, useMut, useTaxSlabs } from '@/api/hooks';
 import type { Item } from '@/api/types';
@@ -25,9 +25,9 @@ interface Draft {
 const GOODS_UNITS = ['pcs', 'nos', 'box', 'pack', 'kg', 'g', 'ltr', 'ml', 'mtr', 'ream', 'dozen', 'set', 'pair'];
 const SERVICE_UNITS = ['job', 'hour', 'day', 'visit', 'month', 'year'];
 const TIERS = [
-  { k: 'sp1', label: 'SP1 · Standard', hint: 'Walk-in & regular customers', color: '#5b5bf0' },
-  { k: 'sp2', label: 'SP2 · Loyal', hint: 'Repeat & loyal customers', color: '#10b981' },
-  { k: 'sp3', label: 'SP3 · New', hint: 'First-time / promotional', color: '#f59e0b' },
+  { k: 'sp1', label: 'SP1 · Standard', hint: 'Walk-in & regular customers', color: '#c75f71' },
+  { k: 'sp2', label: 'SP2 · Loyal', hint: 'Repeat & loyal customers', color: '#7d8c77' },
+  { k: 'sp3', label: 'SP3 · New', hint: 'First-time / promotional', color: '#c98a3c' },
 ] as const;
 
 /** Internal EAN-13 (prefix 2 = in-store use) with a valid check digit. */
@@ -313,7 +313,7 @@ export default function ItemForm() {
                     <button type="button" className="img-remove" aria-label="Remove photo" onClick={(ev) => { ev.stopPropagation(); set('image', ''); }}><Trash2 size={14} /></button>
                   </>
                 ) : (
-                  <div className="img-empty"><ImagePlus size={24} /><strong>Add photo</strong><span>Drag & drop or click</span></div>
+                  <div className="img-empty"><span className="img-empty-icon"><Camera size={26} /></span><strong>Add photo</strong><span>Click to upload</span></div>
                 )}
                 <input ref={fileRef} type="file" accept="image/*" hidden onChange={(ev) => { pickImage(ev.target.files?.[0]); ev.target.value = ''; }} />
               </div>

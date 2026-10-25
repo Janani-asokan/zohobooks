@@ -12,10 +12,14 @@ import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
+import '@fontsource/poppins/500.css';
+import '@fontsource/poppins/600.css';
+import '@fontsource/poppins/700.css';
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/shell.css';
 import './styles/features.css';
+import './styles/theme.css';
 import './styles/documents.css';
 import './styles/print.css';
 

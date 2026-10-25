@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Paperclip, FileText, Trash2, Download, Loader2, Upload } from 'lucide-react';
+import { Paperclip, FileText, Trash2, Download, Loader2, Camera } from 'lucide-react';
 import { api } from '@/api/client';
 import { useToast } from '@/context/ToastContext';
 import { ACCEPT_UPLOADS, fileToDataUrl, fmtBytes } from '@/lib/files';
@@ -66,7 +66,7 @@ export function Attachments({ entity, entityId, canWrite = true, title = 'Attach
           {canWrite && (
             <button type="button" className={`attach-drop ${drag ? 'drag' : ''}`} onClick={() => pick.current?.click()}
               onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); void upload(e.dataTransfer.files); }}>
-              {busy ? <><Loader2 size={14} className="spin" /> Uploading…</> : <><Upload size={14} /> {q.data!.length ? 'Add more files' : 'Attach a PDF or photo'}</>}
+              {busy ? <><Loader2 size={22} className="spin" /> <span>Uploading…</span></> : <><span className="attach-drop-icon"><Camera size={22} /></span><span className="attach-drop-text"><strong>{q.data!.length ? 'Add more files' : 'Click to upload'}</strong><span>PDF or photo · up to 10 MB</span></span></>}
             </button>
           )}
           {!canWrite && q.data!.length === 0 && <p className="small muted">No files attached.</p>}

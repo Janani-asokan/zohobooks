@@ -48,7 +48,7 @@ export default function Billing() {
       await loadRazorpay();
       new window.Razorpay!({
         key: order.keyId, order_id: order.orderId, amount: order.amount, currency: 'INR', name: order.name, description: order.description,
-        prefill: { name: me.user.name, email: me.user.email }, theme: { color: '#1f7a4d' },
+        prefill: { name: me.user.name, email: me.user.email }, theme: { color: '#b04d60' },
         handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
           try {
             await api.post('/billing/razorpay/verify', { orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature });
@@ -82,13 +82,13 @@ export default function Billing() {
           <div className="card">
             <div className="card-header"><div><h3>Choose a plan</h3><p>Renewal extends from your current expiry date</p></div></div>
             <div className="card-body">
-              <div className="radio-cards" style={{ gridTemplateColumns: `repeat(${data?.plans.length ?? 2}, minmax(0,1fr))` }}>
+              <div className="radio-cards" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(180px, 1fr))` }}>
                 {(data?.plans ?? []).map((p) => (
                   <div key={p.id} className={`radio-card ${chosen?.id === p.id ? 'active' : ''}`} onClick={() => setPlanId(p.id)} role="radio" aria-checked={chosen?.id === p.id} tabIndex={0}>
                     <span className="dot" />
                     <div>
                       <strong>{p.name} · {money(p.pricePerYear)}/yr</strong>
-                      <span className="row" style={{ gap: 10, marginTop: 4 }}><Users size={12} /> {p.maxUsers} users <GitBranch size={12} /> {p.maxBranches} branches <FileText size={12} /> {p.maxInvoicesPerMonth ?? 'Unlimited'} invoices</span>
+                      <span className="row" style={{ gap: 10, marginTop: 4, flexWrap: 'wrap' }}><Users size={12} /> {p.maxUsers} users <GitBranch size={12} /> {p.maxBranches} branches <FileText size={12} /> {p.maxInvoicesPerMonth ?? 'Unlimited'} invoices</span>
                     </div>
                   </div>
                 ))}

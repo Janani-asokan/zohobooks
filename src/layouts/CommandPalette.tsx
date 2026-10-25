@@ -60,7 +60,7 @@ export function CommandPalette({ open, onClose, actions }: { open: boolean; onCl
       <div className="palette" role="dialog" aria-label="Command palette">
         <div className="palette-input">
           <Search size={18} className="muted" />
-          <input ref={inputRef} value={q} placeholder="Search or type a command — e.g. “new bill”, “GSTR”, a customer…" aria-label="Search"
+          <input ref={inputRef} autoFocus value={q} placeholder="Search or type a command — e.g. “new bill”, “GSTR”, a customer…" aria-label="Search"
             onChange={(e) => { setQ(e.target.value); setHl(0); }}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown') { e.preventDefault(); setHl((h) => Math.min(h + 1, results.length - 1)); }

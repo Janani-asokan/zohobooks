@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Upload, Trash2, Save, ImageIcon, Loader2, Smartphone, LayoutTemplate, BellRing, Scale } from 'lucide-react';
+import { Camera, Upload, Trash2, Save, Loader2, Smartphone, LayoutTemplate, BellRing, Scale } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
 import { useMut, useOrg } from '@/api/hooks';
 import type { Organization as Org } from '@/api/types';
@@ -54,7 +54,7 @@ function OrgForm({ initial }: { initial: Org }) {
     });
   };
 
-  const TPLS: Array<[Org['invoiceTemplate'], string, string]> = [['classic', 'Classic', '#1f7a4d'], ['modern', 'Modern', '#18181b'], ['compact', 'Compact', '#71717a']];
+  const TPLS: Array<[Org['invoiceTemplate'], string, string]> = [['classic', 'Classic', '#b04d60'], ['modern', 'Modern', '#54463a'], ['compact', 'Compact', '#7d8c77']];
 
   return (
     <div className="page" style={{ maxWidth: 1100 }}>
@@ -65,9 +65,9 @@ function OrgForm({ initial }: { initial: Org }) {
             <div className="card-body">
               <div className="section-title">Logo</div>
               <div className="row" style={{ gap: 18 }}>
-                <div role="button" tabIndex={0} aria-label="Upload logo" style={{ width: 120, height: 120, borderRadius: 8, border: '2px dashed var(--border-strong)', display: 'grid', placeItems: 'center', background: 'var(--ink-50)', overflow: 'hidden', cursor: 'pointer' }}
+                <div role="button" tabIndex={0} aria-label="Upload logo" className="logo-drop"
                   onClick={() => fileRef.current?.click()} onKeyDown={(ev) => ev.key === 'Enter' && fileRef.current?.click()} onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.preventDefault(); onFile(ev.dataTransfer.files[0]); }}>
-                  {org.logo ? <img src={org.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImageIcon size={30} className="muted" />}
+                  {org.logo ? <img src={org.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span className="img-empty"><span className="img-empty-icon"><Camera size={24} /></span><strong>Add logo</strong><span>Click to upload</span></span>}
                 </div>
                 <div>
                   <div className="row">

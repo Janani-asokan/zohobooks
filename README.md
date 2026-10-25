@@ -14,6 +14,10 @@ A multi-tenant GST billing, inventory and accounting SaaS for Indian businesses.
 
 ---
 
+## Look and feel
+
+A warm **Rose & Sage** theme (#C75F71 rose, #F0B8B8 blush, #A2AE9D sage, #54463A cocoa) with soft gradient backgrounds, rounded cards, colourful icon tiles, big action buttons on the dashboard, picture-style upload boxes and gentle animations (switched off automatically for people who prefer reduced motion). Light and dark themes. The landing page has photo slots — see `public/img/README.md` for the photos to add.
+
 ## Quick start
 
 ```bash
