@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { rateLimit } from '../../auth';
+import { config } from '../../config';
 import { audit } from '../../audit';
 import { many, one } from '../../db';
 import { forbidden, HttpError, notFound, parse } from '../../http';
 import { getOrg } from '../../services/common';
 import { aiEnabled, decodeDataUrl, extractDocument } from '../../services/extract';
-import { aiError, askAssistant, stockAdvice, suggestItem } from '../../services/assistant';
+import { aiError, askAssistant, draftReminder, parseBill, stockAdvice, suggestItem } from '../../services/assistant';
 import { stockInsights } from '../../services/stockInsights';
 import { withTenant } from '../../db';
 import { h } from '../../http';
@@ -67,6 +68,38 @@ filesRouter.post(
     const b = parse(z.object({ leadDays: z.number().int().min(1).max(60).optional(), coverDays: z.number().int().min(7).max(120).optional() }), req.body ?? {});
     const { ins, org } = await withTenant(c.shopId, async (db) => ({ ins: await stockInsights(db, c.shopId, b), org: await getOrg(db, c.shopId) }));
     res.json(await stockAdvice(ins, { name: org.company_name, state: org.state ?? '' }, allowed(c, 'items.cost')).catch(aiError));
+  }),
+);
+
+filesRouter.post(
+  '/ai/parse-bill',
+  rateLimit('ai-bill', 30, 60_000),
+  h(async (req, res) => {
+    const c = userCtx(req);
+    if (!allowed(c, 'sales.write')) throw forbidden();
+    const b = parse(z.object({ text: z.string().trim().min(2, 'Type the items first').max(1500), context: z.enum(['invoice', 'pos']).default('invoice') }), req.body);
+    res.json(await parseBill(c, b.text, b.context).catch(aiError));
+  }),
+);
+filesRouter.post(
+  '/ai/reminder',
+  rateLimit('ai-reminder', 30, 60_000),
+  h(async (req, res) => {
+    const c = userCtx(req);
+    if (!allowed(c, 'sales.write') && !allowed(c, 'payments.write')) throw forbidden();
+    const b = parse(z.object({ invoiceId: z.string().uuid(), tone: z.enum(['friendly', 'polite', 'firm']).default('polite'), language: z.enum(['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', 'Marathi', 'Gujarati', 'Bengali', 'Hinglish']).default('English') }), req.body);
+    const { inv, org } = await withTenant(c.shopId, async (db) => ({
+      inv: await one(db, "SELECT *, current_date - due_date AS late FROM invoices WHERE shop_id = $1 AND id = $2 AND status = 'Issued'", [c.shopId, b.invoiceId]),
+      org: await getOrg(db, c.shopId),
+    }));
+    if (!inv) throw new HttpError(404, 'Invoice not found', 'not_found');
+    const balance = Math.round((Number(inv.total) - Number(inv.amount_paid) - Number(inv.amount_credited)) * 100) / 100;
+    if (balance <= 0) throw new HttpError(409, 'This invoice is fully paid', 'paid');
+    const message = await draftReminder({
+      number: inv.number, date: inv.date, dueDate: inv.due_date, total: Number(inv.total), balance, customer: inv.customer.companyName || inv.customer.name,
+      daysOverdue: Math.max(0, Number(inv.late)), payLink: inv.public_token ? `${config.appUrl}/share/${inv.public_token}` : null, upiId: org.upi_id || null,
+    }, org.company_name, b.tone, b.language).catch(aiError);
+    res.json({ message, phone: inv.customer.phone ?? '' });
   }),
 );
 

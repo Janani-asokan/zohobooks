@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBankAccounts, useBranches, useInvoice, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { printInvoice, printRoute, type PrintPaper } from '@/lib/printInvoice';
@@ -16,6 +16,7 @@ import { Attachments } from '@/components/Attachments';
 import { useClickOutside } from '@/components/useClickOutside';
 import { fmtDate, money, todayISO } from '@/lib/format';
 import { useQuery } from '@tanstack/react-query';
+import { useAiEnabled } from '@/components/Assistant';
 
 const shareUrl = (token: string) => `${window.location.origin}/share/${token}`;
 
@@ -91,6 +92,8 @@ export default function InvoiceView() {
   const issueMut = useMut((b: Record<string, unknown>) => api.put(`/shop/invoices/${id}`, b), keys, { success: 'Invoice issued' });
   const mailMut = useMut((b: typeof mail) => api.post<{ status: string; detail: string }>(`/shop/invoices/${id}/email`, b), [['invoice']], { silentError: true });
   const refsMut = useMut((b: typeof refs) => api.put(`/shop/invoices/${id}/gst-refs`, b), keys, { silentError: true });
+  const aiOn = useAiEnabled();
+  const [aiRemind, setAiRemind] = useState(false);
   const remind = useMut((channel: 'email' | 'whatsapp') => api.post<{ status: string; detail: string }>(`/shop/invoices/${id}/reminders`, { channel }), [['invoice']], {});
 
   useEffect(() => {
@@ -169,6 +172,7 @@ export default function InvoiceView() {
                   {inv.balance > 0 && (
                     <a className="dropdown-item" href={waLink(phone, whatsappText(inv, org, true))} target="_blank" rel="noreferrer" onClick={() => { close(); remind.mutate('whatsapp'); }}><Bell size={16} /> WhatsApp payment reminder</a>
                   )}
+                  {inv.balance > 0 && aiOn && (canSell || me.can('payments.write')) && <button className="dropdown-item" onClick={() => { close(); setAiRemind(true); }}><Sparkles size={16} /> Write a reminder with AI</button>}
                   {canSell && <button className="dropdown-item" onClick={() => { close(); setMail({ to: inv.customer.email, cc: '', message: '' }); setMailOpen(true); }}><Mail size={16} /> Email invoice with PDF</button>}
                   <a className="dropdown-item" href={`mailto:${inv.customer.email}?subject=${encodeURIComponent(`Invoice ${inv.number} from ${org.companyName}`)}&body=${encodeURIComponent(whatsappText(inv, org))}`} onClick={close}><ExternalLink size={16} /> Email from my mail app</a>
                   {inv.balance > 0 && canSell && (
@@ -353,6 +357,7 @@ export default function InvoiceView() {
       </Modal>
 
       <ConfirmModal open={delOpen} onClose={() => setDelOpen(false)} title="Delete draft?" text="Drafts have no invoice number yet, so deleting one leaves no gap in your series." onConfirm={() => delMut.mutate(undefined, { onSuccess: () => navigate('/app/sales/invoices') })} />
+      {aiRemind && <AiReminder invoiceId={inv.id} phone={phone} onClose={() => setAiRemind(false)} onSent={() => remind.mutate('whatsapp')} />}
       <ConfirmModal open={!!delPayment} onClose={() => setDelPayment(null)} title="Remove payment?" confirmLabel="Remove" text="The invoice balance and the linked bank entry will be reversed." onConfirm={() => delPay.mutate(delPayment!)} />
     </div>
   );
@@ -375,5 +380,35 @@ function BillProfit({ id }: { id: string }) {
         {q.data!.lines.filter((l) => l.profit < 0).map((l) => <div key={l.name} className="small text-red" style={{ marginTop: 6 }}>{l.name} is sold below cost ({money(l.profit)})</div>)}
       </div>
     </div>
+  );
+}
+
+/** AI-written WhatsApp reminder in the customer's language and the tone the shop wants, editable before sending. */
+function AiReminder({ invoiceId, phone, onClose, onSent }: { invoiceId: string; phone: string; onClose: () => void; onSent: () => void }) {
+  const toast = useToast();
+  const [tone, setTone] = useState<'friendly' | 'polite' | 'firm'>('polite');
+  const [language, setLanguage] = useState(() => { try { return localStorage.getItem('c360.remind.lang') ?? 'English'; } catch { return 'English'; } });
+  const [text, setText] = useState('');
+  const gen = useMut(() => api.post<{ message: string }>('/shop/ai/reminder', { invoiceId, tone, language }), [], { silentError: true });
+  const write = () => { try { localStorage.setItem('c360.remind.lang', language); } catch { /* private mode */ } gen.mutate(undefined, { onSuccess: (r) => setText(r.message), onError: (e) => toast('error', e.message) }); };
+  useEffect(write, []);
+  return (
+    <Modal open onClose={onClose} title="Payment reminder" subtitle="Written by AI from this invoice. Edit anything before sending."
+      footer={<>
+        <button className="btn btn-secondary" disabled={!text} onClick={() => { navigator.clipboard?.writeText(text); toast('success', 'Message copied'); }}><Copy size={15} /> Copy</button>
+        <a className={`btn btn-primary ${!text ? 'disabled' : ''}`} href={text ? waLink(phone, text) : undefined} target="_blank" rel="noreferrer" onClick={() => { if (text) { onSent(); onClose(); } }}><MessageCircle size={15} /> Send on WhatsApp</a>
+      </>}>
+      <div className="stack" style={{ gap: 12 }}>
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+          <Segmented value={tone} onChange={setTone} options={[{ value: 'friendly', label: 'Friendly' }, { value: 'polite', label: 'Polite' }, { value: 'firm', label: 'Firm' }]} />
+          <select className="select" style={{ width: 150 }} value={language} onChange={(e) => setLanguage(e.target.value)} aria-label="Language">
+            {['English', 'Hinglish', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', 'Marathi', 'Gujarati', 'Bengali'].map((l) => <option key={l}>{l}</option>)}
+          </select>
+          <button className="btn btn-soft" onClick={write} disabled={gen.isPending}>{gen.isPending ? <Loader2 size={15} className="spin" /> : <Sparkles size={15} />} Rewrite</button>
+        </div>
+        {gen.isPending && !text ? <div className="skeleton" style={{ height: 140 }} /> : <textarea className="textarea" rows={8} value={text} onChange={(e) => setText(e.target.value)} aria-label="Reminder message" />}
+        {!phone && <div className="small muted">This customer has no phone number. Copy the message, or add their number to send on WhatsApp.</div>}
+      </div>
+    </Modal>
   );
 }

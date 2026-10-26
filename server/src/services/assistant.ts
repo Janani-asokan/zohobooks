@@ -287,3 +287,119 @@ export async function stockAdvice(ins: StockInsights, shop: { name: string; stat
   if (response.stop_reason === 'refusal' || !response.parsed_output) throw new HttpError(422, 'Couldn’t prepare stock advice right now.', 'ai_no_answer');
   return response.parsed_output;
 }
+
+/* ---------- Type or speak a bill ---------- */
+
+export interface ParsedBill {
+  customer: { id: string; name: string } | null;
+  customerText: string | null;
+  lines: Array<{ itemId: string; name: string; qty: number; rate: number | null; discount: number }>;
+  unmatched: string[];
+  billDiscount: { kind: 'percent' | 'amount'; value: number } | null;
+  paymentMode: 'Cash' | 'UPI' | 'Card' | null;
+  pricesIncludeTax: boolean | null;
+  notes: string | null;
+}
+
+/**
+ * Turns "3 Logitech mouse and a Dell monitor for Nila Textiles, 5% off, paid by UPI" into bill lines. The model looks up
+ * the shop's real items and customers through read-only tools and finishes by calling fill_bill; every id it returns is
+ * checked against the database before the form sees it.
+ */
+export async function parseBill(c: UserCtx, text: string, context: 'invoice' | 'pos'): Promise<ParsedBill> {
+  const q = <R>(fn: (db: Parameters<Parameters<typeof withTenant>[1]>[0]) => Promise<R>) => withTenant(c.shopId, fn);
+  let result: ParsedBill | null = null;
+  const tools = [
+    betaZodTool({
+      name: 'search_items',
+      description: 'Find the shop\'s items by words from the name, brand, SKU or barcode. Returns up to 8 matches with id, name, unit, price and stock. Search once per product mentioned; try a shorter query if nothing matches.',
+      inputSchema: z.object({ query: z.string().min(1) }),
+      run: async ({ query }) => q(async (db) => {
+        const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 1).slice(0, 5);
+        const rows = await many(db, `SELECT i.id, i.name, i.sku, i.unit, i.sp1, i.mrp, coalesce((SELECT sum(qty) FROM item_stock s WHERE s.item_id = i.id), 0) AS stock
+            FROM items i WHERE i.shop_id = $1 AND NOT i.archived AND NOT i.is_group
+              AND (i.barcode = $2 OR lower(i.sku) = $2 OR (SELECT bool_and(lower(i.name || ' ' || i.brand || ' ' || i.sku || ' ' || i.category) LIKE '%' || w || '%') FROM unnest($3::text[]) w))
+            ORDER BY length(i.name) LIMIT 8`, [c.shopId, query.trim().toLowerCase(), words.length ? words : [query.toLowerCase()]]);
+        return JSON.stringify(rows.map((r) => ({ id: r.id, name: r.name, sku: r.sku, unit: r.unit, price: Number(r.sp1), mrp: r.mrp === null ? null : Number(r.mrp), stock: Number(r.stock) })));
+      }),
+    }),
+    betaZodTool({
+      name: 'search_customers',
+      description: 'Find customers by name, company or phone. Returns up to 6 matches with id.',
+      inputSchema: z.object({ query: z.string().min(1) }),
+      run: async ({ query }) => q(async (db) => JSON.stringify(await many(db,
+        `SELECT id, name, company_name, phone FROM customers WHERE shop_id = $1 AND (name ILIKE '%' || $2 || '%' OR company_name ILIKE '%' || $2 || '%' OR phone LIKE '%' || $2 || '%') ORDER BY company_name, name LIMIT 6`, [c.shopId, query.trim()]))),
+    }),
+    betaZodTool({
+      name: 'fill_bill',
+      description: 'Call this once at the end with the bill to fill in. Use only ids returned by the searches.',
+      inputSchema: z.object({
+        customerId: z.string().nullable().describe('id from search_customers, or null for walk-in / not found'),
+        customerText: z.string().nullable().describe('the customer as the user said it, if any'),
+        lines: z.array(z.object({ itemId: z.string(), qty: z.number().positive(), rate: z.number().min(0).nullable().describe('only if the user said a price'), discount: z.number().min(0).max(100).nullable().describe('line discount % if said for this item') })),
+        unmatched: z.array(z.string()).describe('products the user mentioned that no search found'),
+        billDiscount: z.object({ kind: z.enum(['percent', 'amount']), value: z.number().min(0) }).nullable().describe('discount on the whole bill, e.g. "5% off" or "₹100 off"'),
+        paymentMode: z.enum(['Cash', 'UPI', 'Card']).nullable(),
+        pricesIncludeTax: z.boolean().nullable().describe('true if the user said MRP / inclusive prices'),
+        notes: z.string().nullable(),
+      }),
+      run: async (b) => {
+        const ids = [...new Set(b.lines.map((l) => l.itemId))];
+        const found = await q((db) => many(db, 'SELECT id, name FROM items WHERE shop_id = $1 AND id::text = ANY($2::text[]) AND NOT archived AND NOT is_group', [c.shopId, ids]));
+        const names = new Map(found.map((f) => [f.id, f.name]));
+        const cust = b.customerId ? await q((db) => one(db, 'SELECT id, coalesce(nullif(company_name, \'\'), name) AS name FROM customers WHERE shop_id = $1 AND id::text = $2', [c.shopId, b.customerId])) : null;
+        result = {
+          customer: cust ? { id: cust.id, name: cust.name } : null, customerText: b.customerText,
+          lines: b.lines.filter((l) => names.has(l.itemId)).map((l) => ({ itemId: l.itemId, name: names.get(l.itemId)!, qty: l.qty, rate: l.rate, discount: l.discount ?? 0 })),
+          unmatched: b.unmatched, billDiscount: b.billDiscount && b.billDiscount.value > 0 ? b.billDiscount : null, paymentMode: b.paymentMode, pricesIncludeTax: b.pricesIncludeTax, notes: b.notes,
+        };
+        return 'Filled. Reply with one short sentence summarising the bill.';
+      },
+    }),
+  ];
+  await ai().beta.messages.toolRunner({
+    model: config.ai.model,
+    max_tokens: 8000,
+    max_iterations: 10,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: `You fill in a ${context === 'pos' ? 'counter (POS) bill' : 'sales invoice'} for an Indian shop from what the cashier typed or said (English, Hinglish or a mix; numbers may be words: "do" = 2, "teen" = 3, "ek" = 1, "dozen" = 12).
+Search for every product mentioned and pick the closest match; if two are equally likely, prefer the one in stock. Search the customer if one is named.
+Never invent ids. Then call fill_bill exactly once.`,
+    tools,
+    messages: [{ role: 'user', content: text }],
+  });
+  if (!result) throw new HttpError(422, 'Couldn’t understand that bill. Try naming the items and quantities, e.g. “2 USB cable, 1 mouse”.', 'ai_no_answer');
+  return result;
+}
+
+/* ---------- Payment reminder messages ---------- */
+
+export async function draftReminder(inv: { number: string; date: string; dueDate: string; total: number; balance: number; customer: string; daysOverdue: number; payLink: string | null; upiId: string | null },
+  shop: string, tone: 'friendly' | 'polite' | 'firm', language: string): Promise<string> {
+  const fmt = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const daysToDue = Math.round((Date.parse(`${inv.dueDate}T00:00:00Z`) - Date.parse(`${todayISO()}T00:00:00Z`)) / 864e5);
+  // The model gets the due status as words, so it never has to work out dates itself.
+  const facts = {
+    customer: inv.customer, invoice: inv.number, invoiceDate: fmt(inv.date), amountDue: `₹${inv.balance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`,
+    dueStatus: daysToDue > 0 ? `due on ${fmt(inv.dueDate)} (in ${daysToDue} day${daysToDue === 1 ? '' : 's'})` : daysToDue === 0 ? `due today, ${fmt(inv.dueDate)}` : `overdue by ${-daysToDue} day${daysToDue === -1 ? '' : 's'} (was due on ${fmt(inv.dueDate)})`,
+    payLink: inv.payLink, upiId: inv.upiId,
+  };
+  const response = await ai().beta.messages.create({
+    model: config.ai.model,
+    max_tokens: 2000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: `You write one WhatsApp payment reminder for an Indian shop, ${shop}, using only the facts given. Language: ${language}${language === 'English' || language === 'Hinglish' ? '' : ' in its own script; keep the invoice number, amount, link and UPI ID exactly as given'}.
+Tone: ${tone === 'firm' ? 'firm but respectful; if overdue, ask for payment within 3 days' : tone === 'friendly' ? 'warm and casual, like a shopkeeper who knows the customer' : 'polite and professional'}.
+Take the timing from dueStatus (translate it into the message language, keeping its dates and numbers). Include the amount due, the invoice number, and the payment link and UPI ID when given. Under 80 words, no subject line, no placeholders. You may end with 🙏.
+Reply with the finished message only.`,
+    messages: [{ role: 'user', content: JSON.stringify(facts) }],
+  });
+  if (response.stop_reason === 'refusal') throw new HttpError(422, 'Couldn’t write this reminder.', 'ai_no_answer');
+  const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+  if (!text) throw new HttpError(502, 'The AI returned an empty message. Try again.', 'ai_failed');
+  return text;
+}

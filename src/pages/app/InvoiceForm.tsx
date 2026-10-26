@@ -11,6 +11,8 @@ import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { BillOptionsCard, convertRates, LineItemsEditor, priceFor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type BillOptions, type DraftLine } from '@/components/LineItems';
 import { useShortcuts } from '@/components/useShortcuts';
 import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
+import { QuickBill, type ParsedBill } from '@/components/QuickBill';
+import { useAiEnabled } from '@/components/Assistant';
 import { attachFile } from '@/components/Attachments';
 import { useDocLines } from '@/lib/docLines';
 import { matchParty } from '@/lib/match';
@@ -131,6 +133,23 @@ function Form({ existing }: { existing?: Invoice }) {
     }
     setInvFile(file);
   };
+  const aiOn = useAiEnabled();
+  /** Lines and options from "Type or speak the bill". */
+  const applyQuick = (b: ParsedBill) => {
+    const c = b.customer ? customers.find((x) => x.id === b.customer!.id) : undefined;
+    if (c) selectCustomer(c.id);
+    const tier = (c ?? customer)?.tier ?? 'SP1';
+    const inclusive = b.pricesIncludeTax ?? billOpts.pricesIncludeTax;
+    if (b.lines.length) {
+      const fresh = b.lines.map((l) => {
+        const it = items.find((i) => i.id === l.itemId);
+        return { key: uid('ln_'), itemId: l.itemId, qty: l.qty, tier, discount: l.discount, rate: l.rate ?? (it ? priceFor(it, tier, withGst && inclusive) : 0) };
+      });
+      setLines((ls) => [...ls.filter((l) => l.itemId), ...fresh]);
+    }
+    if (b.billDiscount || b.pricesIncludeTax !== null) setBillOpts((o) => ({ pricesIncludeTax: b.pricesIncludeTax ?? o.pricesIncludeTax, billDiscount: b.billDiscount ?? o.billDiscount }));
+    if (b.notes) setNotes((n) => [n, b.notes].filter(Boolean).join('\n'));
+  };
   const [creditPrompt, setCreditPrompt] = useState<{ mode: 'issue' | 'issue-pay'; message: string } | null>(null);
   const save = (mode: 'draft' | 'issue' | 'issue-pay', overrideCreditLimit = false) => {
     setTouched(true);
@@ -171,6 +190,7 @@ function Form({ existing }: { existing?: Invoice }) {
 
       <div className="card">
         <div className="card-body">
+          {!existing && aiOn && <div style={{ marginBottom: 14 }}><QuickBill context="invoice" onApply={applyQuick} /></div>}
           {!existing && (
             <div style={{ marginBottom: 16 }}>
               <SmartUpload kind="invoice" toRows={fillRows} onApply={(k, r, f) => void applyFill(k, r, f)} extra={docLines.extra}

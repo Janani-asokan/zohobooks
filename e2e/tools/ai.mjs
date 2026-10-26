@@ -60,7 +60,7 @@ await step('sales order filled from a photo (AI reader)', async () => {
 
 await step('Ask AI answers from shop data', async () => {
   await p.goto(B + '/app');
-  await p.getByRole('button', { name: 'Ask AI' }).click();
+  await p.getByRole('button', { name: 'Ask AI', exact: true }).click();
   await p.locator('.ai-chip').first().click();
   await p.locator('.ai-msg.assistant:not(.ai-typing)').first().waitFor({ timeout: 90000 });
   const a = await p.locator('.ai-msg.assistant').first().innerText();
@@ -80,6 +80,41 @@ await step('Fill with AI on a new item', async () => {
   const hsn = await p.locator('input[placeholder="e.g. 8471"]').inputValue();
   if (!/^\d{4,8}$/.test(hsn)) throw new Error('HSN not filled: ' + hsn);
   if (out) await p.screenshot({ path: `${out}/ai-item.png` });
+});
+
+await step('type a bill in plain words → invoice lines (AI)', async () => {
+  await p.goto(B + '/app/sales/invoices/new');
+  await p.locator('textarea[aria-label="Bill in your words"]').fill('3 logitech mouse aur ek dell monitor for Nila Textiles, 5% off');
+  await p.getByRole('button', { name: 'Fill', exact: true }).click();
+  await p.locator('.toast', { hasText: 'items added' }).first().waitFor({ timeout: 90000 });
+  const sel = await p.locator('select[aria-label=Customer] option:checked').innerText();
+  if (!/Nila/.test(sel)) throw new Error('customer not picked: ' + sel);
+  const totals = await p.locator('.card', { hasText: 'Total (₹)' }).last().innerText();
+  if (!/Bill discount 5%/.test(totals)) throw new Error('bill discount not applied');
+  if ((await p.locator('[data-line]').count()) < 2) throw new Error('lines not added');
+  if (out) await p.screenshot({ path: `${out}/ai-quickbill.png` });
+});
+
+await step('speak/type a POS bill (AI)', async () => {
+  await p.goto(B + '/app/pos');
+  await p.locator('textarea[aria-label="Bill in your words"]').fill('do pen drive 64gb aur teen usb c cable, UPI');
+  await p.keyboard.press('Enter');
+  await p.locator('.toast', { hasText: 'items added' }).first().waitFor({ timeout: 90000 });
+  if ((await p.locator('.pos-line').count()) < 2) throw new Error('cart not filled');
+  if (!(await p.getByRole('button', { name: 'UPI' }).first().getAttribute('class'))?.includes('active')) throw new Error('UPI not selected');
+  if (out) await p.screenshot({ path: `${out}/ai-pos.png` });
+});
+
+await step('AI payment reminder in Tamil', async () => {
+  const id = await p.evaluate(async () => (await (await fetch('/api/shop/invoices')).json()).find((i) => i.status === 'Issued' && i.balance > 0).id);
+  await p.goto(`${B}/app/sales/invoices/${id}`);
+  await p.getByRole('button', { name: /^Share/ }).click();
+  await p.getByRole('button', { name: 'Write a reminder with AI' }).click();
+  await p.locator('textarea[aria-label="Reminder message"]').waitFor({ timeout: 90000 });
+  await p.locator('select[aria-label=Language]').selectOption('Tamil');
+  await p.getByRole('button', { name: 'Rewrite' }).click();
+  await p.waitForFunction(() => /[\u0B80-\u0BFF]/.test(document.querySelector('textarea[aria-label="Reminder message"]')?.value ?? ''), null, { timeout: 90000 });
+  if (out) await p.screenshot({ path: `${out}/ai-reminder.png` });
 });
 
 console.log(results.join('\n'));

@@ -454,3 +454,21 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .ai-actions .pri-medium .pri { background: var(--amber-50); color: var(--amber-700); }
 .ai-actions .pri-low .pri { background: var(--sage-soft); color: var(--sage-ink); }
 .ai-season { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px dashed var(--brand-200); font-size: 13px; color: var(--ink-800); display: flex; gap: 8px; align-items: flex-start; }
+
+/* ---------- Type or speak the bill ---------- */
+.quick-bill { border: 1.5px dashed var(--brand-200); border-radius: 16px; padding: 12px 14px; background: linear-gradient(135deg, var(--brand-50), var(--surface)); }
+.quick-bill.compact { padding: 10px 12px; }
+.qb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.qb-head strong { color: var(--ink-900); font-size: 14px; }
+.qb-icon { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-grad); color: #fff; flex: none; box-shadow: var(--shadow-rose); }
+.qb-lang { width: auto; height: 32px; font-size: 12px; padding: 0 28px 0 10px; }
+.qb-row { display: flex; gap: 8px; align-items: flex-end; }
+.qb-row .textarea { flex: 1; min-height: 42px; resize: vertical; }
+.quick-bill.compact .qb-row .textarea { min-height: 40px; height: 40px; }
+.qb-mic { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--brand-700); flex: none; }
+.qb-mic.on { background: var(--red-500); color: #fff; border-color: transparent; animation: qb-pulse 1.2s ease-in-out infinite; }
+@keyframes qb-pulse { 50% { box-shadow: 0 0 0 6px rgba(210, 75, 75, .18); } }
+.qb-row .btn { height: 42px; }
+.qb-listening { margin-top: 6px; color: var(--red-600); display: flex; align-items: center; gap: 6px; }
+.qb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red-500); animation: qb-pulse 1.2s infinite; }
+.qb-warn { margin-top: 6px; color: var(--amber-700); display: flex; align-items: center; gap: 6px; }

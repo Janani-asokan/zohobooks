@@ -13,6 +13,8 @@ import { upiLink, useQr } from '@/components/qr';
 import { useShortcuts } from '@/components/useShortcuts';
 import { applyBillAdjustments, computeTotals, lineAmount, type BillDiscount } from '@/lib/calc';
 import { priceFor } from '@/components/LineItems';
+import { QuickBill, type ParsedBill } from '@/components/QuickBill';
+import { useAiEnabled } from '@/components/Assistant';
 import { Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
@@ -71,6 +73,21 @@ export default function Pos() {
   const add = (it: Item) => setCart((c) => (c.some((l) => l.itemId === it.id) ? c.map((l) => (l.itemId === it.id ? { ...l, qty: l.qty + 1 } : l)) : [...c, { itemId: it.id, qty: 1 }]));
   const setQty = (id: string, qty: number) => setCart((c) => (qty <= 0 ? c.filter((l) => l.itemId !== id) : c.map((l) => (l.itemId === id ? { ...l, qty } : l))));
 
+  const aiOn = useAiEnabled();
+  const applyQuick = (b: ParsedBill) => {
+    setCart((c) => {
+      const next = [...c];
+      for (const l of b.lines) {
+        const i = next.findIndex((x) => x.itemId === l.itemId);
+        if (i >= 0) next[i] = { ...next[i]!, qty: next[i]!.qty + l.qty }; else next.push({ itemId: l.itemId, qty: l.qty });
+      }
+      return next;
+    });
+    if (b.customer) setCustomerId(b.customer.id);
+    if (b.paymentMode) setMode(b.paymentMode);
+    if (b.billDiscount) setDisc(b.billDiscount);
+    if (b.pricesIncludeTax !== null && withGst) setMrp(b.pricesIncludeTax);
+  };
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
     return items.filter((i) => (kind === 'all' || i.type === kind) && (!s || [i.name, i.sku, i.barcode].some((v) => v.toLowerCase().includes(s)))).slice(0, 60);
@@ -111,6 +128,7 @@ export default function Pos() {
           </div>
           <Segmented value={kind} onChange={setKind} options={[{ value: 'all', label: 'All' }, { value: 'Goods', label: 'Goods', icon: Package }, { value: 'Services', label: 'Services', icon: Wrench }]} />
         </div>
+        {aiOn && <div style={{ marginBottom: 12 }}><QuickBill context="pos" onApply={applyQuick} compact /></div>}
         <div className="pos-grid">
           {shown.map((it) => {
             const st = branchId ? it.stockByBranch[branchId] ?? 0 : it.stock;
