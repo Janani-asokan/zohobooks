@@ -100,11 +100,26 @@ The uploaded file is kept on the record it filled. Every record also has an **At
 
 Without `ANTHROPIC_API_KEY`, reading runs entirely on the server: PDF text extraction (pdf.js) and English OCR (Tesseract, model bundled, no download). Photos and screenshots are scaled up and contrast-boosted before OCR, and scanned PDFs (no text layer) are rendered and OCR'd page by page. With the key, the smart reader (Claude) also handles handwriting, small screenshots and unusual layouts, and falls back to the built-in reader if it is unavailable.
 
+**Billing extras:** MRP (GST-inclusive) billing, a discount on the whole bill, POS split payments (cash + UPI + card), bill-wise profit (item cost saved on each line; hidden from roles without cost access), and delivery challans (packed → dispatched → delivered → invoiced).
+
+**Smart Reorder (Inventory):** sales speed per item, days of stock left against the supplier's delivery time, suggested order quantities and the usual vendor, one-click draft purchase orders, dead stock, slow movers and batches expiring within 60 days.
+
+**Tally & Import (Accounting):** Tally XML export of masters and vouchers (sales, receipts, purchases, payments; every voucher balances), Tally masters import (UTF-8 or UTF-16), and CSV import from any software with column matching.
+
+**Field staff:** *My Day* for salespeople (start/end day, GPS check-in at customers, outcome, order value, collection) and *Field Team* for owners (map of routes and visits, totals, export). Location is recorded only between Start day and End day. Map tiles come from OpenStreetMap.
+
+**Weighing scale:** POS reads USB/serial scales (Chrome or Edge on a computer) and bills weighed items by the reading.
+
 **AI features (with `ANTHROPIC_API_KEY`):**
 
 - **Smart reader** for every upload box above.
 - **Ask AI** (top bar): ask about sales, dues, customers, stock, bills and expenses in plain words. It answers from the shop's live data through read-only lookups that respect the user's role (sales staff can't see purchases, cost prices need `items.cost`), and it can't change anything.
 - **Fill with AI** on the new-item form: suggests the HSN/SAC code, GST rate, unit, category, brand and a short description from the item name. It only fills empty fields.
+- **Type or speak the bill** on invoices and POS (English, Hinglish, 9 Indian languages by voice): finds your items and customer, discount and payment mode.
+- **AI stock advice** on Smart Reorder, with festival tips from a fixed festival calendar.
+- **AI payment reminders** for WhatsApp in 10 languages and three tones.
+- **AI column matching** when importing lists from other software.
+- **AI day summary** of the field team.
 
 Without the key these buttons are hidden and everything else works as before. Set the key in the Render dashboard (Environment → `ANTHROPIC_API_KEY`); never commit it.
 

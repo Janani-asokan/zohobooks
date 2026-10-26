@@ -111,7 +111,11 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
   useEffect(() => {
     if (params.get('new')) {
       open();
+      // "Take order" from a field visit pre-picks the customer.
+      const cust = params.get('customer');
+      if (cust) setCustomerId(cust);
       params.delete('new');
+      params.delete('customer');
       setParams(params, { replace: true });
     }
   }, []);

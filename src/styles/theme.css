@@ -495,3 +495,40 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .dt-field.need .select { border-color: var(--red-500); }
 .import-result { display: grid; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--sage-soft); }
 @media (max-width: 640px) { .dt-step { grid-template-columns: 28px 1fr; } .dt-step .btn { grid-column: 1 / -1; } }
+
+/* ---------- Field staff ---------- */
+.field-hero { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 18px 20px; background: var(--blush-grad); }
+.field-hero.on { background: linear-gradient(135deg, var(--sage-soft), #fff); border-color: var(--sage); }
+.fh-status { display: flex; gap: 12px; align-items: center; }
+.fh-status strong { font-size: 18px; color: var(--ink-900); }
+.fh-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ink-300, #b9aea4); flex: none; display: inline-block; }
+.field-hero.on .fh-dot, .duty-bar .fh-dot { background: var(--green-600, #3d8b5a); box-shadow: 0 0 0 0 rgba(61, 139, 90, .5); animation: duty-pulse 1.8s infinite; }
+@keyframes duty-pulse { 70% { box-shadow: 0 0 0 10px rgba(61, 139, 90, 0); } 100% { box-shadow: 0 0 0 0 rgba(61, 139, 90, 0); } }
+.field-privacy { display: flex; gap: 6px; align-items: center; margin: 8px 4px 0; }
+.field-stats { grid-template-columns: repeat(3, 1fr); }
+.field-stats .fs { display: flex; gap: 10px; align-items: center; padding: 14px; color: var(--brand-700); }
+.field-stats .fs strong { display: block; font-size: 17px; color: var(--ink-900); }
+.field-stats .fs span { font-size: 12px; color: var(--ink-500); }
+.field-checkin { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 22px; border-radius: 18px; border: none; background: var(--accent-grad); color: #fff; cursor: pointer; box-shadow: var(--shadow-rose); font-size: 15px; }
+.field-checkin:disabled { opacity: .7; }
+.field-open { padding: 16px 18px; border: 2px solid var(--sage); }
+.fo-icon { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: var(--sage-grad); color: #fff; flex: none; }
+.field-list { list-style: none; margin: 0; padding: 0; }
+.field-list li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); }
+.fl-time { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--brand-700); min-width: 64px; font-size: 13px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-btn.on { border-color: var(--brand-500); background: var(--brand-50); color: var(--brand-700); font-weight: 600; }
+.duty-bar { display: flex; align-items: center; gap: 8px; padding: 6px 16px; background: var(--sage-soft); color: var(--sage-ink); font-size: 12.5px; font-weight: 600; text-decoration: none; }
+.field-team { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: stretch; }
+.ft-people { padding: 0; overflow: hidden; max-height: 560px; overflow-y: auto; }
+.ft-person { width: 100%; display: flex; gap: 10px; padding: 12px 14px; border: none; border-top: 1px solid var(--border); background: none; cursor: pointer; color: var(--ink-800); }
+.ft-person.on, .ft-person:hover { background: var(--brand-50); }
+.ft-color { width: 6px; border-radius: 6px; flex: none; }
+.ft-map { padding: 0; overflow: hidden; min-height: 560px; }
+.ft-map-el { width: 100%; height: 100%; min-height: 560px; }
+.fv-pin span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 12px; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+.leaflet-container { font-family: inherit; }
+@media (max-width: 900px) { .field-team { grid-template-columns: 1fr; } .ft-map, .ft-map-el { min-height: 380px; } }
+@media (max-width: 480px) { .field-stats { grid-template-columns: 1fr; } }
+.scale-btn { height: 46px; display: inline-flex; align-items: center; gap: 6px; }
+.scale-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber-600, #d08a2c); } .scale-dot.ok { background: var(--green-600, #3d8b5a); }

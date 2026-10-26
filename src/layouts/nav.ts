@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, type LucideIcon,
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, type LucideIcon,
 } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import type { PaletteAction } from './CommandPalette';
@@ -10,7 +10,7 @@ type Can = (p: Permission) => boolean;
 
 const CHILD_ICONS: Record<string, LucideIcon> = {
   Customers: UserRound, Quotes: FileSignature, 'Sales Orders': ClipboardList, Invoices: FileText, 'Delivery Challans': Truck, 'Payments Received': IndianRupee,
-  'Credit Notes': FileMinus, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, Vendors: Truck, 'Purchase Orders': ClipboardList,
+  'Credit Notes': FileMinus, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, 'My Day (field)': MapPin, 'Field Team': MapPinned, Vendors: Truck, 'Purchase Orders': ClipboardList,
   Bills: Receipt, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Stock Adjustments': SlidersHorizontal,
   Transfers: ArrowLeftRight, 'Smart Reorder': BrainCircuit, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank, 'Tally & Import': RefreshCw,
 };
@@ -30,6 +30,8 @@ export function buildNav(can: Can): NavItem[] {
       { label: 'Credit Notes', to: '/app/sales/credit-notes' },
       ...(can('admin') ? [{ label: 'Recurring Invoices', to: '/app/sales/recurring' }] : []),
       ...(can('sales.write') ? [{ label: 'Point of Sale', to: '/app/pos' }] : []),
+      { label: 'My Day (field)', to: '/app/field' },
+      ...(can('field.view') ? [{ label: 'Field Team', to: '/app/field/team' }] : []),
     ],
   });
   if (can('purchases.read')) {
@@ -127,6 +129,8 @@ export function buildActions(can: Can): PaletteAction[] {
   add(true, 'Go to', 'Stock adjustments', SlidersHorizontal, '/app/inventory/adjustments', 'stock count damaged expired write off');
   add(true, 'Go to', 'Transfers', ArrowLeftRight, '/app/inventory/transfers', 'move stock between branches in transit');
   add(can('items.write') || can('purchases.read'), 'Go to', 'Smart Reorder', BrainCircuit, '/app/inventory/reorder', 'reorder low stock purchase suggestions dead stock expiry AI');
+  add(true, 'Go to', 'My Day (field visits)', MapPin, '/app/field', 'salesman check in visit gps start day');
+  add(can('field.view'), 'Go to', 'Field Team', MapPinned, '/app/field/team', 'salesman tracking map route gps team');
   add(true, 'Go to', 'Tally & Import', RefreshCw, '/app/accounting/tally', 'tally export import xml vyapar busy excel csv migrate');
   add(true, 'Go to', 'Delivery Challans', Truck, '/app/sales/challans', 'dispatch delivery order tracking vehicle');
   add(true, 'Go to', 'Stock summary', Boxes, '/app/inventory/stock-summary', 'inventory valuation closing stock report');

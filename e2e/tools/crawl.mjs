@@ -4,7 +4,7 @@ import { chromium } from 'playwright';
 const [out, email = 'owner@shop.com', pass = 'owner123'] = process.argv.slice(2);
 const B = process.env.BASE ?? 'http://localhost:5173';
 const W = Number(process.env.W ?? 1440);
-const ROUTES = ['/app', '/app/pos', '/app/items', '/app/items/new', '/app/items/labels', '/app/sales/customers', '/app/sales/quotes', '/app/sales/orders', '/app/sales/challans', '/app/sales/invoices',
+const ROUTES = ['/app', '/app/pos', '/app/items', '/app/items/new', '/app/items/labels', '/app/sales/customers', '/app/sales/quotes', '/app/sales/orders', '/app/sales/challans', '/app/field', '/app/field/team', '/app/sales/invoices',
   '/app/sales/invoices/new', '/app/sales/payments', '/app/sales/credit-notes', '/app/sales/recurring', '/app/purchases/vendors', '/app/purchases/orders', '/app/purchases/bills',
   '/app/purchases/payments', '/app/purchases/expenses', '/app/inventory/warehouses', '/app/inventory/adjustments', '/app/inventory/transfers', '/app/inventory/reorder', '/app/accounting/tally', '/app/inventory/stock-summary',
   '/app/banking', '/app/accounting/accounts', '/app/accounting/journals', '/app/accounting/ledger?account=ar', '/app/reports', '/app/reports/gst', '/app/reports/profit-loss',

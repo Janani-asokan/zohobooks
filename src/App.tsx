@@ -39,6 +39,8 @@ const Transfers = lazy(() => import('./pages/app/Transfers'));
 const DeliveryChallans = lazy(() => import('./pages/app/DeliveryChallans'));
 const StockInsights = lazy(() => import('./pages/app/StockInsights'));
 const DataTransfer = lazy(() => import('./pages/app/DataTransfer'));
+const FieldDay = lazy(() => import('./pages/app/FieldDay'));
+const FieldTeam = lazy(() => import('./pages/app/FieldTeam'));
 const StockSummary = lazy(() => import('./pages/app/StockSummary'));
 const Banking = lazy(() => import('./pages/app/Banking'));
 const Reports = lazy(() => import('./pages/app/Reports'));
@@ -98,6 +100,8 @@ export default function App() {
             <Route path="sales/quotes" element={<SalesOrders key="quote" kind="quote" />} />
             <Route path="sales/orders" element={<SalesOrders key="order" />} />
             <Route path="sales/challans" element={<DeliveryChallans />} />
+            <Route path="field" element={<FieldDay />} />
+            <Route path="field/team" element={<FieldTeam />} />
             <Route path="sales/invoices" element={<Invoices />} />
             <Route path="sales/invoices/new" element={<InvoiceForm />} />
             <Route path="sales/invoices/:id" element={<InvoiceView />} />

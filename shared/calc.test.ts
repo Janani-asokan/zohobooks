@@ -112,3 +112,20 @@ describe('reading CSV from other software', () => {
     expect(parseCsvRaw('Name\tPrice\nA, B\t5\n').rows[0]).toEqual({ Name: 'A, B', Price: '5' });
   });
 });
+
+import { parseScale, qtyFromReading } from './scale';
+describe('weighing scale readings', () => {
+  it('reads the common scale formats', () => {
+    expect(parseScale('ST,GS,+  1.250kg')).toEqual({ kg: 1.25, stable: true });
+    expect(parseScale('US,GS,+  0.980kg')).toEqual({ kg: 0.98, stable: false });
+    expect(parseScale('   2.005 kg')).toEqual({ kg: 2.005, stable: true });
+    expect(parseScale('750 g')).toEqual({ kg: 0.75, stable: true });
+    expect(parseScale('+001250')).toEqual({ kg: 1.25, stable: true });
+    expect(parseScale('W:0001.250')).toEqual({ kg: 1.25, stable: true });
+    expect(parseScale('READY')).toBeNull();
+  });
+  it('turns a reading into the item’s unit', () => {
+    expect(qtyFromReading(1.25, 'kg')).toBe(1.25);
+    expect(qtyFromReading(0.75, 'g')).toBe(750);
+  });
+});

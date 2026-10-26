@@ -1,22 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, FileText, Boxes, ShoppingBag, Landmark, BarChart3, ShieldCheck, Check, Camera, Smartphone, Store, Calculator, Users,
-  Sparkles, BellRing, IndianRupee, Send, ChevronDown, Zap, LogIn, ScanLine,
+  ArrowRight, Boxes, BarChart3, Check, Camera, Store, Calculator, Users,
+  Sparkles, BellRing, IndianRupee, Send, ChevronDown, Zap, LogIn, ScanLine, Mic, BrainCircuit, MapPinned, RefreshCw, Split, Truck, TrendingUp, MessageCircle, Scale,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/Logo';
 import { HeroArt, Photo, SceneArt } from '@/components/Photo';
 import '@/styles/landing.css';
 
 const FEATURES = [
-  { icon: FileText, tone: 'rose', title: 'GST invoices in 30 seconds', text: 'Pick the customer, scan or search items, and print. CGST, SGST or IGST is chosen for you.' },
-  { icon: Camera, tone: 'sage', title: 'Upload a PDF or photo', text: 'Snap a bill or price list. Prices like “30k” fill themselves into the form.' },
-  { icon: Boxes, tone: 'gold', title: 'Stock that updates itself', text: 'Sales take stock out, bills put it back. Low-stock alerts before you run out.' },
-  { icon: ShoppingBag, tone: 'blush', title: 'Purchases & vendors', text: 'Purchase orders, bills and payments, with a clear list of who to pay this week.' },
-  { icon: Landmark, tone: 'cocoa', title: 'Books done for you', text: 'Profit & loss, balance sheet and cash flow, built from your bills and invoices.' },
-  { icon: BarChart3, tone: 'rose', title: 'Reports in one click', text: 'GSTR-1, GSTR-3B, sales and stock reports. Download as PDF, Excel or CSV.' },
-  { icon: ShieldCheck, tone: 'sage', title: 'Safe for your team', text: 'Give staff their own login and decide what each person can see.' },
-  { icon: Smartphone, tone: 'gold', title: 'Works on your phone', text: 'Check stock, share an invoice on WhatsApp or collect a payment from anywhere.' },
+  { icon: Mic, tone: 'rose', title: 'Speak the bill', text: 'Say “3 mouse aur ek monitor for Nila Textiles, 5% off, UPI” in English, Hindi, Tamil or Hinglish. AI fills the invoice.' },
+  { icon: Camera, tone: 'sage', title: 'Photo to bill (AI OCR)', text: 'Snap a supplier bill, purchase order or receipt. Items, GST and totals fill themselves, even from small screenshots.' },
+  { icon: BrainCircuit, tone: 'gold', title: 'Smart reorder', text: 'Knows how fast each item sells, warns before you run out, and turns the shopping list into purchase orders in one tap.' },
+  { icon: Sparkles, tone: 'blush', title: 'Ask AI about your shop', text: '“Who owes me the most?” “What sold best this Diwali?” Answers from your own data in seconds.' },
+  { icon: MapPinned, tone: 'cocoa', title: 'Salesman tracking', text: 'Field staff check in at customers. See their route, visits, orders and collections on a map, with an AI day summary.' },
+  { icon: RefreshCw, tone: 'rose', title: 'Tally both ways', text: 'Send masters and vouchers to Tally for your CA, or move in from Tally, Vyapar or Busy. AI matches the columns.' },
+  { icon: Split, tone: 'sage', title: 'Split payments & MRP billing', text: 'Part cash, part UPI on one bill. Type MRP prices and GST is worked out inside them. Discount on the whole bill.' },
+  { icon: Truck, tone: 'gold', title: 'Delivery challans', text: 'Packed, dispatched, delivered with the receiver’s name, then invoiced in one click.' },
+  { icon: TrendingUp, tone: 'blush', title: 'Profit on every bill', text: 'See the margin on each invoice and spot bills sold below cost before they hurt.' },
+  { icon: MessageCircle, tone: 'cocoa', title: 'WhatsApp reminders by AI', text: 'Polite, friendly or firm payment reminders in 10 Indian languages, with your UPI link.' },
+  { icon: BarChart3, tone: 'rose', title: 'GST returns & reports', text: 'GSTR-1, GSTR-3B, e-invoice and e-way bill JSON, P&L and balance sheet. PDF, Excel or CSV.' },
+  { icon: Scale, tone: 'sage', title: 'Barcode, thermal & scale', text: 'Scan barcodes, print thermal receipts and labels, and read weights from a USB weighing scale at the counter.' },
 ] as const;
 
 const AUDIENCE = [

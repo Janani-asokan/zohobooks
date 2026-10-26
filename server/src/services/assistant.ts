@@ -426,3 +426,26 @@ export async function mapColumns(kind: 'customers' | 'vendors' | 'items' | null,
   const valid = new Set(headers);
   return { kind: p.kind, mapping: Object.fromEntries(p.mapping.map((m) => [m.field, m.column && valid.has(m.column) ? m.column : null])), note: p.note };
 }
+
+/* ---------- Field staff day summary ---------- */
+
+const FieldSummary = z.object({
+  headline: z.string().describe('One sentence on the team’s day'),
+  people: z.array(z.object({ name: z.string(), summary: z.string().describe('Two sentences: what they did and the result, with numbers') , flag: z.string().nullable().describe('One thing the owner should look at, e.g. a long gap, very short visits, a big collection, or a follow-up due; null if nothing') })),
+  followUps: z.array(z.string()).describe('Customers to follow up, with who and when, from the notes and next-visit dates'),
+});
+
+export async function fieldSummary(date: string, people: unknown[], shop: string) {
+  const response = await ai().beta.messages.parse({
+    model: config.ai.model,
+    max_tokens: 6000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low', format: zodOutputFormat(FieldSummary) },
+    system: `You summarise a day of field sales staff for the owner of ${shop}, an Indian business. Times are already IST clock times; use them as given. Money in ₹ with Indian grouping.
+Be factual and fair: use only the data given, never guess where someone was beyond the visits listed. Plain, short sentences.`,
+    messages: [{ role: 'user', content: JSON.stringify({ date, people }) }],
+  });
+  if (!response.parsed_output) throw new HttpError(422, 'Couldn’t summarise the day.', 'ai_no_answer');
+  return response.parsed_output;
+}

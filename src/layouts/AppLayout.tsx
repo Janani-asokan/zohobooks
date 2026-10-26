@@ -20,6 +20,7 @@ import { useShortcuts } from '@/components/useShortcuts';
 import { useOnline } from '@/components/useOnline';
 import { initials } from '@/lib/format';
 import { AssistantButton } from '@/components/Assistant';
+import { useFieldTracker } from '@/lib/geo';
 
 export function OrgLogo({ logo, name, size = 36 }: { logo?: string; name: string; size?: number }) {
   return (
@@ -184,6 +185,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const sb = useSidebarState('ledgerly.app.sidebar');
   const online = useOnline();
+  const onDuty = useFieldTracker();
   const [shortcuts, setShortcuts] = useState(false);
   const [palette, setPalette] = useState(false);
   const canSell = me.can('sales.write');
@@ -278,6 +280,7 @@ export default function AppLayout() {
             </ProfileMenu>
           </div>
         </header>
+        {onDuty && <Link to="/app/field" className="duty-bar no-print" role="status"><span className="fh-dot" /> On duty · sharing location while the app is open · tap to check in or end your day</Link>}
         <main>
           <Outlet />
         </main>

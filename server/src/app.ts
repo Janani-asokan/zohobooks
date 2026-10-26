@@ -19,6 +19,7 @@ import { salesRouter } from './routes/shop/sales';
 import { filesRouter } from './routes/shop/files';
 import { challansRouter } from './routes/shop/challans';
 import { dataRouter } from './routes/shop/dataTransfer';
+import { fieldRouter } from './routes/shop/field';
 import { inventoryRouter } from './routes/shop/inventory';
 import { accountingRouter } from './routes/shop/accounting';
 import { adminRouter } from './routes/shop/admin';
@@ -35,7 +36,8 @@ export function createApp() {
           scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
           styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
           fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-          imgSrc: ["'self'", 'data:', 'blob:'],
+          // Map tiles for the field staff map (OpenStreetMap).
+          imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org'],
           connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
           frameSrc: ['https://api.razorpay.com', 'https://checkout.razorpay.com'],
           mediaSrc: ["'self'", 'blob:'],
@@ -60,7 +62,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), auditWrites, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, dataRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), auditWrites, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, dataRouter, fieldRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

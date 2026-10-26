@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag } from 'lucide-react';
+import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale } from 'lucide-react';
 import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
@@ -15,6 +15,8 @@ import { applyBillAdjustments, computeTotals, lineAmount, type BillDiscount } fr
 import { priceFor } from '@/components/LineItems';
 import { QuickBill, type ParsedBill } from '@/components/QuickBill';
 import { useAiEnabled } from '@/components/Assistant';
+import { useScale } from '@/lib/scale';
+import { isWeighed, qtyFromReading } from '../../../shared/scale';
 import { Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
@@ -70,7 +72,14 @@ export default function Pos() {
   const upiDue = mode === 'Split' ? Number(split.UPI) || 0 : totals.total;
   const qr = useQr((mode === 'UPI' || (mode === 'Split' && upiDue > 0)) && org?.upiId && upiDue > 0 ? upiLink(org, upiDue, 'POS sale') : null);
 
-  const add = (it: Item) => setCart((c) => (c.some((l) => l.itemId === it.id) ? c.map((l) => (l.itemId === it.id ? { ...l, qty: l.qty + 1 } : l)) : [...c, { itemId: it.id, qty: 1 }]));
+  const scale = useScale();
+  useEffect(() => { if (scale.error) toast('error', 'Scale', scale.error); }, [scale.error]);
+  /** Items sold by weight take the scale reading when a scale is connected; everything else adds one. */
+  const add = (it: Item) => {
+    const w = scale.connected && scale.reading && scale.reading.kg > 0 && isWeighed(it.unit) ? qtyFromReading(scale.reading.kg, it.unit) : null;
+    if (w !== null) return setCart((c) => (c.some((l) => l.itemId === it.id) ? c.map((l) => (l.itemId === it.id ? { ...l, qty: w } : l)) : [...c, { itemId: it.id, qty: w }]));
+    setCart((c) => (c.some((l) => l.itemId === it.id) ? c.map((l) => (l.itemId === it.id ? { ...l, qty: l.qty + 1 } : l)) : [...c, { itemId: it.id, qty: 1 }]));
+  };
   const setQty = (id: string, qty: number) => setCart((c) => (qty <= 0 ? c.filter((l) => l.itemId !== id) : c.map((l) => (l.itemId === id ? { ...l, qty } : l))));
 
   const aiOn = useAiEnabled();
@@ -127,6 +136,11 @@ export default function Pos() {
             <input ref={scanRef} className="input" style={{ height: 46, fontSize: 14 }} placeholder="Scan barcode or type to search (F2)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onScanEnter()} aria-label="Scan or search items" />
           </div>
           <Segmented value={kind} onChange={setKind} options={[{ value: 'all', label: 'All' }, { value: 'Goods', label: 'Goods', icon: Package }, { value: 'Services', label: 'Services', icon: Wrench }]} />
+          {scale.supported && (
+            <button type="button" className={`btn ${scale.connected ? 'btn-soft' : 'btn-secondary'} scale-btn`} onClick={() => (scale.connected ? void scale.disconnect() : void scale.connect())} title={scale.connected ? 'Disconnect scale' : 'Connect a USB / serial weighing scale'}>
+              <Scale size={16} /> {scale.connected ? (scale.reading ? <><strong>{scale.reading.kg.toFixed(3)} kg</strong><span className={`scale-dot ${scale.reading.stable ? 'ok' : ''}`} /></> : 'Waiting for weight…') : 'Scale'}
+            </button>
+          )}
         </div>
         {aiOn && <div style={{ marginBottom: 12 }}><QuickBill context="pos" onApply={applyQuick} compact /></div>}
         <div className="pos-grid">
@@ -175,6 +189,7 @@ export default function Pos() {
                 <button className="qty-btn" onClick={() => setQty(l.itemId, l.qty - 1)} aria-label="Decrease">−</button>
                 <input className="input" style={{ width: 56, height: 30, textAlign: 'center', padding: 0 }} type="number" value={l.qty} onChange={(e) => setQty(l.itemId, Number(e.target.value))} aria-label="Quantity" />
                 <button className="qty-btn" onClick={() => setQty(l.itemId, l.qty + 1)} aria-label="Increase">+</button>
+                {scale.connected && scale.reading && isWeighed(l.it.unit) && <button className="qty-btn" title="Use the scale reading" aria-label="Use weight" onClick={() => setQty(l.itemId, qtyFromReading(scale.reading!.kg, l.it.unit))}><Scale size={13} /></button>}
               </div>
               <div className="row" style={{ gap: 4 }}>
                 <strong style={{ minWidth: 80, textAlign: 'right' }}>{money(lineAmount({ qty: l.qty, rate: unit(l.it), taxRate: 0 }))}</strong>
