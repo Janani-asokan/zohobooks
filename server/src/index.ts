@@ -3,6 +3,7 @@ import { createApp } from './app';
 import { config } from './config';
 import { query } from './db';
 import { startJobs } from './jobs';
+import { mailStatus } from './mailer';
 import { migrate } from './migrate';
 import { hashPassword } from './auth';
 import { isStrongPassword } from '../../shared/permissions';
@@ -40,6 +41,9 @@ async function main() {
     await resetDemoPasswords();
     console.log('[bootstrap] Demo mode: demo accounts use their simple passwords (owner123, admin123 …). Set DEMO_SIMPLE_PASSWORDS=0 to turn off.');
   }
+  const mail = mailStatus();
+  if (mail.configured) console.log(`[mail] Sending email via ${mail.provider} from ${mail.from}`);
+  else if (config.isProd) console.warn('[mail] No email provider configured: password-reset and invoice emails will NOT be sent. Set BREVO_API_KEY (or RESEND_API_KEY, or SMTP_HOST) and MAIL_FROM.');
   const app = createApp();
   app.listen(config.port, () => console.log(`[server] Corpus360 API listening on :${config.port} (${config.env})`));
   startJobs();

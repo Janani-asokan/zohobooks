@@ -47,8 +47,13 @@ export default function SuperDashboard() {
   const createShop = useMut((b: typeof form) => api.post<Shop>('/platform/shops', b), keys, { silentError: true });
   const toggle = useMut((v: { id: string; active: boolean }) => api.patch<Shop>(`/platform/shops/${v.id}`, { active: v.active }), keys, { success: (s) => (s.active ? `${s.shopName} activated` : `${s.shopName} deactivated — sessions ended`) });
   const renewMut = useMut((v: { id: string; planId: string; years: number; reference: string }) => api.post<Shop>(`/platform/shops/${v.id}/renew`, v), keys, { success: (s) => `License renewed till ${fmtDate(s.licenseEnd)}` });
-  const resetOwner = useMut((id: string) => api.post<{ sentTo: string; devResetUrl?: string }>(`/platform/shops/${id}/reset-owner-password`), [], {
-    success: (r) => `Reset link sent to ${r.sentTo}`,
+  const [resetLink, setResetLink] = useState<{ to: string; url: string; error?: string } | null>(null);
+  const resetOwner = useMut((id: string) => api.post<{ sentTo: string; emailed: boolean; emailError?: string; devResetUrl?: string }>(`/platform/shops/${id}/reset-owner-password`), []);
+  const sendReset = (id: string) => resetOwner.mutate(id, {
+    onSuccess: (r) => {
+      if (r.emailed) toast('success', `Reset link emailed to ${r.sentTo}`);
+      else if (r.devResetUrl) setResetLink({ to: r.sentTo, url: r.devResetUrl, error: r.emailError });
+    },
   });
 
   const now = new Date();
@@ -172,7 +177,7 @@ export default function SuperDashboard() {
                     <td><div className="strong small">{fmtDate(s.licenseEnd)}</div><div className="muted">{d >= 0 ? `${d} days left` : `Expired ${-d} days ago`}</div></td>
                     <td><Toggle checked={s.active} onChange={(v) => toggle.mutate({ id: s.id, active: v })} size="sm" tone="success" label={<span className="small">{s.active ? 'Active' : 'Inactive'}</span>} /></td>
                     <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                      <button className="icon-btn" title="Email owner a password-reset link" onClick={() => resetOwner.mutate(s.id)}><KeyRound size={15} /></button>
+                      <button className="icon-btn" title="Email owner a password-reset link" onClick={() => sendReset(s.id)}><KeyRound size={15} /></button>
                       <button className="btn btn-secondary btn-sm" onClick={() => { setRenew(s); setRenewPlan(s.planId === 'trial' ? 'standard' : s.planId); setRenewYears(1); setRenewRef(''); }}><RefreshCw size={14} /> Renew</button>
                     </td>
                   </tr>
@@ -234,6 +239,12 @@ export default function SuperDashboard() {
           <div className="small muted" style={{ marginTop: 10 }}>Temporary password</div><div className="strong" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{created?.password}</div>
         </div>
         <p className="small muted" style={{ marginTop: 12 }}>This password is shown only once. The owner will be asked to choose their own on first sign-in.</p>
+      </Modal>
+
+      <Modal open={!!resetLink} onClose={() => setResetLink(null)} title="Email not sent" subtitle={resetLink ? `Share this reset link with ${resetLink.to} on WhatsApp or by phone. It works for 24 hours.` : ''}
+        footer={<button className="btn btn-primary" onClick={() => { navigator.clipboard?.writeText(resetLink?.url ?? '').then(() => toast('success', 'Link copied'), () => {}); }}>Copy link</button>}>
+        <div className="card" style={{ padding: 12, boxShadow: 'none', background: 'var(--ink-50)', wordBreak: 'break-all', fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12.5 }}>{resetLink?.url}</div>
+        <p className="small muted" style={{ marginTop: 12 }}>{resetLink?.error ? `The email provider said: ${resetLink.error}` : 'No email provider is set up on the server.'} Check Configuration → Email.</p>
       </Modal>
 
       <Modal open={!!renew} onClose={() => setRenew(null)} title="Renew license" subtitle={renew ? `${renew.shopName} · currently valid till ${fmtDate(renew.licenseEnd)}` : ''}

@@ -31,5 +31,12 @@ services:
       # Optional: set in the Render dashboard to turn on the smart reader for uploaded PDFs and photos.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Email (password resets, invoices, reminders). Render's free plan blocks SMTP ports, so use an
+      # HTTPS provider: BREVO_API_KEY (free, 300 emails/day) or RESEND_API_KEY. MAIL_FROM must be a
+      # sender verified with that provider, e.g. "Corpus360 <you@gmail.com>".
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
       - key: BACKUPS_ENABLED
         value: "0"

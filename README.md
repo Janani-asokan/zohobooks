@@ -61,7 +61,8 @@ In production the API serves the built web app too, so you deploy one process. M
 | `DATABASE_URL` | PostgreSQL connection string |
 | `APP_URL` | Public URL, used in reset links, shared invoice links and emails |
 | `ALLOWED_ORIGINS` | Comma-separated origins allowed to make write requests |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Sends password-reset, reminder and license emails. Without these, emails are only logged |
+| `BREVO_API_KEY` or `RESEND_API_KEY`, and `MAIL_FROM` | Sends password-reset, invoice, reminder and license emails over HTTPS (works on Render's free plan). See *Email* below |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | SMTP instead, where the host allows it. Without any provider, emails are not sent |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | Lets shop owners renew their license online |
 | `BACKUPS_ENABLED=1`, `BACKUP_DIR`, `BACKUP_KEEP` | Daily `pg_dump` backups (on by default in production) |
 | `ANTHROPIC_API_KEY` | Optional. Turns on the smart reader for uploads (scanned PDFs, handwriting, messy layouts). Without it, uploads use the built-in PDF text reader and OCR |
@@ -191,7 +192,16 @@ Without the key these buttons are hidden and everything else works as before. Se
 ### What needs your accounts
 - **Direct e-invoice IRN / e-way bill generation** needs a GSP or ASP licence and credentials. Until then the app produces the official JSON for upload on the government portals.
 - **Automatic WhatsApp messages** need the WhatsApp Business API. Until then sharing uses `wa.me` links, which open WhatsApp with the message ready to send.
-- **SMS** isn't implemented. **Email** needs SMTP settings. **Online license payments** need Razorpay keys.
+- **SMS** isn't implemented. **Email** needs a provider (below). **Online license payments** need Razorpay keys.
+
+### Email (password resets, invoices, reminders)
+Without a provider nothing is emailed: the server logs a warning and Super Admin → Configuration → Email shows *Not set up*. Render's free plan blocks outgoing SMTP ports, so use an HTTPS provider there:
+
+1. Sign up at [brevo.com](https://www.brevo.com) (free, 300 emails a day), verify the sender address you want to send from (Senders & IP → Senders), and create an API key (SMTP & API → API keys).
+2. In Render → the web service → Environment, add `BREVO_API_KEY` and `MAIL_FROM` (for example `Corpus360 <you@gmail.com>`, using the verified address). Save; Render redeploys.
+3. Super Admin → Configuration → Email → *Send test*. Any error from the provider is shown there.
+
+`RESEND_API_KEY` works the same way (Resend needs a verified domain to email other people). `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` work on hosts that allow SMTP. When email can't be sent, the Super Admin's *reset owner password* button shows the link to pass on instead.
 
 ## Testing
 

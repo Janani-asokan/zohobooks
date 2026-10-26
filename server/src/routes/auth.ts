@@ -192,11 +192,12 @@ authRouter.post(
       const token = randomToken();
       await query('INSERT INTO password_resets (token_hash, principal_type, principal_id, expires_at) VALUES ($1,$2,$3, now() + interval \'30 minutes\')', [sha256(token), p.type, p.row.id]);
       const url = `${config.appUrl}/reset-password?token=${token}`;
+      // A failed send is logged, not shown: the reply must look the same whether or not the account exists.
       await sendMail({
         to: p.row.email,
         subject: 'Reset your Corpus360 password',
         text: `Hi ${p.row.name},\n\nUse this link to set a new password (valid for 30 minutes):\n${url}\n\nIf you didn't request this, you can ignore this email.`,
-      });
+      }).catch((e) => console.error(`[mail] Password reset email to ${p.row.email} failed: ${(e as Error).message}`));
       if (config.exposeDevResetLinks) devResetUrl = url;
     }
     // Same response whether or not the account exists (no account enumeration).

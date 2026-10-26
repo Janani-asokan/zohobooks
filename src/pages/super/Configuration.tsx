@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Hash, CalendarRange, Percent, Plus, Trash2, Save, Info, RotateCcw, Lock } from 'lucide-react';
+import { Hash, CalendarRange, Percent, Plus, Trash2, Save, Info, RotateCcw, Lock, Mail, Send, Loader2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { useMut, usePlatformConfig } from '@/api/hooks';
 import type { PlatformConfig, TaxSlab } from '@/api/types';
@@ -63,6 +64,8 @@ function ConfigForm({ config }: { config: PlatformConfig }) {
       <PageHeader title="Configuration" subtitle="Global platform rules that apply to every shop workspace. Changes affect new records only." />
 
       <div className="stack">
+        <EmailCheck />
+
         {/* ---------------- ID Generation ---------------- */}
         <section className="card">
           <div className="card-header">
@@ -246,5 +249,54 @@ function ConfigForm({ config }: { config: PlatformConfig }) {
         </section>
       </div>
     </div>
+  );
+}
+
+interface MailStatus { configured: boolean; provider: 'brevo' | 'resend' | 'smtp' | null; from: string }
+const PROVIDER = { brevo: 'Brevo', resend: 'Resend', smtp: 'SMTP' } as const;
+
+/** Shows which email provider the server uses and sends a test, so a missing or wrong setting shows up before a customer needs a reset link. */
+function EmailCheck() {
+  const status = useQuery({ queryKey: ['platform', 'mail'], queryFn: () => api.get<MailStatus>('/platform/mail') });
+  const [to, setTo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ sent: boolean; error?: string } | null>(null);
+  const s = status.data;
+  const test = async () => {
+    setBusy(true); setResult(null);
+    try { setResult(await api.post<{ sent: boolean; error?: string }>('/platform/mail/test', { to })); }
+    catch (e) { setResult({ sent: false, error: (e as Error).message }); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="card">
+      <div className="card-header">
+        <div className="row" style={{ gap: 14 }}>
+          <span className="stat-icon tone-rose"><Mail size={19} /></span>
+          <div>
+            <h3>Email</h3>
+            <p>Password-reset links, welcome emails, invoices and payment reminders.</p>
+          </div>
+        </div>
+        {s && <Badge tone={s.configured ? 'green' : 'red'}>{s.configured ? `On · ${PROVIDER[s.provider!]}` : 'Not set up'}</Badge>}
+      </div>
+      <div className="card-body stack" style={{ gap: 12 }}>
+        {s && !s.configured && (
+          <div className="small" style={{ background: 'var(--ink-50)', borderRadius: 10, padding: 12 }}>
+            <strong>No email is being sent.</strong> In the hosting dashboard (Render → Environment), add <code>BREVO_API_KEY</code> (free at brevo.com) or <code>RESEND_API_KEY</code>, and <code>MAIL_FROM</code> set to a sender address verified with that provider, then redeploy. SMTP (<code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code>) also works on hosts that allow it; Render's free plan blocks SMTP ports.
+          </div>
+        )}
+        {s?.configured && <div className="small muted">Sending from <strong>{s.from}</strong>.</div>}
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <Field label="Send a test email to">
+            <input id="mail-test-to" className="input" style={{ width: 280, maxWidth: '100%' }} type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="you@example.com" onKeyDown={(e) => e.key === 'Enter' && to && test()} />
+          </Field>
+          <button className="btn btn-secondary" disabled={!to || busy} onClick={test}>{busy ? <Loader2 size={15} className="spin" /> : <Send size={15} />} Send test</button>
+        </div>
+        {result && (result.sent
+          ? <div className="small" style={{ color: 'var(--green-700, #2f6b45)' }}>Sent. Check the inbox (and spam folder) of {to}.</div>
+          : <div className="small" style={{ color: 'var(--red-600, #b3261e)' }}>Not sent: {result.error}</div>)}
+      </div>
+    </section>
   );
 }

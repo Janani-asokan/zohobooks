@@ -26,9 +26,14 @@ export const config = {
     enabled: bool(env.BACKUPS_ENABLED, env.NODE_ENV === 'production'),
   },
   jobs: { enabled: bool(env.JOBS_ENABLED, env.NODE_ENV !== 'test') },
-  smtp: env.SMTP_HOST
-    ? { host: env.SMTP_HOST, port: Number(env.SMTP_PORT ?? 587), user: env.SMTP_USER ?? '', pass: env.SMTP_PASS ?? '', from: env.SMTP_FROM ?? 'Corpus360 <no-reply@corpus360.app>' }
-    : null,
+  /** Outgoing email: Brevo or Resend (HTTPS, work on Render's free plan) or SMTP. The first one set is used. */
+  mail: {
+    brevoKey: env.BREVO_API_KEY ?? '',
+    resendKey: env.RESEND_API_KEY ?? '',
+    smtp: env.SMTP_HOST ? { host: env.SMTP_HOST, port: Number(env.SMTP_PORT ?? 587), user: env.SMTP_USER ?? '', pass: env.SMTP_PASS ?? '' } : null,
+    /** Must be a sender address the provider has verified. */
+    from: env.MAIL_FROM ?? env.SMTP_FROM ?? 'Corpus360 <no-reply@corpus360.app>',
+  },
   razorpay: env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET } : null,
   /** E-invoice (IRP) provider credentials — when absent, the app generates the JSON for manual upload only. */
   einvoice: env.EINVOICE_API_URL ? { url: env.EINVOICE_API_URL, clientId: env.EINVOICE_CLIENT_ID ?? '', clientSecret: env.EINVOICE_CLIENT_SECRET ?? '' } : null,
