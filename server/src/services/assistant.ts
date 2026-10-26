@@ -403,3 +403,26 @@ Reply with the finished message only.`,
   if (!text) throw new HttpError(502, 'The AI returned an empty message. Try again.', 'ai_failed');
   return text;
 }
+
+/* ---------- Column mapping for imports ---------- */
+
+export async function mapColumns(kind: 'customers' | 'vendors' | 'items' | null, headers: string[], sample: Array<Record<string, string>>, fields: Record<string, Array<{ key: string; label: string }>>) {
+  const Out = z.object({
+    kind: z.enum(['customers', 'vendors', 'items']).describe('What the file lists'),
+    mapping: z.array(z.object({ field: z.string().describe('our field key'), column: z.string().nullable().describe('exact header from the file, or null') })),
+    note: z.string().nullable().describe('One short sentence if something needs the user’s attention, e.g. prices include GST, or quantities are in boxes'),
+  });
+  const response = await ai().beta.messages.parse({
+    model: config.ai.model,
+    max_tokens: 4000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low', format: zodOutputFormat(Out) },
+    system: 'You map spreadsheet columns exported from Indian billing software (Tally, Vyapar, Busy, Marg, Zoho, Excel) to an app\'s import fields. Use the header names and the sample values. Each column maps to at most one field. Use exact header text. Leave a field null when no column fits. Currency symbols, commas, "/-" and formats like "GST@18%" are cleaned automatically, so never mention them in the note.',
+    messages: [{ role: 'user', content: JSON.stringify({ expectedKind: kind, ourFields: fields, headers, sampleRows: sample.slice(0, 5) }) }],
+  });
+  if (!response.parsed_output) throw new HttpError(422, 'Couldn’t read the columns. Map them by hand.', 'ai_no_answer');
+  const p = response.parsed_output;
+  const valid = new Set(headers);
+  return { kind: p.kind, mapping: Object.fromEntries(p.mapping.map((m) => [m.field, m.column && valid.has(m.column) ? m.column : null])), note: p.note };
+}

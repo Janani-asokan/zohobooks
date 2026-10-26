@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, type LucideIcon,
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, type LucideIcon,
 } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import type { PaletteAction } from './CommandPalette';
@@ -12,7 +12,7 @@ const CHILD_ICONS: Record<string, LucideIcon> = {
   Customers: UserRound, Quotes: FileSignature, 'Sales Orders': ClipboardList, Invoices: FileText, 'Delivery Challans': Truck, 'Payments Received': IndianRupee,
   'Credit Notes': FileMinus, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, Vendors: Truck, 'Purchase Orders': ClipboardList,
   Bills: Receipt, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Stock Adjustments': SlidersHorizontal,
-  Transfers: ArrowLeftRight, 'Smart Reorder': BrainCircuit, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank,
+  Transfers: ArrowLeftRight, 'Smart Reorder': BrainCircuit, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank, 'Tally & Import': RefreshCw,
 };
 
 /** Sidebar information architecture. Order and grouping follow how a shop actually works through a day. */
@@ -58,6 +58,7 @@ export function buildNav(can: Can): NavItem[] {
   const accounting = [
     ...(can('accounting.read') ? [{ label: 'Chart of Accounts', to: '/app/accounting/accounts' }, { label: 'Manual Journals', to: '/app/accounting/journals' }, { label: 'General Ledger', to: '/app/accounting/ledger' }] : []),
     ...(can('banking.read') ? [{ label: 'Banking', to: '/app/banking' }] : []),
+    ...(can('accounting.read') || can('reports.read') || can('customers.write') || can('items.write') ? [{ label: 'Tally & Import', to: '/app/accounting/tally' }] : []),
   ];
   if (accounting.length) items.push({ label: 'Accounting', icon: Landmark, children: accounting });
   if (can('reports.read')) items.push({ label: 'Reports', icon: BarChart3, to: '/app/reports' });
@@ -126,6 +127,7 @@ export function buildActions(can: Can): PaletteAction[] {
   add(true, 'Go to', 'Stock adjustments', SlidersHorizontal, '/app/inventory/adjustments', 'stock count damaged expired write off');
   add(true, 'Go to', 'Transfers', ArrowLeftRight, '/app/inventory/transfers', 'move stock between branches in transit');
   add(can('items.write') || can('purchases.read'), 'Go to', 'Smart Reorder', BrainCircuit, '/app/inventory/reorder', 'reorder low stock purchase suggestions dead stock expiry AI');
+  add(true, 'Go to', 'Tally & Import', RefreshCw, '/app/accounting/tally', 'tally export import xml vyapar busy excel csv migrate');
   add(true, 'Go to', 'Delivery Challans', Truck, '/app/sales/challans', 'dispatch delivery order tracking vehicle');
   add(true, 'Go to', 'Stock summary', Boxes, '/app/inventory/stock-summary', 'inventory valuation closing stock report');
   add(can('items.write'), 'Create', 'Record stock count', SlidersHorizontal, '/app/inventory/adjustments?new=1&mode=count', 'physical count audit');

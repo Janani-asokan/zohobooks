@@ -472,3 +472,26 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .qb-listening { margin-top: 6px; color: var(--red-600); display: flex; align-items: center; gap: 6px; }
 .qb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red-500); animation: qb-pulse 1.2s infinite; }
 .qb-warn { margin-top: 6px; color: var(--amber-700); display: flex; align-items: center; gap: 6px; }
+
+/* ---------- Tally & import ---------- */
+.dt-card { padding: 0; overflow: hidden; }
+.dt-head { display: flex; gap: 12px; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--border); background: var(--blush-grad); }
+.dt-head h3 { margin: 0; font-size: 16px; }
+.dt-icon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-grad); color: #fff; flex: none; box-shadow: var(--shadow-rose); }
+.dt-icon.sage { background: var(--sage-grad); } .dt-icon.gold { background: var(--gold-grad); }
+.dt-body { padding: 16px 18px; }
+.dt-steps { display: grid; gap: 12px; }
+.dt-step { display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--border); border-radius: 14px; }
+.dt-step > span { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--sage-grad); color: #fff; font-weight: 700; font-size: 13px; }
+.dt-howto { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--sage-soft); color: var(--ink-800); display: flex; gap: 8px; align-items: flex-start; }
+.dt-drop { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px; border: 2px dashed var(--brand-200); border-radius: 16px; background: var(--brand-50); color: var(--brand-700); cursor: pointer; }
+.dt-drop:hover { border-color: var(--brand-500); }
+.dt-kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.dt-kind { display: grid; grid-template-columns: auto auto 1fr; gap: 4px 8px; align-items: center; padding: 12px; border: 1px solid var(--border); border-radius: 14px; cursor: pointer; }
+.dt-kind .small { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-kind.on { border-color: var(--brand-500); background: var(--brand-50); }
+.dt-map { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.dt-field { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--ink-700); }
+.dt-field.need .select { border-color: var(--red-500); }
+.import-result { display: grid; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--sage-soft); }
+@media (max-width: 640px) { .dt-step { grid-template-columns: 28px 1fr; } .dt-step .btn { grid-column: 1 / -1; } }

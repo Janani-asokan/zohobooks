@@ -38,6 +38,7 @@ const StockAdjustments = lazy(() => import('./pages/app/StockAdjustments'));
 const Transfers = lazy(() => import('./pages/app/Transfers'));
 const DeliveryChallans = lazy(() => import('./pages/app/DeliveryChallans'));
 const StockInsights = lazy(() => import('./pages/app/StockInsights'));
+const DataTransfer = lazy(() => import('./pages/app/DataTransfer'));
 const StockSummary = lazy(() => import('./pages/app/StockSummary'));
 const Banking = lazy(() => import('./pages/app/Banking'));
 const Reports = lazy(() => import('./pages/app/Reports'));
@@ -113,6 +114,7 @@ export default function App() {
             <Route path="inventory/adjustments" element={<StockAdjustments />} />
             <Route path="inventory/transfers" element={<Transfers />} />
             <Route path="inventory/reorder" element={<StockInsights />} />
+            <Route path="accounting/tally" element={<DataTransfer />} />
             <Route path="inventory/stock-summary" element={<StockSummary />} />
             <Route path="purchases/expenses" element={<Expenses />} />
             <Route path="banking" element={<Banking />} />

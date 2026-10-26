@@ -83,7 +83,7 @@ await step('delivery challan: pack, dispatch, deliver, invoice', async () => {
 
 await step('bill-wise profit report', async () => {
   await p.goto(B + '/app/reports/bill-profit');
-  await p.getByText('Loss-making bills').waitFor();
+  await p.getByText('Loss-making bills', { exact: true }).waitFor();
   await p.locator('tbody tr').first().waitFor();
   if (out) await p.screenshot({ path: `${out}/billing-profit.png` });
 });

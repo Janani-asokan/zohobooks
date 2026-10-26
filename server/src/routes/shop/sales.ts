@@ -73,7 +73,7 @@ salesRouter.get(
   }),
 );
 
-async function insertCustomer(db: Db, shopId: string, b: z.infer<typeof customerBody>, orgState: string) {
+export async function insertCustomer(db: Db, shopId: string, b: z.infer<typeof customerBody>, orgState: string) {
   const cfg = await platformConfig(db);
   const n = await nextSeq(db, shopId, 'customer', 1000);
   return one(

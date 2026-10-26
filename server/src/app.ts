@@ -18,6 +18,7 @@ import { reportsRouter } from './routes/shop/reports';
 import { salesRouter } from './routes/shop/sales';
 import { filesRouter } from './routes/shop/files';
 import { challansRouter } from './routes/shop/challans';
+import { dataRouter } from './routes/shop/dataTransfer';
 import { inventoryRouter } from './routes/shop/inventory';
 import { accountingRouter } from './routes/shop/accounting';
 import { adminRouter } from './routes/shop/admin';
@@ -46,7 +47,8 @@ export function createApp() {
   // Uploads (files sent as base64) get a larger body limit than everything else.
   const smallJson = express.json({ limit: '3mb' });
   const uploadJson = express.json({ limit: '15mb' });
-  app.use((req, res, next) => (/^\/api\/shop\/(extract|attachments)$/.test(req.path) ? uploadJson : smallJson)(req, res, next));
+  const dataJson = express.json({ limit: '32mb' }); // Tally master exports and big item lists
+  app.use((req, res, next) => (/^\/api\/shop\/(tally\/(preview|import)|data-import)$/.test(req.path) ? dataJson : /^\/api\/shop\/(extract|attachments)$/.test(req.path) ? uploadJson : smallJson)(req, res, next));
 
   app.get('/api/health', async (_req, res) => {
     await query('SELECT 1');
@@ -58,7 +60,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), auditWrites, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), auditWrites, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, dataRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

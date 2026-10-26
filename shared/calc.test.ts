@@ -103,3 +103,12 @@ describe('bill discount and MRP billing', () => {
     expect(applyBillAdjustments([{ qty: 1, rate: 118, taxRate: 18 }], { withGst: false, pricesIncludeTax: true })[0]!.rate).toBe(118);
   });
 });
+
+import { parseCsvRaw } from './csv';
+describe('reading CSV from other software', () => {
+  it('keeps header text and handles semicolons, tabs and quoted commas', () => {
+    expect(parseCsvRaw('Item Name,Sale Price\n"Pen, blue",10\n')).toEqual({ headers: ['Item Name', 'Sale Price'], rows: [{ 'Item Name': 'Pen, blue', 'Sale Price': '10' }] });
+    expect(parseCsvRaw('Name;GST %\nBulb;12\n').rows[0]).toEqual({ Name: 'Bulb', 'GST %': '12' });
+    expect(parseCsvRaw('Name\tPrice\nA, B\t5\n').rows[0]).toEqual({ Name: 'A, B', Price: '5' });
+  });
+});
