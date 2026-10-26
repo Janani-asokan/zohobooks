@@ -181,7 +181,7 @@ export default function Home() {
           )}
         </div>
         <div className="card">
-          <div className="card-header"><div><h3>Low stock</h3><p>At or below the reorder level</p></div><Link to="/app/items?tab=stock" className="btn btn-ghost btn-sm">All alerts <ArrowRight size={14} /></Link></div>
+          <div className="card-header"><div><h3>Low stock</h3><p>At or below the reorder level</p></div><Link to="/app/inventory/reorder" className="btn btn-ghost btn-sm">Smart reorder <ArrowRight size={14} /></Link></div>
           {!d ? <div className="skeleton" style={{ height: 150, margin: 16 }} /> : d.lowStockList.length === 0 ? <div className="card-body muted small"><Check size={14} style={{ verticalAlign: -2, color: 'var(--green-600)' }} /> Every item is above its reorder level.</div> : (
             <ul className="dash-list">{d.lowStockList.map((x) => (
               <li key={x.id}><Link to={`/app/items?open=${x.id}`}><span><strong>{x.name}</strong><span className="muted small">Reorder at {x.reorderLevel} {x.unit}</span></span><span className="num strong" style={{ color: x.stock <= 0 ? 'var(--red-600)' : 'var(--amber-700)' }}>{x.stock} {x.unit}</span></Link></li>

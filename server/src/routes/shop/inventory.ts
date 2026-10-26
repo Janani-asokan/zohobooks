@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { perm, todayISO } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, type Db } from '../../db';
-import { badRequest, conflict, notFound, parse } from '../../http';
+import { badRequest, conflict, HttpError, notFound, parse } from '../../http';
+import { stockInsights } from '../../services/stockInsights';
 import { nextSeq, requireRow } from '../../services/common';
 import { moveStock } from '../../services/stock';
 import { T, allowed } from './ctx';
@@ -286,6 +287,23 @@ inventoryRouter.get(
     return {
       from, to, branchId, items, byCategory, byBranch, inTransit,
       totals: { qty: r3(items.reduce((s, i) => s + i.closing, 0)), value: showCost ? r2(items.reduce((s, i) => s + (i.value ?? 0), 0)) : null, items: items.length, lowStock: items.filter((i) => i.closing <= i.reorderLevel).length },
+    };
+  }),
+);
+
+/* ---------- Stock insights: reorder suggestions, dead and slow stock, expiring batches ---------- */
+inventoryRouter.get(
+  '/stock/insights',
+  T(async (db, req, c) => {
+    if (!allowed(c, 'items.write') && !allowed(c, 'purchases.read') && !allowed(c, 'reports.read')) throw new HttpError(403, 'Your role can’t see stock planning', 'forbidden');
+    const ins = await stockInsights(db, c.shopId, { leadDays: Number(req.query.leadDays) || undefined, coverDays: Number(req.query.coverDays) || undefined });
+    if (allowed(c, 'items.cost')) return ins;
+    // Without cost access, keep quantities and days but hide money figures based on cost.
+    return {
+      ...ins,
+      reorder: ins.reorder.map((r) => ({ ...r, cost: 0, lastPurchaseRate: null })),
+      dead: ins.dead.map((d) => ({ ...d, value: 0 })), slow: ins.slow.map((d) => ({ ...d, value: 0 })), expiring: ins.expiring.map((d) => ({ ...d, value: 0 })),
+      totals: { ...ins.totals, stockValue: 0, deadValue: 0, expiringValue: 0 },
     };
   }),
 );

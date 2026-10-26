@@ -8,6 +8,7 @@ import { todayISO, type UserCtx } from '../auth';
 import { config } from '../config';
 import { many, one, withTenant } from '../db';
 import { HttpError } from '../http';
+import { stockInsights, type StockInsights } from './stockInsights';
 import type { Permission } from '../../../shared/permissions';
 
 let client: Anthropic | null = null;
@@ -120,6 +121,22 @@ function shopTools(c: UserCtx) {
       }),
     }),
     betaZodTool({
+      name: 'stock_planning',
+      description: 'What to reorder (with suggested quantity, days of stock left, sales per day and usual vendor), dead stock (no sales in 90 days), slow movers, batches expiring within 60 days, and the fastest sellers.',
+      inputSchema: z.object({}),
+      run: async () => {
+        if (!has('items.write', 'purchases.read', 'reports.read')) return deny('stock planning');
+        const ins = await q((db) => stockInsights(db, c.shopId));
+        const cost = has('items.cost');
+        return JSON.stringify({
+          reorder: ins.reorder.slice(0, 25).map((r) => ({ name: r.name, stock: r.stock, unit: r.unit, perDay: r.perDay, daysLeft: r.daysLeft, suggestQty: r.suggestQty, vendor: r.vendorName, urgency: r.urgency, trendPct: r.trend })),
+          dead: ins.dead.slice(0, 15).map((d) => ({ name: d.name, stock: d.stock, daysIdle: d.daysIdle, ...(cost ? { value: d.value } : {}) })),
+          slow: ins.slow.slice(0, 10).map((d) => ({ name: d.name, stock: d.stock, daysOfStock: d.daysLeft })),
+          expiring: ins.expiring.slice(0, 15), topMovers: ins.topMovers, totals: cost ? ins.totals : { ...ins.totals, stockValue: undefined, deadValue: undefined, expiringValue: undefined },
+        });
+      },
+    }),
+    betaZodTool({
       name: 'purchases_and_expenses',
       description: 'Vendor bills still unpaid, and spending between two dates: bills by vendor and expenses by category.',
       inputSchema: z.object({ from: ISO, to: ISO }),
@@ -161,7 +178,7 @@ export async function askAssistant(c: UserCtx, shop: { name: string; state: stri
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
     output_config: { effort: 'low' },
-    system: `${ASSISTANT_SYSTEM}\nShop: ${shop.name}${shop.state ? `, ${shop.state}` : ''}. User role: ${c.role}. Today is ${todayISO()}.`,
+    system: `${ASSISTANT_SYSTEM}\nShop: ${shop.name}${shop.state ? `, ${shop.state}` : ''}. User role: ${c.role}. Today is ${todayISO()}.${festivalLine()}`,
     tools: shopTools(c),
     messages: history.map((m) => ({ role: m.role, content: m.content })),
   });
@@ -208,4 +225,65 @@ export function aiError(e: unknown): never {
   }
   console.error('[ai] request failed:', e instanceof Anthropic.APIError ? `${e.status} ${e.message}` : (e as Error).message);
   throw new HttpError(502, 'The AI couldn’t answer right now. Please try again.', 'ai_failed');
+}
+
+/* ---------- Stock advice ---------- */
+
+/** Main shopping festivals and seasons. Lunar-calendar dates can shift by a day by region; the model gets these
+ *  instead of guessing, so it never calls a festival past or upcoming wrongly. */
+const FESTIVALS: Array<[string, string]> = [
+  ['2026-01-14', 'Makar Sankranti / Pongal'], ['2026-01-26', 'Republic Day sales'], ['2026-03-04', 'Holi'], ['2026-03-20', 'Eid al-Fitr'],
+  ['2026-04-14', 'Tamil New Year / Vishu / Baisakhi'], ['2026-04-20', 'Akshaya Tritiya'], ['2026-05-27', 'Eid al-Adha'], ['2026-06-01', 'School reopening season'],
+  ['2026-08-15', 'Independence Day sales'], ['2026-08-26', 'Onam'], ['2026-08-28', 'Raksha Bandhan'], ['2026-09-04', 'Janmashtami'], ['2026-09-14', 'Ganesh Chaturthi'],
+  ['2026-10-11', 'Navratri begins'], ['2026-10-20', 'Dussehra'], ['2026-11-06', 'Dhanteras'], ['2026-11-08', 'Deepavali'], ['2026-12-25', 'Christmas'], ['2026-12-31', 'New Year'],
+  ['2027-01-14', 'Makar Sankranti / Pongal'], ['2027-01-26', 'Republic Day sales'], ['2027-03-10', 'Eid al-Fitr'], ['2027-03-22', 'Holi'], ['2027-04-14', 'Tamil New Year / Vishu / Baisakhi'],
+  ['2027-05-17', 'Eid al-Adha'], ['2027-06-01', 'School reopening season'], ['2027-08-15', 'Independence Day sales'], ['2027-08-17', 'Raksha Bandhan'],
+  ['2027-09-04', 'Ganesh Chaturthi'], ['2027-10-09', 'Dussehra'], ['2027-10-29', 'Deepavali'], ['2027-12-25', 'Christmas'],
+];
+const festivalLine = () => {
+  const f = upcomingFestivals(todayISO());
+  return f.length ? ` Coming up (use these dates, don't guess others): ${f.map((x) => `${x.name} ${x.date}`).join(', ')}.` : '';
+};
+const upcomingFestivals = (today: string) => {
+  const end = new Date(Date.parse(`${today}T00:00:00Z`) + 45 * 864e5).toISOString().slice(0, 10);
+  return FESTIVALS.filter(([d]) => d >= today && d <= end).map(([date, name]) => ({ date, name }));
+};
+
+const StockAdvice = z.object({
+  headline: z.string().describe('One sentence: the single most important stock action this week'),
+  actions: z.array(z.object({
+    priority: z.enum(['high', 'medium', 'low']),
+    title: z.string().describe('Short imperative, e.g. "Reorder 40 pcs of Logitech M331 from Redington"'),
+    detail: z.string().describe('One or two plain sentences with the numbers behind it'),
+    kind: z.enum(['reorder', 'clearance', 'expiry', 'pricing', 'season', 'other']),
+  })).max(8),
+  seasonal: z.string().nullable().describe('From the listed upcoming festivals only: which one changes demand for this shop and what to stock up on or promote; null if none is listed or relevant'),
+});
+export type StockAdvice = z.infer<typeof StockAdvice>;
+
+export async function stockAdvice(ins: StockInsights, shop: { name: string; state: string }, canCost: boolean): Promise<StockAdvice> {
+  const data = {
+    today: todayISO(), leadDays: ins.leadDays, coverDays: ins.coverDays,
+    reorder: ins.reorder.slice(0, 30).map((r) => ({ name: r.name, category: r.category, stock: r.stock, unit: r.unit, perDay: r.perDay, daysLeft: r.daysLeft, suggestQty: r.suggestQty, vendor: r.vendorName, urgency: r.urgency, trendPct: r.trend })),
+    dead: ins.dead.slice(0, 15).map((d) => ({ name: d.name, stock: d.stock, daysIdle: d.daysIdle, ...(canCost ? { value: d.value } : {}) })),
+    slow: ins.slow.slice(0, 10).map((d) => ({ name: d.name, stock: d.stock, daysOfStock: d.daysLeft })),
+    expiring: ins.expiring.slice(0, 15).map((e) => ({ name: e.name, batch: e.batchNo, expires: e.expiryDate, qty: e.qty })),
+    topMovers: ins.topMovers,
+    upcomingFestivals: upcomingFestivals(todayISO()),
+  };
+  const response = await ai().beta.messages.parse({
+    model: config.ai.model,
+    max_tokens: 8000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low', format: zodOutputFormat(StockAdvice) },
+    system: `You are a stock-planning adviser for a small Indian shop (${shop.name}${shop.state ? `, ${shop.state}` : ''}). You get its computed stock figures. Turn them into a short, prioritised to-do list in plain words.
+- Use only the numbers given; never invent items or figures. Quantities keep their units. Money as ₹ with Indian grouping.
+- Reorder first (out of stock, then running out soonest), then expiring batches (sell first, discount, or return to supplier), then dead stock (bundle, discount, return), then pricing or trend notes.
+- For seasons, use only upcomingFestivals (dates are given); if it is empty, set seasonal to null. Never say a festival has passed or is coming unless its date is listed.
+- Keep each detail to one or two sentences. At most 8 actions.`,
+    messages: [{ role: 'user', content: JSON.stringify(data) }],
+  });
+  if (response.stop_reason === 'refusal' || !response.parsed_output) throw new HttpError(422, 'Couldn’t prepare stock advice right now.', 'ai_no_answer');
+  return response.parsed_output;
 }

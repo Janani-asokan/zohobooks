@@ -6,7 +6,8 @@ import { many, one } from '../../db';
 import { forbidden, HttpError, notFound, parse } from '../../http';
 import { getOrg } from '../../services/common';
 import { aiEnabled, decodeDataUrl, extractDocument } from '../../services/extract';
-import { aiError, askAssistant, suggestItem } from '../../services/assistant';
+import { aiError, askAssistant, stockAdvice, suggestItem } from '../../services/assistant';
+import { stockInsights } from '../../services/stockInsights';
 import { withTenant } from '../../db';
 import { h } from '../../http';
 import { userCtx } from '../../auth';
@@ -54,6 +55,18 @@ filesRouter.post(
     userCtx(req);
     const b = parse(z.object({ name: z.string().trim().min(2).max(200), hint: z.string().max(500).default('') }), req.body);
     res.json(await suggestItem(b.name, b.hint).catch(aiError));
+  }),
+);
+
+filesRouter.post(
+  '/ai/stock-advice',
+  rateLimit('ai-stock', 10, 60_000),
+  h(async (req, res) => {
+    const c = userCtx(req);
+    if (!['items.write', 'purchases.read', 'reports.read'].some((p) => allowed(c, p as Permission))) throw forbidden();
+    const b = parse(z.object({ leadDays: z.number().int().min(1).max(60).optional(), coverDays: z.number().int().min(7).max(120).optional() }), req.body ?? {});
+    const { ins, org } = await withTenant(c.shopId, async (db) => ({ ins: await stockInsights(db, c.shopId, b), org: await getOrg(db, c.shopId) }));
+    res.json(await stockAdvice(ins, { name: org.company_name, state: org.state ?? '' }, allowed(c, 'items.cost')).catch(aiError));
   }),
 );
 

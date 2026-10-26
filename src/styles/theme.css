@@ -434,3 +434,23 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .track-step i { width: 18px; height: 4px; border-radius: 99px; background: var(--ink-150, var(--ink-100)); }
 .track-step.done { color: var(--ink-800); font-weight: 600; }
 .track-step.done i { background: var(--sage-grad); }
+
+/* ---------- Smart reorder ---------- */
+.insight-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; padding: 14px 18px; }
+.insight-controls label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink-800); font-size: 13px; }
+.insight-controls .input { width: 72px; height: 36px; text-align: center; }
+.days-bar { height: 8px; border-radius: 99px; background: var(--ink-100); overflow: hidden; margin-bottom: 4px; }
+.days-bar span { display: block; height: 100%; border-radius: 99px; background: var(--sage-grad); min-width: 4px; }
+.days-bar span.out, .days-bar span.critical { background: var(--red-500); } .days-bar span.soon { background: var(--amber-600, #d08a2c); }
+.ai-advice { padding: 16px 18px; background: linear-gradient(135deg, var(--brand-50), var(--sage-soft)); }
+.ai-advice-head { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.ai-advice-head h3 { margin: 0; font-size: 15px; }
+.ai-advice-body { margin-top: 14px; }
+.ai-headline { font-weight: 700; color: var(--ink-900); margin: 0 0 10px; }
+.ai-actions { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.ai-actions li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+.ai-actions .pri { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; padding: 3px 8px; border-radius: 99px; flex: none; margin-top: 1px; }
+.ai-actions .pri-high .pri { background: var(--red-50); color: var(--red-600); }
+.ai-actions .pri-medium .pri { background: var(--amber-50); color: var(--amber-700); }
+.ai-actions .pri-low .pri { background: var(--sage-soft); color: var(--sage-ink); }
+.ai-season { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px dashed var(--brand-200); font-size: 13px; color: var(--ink-800); display: flex; gap: 8px; align-items: flex-start; }
