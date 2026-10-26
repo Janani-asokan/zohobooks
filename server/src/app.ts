@@ -20,6 +20,7 @@ import { filesRouter } from './routes/shop/files';
 import { challansRouter } from './routes/shop/challans';
 import { dataRouter } from './routes/shop/dataTransfer';
 import { fieldRouter } from './routes/shop/field';
+import { briefingRouter } from './routes/shop/briefing';
 import { inventoryRouter } from './routes/shop/inventory';
 import { accountingRouter } from './routes/shop/accounting';
 import { adminRouter } from './routes/shop/admin';
@@ -37,13 +38,15 @@ export function createApp() {
           styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
           fontSrc: ["'self'", 'https://fonts.gstatic.com'],
           // Map tiles for the field staff map (OpenStreetMap).
-          imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org'],
+          imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.de'],
           connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
           frameSrc: ['https://api.razorpay.com', 'https://checkout.razorpay.com'],
           mediaSrc: ["'self'", 'blob:'],
         },
       },
       crossOriginEmbedderPolicy: false,
+      // Map tile servers (OpenStreetMap) refuse requests without a referrer; send only our origin, never the path.
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     }),
   );
   // Uploads (files sent as base64) get a larger body limit than everything else.
@@ -62,7 +65,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), auditWrites, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, dataRouter, fieldRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), auditWrites, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, dataRouter, fieldRouter, briefingRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

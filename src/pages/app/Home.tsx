@@ -7,6 +7,7 @@ import { useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { EmptyState, StatCard } from '@/components/ui';
 import { openAssistant, useAiEnabled } from '@/components/Assistant';
+import { TodayPanel } from '@/components/TodayPanel';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AreaChart, Donut, MeterList } from '@/components/charts';
 import { fmtDate, money, moneyShort } from '@/lib/format';
@@ -85,6 +86,8 @@ export default function Home() {
         </div>
         <img className="welcome-photo" src="/img/hero.webp" alt="" aria-hidden="true" decoding="async" />
       </section>
+
+      {(me.can('reports.read') || me.can('admin')) && <TodayPanel aiOn={aiOn} />}
 
       {actions.length > 0 && (
         <nav className="big-actions" aria-label="Quick actions">

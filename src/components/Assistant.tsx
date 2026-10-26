@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, RotateCcw, SendHorizontal, Sparkles, X } from 'lucide-react';
+import { Loader2, Mic, MicOff, RotateCcw, SendHorizontal, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
+import { usePrefs } from '@/context/PrefsContext';
 import { api } from '@/api/client';
 
 type Turn = { role: 'user' | 'assistant'; content: string; error?: boolean };
@@ -13,8 +14,26 @@ const SUGGESTIONS = [
   'What are my top 5 selling items this year?',
 ];
 
-export const useAiEnabled = () =>
-  useQuery({ queryKey: ['ai-status'], queryFn: () => api.get<{ enabled: boolean }>('/shop/ai/status'), staleTime: 10 * 60_000 }).data?.enabled ?? false;
+const useAiStatusQuery = () => useQuery({ queryKey: ['ai-status'], queryFn: () => api.get<{ enabled: boolean }>('/shop/ai/status'), staleTime: 10 * 60_000 });
+// Voice: speech-to-text (Chrome, Edge, Safari) and read-aloud answers, in the app's language.
+const Recog = (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) as any;
+const VOICE_LANG: Record<string, string> = { en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN' };
+/** Markdown → something pleasant to hear: no symbols, tables read row by row. */
+const speakable = (md: string) => md.replace(/\|/g, ', ').replace(/[*#`>_-]{1,3}/g, ' ').replace(/₹/g, 'rupees ').replace(/\s+/g, ' ').trim();
+function speak(text: string, lang: string) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(speakable(text).slice(0, 1200));
+  u.lang = lang;
+  const v = window.speechSynthesis.getVoices().find((x) => x.lang === lang) ?? window.speechSynthesis.getVoices().find((x) => x.lang.startsWith(lang.slice(0, 2)));
+  if (v) u.voice = v;
+  u.rate = 1.02;
+  window.speechSynthesis.speak(u);
+}
+
+export const useAiEnabled = () => useAiStatusQuery().data?.enabled ?? false;
+/** undefined while the server hasn't answered yet. */
+export const useAiStatus = () => useAiStatusQuery().data?.enabled;
 
 /** **bold** and `code` inside a line. */
 function inline(s: string): ReactNode[] {
@@ -97,7 +116,24 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const ask = async (q: string) => {
+  const { lang } = usePrefs();
+  const vlang = VOICE_LANG[lang] ?? 'en-IN';
+  const [listening, setListening] = useState(false);
+  const [voiceOut, setVoiceOut] = useState(() => { try { return localStorage.getItem('c360.ai.speak') === '1'; } catch { return false; } });
+  const rec = useRef<any>(null);
+  useEffect(() => () => { rec.current?.stop(); if ('speechSynthesis' in window) window.speechSynthesis.cancel(); }, []);
+  const toggleVoiceOut = () => { const v = !voiceOut; setVoiceOut(v); try { localStorage.setItem('c360.ai.speak', v ? '1' : '0'); } catch { /* private mode */ } if (!v && 'speechSynthesis' in window) window.speechSynthesis.cancel(); };
+  const listen = () => {
+    if (!Recog) return;
+    if (listening) { rec.current?.stop(); return; }
+    const r = new Recog();
+    r.lang = vlang; r.interimResults = true; r.continuous = false;
+    let said = '';
+    r.onresult = (e: any) => { said = Array.from(e.results as ArrayLike<any>).map((x: any) => x[0].transcript).join(' '); setDraft(said); };
+    r.onend = () => { setListening(false); if (said.trim()) void ask(said, true); };
+    rec.current = r; setListening(true); r.start();
+  };
+  const ask = async (q: string, spoken = false) => {
     const text = q.trim();
     if (!text || busy) return;
     const next = [...turns.filter((t) => !t.error), { role: 'user' as const, content: text }];
@@ -107,6 +143,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
     try {
       const r = await api.post<{ answer: string }>('/shop/ai/ask', { messages: next.slice(-12).map(({ role, content }) => ({ role, content })) });
       setTurns([...next, { role: 'assistant', content: r.answer }]);
+      if (voiceOut || spoken) speak(r.answer, vlang);
     } catch (e) {
       setTurns([...next, { role: 'assistant', content: (e as Error).message, error: true }]);
     } finally {
@@ -124,6 +161,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
             <div className="ai-title">Ask AI</div>
             <div className="small muted">Answers from your live sales, dues and stock</div>
           </div>
+          {'speechSynthesis' in window && <button className={`icon-btn ${voiceOut ? 'on' : ''}`} onClick={toggleVoiceOut} aria-label={voiceOut ? 'Stop reading answers aloud' : 'Read answers aloud'} title={voiceOut ? 'Reading answers aloud' : 'Read answers aloud'}>{voiceOut ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>}
           {turns.length > 0 && <button className="icon-btn" onClick={() => setTurns([])} aria-label="New chat" title="New chat"><RotateCcw size={16} /></button>}
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </header>
@@ -131,7 +169,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
           {turns.length === 0 && (
             <div className="ai-empty">
               <div className="ai-hello"><Sparkles size={22} /></div>
-              <p><strong>Ask anything about your business.</strong><br />I look up your invoices, payments, customers and stock. I can’t change anything.</p>
+              <p><strong>Ask anything about your business.</strong><br />Type, or tap the mic and just say it. I look up your invoices, payments, customers and stock. I can’t change anything.</p>
               <div className="ai-chips">{SUGGESTIONS.map((s) => <button key={s} className="ai-chip" onClick={() => ask(s)}>{s}</button>)}</div>
             </div>
           )}
@@ -146,8 +184,10 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
         <form className="ai-input" onSubmit={(e) => { e.preventDefault(); ask(draft); }}>
           <textarea ref={input} rows={1} value={draft} maxLength={1000} placeholder="Ask about sales, dues or stock…"
             onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(draft); } }} />
+          {Recog && <button type="button" className={`icon-btn qb-mic ${listening ? 'on' : ''}`} onClick={listen} aria-label={listening ? 'Stop listening' : 'Ask by voice'} title="Ask by voice">{listening ? <MicOff size={17} /> : <Mic size={17} />}</button>}
           <button className="btn btn-primary" type="submit" disabled={busy || !draft.trim()} aria-label="Send"><SendHorizontal size={16} /></button>
         </form>
+        {listening && <div className="small qb-listening" style={{ padding: '0 16px' }}><span className="qb-dot" /> Listening… ask your question, then pause. The answer is read aloud.</div>}
         <div className="ai-foot small muted">AI can make mistakes. Check important numbers in Reports.</div>
       </aside>
     </div>

@@ -36,11 +36,25 @@ export default function FieldTeam() {
   const mapEl = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
+  const [tilesDown, setTilesDown] = useState(false);
 
   useEffect(() => {
     if (!mapEl.current || map.current) return;
     map.current = L.map(mapEl.current, { zoomControl: true, attributionControl: true }).setView([20.6, 78.9], 5);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map.current);
+    // OpenStreetMap first, the OSM Germany mirror if it refuses; pins and routes show either way.
+    const servers = ['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://tile.openstreetmap.de/{z}/{x}/{y}.png'];
+    const blank = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    const addTiles = (i: number) => {
+      let failed = 0;
+      const t = L.tileLayer(servers[i]!, { maxZoom: 19, attribution: '© OpenStreetMap contributors', referrerPolicy: 'strict-origin-when-cross-origin', errorTileUrl: blank, crossOrigin: false } as L.TileLayerOptions);
+      t.on('tileerror', () => {
+        if (++failed !== 4) return;
+        map.current?.removeLayer(t);
+        if (i + 1 < servers.length) addTiles(i + 1); else setTilesDown(true);
+      });
+      t.addTo(map.current!);
+    };
+    addTiles(0);
     layer.current = L.layerGroup().addTo(map.current);
     return () => { map.current?.remove(); map.current = null; };
   }, []);
@@ -133,7 +147,10 @@ export default function FieldTeam() {
             </button>
           ))}
         </aside>
-        <div className="card ft-map"><div ref={mapEl} className="ft-map-el" aria-label="Map of visits" /></div>
+        <div className="card ft-map">
+          <div ref={mapEl} className="ft-map-el" aria-label="Map of visits" />
+          {tilesDown && <div className="ft-map-note">The street map couldn’t load on this network. Visits and routes are still shown; tap a pin, or open a visit in Google Maps from the list below.</div>}
+        </div>
       </div>
 
       {shown.some((p) => p.visits.length) && (
@@ -142,7 +159,7 @@ export default function FieldTeam() {
           <div className="table-wrap"><table className="table">
             <thead><tr><th>Time</th><th>Person</th><th>Customer</th><th>Result</th><th className="num">Minutes</th><th className="num">Order</th><th className="num">Collected</th><th>Notes</th></tr></thead>
             <tbody>{shown.flatMap((p) => p.visits.map((v) => ({ p, v }))).sort((a, b) => a.v.checkedInAt.localeCompare(b.v.checkedInAt)).map(({ p, v }) => (
-              <tr key={v.id}><td>{time(v.checkedInAt)}</td><td>{p.userName}</td><td className="strong">{v.customerName}<div className="muted small">{v.purpose}</div></td><td>{v.outcome || <span className="muted">In progress</span>}</td>
+              <tr key={v.id}><td>{time(v.checkedInAt)}</td><td>{p.userName}</td><td className="strong">{v.customerName}<div className="muted small">{v.purpose}{v.lat !== null && <> · <a href={`https://www.google.com/maps?q=${v.lat},${v.lng}`} target="_blank" rel="noreferrer">map</a></>}</div></td><td>{v.outcome || <span className="muted">In progress</span>}</td>
                 <td className="num">{v.minutes ?? '—'}</td><td className="num">{v.orderValue ? money(v.orderValue) : '—'}</td><td className="num">{v.collected ? money(v.collected) : '—'}</td><td className="small">{v.notes}{v.nextVisit ? <div className="muted">Next visit {v.nextVisit}</div> : null}</td></tr>
             ))}</tbody>
           </table></div>

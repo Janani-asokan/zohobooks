@@ -106,14 +106,17 @@ Without `ANTHROPIC_API_KEY`, reading runs entirely on the server: PDF text extra
 
 **Tally & Import (Accounting):** Tally XML export of masters and vouchers (sales, receipts, purchases, payments; every voucher balances), Tally masters import (UTF-8 or UTF-16), and CSV import from any software with column matching.
 
-**Field staff:** *My Day* for salespeople (start/end day, GPS check-in at customers, outcome, order value, collection) and *Field Team* for owners (map of routes and visits, totals, export). Location is recorded only between Start day and End day. Map tiles come from OpenStreetMap.
+**Field staff:** *My Day* for salespeople (start/end day, GPS check-in at customers, outcome, order value, collection) and *Field Team* for owners (map of routes and visits, totals, export). Location is recorded only between Start day and End day. Map tiles come from OpenStreetMap (with a mirror as fallback); each visit also has a Google Maps link.
+
+**Business health score (Dashboard):** five checks from your own books, 20 points each (collections, cash coming in, sales growth, stock health, profit margin), with the biggest win to work on. No AI needed.
 
 **Weighing scale:** POS reads USB/serial scales (Chrome or Edge on a computer) and bills weighed items by the reading.
 
 **AI features (with `ANTHROPIC_API_KEY`):**
 
 - **Smart reader** for every upload box above.
-- **Ask AI** (top bar): ask about sales, dues, customers, stock, bills and expenses in plain words. It answers from the shop's live data through read-only lookups that respect the user's role (sales staff can't see purchases, cost prices need `items.cost`), and it can't change anything.
+- **Today's plan** on the Dashboard: every morning the AI writes up to five jobs for the day from your books (overdue dues to collect, items to reorder, expiring batches, field follow-ups, slow stock) with one-tap buttons, in English, Hindi or Tamil. It is saved for the day; without the key the same jobs are listed in plain words.
+- **Ask AI** (top bar): ask about sales, dues, customers, stock, bills and expenses in plain words. It answers from the shop's live data through read-only lookups that respect the user's role (sales staff can't see purchases, cost prices need `items.cost`), and it can't change anything. Ask by voice with the mic button and turn on read-aloud to hear the answer.
 - **Fill with AI** on the new-item form: suggests the HSN/SAC code, GST rate, unit, category, brand and a short description from the item name. It only fills empty fields.
 - **Type or speak the bill** on invoices and POS (English, Hinglish, 9 Indian languages by voice): finds your items and customer, discount and payment mode.
 - **AI stock advice** on Smart Reorder, with festival tips from a fixed festival calendar.

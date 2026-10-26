@@ -16,7 +16,7 @@ import { Attachments } from '@/components/Attachments';
 import { useClickOutside } from '@/components/useClickOutside';
 import { fmtDate, money, todayISO } from '@/lib/format';
 import { useQuery } from '@tanstack/react-query';
-import { useAiEnabled } from '@/components/Assistant';
+import { useAiEnabled, useAiStatus } from '@/components/Assistant';
 
 const shareUrl = (token: string) => `${window.location.origin}/share/${token}`;
 
@@ -93,7 +93,15 @@ export default function InvoiceView() {
   const mailMut = useMut((b: typeof mail) => api.post<{ status: string; detail: string }>(`/shop/invoices/${id}/email`, b), [['invoice']], { silentError: true });
   const refsMut = useMut((b: typeof refs) => api.put(`/shop/invoices/${id}/gst-refs`, b), keys, { silentError: true });
   const aiOn = useAiEnabled();
+  const aiKnown = useAiStatus();
   const [aiRemind, setAiRemind] = useState(false);
+  // "Send reminder" from the dashboard plan lands here with ?remind=1.
+  useEffect(() => {
+    if (!inv || aiKnown === undefined || !params.get('remind')) return;
+    params.delete('remind'); setParams(params, { replace: true });
+    if (inv.status !== 'Issued' || inv.balance <= 0) return;
+    if (aiKnown) setAiRemind(true); else toast('info', 'Send a reminder', 'Use Share → WhatsApp payment reminder.');
+  }, [inv?.id, aiKnown]);
   const remind = useMut((channel: 'email' | 'whatsapp') => api.post<{ status: string; detail: string }>(`/shop/invoices/${id}/reminders`, { channel }), [['invoice']], {});
 
   useEffect(() => {

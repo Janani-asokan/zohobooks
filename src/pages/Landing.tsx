@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight, Boxes, BarChart3, Check, Camera, Store, Calculator, Users,
+  ArrowRight, Boxes, BarChart3, Check, Camera, Store, Calculator, Users, FileText,
   Sparkles, BellRing, IndianRupee, Send, ChevronDown, Zap, LogIn, ScanLine, Mic, BrainCircuit, MapPinned, RefreshCw, Split, Truck, TrendingUp, MessageCircle, Scale,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/Logo';
@@ -36,10 +36,25 @@ const STEPS = [
 ];
 
 const SCREENS = [
-  { id: 'dashboard', label: 'Dashboard', src: '/screens/dashboard.jpg' },
-  { id: 'invoice', label: 'Invoice', src: '/screens/invoice.jpg' },
-  { id: 'items', label: 'Items', src: '/screens/items.jpg' },
-  { id: 'reports', label: 'Reports', src: '/screens/reports.jpg' },
+  { id: 'dashboard', label: 'AI morning plan', icon: Sparkles, caption: 'Every morning: a health score for your business and a to-do list written by AI, with one-tap reminders.', src: '/screens/dashboard.jpg' },
+  { id: 'pos', label: 'Speak the bill', icon: Mic, caption: 'Say or type the bill in your own words. Items, customer, discount and payment fill themselves.', src: '/screens/pos.jpg' },
+  { id: 'reorder', label: 'Smart reorder', icon: BrainCircuit, caption: 'What to buy, how much and from whom, with festival tips. One tap makes the purchase orders.', src: '/screens/reorder.jpg' },
+  { id: 'ask', label: 'Ask AI', icon: MessageCircle, caption: 'Ask your shop anything, by voice or text, and hear the answer read aloud.', src: '/screens/ask.jpg' },
+  { id: 'invoice', label: 'GST invoice', icon: FileText, caption: 'Clean GST invoices with your logo, UPI QR and profit on every bill.', src: '/screens/invoice.jpg' },
+  { id: 'reports', label: 'Reports', icon: BarChart3, caption: 'P&L, balance sheet, GST returns and Tally export, ready for your CA.', src: '/screens/reports.jpg' },
+];
+
+/** Where Corpus360 goes further than a regular billing app. */
+const COMPARE: Array<[string, string, string]> = [
+  ['GST invoices, POS, barcode, thermal printing', 'Yes', 'Yes'],
+  ['Make a bill by speaking, in Indian languages', '—', 'Yes'],
+  ['AI morning plan and business health score', '—', 'Yes'],
+  ['Photo or PDF of any bill fills the form', 'Basic OCR', 'AI reader'],
+  ['Reorder list from real sales speed + festival tips', 'Low-stock alert', 'Yes'],
+  ['Ask your shop questions by voice', '—', 'Yes'],
+  ['WhatsApp reminders written in the customer’s language', 'Fixed text', 'AI, 10 languages'],
+  ['Salesman route, visits and AI day summary', 'Add-on', 'Included'],
+  ['Tally: export and import, any software’s Excel', 'Export only', 'Both ways, AI-matched'],
 ];
 
 const FAQ = [
@@ -80,7 +95,7 @@ export default function Landing() {
       <span className="lp-dot d1" /><span className="lp-dot d2" /><span className="lp-dot d3" /><span className="lp-dot d4" />
       <header ref={navRef} className={`lp-nav ${scrolled ? 'scrolled' : ''}`}>
         <Link to="/" className="lp-logo" aria-label="Corpus360 home"><BrandLogo height={22} /></Link>
-        <nav className="lp-links"><a href="#home">Home</a><a href="#features">Features</a><a href="#how">How it works</a><a href="#faq">FAQ</a></nav>
+        <nav className="lp-links"><a href="#home">Home</a><a href="#features">Features</a><a href="#screens">See it</a><a href="#compare">Why us</a><a href="#faq">FAQ</a></nav>
         <div className="lp-nav-cta">
           <Link to="/login" className="lp-pill lp-pill-light"><LogIn size={15} /> Login</Link>
           <Link to="/login" className="lp-pill lp-pill-rose">Try the demo</Link>
@@ -159,9 +174,25 @@ export default function Landing() {
       <section className="lp-section" id="screens">
         <h2 className="reveal">See it in <span>action</span></h2>
         <div className="lp-tabs reveal" role="tablist" aria-label="Screens">
-          {SCREENS.map((s) => <button key={s.id} role="tab" aria-selected={screen === s.id} className={screen === s.id ? 'active' : ''} onClick={() => setScreen(s.id)}>{s.label}</button>)}
+          {SCREENS.map((s) => <button key={s.id} role="tab" aria-selected={screen === s.id} className={screen === s.id ? 'active' : ''} onClick={() => setScreen(s.id)}><s.icon size={15} /> {s.label}</button>)}
         </div>
+        <p className="lp-caption reveal">{current.caption}</p>
         <div className="lp-frame reveal"><div className="lp-frame-bar"><i /><i /><i /></div><img key={current.id} src={current.src} alt={`Corpus360 ${current.label.toLowerCase()} screen`} /></div>
+      </section>
+
+      <section className="lp-section" id="compare">
+        <h2 className="reveal">Why shops <span>switch</span></h2>
+        <p className="lp-sub reveal">Everything a billing app does, plus an assistant that does the thinking for you.</p>
+        <div className="lp-compare reveal" role="table" aria-label="Corpus360 compared with a regular billing app">
+          <div className="lp-cmp-row lp-cmp-head" role="row"><span role="columnheader" /><span role="columnheader">Regular billing app</span><span role="columnheader" className="us">Corpus360</span></div>
+          {COMPARE.map(([what, them, us]) => (
+            <div key={what} className="lp-cmp-row" role="row">
+              <span role="cell">{what}</span>
+              <span role="cell" className="them">{them}</span>
+              <span role="cell" className="us"><Check size={15} /> {us}</span>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="lp-section" id="faq">

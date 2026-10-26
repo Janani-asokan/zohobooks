@@ -166,7 +166,8 @@ You answer the shop team's questions about their own business using the tools, w
 - Keep answers short and practical: a one-line answer first, then at most a few bullet points or a small table. Plain words, no accounting jargon unless asked.
 - If a tool says the user's role can't see something, say so politely.
 - You can't create, change or delete records. When the user wants to do something, tell them where in the app to do it (e.g. Sales → Invoices → New invoice; Items → New item; Purchases → Bills).
-- General GST, invoicing or business questions you may answer from knowledge, briefly, and say when they should confirm with their CA.`;
+- General GST, invoicing or business questions you may answer from knowledge, briefly, and say when they should confirm with their CA.
+- Reply in the language the user writes in (English, Hindi, Tamil, Hinglish and so on), keeping names, numbers and ₹ amounts as they are.`;
 
 export type ChatTurn = { role: 'user' | 'assistant'; content: string };
 
@@ -448,4 +449,34 @@ Be factual and fair: use only the data given, never guess where someone was beyo
   });
   if (!response.parsed_output) throw new HttpError(422, 'Couldn’t summarise the day.', 'ai_no_answer');
   return response.parsed_output;
+}
+
+/* ---------- Morning briefing ---------- */
+
+const Briefing = z.object({
+  greeting: z.string().describe('Short warm greeting with one line on how the business is doing'),
+  actions: z.array(z.object({
+    ref: z.string().describe('One of the action refs given; never invent one'),
+    title: z.string().describe('Short imperative, e.g. "Collect ₹52,181 from BrightPath Academy"'),
+    detail: z.string().describe('One sentence with the why'),
+  })).max(5),
+  tip: z.string().nullable().describe('One practical idea for today (festival, slow stock, pricing); null if nothing useful'),
+});
+export type BriefingOut = z.infer<typeof Briefing>;
+
+export async function dailyBriefing(input: { shop: string; owner: string; today: string; facts: unknown; refs: Array<{ ref: string; about: string }> }, lang: 'en' | 'hi' | 'ta'): Promise<BriefingOut> {
+  const language = { en: 'simple Indian English', hi: 'simple Hindi (Devanagari)', ta: 'simple Tamil (Tamil script)' }[lang];
+  const response = await ai().beta.messages.parse({
+    model: config.ai.model,
+    max_tokens: 6000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low', format: zodOutputFormat(Briefing) },
+    system: `You write the morning briefing for ${input.owner}, who runs ${input.shop}, a small Indian business. Write in ${language}; keep names, invoice numbers and ₹ amounts as given.
+Pick the 3 to 5 most useful things to do today from the action refs (money to collect first, then stock that is running out or expiring, then follow-ups). Use only the facts given; amounts as ₹ with Indian grouping. Warm, brief, practical.`,
+    messages: [{ role: 'user', content: JSON.stringify({ today: input.today, facts: input.facts, actionRefs: input.refs, upcomingFestivals: upcomingFestivals(input.today) }) }],
+  });
+  if (!response.parsed_output) throw new HttpError(422, 'Couldn’t write the briefing right now.', 'ai_no_answer');
+  const valid = new Set(input.refs.map((r) => r.ref));
+  return { ...response.parsed_output, actions: response.parsed_output.actions.filter((a) => valid.has(a.ref)) };
 }

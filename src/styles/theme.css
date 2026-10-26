@@ -532,3 +532,39 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 @media (max-width: 480px) { .field-stats { grid-template-columns: 1fr; } }
 .scale-btn { height: 46px; display: inline-flex; align-items: center; gap: 6px; }
 .scale-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber-600, #d08a2c); } .scale-dot.ok { background: var(--green-600, #3d8b5a); }
+.ft-map { position: relative; }
+.ft-map .leaflet-container { background: linear-gradient(135deg, #f4efe9, #eef2eb); }
+.ft-map-note { position: absolute; left: 12px; right: 12px; bottom: 28px; z-index: 500; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.95); border: 1px solid var(--border); font-size: 12.5px; color: var(--ink-700); box-shadow: var(--shadow-xs); }
+
+/* ---------- Today: health score + AI plan ---------- */
+.today { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 16px; margin-bottom: 20px; }
+.hs-card, .brief-card { padding: 16px 18px; animation: rise-in .5s cubic-bezier(.2, .7, .2, 1) backwards; }
+.hs-head { display: flex; gap: 8px; align-items: center; font-weight: 700; color: var(--ink-900); margin-bottom: 10px; }
+.hs-head svg { color: var(--brand-500); }
+.hs-body { display: grid; grid-template-columns: 128px 1fr; gap: 14px; align-items: center; }
+.hs-gauge { width: 128px; height: 128px; }
+.hs-arc { transition: stroke-dashoffset 1.2s cubic-bezier(.2, .7, .2, 1); animation: hs-draw 1.2s cubic-bezier(.2, .7, .2, 1) backwards; }
+@keyframes hs-draw { from { stroke-dashoffset: 330; } }
+.hs-num { font: 800 32px var(--font-display, inherit); fill: var(--ink-900); }
+.hs-grade { font-size: 11px; font-weight: 700; fill: var(--ink-500); text-transform: uppercase; letter-spacing: .05em; }
+.hs-parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.hs-parts li { display: grid; grid-template-columns: 22px 1fr 60px 20px; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-700); cursor: pointer; }
+.hs-pi { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--brand-50); color: var(--brand-700); }
+.hs-bar { height: 6px; border-radius: 99px; background: var(--ink-100); overflow: hidden; }
+.hs-bar span { display: block; height: 100%; border-radius: 99px; background: var(--sage-grad); }
+.hs-bar span.mid { background: #d9a441; } .hs-bar span.low { background: var(--red-500); }
+.hs-ps { font-weight: 700; text-align: right; color: var(--ink-900); }
+.hs-tip { grid-column: 1 / -1; font-size: 11.5px; color: var(--ink-600); background: var(--sage-soft); padding: 6px 8px; border-radius: 8px; }
+.brief-head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.brief-head h3 { margin: 0; font-size: 16px; }
+.brief-greet { margin: 0 0 10px; color: var(--ink-800); font-weight: 600; }
+.brief-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.brief-list li { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); animation: rise-in .45s cubic-bezier(.2, .7, .2, 1) backwards; }
+.brief-ic { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; flex: none; }
+.brief-tip { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, var(--brand-50), var(--sage-soft)); font-size: 13px; display: flex; gap: 8px; align-items: flex-start; color: var(--ink-800); }
+@media (max-width: 980px) { .today { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .hs-body { grid-template-columns: 1fr; justify-items: center; } .hs-parts { width: 100%; } .brief-list li { flex-wrap: wrap; } }
+.ai-head .icon-btn.on { color: var(--brand-700); background: var(--surface); }
+.hs-win { display: flex; gap: 10px; margin-top: 14px; padding: 12px; border-radius: 14px; background: linear-gradient(135deg, var(--brand-50), #fff); border: 1px solid var(--brand-200); color: var(--ink-800); }
+.hs-win strong { color: var(--ink-900); }
+.hs-win-ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-grad); color: #fff; flex: none; }
