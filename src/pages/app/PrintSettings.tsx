@@ -152,7 +152,7 @@ export default function PrintSettings() {
                     <label key={p} className={`ps-radio ${iv.paper === p ? 'active' : ''}`}>{p.toUpperCase()}<input type="radio" name="ipaper" checked={iv.paper === p} onChange={() => setI({ paper: p })} /></label>
                   ))}
                 </div>
-                <p className="small muted" style={{ marginTop: 8 }}>A5 drops the line-total column to fit; totals are unchanged. 80mm receipts use the Thermal receipt tab.</p>
+                <p className="small muted" style={{ marginTop: 8 }}>A5 drops the line-total column to fit; totals are unchanged. 58 mm and 80 mm receipts use the Thermal receipt tab.</p>
               </div>
               <div className="ps-sec">
                 <h3>Logo and colour</h3>
@@ -214,12 +214,13 @@ export default function PrintSettings() {
               </div>
               <div className="ps-sec">
                 <h3>Print Settings</h3>
-                <div className="small muted" style={{ marginBottom: 6 }}>Select Paper Size</div>
+                <div className="small muted" style={{ marginBottom: 6 }}>Default roll width</div>
                 <div className="ps-radios">
                   {(['2in', '3in'] as const).map((p) => (
-                    <label key={p} className={`ps-radio ${th.paper === p ? 'active' : ''}`}>{p === '2in' ? '2 inch' : '3 inch'}<input type="radio" name="paper" checked={th.paper === p} onChange={() => setT({ paper: p })} /></label>
+                    <label key={p} className={`ps-radio ${th.paper === p ? 'active' : ''}`}>{p === '2in' ? '58 mm (2 inch)' : '80 mm (3 inch)'}<input type="radio" name="paper" checked={th.paper === p} onChange={() => setT({ paper: p })} /></label>
                   ))}
                 </div>
+                <p className="small muted" style={{ marginTop: 8 }}>Older and handheld printers use 58 mm rolls. You can still pick the other size each time you print.</p>
               </div>
               <div className="ps-sec">
                 <button className={`ps-acc ${open.logo ? 'open' : ''}`} onClick={() => setOpen({ ...open, logo: !open.logo })}>Upload Logo <ChevronDown size={18} /></button>

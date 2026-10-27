@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBankAccounts, useBranches, useInvoice, useMut, useOrg, usePrintSettings } from '@/api/hooks';
-import { printInvoice, printRoute, type PrintPaper } from '@/lib/printInvoice';
+import { preparePrint, printInvoice, printRoute, type PrintPaper, type Roll } from '@/lib/printInvoice';
 import { withPrintDefaults } from '../../../shared/printSettings';
 import type { InvoiceDetail, Organization } from '@/api/types';
 import { downloadInvoicePdf } from '@/lib/report';
@@ -37,13 +37,13 @@ export const waLink = (phone: string, text: string) => {
   return `https://wa.me/${digits.length === 10 ? '91' + digits : ''}?text=${encodeURIComponent(text)}`;
 };
 
-function Menu({ label, icon: Icon, children, primary }: { label: string; icon: typeof Share2; children: (close: () => void) => React.ReactNode; primary?: boolean }) {
+function Menu({ label, icon: Icon, children, primary, onOpen }: { label: string; icon: typeof Share2; children: (close: () => void) => React.ReactNode; primary?: boolean; onOpen?: () => void }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
   const ref = useClickOutside<HTMLDivElement>(close, open);
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button className={`btn ${primary ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}><Icon size={15} /> {label} <ChevronDown size={14} /></button>
+      <button className={`btn ${primary ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { if (!open) onOpen?.(); setOpen((o) => !o); }} aria-haspopup="menu" aria-expanded={open}><Icon size={15} /> {label} <ChevronDown size={14} /></button>
       {open && <div className="dropdown" role="menu">{children(close)}</div>}
     </div>
   );
@@ -113,9 +113,12 @@ export default function InvoiceView() {
   if (q.isError) return <div className="page"><div className="card"><EmptyState icon={FileX} title="Invoice not found" text={q.error.message} action={<Link to="/app/sales/invoices" className="btn btn-primary">Back to invoices</Link>} /></div></div>;
   if (!inv || !org) return <div className="page"><div className="skeleton" style={{ height: 600 }} /></div>;
 
-  function doPrint(paper: PrintPaper) {
-    printInvoice(id!, paper).catch((e) => toast('error', 'Could not print', e.message));
+  function doPrint(paper: PrintPaper, roll?: Roll) {
+    printInvoice(id!, paper, roll).catch((e) => toast('error', 'Could not print', e.message));
   }
+  // Opening the menu starts loading the two likeliest prints, so the click prints straight away.
+  const warmPrint = () => { preparePrint(id!, printCfg.invoice.paper); preparePrint(id!, 'thermal', printCfg.thermal.paper); };
+  const rolls: Roll[] = printCfg.thermal.paper === '2in' ? ['2in', '3in'] : ['3in', '2in'];
   const downloadPdf = (paper: PrintPaper = 'a4') => {
     setPdfBusy(true);
     downloadInvoicePdf(id!, `${inv?.number ?? 'draft-invoice'}.pdf`, paper)
@@ -192,12 +195,14 @@ export default function InvoiceView() {
               )}
             </Menu>
           )}
-          <Menu label="Print" icon={Printer}>
+          <Menu label="Print" icon={Printer} onOpen={warmPrint}>
             {(close) => (
               <>
                 <button className="dropdown-item" onClick={() => { close(); doPrint('a4'); }}><Printer size={16} /> Print A4</button>
                 <button className="dropdown-item" onClick={() => { close(); doPrint('a5'); }}><Printer size={16} /> Print A5</button>
-                <button className="dropdown-item" onClick={() => { close(); doPrint('thermal'); }}><Receipt size={16} /> Print receipt ({printCfg.thermal.paper === '2in' ? '58' : '80'}mm)</button>
+                {rolls.map((r) => (
+                  <button key={r} className="dropdown-item" onClick={() => { close(); doPrint('thermal', r); }}><Receipt size={16} /> Print receipt {r === '2in' ? '58mm (2″)' : '80mm (3″)'}</button>
+                ))}
                 <div className="dropdown-sep" />
                 <button className="dropdown-item" disabled={pdfBusy} onClick={() => { close(); downloadPdf(printCfg.invoice.paper); }}><Download size={16} /> Download PDF</button>
                 <Link className="dropdown-item" to={printRoute(inv.id, printCfg.invoice.paper)} onClick={close}><ExternalLink size={16} /> Open print view</Link>

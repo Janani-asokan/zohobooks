@@ -40,7 +40,7 @@ export function createApp() {
           // Map tiles for the field staff map (OpenStreetMap).
           imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.de'],
           connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
-          frameSrc: ['https://api.razorpay.com', 'https://checkout.razorpay.com'],
+          frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
           mediaSrc: ["'self'", 'blob:'],
         },
       },

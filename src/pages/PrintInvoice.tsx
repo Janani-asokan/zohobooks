@@ -6,7 +6,7 @@ import type { Invoice } from '@/api/types';
 import { TaxInvoice, type PrintBranch, type PrintOrg } from '@/components/TaxInvoice';
 import { ThermalReceipt, receiptFromInvoice } from '@/components/printing';
 import { Segmented } from '@/components/ui';
-import { withPrintDefaults, type PrintSettings } from '../../shared/printSettings';
+import { withPrintDefaults, type PaperSize, type PrintSettings } from '../../shared/printSettings';
 
 export type Paper = 'a4' | 'a5' | 'thermal';
 interface Bundle { invoice: Invoice; org: PrintOrg; branch: PrintBranch | null; settings: PrintSettings }
@@ -35,7 +35,7 @@ async function loadBundle(id: string, rt: string | null, share: string | null): 
   return { ...b, settings: withPrintDefaults(b.settings) };
 }
 
-/** Standalone print route: /invoices/:id/print?paper=a4|a5|thermal. Renders only the document. */
+/** Standalone print route: /invoices/:id/print?paper=a4|a5|thermal[&roll=2in|3in]. Renders only the document. */
 export default function PrintInvoice() {
   const { id = '' } = useParams();
   const [params, setParams] = useSearchParams();
@@ -48,6 +48,9 @@ export default function PrintInvoice() {
   const [readyFor, setReadyFor] = useState<Paper | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const paper = (['a4', 'a5', 'thermal'].includes(params.get('paper') ?? '') ? params.get('paper') : data?.settings.invoice.paper ?? 'a4') as Paper;
+  // The roll width can be picked per print; otherwise it comes from Print settings.
+  const rollParam = params.get('roll');
+  const roll: PaperSize = rollParam === '2in' || rollParam === '3in' ? rollParam : data?.settings.thermal.paper ?? '3in';
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -77,7 +80,7 @@ export default function PrintInvoice() {
 
   const inv = data?.invoice;
   const label = inv ? `${inv.number ?? 'Draft'} · ${data!.org.companyName}` : '';
-  const thermalMm = data?.settings.thermal.paper === '2in' ? 58 : 80;
+  const thermalMm = roll === '2in' ? 58 : 80;
 
   useEffect(() => {
     if (!inv) return;
@@ -109,9 +112,9 @@ export default function PrintInvoice() {
   const doc = useMemo(() => {
     if (!data || !inv) return null;
     if (paper === 'thermal')
-      return <div className="print-doc"><ThermalReceipt data={receiptFromInvoice(inv, [], undefined, undefined)} org={data.org} s={data.settings.thermal} /></div>;
+      return <div className="print-doc"><ThermalReceipt data={receiptFromInvoice(inv, [], undefined, undefined)} org={data.org} s={{ ...data.settings.thermal, paper: roll }} /></div>;
     return <TaxInvoice inv={inv} org={data.org} branch={data.branch} s={data.settings.invoice} paper={paper} onReady={onDocReady} />;
-  }, [data, paper, onDocReady]);
+  }, [data, paper, roll, onDocReady]);
 
   if (error)
     return (
@@ -125,7 +128,7 @@ export default function PrintInvoice() {
       </div>
     );
 
-  const pdfHref = share ? `/public/invoices/${share}/pdf` : `/shop/invoices/${id}/pdf?paper=${paper}`;
+  const pdfHref = share ? `/public/invoices/${share}/pdf` : `/shop/invoices/${id}/pdf?paper=${paper}${paper === 'thermal' ? `&roll=${roll}` : ''}`;
   // The server PDF matches this page exactly; if it can't be made right now, the browser's own print-to-PDF is used.
   const savePdf = () => {
     setPdfBusy(true);
@@ -138,7 +141,16 @@ export default function PrintInvoice() {
           {!share && <button className="icon-btn" onClick={() => (history.length > 1 ? navigate(-1) : navigate(`/app/sales/invoices/${id}`))} aria-label="Back"><ArrowLeft size={18} /></button>}
           <div className="strong" style={{ fontSize: 14 }}>{inv?.number ?? (inv ? 'Draft invoice' : '')}</div>
           <div className="grow" />
-          {!share && <Segmented value={paper} onChange={(v) => { params.set('paper', v); setParams(params, { replace: true }); }} options={[{ value: 'a4', label: 'A4' }, { value: 'a5', label: 'A5' }, { value: 'thermal', label: '80mm' }]} />}
+          {!share && (
+            <Segmented
+              value={paper === 'thermal' ? roll : paper}
+              onChange={(v) => {
+                if (v === '2in' || v === '3in') { params.set('paper', 'thermal'); params.set('roll', v); } else { params.set('paper', v); params.delete('roll'); }
+                setParams(params, { replace: true });
+              }}
+              options={[{ value: 'a4', label: 'A4' }, { value: 'a5', label: 'A5' }, { value: '2in', label: '58mm' }, { value: '3in', label: '80mm' }]}
+            />
+          )}
           <button className="btn btn-secondary" disabled={!data || pdfBusy} onClick={savePdf}>{pdfBusy ? <Loader2 size={15} className="spin" /> : <Download size={15} />} PDF</button>
           <button className="btn btn-primary" onClick={() => window.print()} disabled={!data}><Printer size={15} /> Print</button>
         </div>

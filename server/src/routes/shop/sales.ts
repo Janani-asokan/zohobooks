@@ -513,6 +513,7 @@ salesRouter.post(
 
 /* ---------- Printing, PDF and email ---------- */
 const paperOf = (v: unknown): PdfPaper => (v === 'a5' || v === 'thermal' ? v : 'a4');
+const rollOf = (v: unknown) => (v === '2in' || v === '3in' ? v : undefined);
 export const pdfName = (inv: { number: string | null; status: string }) => `${(inv.number ?? 'draft-invoice').replace(/[^\w.-]+/g, '-')}.pdf`;
 
 salesRouter.get('/invoices/:id/print-data', T(async (db, req, c) => invoicePrintBundle(db, c.shopId, req.params.id!)));
@@ -522,7 +523,7 @@ salesRouter.get(
   h(async (req, res) => {
     const c = userCtx(req);
     const inv = await withTenant(c.shopId, (db) => getInvoice(db, c.shopId, req.params.id!));
-    const pdf = await renderPdfOr503(c.shopId, inv.id, paperOf(req.query.paper));
+    const pdf = await renderPdfOr503(c.shopId, inv.id, paperOf(req.query.paper), rollOf(req.query.roll));
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `${req.query.inline ? 'inline' : 'attachment'}; filename="${pdfName(inv)}"`);
     res.setHeader('Cache-Control', 'private, no-store');
@@ -530,9 +531,9 @@ salesRouter.get(
   }),
 );
 
-export async function renderPdfOr503(shopId: string, invoiceId: string, paper: PdfPaper) {
+export async function renderPdfOr503(shopId: string, invoiceId: string, paper: PdfPaper, roll?: '2in' | '3in') {
   try {
-    return await invoicePdf(shopId, invoiceId, paper);
+    return await invoicePdf(shopId, invoiceId, paper, roll);
   } catch (e) {
     console.error('[pdf]', (e as Error).message);
     throw new HttpError(503, 'Could not create the PDF right now. Use Print → Save as PDF instead.', 'pdf_unavailable');

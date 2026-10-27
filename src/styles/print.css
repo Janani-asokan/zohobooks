@@ -123,6 +123,14 @@ body.print-route { background: #e9ebef; }
 .print-shell { min-height: 100vh; }
 .print-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-4); background: var(--bg); border-bottom: 1px solid var(--border); }
 .print-bar .grow { flex: 1; }
+/* On phones the paper switch takes its own row so the bar never scrolls sideways. */
+@media (max-width: 560px) {
+  .print-bar { flex-wrap: wrap; }
+  .print-bar > .strong { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .print-bar .grow { display: none; }
+  .print-bar .segmented { order: 5; flex: 1 1 100%; }
+  .print-bar .segmented button { flex: 1; }
+}
 .print-page { padding: var(--sp-6) var(--sp-4); display: flex; justify-content: center; }
 .print-page .ti, .print-page .receipt { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
 @media (max-width: 860px) { .print-page { padding: var(--sp-3) 0; overflow-x: auto; justify-content: flex-start; } }

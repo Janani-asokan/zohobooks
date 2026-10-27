@@ -8,7 +8,7 @@ import { downloadInvoicePdf } from '@/lib/report';
 import { useToast } from '@/context/ToastContext';
 import { StatusBadge } from '@/components/StatusBadge';
 import { fmtDate, money, num2 } from '@/lib/format';
-import { printInvoice } from '@/lib/printInvoice';
+import { preparePrint, printInvoice } from '@/lib/printInvoice';
 
 /** Quick look at an invoice beside the list: totals, lines, payments and the common actions. */
 export function InvoicePanel({ id, onClose }: { id: string; onClose: () => void }) {
@@ -43,7 +43,7 @@ export function InvoicePanel({ id, onClose }: { id: string; onClose: () => void 
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
               {inv.status === 'Issued' && inv.balance > 0 && me.can('payments.write') && <Link className="btn btn-primary btn-sm" to={`/app/sales/invoices/${id}?pay=1`}><Wallet size={14} /> Record payment</Link>}
               {me.can('sales.write') && (inv.status === 'Draft' || (inv.status === 'Issued' && inv.amountPaid === 0 && inv.amountCredited === 0)) && <Link className="btn btn-secondary btn-sm" to={`/app/sales/invoices/${id}/edit`}><Pencil size={14} /> Edit</Link>}
-              <button className="btn btn-secondary btn-sm" onClick={() => printInvoice(id, 'a4').catch((e) => toast('error', 'Could not print', e.message))}><Printer size={14} /> Print</button>
+              <button className="btn btn-secondary btn-sm" onPointerEnter={() => preparePrint(id, 'a4')} onFocus={() => preparePrint(id, 'a4')} onClick={() => printInvoice(id, 'a4').catch((e) => toast('error', 'Could not print', e.message))}><Printer size={14} /> Print</button>
               <button className="btn btn-secondary btn-sm" onClick={() => downloadInvoicePdf(id, `${inv.number ?? 'draft-invoice'}.pdf`).then((how) => how === 'print' && toast('info', 'Print window opened', 'Choose “Save as PDF” as the printer to keep a copy.')).catch((e) => toast('error', 'PDF not ready', e.message))}><Download size={14} /> PDF</button>
             </div>
             <div className="kpi-row">

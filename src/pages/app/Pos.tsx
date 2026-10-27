@@ -3,7 +3,7 @@ import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2,
 import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
-import { withPrintDefaults } from '../../../shared/printSettings';
+import { withPrintDefaults, type PaperSize } from '../../../shared/printSettings';
 import type { Invoice, Item, PriceTier } from '@/api/types';
 import { TIER_LABEL } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
@@ -33,6 +33,9 @@ export default function Pos() {
   const branches = useBranches().data ?? [];
   const org = useOrg().data;
   const printCfg = withPrintDefaults(usePrintSettings().data);
+  // Roll width for this counter: starts from Print settings, can be switched per sale (58 mm or 80 mm printers).
+  const [rollPick, setRoll] = useState<PaperSize | null>(null);
+  const receiptCfg = { ...printCfg.thermal, paper: rollPick ?? printCfg.thermal.paper };
   const [q, setQ] = useState('');
   const [kind, setKind] = useState<'all' | 'Goods' | 'Services'>('all');
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -251,7 +254,8 @@ export default function Pos() {
             {done && done.invoice.customer.phone && org && (
               <a className="btn btn-secondary" target="_blank" rel="noreferrer" href={waLink(done.invoice.customer.phone, `Thank you for shopping at ${org.companyName}! Bill ${done.invoice.number}: ${money(done.invoice.total)}. ${done.invoice.publicToken ? `${window.location.origin}/share/${done.invoice.publicToken}` : ''}`)}><MessageCircle size={15} /> WhatsApp bill</a>
             )}
-            <button className="btn btn-secondary" onClick={() => printReceipt(printCfg.thermal)}><Printer size={15} /> Print receipt</button>
+            <Segmented value={receiptCfg.paper} onChange={setRoll} options={[{ value: '2in', label: '58mm' }, { value: '3in', label: '80mm' }]} />
+            <button className="btn btn-secondary" onClick={() => printReceipt(receiptCfg)}><Printer size={15} /> Print receipt</button>
             <button className="btn btn-primary" onClick={reset} autoFocus><Plus size={15} /> New sale</button>
           </>
         }>
@@ -259,7 +263,7 @@ export default function Pos() {
           <div className="print-area">
             {done.change > 0 && <div className="row" style={{ justifyContent: 'center', gap: 8, marginBottom: 12, fontSize: 16 }}>Give change: <strong style={{ color: 'var(--green-700)', fontSize: 20 }}>{money(done.change)}</strong></div>}
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', width: 'fit-content', margin: '0 auto' }}>
-              <ThermalReceipt data={receiptFromInvoice(done.invoice, items, customers.find((c) => c.id === done.invoice.customerId)?.due, mode === 'Split' ? 'Split' : mode)} org={org} s={printCfg.thermal} />
+              <ThermalReceipt data={receiptFromInvoice(done.invoice, items, customers.find((c) => c.id === done.invoice.customerId)?.due, mode === 'Split' ? 'Split' : mode)} org={org} s={receiptCfg} />
             </div>
           </div>
         )}
