@@ -93,7 +93,8 @@ input, select, textarea { font-family: inherit; font-size: var(--fs-14); color: 
 .checkbox, input[type='checkbox'], input[type='radio'] { accent-color: var(--brand-600); }
 .checkbox { width: 16px; height: 16px; cursor: pointer; }
 
-.segmented { display: inline-flex; padding: 2px; background: var(--ink-100); border-radius: var(--radius-sm); gap: 2px; }
+.segmented { display: inline-flex; padding: 2px; background: var(--ink-100); border-radius: var(--radius-sm); gap: 2px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.segmented > button { flex: none; white-space: nowrap; }
 .segmented button { border: none; background: transparent; height: 28px; padding: 0 var(--sp-3); border-radius: 4px; font-weight: 500; font-size: var(--fs-13); color: var(--ink-600); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .segmented button:hover { color: var(--ink-900); }
 .segmented button.active { background: var(--surface); color: var(--ink-900); box-shadow: 0 0 0 1px var(--border); }
@@ -225,7 +226,7 @@ input, select, textarea { font-family: inherit; font-size: var(--fs-14); color: 
 .mini-table td, .mini-table th { padding-top: 0; padding-bottom: 0; }
 
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.toolbar-left, .toolbar-right { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.toolbar-left, .toolbar-right { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0; max-width: 100%; }
 .toolbar .select { height: 32px; width: auto; min-width: 140px; font-size: var(--fs-13); }
 .search { position: relative; }
 .search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-400); pointer-events: none; }

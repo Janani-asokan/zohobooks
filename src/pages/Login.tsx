@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Loader2, Mail, KeyRound, Languages } from 'lucide-react';
@@ -30,6 +30,12 @@ export default function Login() {
   const [touched, setTouched] = useState({ email: false, password: false });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [slowLogin, setSlowLogin] = useState(false);
+  useEffect(() => {
+    if (!loading) { setSlowLogin(false); return; }
+    const t = setTimeout(() => setSlowLogin(true), 5000);
+    return () => clearTimeout(t);
+  }, [loading]);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotTouched, setForgotTouched] = useState(false);
@@ -122,6 +128,7 @@ export default function Login() {
         <button className="btn btn-primary btn-block login-btn" type="submit" disabled={loading}>
           {loading ? <><Loader2 size={18} className="spin" /> {t('login.signingIn')}</> : <>{t('login.submit')} <ArrowRight size={18} /></>}
         </button>
+        {slowLogin && <p className="small muted" role="status" style={{ textAlign: 'center', margin: 0 }}>Starting up the server after a quiet spell. This first sign-in can take up to a minute.</p>}
       </form>
 
       {demoAccounts.length > 0 && (

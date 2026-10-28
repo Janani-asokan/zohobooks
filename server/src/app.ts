@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
+import compression from 'compression';
 import helmet from 'helmet';
 import { csrfGuard, loadSession, requireShopUser } from './auth';
 import { config } from './config';
@@ -29,6 +30,8 @@ export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
+  // Gzip JSON, HTML, JS and CSS: about a quarter of the bytes on slow mobile connections.
+  app.use(compression({ threshold: 1024 }));
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -72,7 +75,15 @@ export function createApp() {
   // Production: serve the built SPA with history-API fallback.
   const index = path.join(config.staticDir, 'index.html');
   if (fs.existsSync(index)) {
-    app.use(express.static(config.staticDir, { index: false, maxAge: '1h', setHeaders: (res, p) => p.endsWith('sw.js') && res.setHeader('Cache-Control', 'no-cache') }));
+    app.use(express.static(config.staticDir, {
+      index: false,
+      maxAge: '1h',
+      setHeaders: (res, p) => {
+        if (p.endsWith('sw.js')) res.setHeader('Cache-Control', 'no-cache');
+        // Vite names these by content hash, so a changed file always gets a new name: cache for a year.
+        else if (p.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      },
+    }));
     app.get('*', (_req, res) => res.sendFile(index));
   }
   app.use(errorHandler);

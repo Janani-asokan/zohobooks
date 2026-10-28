@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale } from 'lucide-react';
+import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle } from 'lucide-react';
 import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
@@ -182,11 +182,15 @@ export default function Pos() {
         </div>
         <div className="pos-cart">
           {lines.length === 0 && <div className="muted small" style={{ padding: 24, textAlign: 'center' }}>Scan an item or tap a tile to start a bill.</div>}
-          {lines.map((l) => (
+          {lines.map((l) => {
+            // Selling more than the shelf holds is allowed (stock can be entered later), but the cashier should know.
+            const have = l.it.type === 'Goods' ? (branchId ? l.it.stockByBranch[branchId] ?? 0 : l.it.stock) : Infinity;
+            return (
             <div key={l.itemId} className="pos-line">
               <div style={{ minWidth: 0 }}>
                 <div className="strong" style={{ color: 'var(--ink-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.it.name}</div>
                 <div className="small muted">{money(unit(l.it))}{withGst ? ` · GST ${l.it.taxRate}%${inclusive ? ' incl.' : ''}` : ''}</div>
+                {l.qty > have && <div className="small" style={{ color: 'var(--amber-700, #a15c07)' }} role="status"><AlertTriangle size={12} style={{ verticalAlign: -2 }} /> Only {Math.max(have, 0)} {l.it.unit} in stock</div>}
               </div>
               <div className="row" style={{ gap: 6 }}>
                 <button className="qty-btn" onClick={() => setQty(l.itemId, l.qty - 1)} aria-label="Decrease">−</button>
@@ -199,7 +203,8 @@ export default function Pos() {
                 <button className="icon-btn sm danger" onClick={() => setQty(l.itemId, 0)} aria-label="Remove"><Trash2 size={13} /></button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ padding: 14, borderTop: '1px solid var(--border)', background: 'var(--ink-50)' }} className="stack">
           <div className="row between small" style={{ gap: 8 }}>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, UserRound, LogOut, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2 } from 'lucide-react';
-import { buildActions, buildCreate, buildNav } from './nav';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Package, UserRound, LogOut, Lock, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2 } from 'lucide-react';
+import { buildActions, buildCreate, buildNav, canOpen } from './nav';
 import { CommandPalette } from './CommandPalette';
 import { resetHints } from '@/components/kit';
 import { Sidebar, useSidebarState } from './Sidebar';
@@ -13,7 +13,7 @@ import { usePrefs } from '@/context/PrefsContext';
 import { useNotifications, useOrg, useOrgs } from '@/api/hooks';
 import { api, fieldErrors } from '@/api/client';
 import { useToast } from '@/context/ToastContext';
-import { Field, Modal } from '@/components/ui';
+import { EmptyState, Field, Modal } from '@/components/ui';
 import { GSTIN_RE, INDIAN_STATES } from '../../shared/gst';
 import { useClickOutside } from '@/components/useClickOutside';
 import { useShortcuts } from '@/components/useShortcuts';
@@ -188,9 +188,13 @@ export default function AppLayout() {
   const onDuty = useFieldTracker();
   const [shortcuts, setShortcuts] = useState(false);
   const [palette, setPalette] = useState(false);
+  // The search palette loads every item, customer and invoice to search them; only do that once someone opens it.
+  const [paletteUsed, setPaletteUsed] = useState(false);
+  useEffect(() => { if (palette) setPaletteUsed(true); }, [palette]);
   const canSell = me.can('sales.write');
 
   const nav = useMemo(() => buildNav(me.can), [me]);
+  const location = useLocation();
   const actions = useMemo(() => buildActions(me.can), [me]);
 
   useShortcuts({
@@ -282,7 +286,12 @@ export default function AppLayout() {
         </header>
         {onDuty && <Link to="/app/field" className="duty-bar no-print" role="status"><span className="fh-dot" /> On duty · sharing location while the app is open · tap to check in or end your day</Link>}
         <main>
-          <Outlet />
+          {canOpen(location.pathname, me.can) ? <Outlet /> : (
+            <div className="page"><div className="card">
+              <EmptyState icon={Lock} title="This page isn’t part of your role" text={`Your ${me.user.role} login can’t open this page. Ask the shop owner if you need access.`}
+                action={<Link to="/app" className="btn btn-primary">Go to dashboard</Link>} />
+            </div></div>
+          )}
         </main>
         <nav className="bottom-nav no-print" aria-label="Quick navigation">
           <NavLink to="/app" end><LayoutDashboard size={20} />Home</NavLink>
@@ -293,7 +302,7 @@ export default function AppLayout() {
         </nav>
       </div>
       <ShortcutsModal open={shortcuts} onClose={() => setShortcuts(false)} />
-      <CommandPalette open={palette} onClose={() => setPalette(false)} actions={actions} />
+      {paletteUsed && <CommandPalette open={palette} onClose={() => setPalette(false)} actions={actions} />}
     </div>
   );
 }

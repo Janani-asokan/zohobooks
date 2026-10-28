@@ -48,6 +48,9 @@ The `render.yaml` blueprint creates a PostgreSQL database and the web service (b
 
 Free-tier notes: the service sleeps after 15 minutes without visitors (the first request then takes about 50 seconds), and Render's free PostgreSQL expires after 30 days. Use paid plans for real shops.
 
+### Render free plan: first visit after a quiet spell
+Render's free plan stops the server after about 15 minutes without visitors; the next visit waits roughly 30–60 seconds while it starts, and the app shows "Starting up Corpus360…" meanwhile. To avoid it, upgrade the web service to a paid instance, or have a free uptime monitor (for example UptimeRobot or cron-job.org) open `https://<your-app>.onrender.com/api/health` every 10 minutes.
+
 ### Production
 
 ```bash

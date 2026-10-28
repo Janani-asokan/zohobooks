@@ -34,6 +34,16 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (pgErr?.code === '23505') return res.status(409).json({ error: uniqueMessage(pgErr.constraint), code: 'conflict' });
   if (pgErr?.code === '23503') return res.status(409).json({ error: 'This record is referenced by other records', code: 'conflict' });
   if (pgErr?.code === '23514') return res.status(400).json({ error: 'Invalid value: ' + (pgErr.constraint ?? 'check failed'), code: 'bad_request' });
+  // Malformed input that only the database noticed: a bad id in the URL, an impossible date, a stray NUL byte.
+  const pgMsg = (err as Error)?.message ?? '';
+  if (pgErr?.code === '22P02' && /uuid/.test(pgMsg)) return res.status(404).json({ error: 'Not found', code: 'not_found' });
+  if (pgErr?.code === '22007' || pgErr?.code === '22008') return res.status(400).json({ error: 'Enter a valid date (YYYY-MM-DD)', code: 'bad_request' });
+  if (pgErr?.code === '22P02' || pgErr?.code === '22021' || pgErr?.code === '22003') return res.status(400).json({ error: 'One of the values is not valid', code: 'bad_request' });
+  // Body parser errors (bad JSON, too large) carry their own 4xx status.
+  const bp = err as { status?: number; type?: string };
+  if (bp?.type && bp.status && bp.status >= 400 && bp.status < 500) {
+    return res.status(bp.status).json({ error: bp.type === 'entity.too.large' ? 'The upload is too large' : 'The request was not valid JSON', code: 'bad_request' });
+  }
   console.error(err);
   res.status(500).json({ error: 'Something went wrong. Please try again.', code: 'internal' });
 }

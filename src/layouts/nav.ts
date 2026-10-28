@@ -157,3 +157,26 @@ export function buildActions(can: Can): PaletteAction[] {
   add(can('admin'), 'Settings', 'Users & roles', Users, '/app/team', 'staff team branch warehouse');
   return out;
 }
+
+/**
+ * Who may open a page, matching what the sidebar offers. Pages opened from a shared link or an old bookmark
+ * show a friendly "no access" screen instead of a page full of failed requests. The server enforces the same
+ * permissions on every request; this is only for the user's benefit.
+ */
+const ROUTE_RULES: Array<[RegExp, (can: Can) => boolean]> = [
+  [/^\/app\/purchases(\/|$)/, (can) => can('purchases.read')],
+  [/^\/app\/accounting\/(accounts|journals|ledger)/, (can) => can('accounting.read')],
+  [/^\/app\/accounting\/tally/, (can) => can('accounting.read') || can('reports.read') || can('customers.write') || can('items.write')],
+  [/^\/app\/banking/, (can) => can('banking.read')],
+  [/^\/app\/reports/, (can) => can('reports.read')],
+  [/^\/app\/inventory\/reorder/, (can) => can('items.write') || can('purchases.read') || can('reports.read')],
+  [/^\/app\/field\/team/, (can) => can('field.view')],
+  [/^\/app\/(pos|sales\/invoices\/new|sales\/invoices\/[^/]+\/edit)/, (can) => can('sales.write')],
+  [/^\/app\/items\/(new|[^/]+\/edit)/, (can) => can('items.write')],
+  [/^\/app\/(sales\/recurring|organization|team|print-settings|billing)/, (can) => can('admin')],
+  [/^\/app\/audit/, (can) => can('audit.read') || can('admin')],
+];
+export function canOpen(pathname: string, can: Can): boolean {
+  const rule = ROUTE_RULES.find(([re]) => re.test(pathname));
+  return rule ? rule[1](can) : true;
+}
