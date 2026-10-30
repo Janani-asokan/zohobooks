@@ -38,5 +38,8 @@ services:
         sync: false
       - key: MAIL_FROM
         sync: false
+      # Money lending: encrypts borrowers' Aadhaar numbers. Set once and never change it, or saved numbers can't be read.
+      - key: AADHAAR_KEY
+        generateValue: true
       - key: BACKUPS_ENABLED
         value: "0"

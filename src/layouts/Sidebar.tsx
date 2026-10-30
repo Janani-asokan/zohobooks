@@ -8,7 +8,7 @@ export interface NavItem {
   icon: LucideIcon;
   to?: string;
   end?: boolean;
-  children?: Array<{ label: string; to: string; icon?: LucideIcon }>;
+  children?: Array<{ label: string; to: string; icon?: LucideIcon; end?: boolean }>;
   /** Caption rendered above this item to start a new group. */
   section?: string;
 }
@@ -83,7 +83,7 @@ export function Sidebar({
               {isOpen && (
                 <div className="nav-sub">
                   {it.children.map((c) => (
-                    <NavLink key={c.to} to={c.to} className={({ isActive }) => `nav-link ${isActive || pathname.startsWith(c.to + '/') ? 'active' : ''}`} onClick={onNavigate}>
+                    <NavLink key={c.to} to={c.to} end={c.end} className={({ isActive }) => `nav-link ${isActive || (!c.end && pathname.startsWith(c.to + '/')) ? 'active' : ''}`} onClick={onNavigate}>
                       {c.icon && <c.icon size={15} />}
                       <span className="nav-text">{c.label}</span>
                     </NavLink>
@@ -94,7 +94,7 @@ export function Sidebar({
                 <div className="flyout" style={{ top: flyout.top, left: 'calc(var(--sidebar-w-collapsed) - 4px)' }}>
                   <div className="nav-caption" style={{ color: 'var(--ink-400)', padding: '6px 10px' }}>{it.label}</div>
                   {it.children.map((c) => (
-                    <NavLink key={c.to} to={c.to} className={({ isActive }) => (isActive ? 'active' : '')} onClick={() => setFlyout(null)}>
+                    <NavLink key={c.to} to={c.to} end={c.end} className={({ isActive }) => (isActive ? 'active' : '')} onClick={() => setFlyout(null)}>
                       {c.label}
                     </NavLink>
                   ))}

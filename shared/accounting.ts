@@ -49,6 +49,15 @@ export const SYSTEM_ACCOUNTS: AccountDef[] = [
   sys('round_off', '5900', 'Rounding', 'expense', 'other', 'Invoice round-off'),
 ];
 
+/** Money-lending accounts, added to the chart only for businesses that use the lending module. */
+export const LENDING_ACCOUNTS: AccountDef[] = [
+  sys('loan_recv', '1400', 'Loans given', 'asset', 'current', 'Principal still owed by borrowers'),
+  sys('penalty_recv', '1410', 'Late charges receivable', 'asset', 'current', 'Late charges not yet collected'),
+  sys('lending_interest', '4200', 'Interest income (lending)', 'income', 'operating', 'Interest taken upfront when a loan is given'),
+  sys('lending_fees', '4210', 'Loan processing fees', 'income', 'operating', 'Processing fees on loans given'),
+  sys('lending_penalty', '4220', 'Late charges income', 'income', 'operating', 'Late charges applied to defaulting loans'),
+];
+
 /** Banking categories and the account each one posts against. */
 export const BANK_CATEGORIES: Array<{ name: string; account: string; dir: 'in' | 'out' | 'both' }> = [
   { name: 'Sales', account: 'sales', dir: 'in' },

@@ -18,7 +18,7 @@ export const coreRouter = Router();
 const serializeOrg = (o: any) => ({
   companyName: o.company_name, legalName: o.legal_name, gstin: o.gstin, email: o.email, phone: o.phone, address: o.address, state: o.state,
   logo: o.logo, invoiceFooter: o.invoice_footer, upiId: o.upi_id, bankDetails: o.bank_details, invoiceTemplate: o.invoice_template,
-  compositionScheme: o.composition_scheme, autoReminders: o.auto_reminders, reminderDays: o.reminder_days,
+  compositionScheme: o.composition_scheme, autoReminders: o.auto_reminders, reminderDays: o.reminder_days, lendingEnabled: !!o.lending_enabled,
 });
 
 coreRouter.get('/organization', T(async (db, _req, c) => serializeOrg(await getOrg(db, c.shopId))));

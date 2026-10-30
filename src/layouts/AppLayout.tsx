@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, UserRound, LogOut, Lock, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Package, UserRound, LogOut, Lock, HandCoins, ReceiptIndianRupee, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { buildActions, buildCreate, buildNav, canOpen } from './nav';
 import { CommandPalette } from './CommandPalette';
 import { resetHints } from '@/components/kit';
@@ -192,10 +192,13 @@ export default function AppLayout() {
   const [paletteUsed, setPaletteUsed] = useState(false);
   useEffect(() => { if (palette) setPaletteUsed(true); }, [palette]);
   const canSell = me.can('sales.write');
+  // Staff who only handle loans (collectors) get lending shortcuts in the phone bar instead of shop ones.
+  const lendingOnly = !!org.data?.lendingEnabled && !(['sales.write', 'customers.write', 'items.write', 'reports.read'] as const).some((p) => me.can(p)) && (me.can('lending.collect') || me.can('lending.read'));
 
-  const nav = useMemo(() => buildNav(me.can), [me]);
+  const lendingOn = !!org.data?.lendingEnabled;
+  const nav = useMemo(() => buildNav(me.can, { lending: lendingOn }), [me, lendingOn]);
   const location = useLocation();
-  const actions = useMemo(() => buildActions(me.can), [me]);
+  const actions = useMemo(() => buildActions(me.can, { lending: lendingOn }), [me, lendingOn]);
 
   useShortcuts({
     'mod+k': () => setPalette(true),
@@ -293,13 +296,22 @@ export default function AppLayout() {
             </div></div>
           )}
         </main>
-        <nav className="bottom-nav no-print" aria-label="Quick navigation">
-          <NavLink to="/app" end><LayoutDashboard size={20} />Home</NavLink>
-          <NavLink to="/app/sales/invoices"><FileText size={20} />Invoices</NavLink>
-          {canSell ? <button onClick={() => navigate('/app/sales/invoices/new')} aria-label="New invoice"><span className="bn-fab"><Plus size={22} /></span></button> : <NavLink to="/app/sales/customers"><UserRound size={20} />Customers</NavLink>}
-          <NavLink to="/app/items"><Package size={20} />Items</NavLink>
-          <button onClick={() => sb.setMobileOpen(true)}><Menu size={20} />More</button>
-        </nav>
+        {lendingOnly ? (
+          <nav className="bottom-nav no-print" aria-label="Quick navigation">
+            <NavLink to="/app/lending" end><LayoutDashboard size={20} />Home</NavLink>
+            <NavLink to="/app/lending/collections"><ReceiptIndianRupee size={20} />Collect</NavLink>
+            <NavLink to="/app/lending/loans"><HandCoins size={20} />Loans</NavLink>
+            <button onClick={() => sb.setMobileOpen(true)}><Menu size={20} />More</button>
+          </nav>
+        ) : (
+          <nav className="bottom-nav no-print" aria-label="Quick navigation">
+            <NavLink to="/app" end><LayoutDashboard size={20} />Home</NavLink>
+            <NavLink to="/app/sales/invoices"><FileText size={20} />Invoices</NavLink>
+            {canSell ? <button onClick={() => navigate('/app/sales/invoices/new')} aria-label="New invoice"><span className="bn-fab"><Plus size={22} /></span></button> : <NavLink to="/app/sales/customers"><UserRound size={20} />Customers</NavLink>}
+            <NavLink to="/app/items"><Package size={20} />Items</NavLink>
+            <button onClick={() => sb.setMobileOpen(true)}><Menu size={20} />More</button>
+          </nav>
+        )}
       </div>
       <ShortcutsModal open={shortcuts} onClose={() => setShortcuts(false)} />
       {paletteUsed && <CommandPalette open={palette} onClose={() => setPalette(false)} actions={actions} />}

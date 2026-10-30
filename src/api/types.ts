@@ -18,7 +18,7 @@ export type Me =
 export interface Organization {
   companyName: string; legalName: string; gstin: string; email: string; phone: string; address: string; state: string; logo: string;
   invoiceFooter: string; upiId: string; bankDetails: string; invoiceTemplate: 'classic' | 'modern' | 'compact'; compositionScheme: boolean;
-  autoReminders: boolean; reminderDays: number;
+  autoReminders: boolean; reminderDays: number; lendingEnabled: boolean;
 }
 export interface TaxSlab { id: string; name: string; rate: number; active: boolean }
 export interface Branch { id: string; name: string; address: string; phone: string; isPrimary: boolean }

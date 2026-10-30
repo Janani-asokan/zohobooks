@@ -568,3 +568,83 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .hs-win { display: flex; gap: 10px; margin-top: 14px; padding: 12px; border-radius: 14px; background: linear-gradient(135deg, var(--brand-50), #fff); border: 1px solid var(--brand-200); color: var(--ink-800); }
 .hs-win strong { color: var(--ink-900); }
 .hs-win-ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-grad); color: #fff; flex: none; }
+
+/* ---------------- Money lending ---------------- */
+.lend-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+@media (max-width: 1080px) { .lend-grid { grid-template-columns: minmax(0, 1fr); } }
+.lend-grid > * { min-width: 0; }
+.lend-grid .card-header { flex-wrap: wrap; gap: 10px; }
+.lend-alerts { list-style: none; margin: 0; padding: 0 8px 8px; }
+.lend-alerts a { display: flex; gap: 10px; align-items: center; padding: 9px 8px; border-radius: 10px; color: inherit; text-decoration: none; }
+.lend-alerts a:hover { background: var(--ink-50); }
+.lend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--amber-500, #d08a2c); }
+.lend-dot.bad { background: var(--red-500); }
+.lend-areas { display: grid; gap: 8px; padding: 0 14px 14px; }
+.lend-area { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: grid; gap: 4px; }
+.lend-trend { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding: 6px 16px 14px; }
+.lend-trend > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; min-width: 0; }
+.lend-trend span { width: 100%; max-width: 26px; border-radius: 6px 6px 2px 2px; background: var(--accent-grad, var(--brand-600)); }
+.lend-trend em { font-style: normal; font-size: 11px; color: var(--ink-500); }
+.lend-bar { display: inline-block; width: 90px; max-width: 100%; height: 7px; border-radius: 99px; background: var(--ink-100); overflow: hidden; vertical-align: middle; }
+.lend-bar span { display: block; height: 100%; border-radius: inherit; background: var(--green-600, #3d8b5a); }
+.lend-bar span.bad { background: var(--red-500); }
+.lend-dl { display: grid; gap: 8px; margin: 0; }
+.lend-dl > div { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 10px; font-size: 13.5px; }
+.lend-dl dt { color: var(--ink-500); }
+.lend-dl dd { margin: 0; overflow-wrap: anywhere; }
+.lend-confirm dl { display: grid; gap: 10px; margin: 0; }
+.lend-confirm dl > div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--border); padding-bottom: 8px; }
+.lend-confirm dt { color: var(--ink-500); }
+.lend-confirm dd { margin: 0; text-align: right; }
+.lend-confirm .big { font-size: 22px; font-weight: 700; color: var(--ink-900); font-family: var(--font-display); }
+.lend-quote { position: sticky; top: 76px; display: grid; gap: 10px; }
+.lend-quote h3 { margin: 0; }
+.lq-cash { background: var(--sage-50, #eef1ec); border-radius: 14px; padding: 14px; display: grid; gap: 2px; }
+.lq-cash span { font-size: 12.5px; color: var(--ink-600); }
+.lq-cash strong { font-size: 26px; font-family: var(--font-display); color: var(--ink-900); }
+.lq-cash em { font-style: normal; font-size: 12px; color: var(--ink-500); }
+.lq-sched summary { cursor: pointer; font-size: 13px; color: var(--brand-700); margin-top: 6px; }
+.lq-sched .table { max-height: 260px; display: block; overflow-y: auto; }
+.lend-picked { display: flex; justify-content: space-between; gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--ink-50); }
+.lend-suggest { list-style: none; margin: 4px 0 0; padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface, #fff); box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.08)); position: absolute; left: 0; right: 0; z-index: 5; }
+.lend-suggest button { width: 100%; display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 8px 10px; border: none; background: none; border-radius: 8px; cursor: pointer; text-align: left; color: inherit; }
+.lend-suggest button:hover, .lend-suggest button:focus-visible { background: var(--ink-50); }
+.lend-dupe { background: var(--amber-50, #fdf5e7); border: 1px solid var(--amber-200, #f1d9a8); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; }
+.check-line { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; }
+.check-line input { margin-top: 3px; }
+.lend-late { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border-left: 4px solid var(--red-500); }
+.lend-find .input { height: 46px; font-size: 16px; }
+.lend-found { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.lend-found li { display: flex; gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: 12px; padding: 8px 8px 8px 12px; }
+.lend-found-main { flex: 1; min-width: 0; text-align: left; background: none; border: none; color: inherit; cursor: pointer; padding: 4px 0; }
+.lend-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.lend-plans > section { display: grid; gap: 12px; align-content: start; }
+@media (max-width: 900px) { .lend-plans { grid-template-columns: 1fr; } }
+.lend-summary { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 16px 14px; }
+.lend-summary > div { border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; display: grid; min-width: 120px; }
+.lend-summary span { font-size: 12px; color: var(--ink-500); }
+.lend-summary strong { font-size: 16px; }
+@media (max-width: 620px) {
+  .lend-dl > div { grid-template-columns: 1fr; gap: 2px; }
+  .lend-found li { flex-wrap: wrap; }
+  .lend-found li .btn { width: 100%; justify-content: center; }
+}
+/* Loan receipt (80 mm) and the printable loan card */
+.loan-receipt { width: 76mm; max-width: 100%; margin: 0 auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #111; background: #fff; padding: 10px; border: 1px dashed #bbb; border-radius: 6px; }
+.loan-receipt .lr-head { text-align: center; line-height: 1.4; }
+.loan-receipt .lr-head strong { font-size: 14px; }
+.loan-receipt .lr-title { text-align: center; font-weight: 700; border-top: 1px dashed #999; border-bottom: 1px dashed #999; margin: 8px 0; padding: 4px 0; letter-spacing: .08em; }
+.loan-receipt table { width: 100%; border-collapse: collapse; }
+.loan-receipt td { padding: 2px 0; vertical-align: top; }
+.loan-receipt td:last-child { text-align: right; }
+.loan-receipt .lr-amt td { font-weight: 700; font-size: 14px; border-top: 1px dashed #999; padding-top: 6px; }
+.loan-receipt .lr-closed { text-align: center; margin-top: 8px; font-weight: 700; }
+.loan-receipt .lr-foot { text-align: center; margin-top: 8px; border-top: 1px dashed #999; padding-top: 6px; }
+.loan-card-print { display: none; }
+@media print {
+  body.print-receipt .loan-receipt { border: none; width: 76mm; }
+  body.print-loan .loan-card-print { display: block !important; color: #111; font-size: 11px; }
+  body:not(.print-loan) .loan-card-print { display: none !important; }
+  .loan-card-print table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  .loan-card-print th, .loan-card-print td { border: 1px solid #999; padding: 3px 6px; text-align: left; }
+}

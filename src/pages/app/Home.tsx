@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays, Receipt, Landmark, Sparkles } from 'lucide-react';
 import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
@@ -15,7 +15,16 @@ import { fmtDate, money, moneyShort } from '@/lib/format';
 const pctChange = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : cur > 0 ? 100 : null);
 const STATUS_COLORS = { Paid: '#7d8c77', 'Partially Paid': '#c98a3c', Sent: '#e398a4', Overdue: '#b53a3a' } as const;
 
+/** Staff who only work on loans (collectors) start on the lending screen instead of the shop dashboard. */
 export default function Home() {
+  const me = useShopUser();
+  const org = useOrg().data;
+  const shopWork = (['sales.write', 'reports.read', 'items.write', 'purchases.read', 'accounting.read'] as const).some((p) => me.can(p));
+  if (org?.lendingEnabled && !shopWork && (me.can('lending.collect') || me.can('lending.read'))) return <Navigate to="/app/lending" replace />;
+  return <ShopHome />;
+}
+
+function ShopHome() {
   const me = useShopUser();
   const { t } = usePrefs();
   const navigate = useNavigate();

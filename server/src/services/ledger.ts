@@ -2,7 +2,7 @@ import type { Db } from '../db';
 import { many } from '../db';
 import { r2 } from '../../../shared/calc';
 import {
-  BANK_CATEGORIES, SYSTEM_ACCOUNTS, debitNormal, type AccountDef, type AccountType, type BalanceSheet, type CashFlow, type GeneralLedger,
+  BANK_CATEGORIES, LENDING_ACCOUNTS, SYSTEM_ACCOUNTS, debitNormal, type AccountDef, type AccountType, type BalanceSheet, type CashFlow, type GeneralLedger,
   type LedgerAccount, type PnlSection, type ProfitAndLoss, type TrialBalance,
 } from '../../../shared/accounting';
 
@@ -27,6 +27,8 @@ const party = (c: any) => c?.companyName || c?.name || 'Walk-in customer';
 /** Every account the shop can post to: system accounts, banks, expense categories in use and its own accounts. */
 export async function chartOfAccounts(db: Db, shopId: string): Promise<Map<string, AccountDef & { id?: string; archived?: boolean }>> {
   const map = new Map<string, AccountDef & { id?: string; archived?: boolean }>(SYSTEM_ACCOUNTS.map((a) => [a.key, a]));
+  const lending = await many(db, `SELECT 1 FROM organizations WHERE shop_id = $1 AND lending_enabled UNION ALL SELECT 1 FROM lending_loans WHERE shop_id = $1 LIMIT 1`, [shopId]);
+  if (lending.length) for (const a of LENDING_ACCOUNTS) map.set(a.key, a);
   const banks = await many(db, 'SELECT id, name, type FROM bank_accounts WHERE shop_id = $1 ORDER BY created_at', [shopId]);
   banks.forEach((b, i) => map.set(`bank:${b.id}`, { key: `bank:${b.id}`, code: String(1010 + i), name: b.name, type: 'asset', subtype: 'cash', description: b.type === 'Cash' ? 'Cash account' : 'Bank account', system: true, id: b.id }));
   const cats = await many(db, `SELECT DISTINCT category AS c FROM expenses WHERE shop_id = $1
@@ -130,6 +132,32 @@ export async function ledgerEntries(db: Db, shopId: string, to: string, from?: s
       : m.reason === 'adjustment' && m.ref_type !== 'invoice' ? 'stock_adj' : 'cogs';
     const what = { opening: 'Opening stock', purchase: 'Goods received', sale: 'Cost of goods sold', sale_cancel: 'Stock returned on cancel', credit_note: 'Stock returned', adjustment: counter === 'cogs' ? 'Stock re-issued on edit' : 'Stock adjustment' }[m.reason as string] ?? 'Stock movement';
     out.push({ date: m.date, source: m.reason === 'opening' ? 'opening' : 'stock', sourceId: m.ref_id, number: m.number ?? '', description: what, lines: [DR('inventory', v), CR(counter, v)] });
+  }
+
+  // Money lending: interest is taken upfront, so a loan books the full principal as receivable, the cash handed over,
+  // and the interest and fee as income. Receipts reduce principal (and late charges, which are booked when applied).
+  for (const l of await many(db, `SELECT l.id, l.number, l.borrow_date, l.entered_on, l.principal, l.upfront_interest, l.processing_fee, l.net_disbursed,
+      l.account_id, l.existing_loan, l.already_repaid, b.name FROM lending_loans l JOIN borrowers b ON b.id = l.borrower_id
+      WHERE l.shop_id = $1 AND (CASE WHEN l.existing_loan THEN l.entered_on ELSE l.borrow_date END) BETWEEN $2::date AND $3::date`, args)) {
+    if (l.existing_loan) {
+      const owed = Number(l.principal) - Number(l.already_repaid);
+      out.push({ date: l.entered_on, source: 'loan', sourceId: l.id, number: l.number, description: `Existing loan brought in · ${l.name}`, lines: [DR('loan_recv', owed), CR('opening_equity', owed)] });
+    } else {
+      out.push({ date: l.borrow_date, source: 'loan', sourceId: l.id, number: l.number, description: `Loan given to ${l.name}`, lines: [
+        DR('loan_recv', Number(l.principal)), CR(l.account_id ? `bank:${l.account_id}` : 'cash', Number(l.net_disbursed)), CR('lending_interest', Number(l.upfront_interest)), CR('lending_fees', Number(l.processing_fee)),
+      ] });
+    }
+  }
+  for (const p of await many(db, `SELECT p.id, p.receipt_no, p.date, p.amount, p.principal_part, p.penalty_part, p.mode, p.account_id, l.number, b.name
+      FROM lending_payments p JOIN lending_loans l ON l.id = p.loan_id JOIN borrowers b ON b.id = l.borrower_id
+      WHERE p.shop_id = $1 AND p.status = 'Posted' AND p.kind <> 'Opening balance' AND ${between('p.date')}`, args))
+    out.push({ date: p.date, source: 'loan_receipt', sourceId: p.id, number: p.receipt_no, description: `Loan receipt from ${p.name} (${p.number}, ${p.mode})`, lines: [
+      DR(p.account_id ? `bank:${p.account_id}` : 'cash', Number(p.amount)), CR('loan_recv', Number(p.principal_part)), CR('penalty_recv', Number(p.penalty_part)),
+    ] });
+  for (const c of await many(db, `SELECT c.id, c.kind, c.amount, c.date, l.number FROM lending_charges c JOIN lending_loans l ON l.id = c.loan_id
+      WHERE c.shop_id = $1 AND ${between('c.date')}`, args)) {
+    const v = Number(c.amount) * (c.kind === 'Penalty waiver' ? -1 : 1);
+    out.push({ date: c.date, source: 'loan_charge', sourceId: c.id, number: c.number, description: `${c.kind} · ${c.number}`, lines: [DR('penalty_recv', v), CR('lending_penalty', v)] });
   }
 
   for (const j of await many(db, `SELECT id, number, date, reference, notes, lines FROM journals WHERE shop_id = $1 AND ${between('date')}`, args))

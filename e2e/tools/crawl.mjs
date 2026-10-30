@@ -9,7 +9,8 @@ const ROUTES = ['/app', '/app/pos', '/app/items', '/app/items/new', '/app/items/
   '/app/purchases/payments', '/app/purchases/expenses', '/app/inventory/warehouses', '/app/inventory/adjustments', '/app/inventory/transfers', '/app/inventory/reorder', '/app/accounting/tally', '/app/inventory/stock-summary',
   '/app/banking', '/app/accounting/accounts', '/app/accounting/journals', '/app/accounting/ledger?account=ar', '/app/reports', '/app/reports/gst', '/app/reports/profit-loss',
   '/app/reports/balance-sheet', '/app/reports/cash-flow', '/app/reports/trial-balance', '/app/reports/sales-by-customer', '/app/reports/sales-by-item', '/app/reports/bill-profit', '/app/reports/receivables',
-  '/app/reports/payables', '/app/organization', '/app/team', '/app/print-settings', '/app/billing', '/app/audit'];
+  '/app/reports/payables', '/app/organization', '/app/team', '/app/print-settings', '/app/billing', '/app/audit',
+  '/app/lending', '/app/lending/borrowers', '/app/lending/loans', '/app/lending/loans/new', '/app/lending/collections', '/app/lending/planner', '/app/lending/reports', '/app/lending/settings'];
 const b = await chromium.launch();
 const p = await (await b.newContext({ viewport: { width: W, height: 900 } })).newPage();
 let issues = [];

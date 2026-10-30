@@ -37,6 +37,7 @@ npm run dev         # API on :4000, web on http://localhost:5173 (proxied)
 | Shop owner | owner@shop.com | owner123 |
 | Super admin | admin@ledgerly.in | admin123 |
 | Manager / Sales staff / Accountant / Warehouse | manager@ / sales@ / accounts@ / warehouse@shop.com | manager123 / sales123 / accounts123 / warehouse123 |
+| Loan collector | collector@shop.com | collector123 |
 
 There's no role picker on the login page: the server works out who you are from your account.
 
@@ -64,6 +65,7 @@ In production the API serves the built web app too, so you deploy one process. M
 | `DATABASE_URL` | PostgreSQL connection string |
 | `APP_URL` | Public URL, used in reset links, shared invoice links and emails |
 | `ALLOWED_ORIGINS` | Comma-separated origins allowed to make write requests |
+| `AADHAAR_KEY` | Money lending: encrypts borrowers’ Aadhaar numbers. Any long random string; set it once and never change it. Without it, Aadhaar entry is off |
 | `BREVO_API_KEY` or `RESEND_API_KEY`, and `MAIL_FROM` | Sends password-reset, invoice, reminder and license emails over HTTPS (works on Render's free plan). See *Email* below |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | SMTP instead, where the host allows it. Without any provider, emails are not sent |
 | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | Lets shop owners renew their license online |
@@ -113,6 +115,16 @@ Without `ANTHROPIC_API_KEY`, reading runs entirely on the server: PDF text extra
 **Field staff:** *My Day* for salespeople (start/end day, GPS check-in at customers, outcome, order value, collection) and *Field Team* for owners (map of routes and visits, totals, export). Location is recorded only between Start day and End day. Map tiles come from OpenStreetMap (with a mirror as fallback); each visit also has a Google Maps link.
 
 **Business health score (Dashboard):** five checks from your own books, 20 points each (collections, cash coming in, sales growth, stock health, profit margin), with the biggest win to work on. No AI needed.
+
+**Money lending (optional module):** switch it on in Lending settings (owner). Daily 100-day, weekly and monthly loans with interest taken upfront, exactly as in the Sri Sakthi Thirumurugan Finance system it replaces:
+- **Borrowers** by area (codes like KUN001), verification (approve, manual approval with a note, failed), a risk score, and Aadhaar stored encrypted (AES-256-GCM) with only the last 4 digits shown; the owner can view the full number with a reason, which is audited. Duplicates are caught by Aadhaar or mobile.
+- **Give a loan** with a live quote (cash to hand over, upfront interest, instalment, dates, effective yearly rate), cash rounding by up to ₹100, borrower acknowledgement, collector, and **existing loans** brought in from a paper register with what was already repaid.
+- **Collections:** collect with a confirm step and an 80 mm receipt (print or WhatsApp), prepayments, full closure with typed confirmation, owner-only reversal. A retried request never saves twice, and two collectors can't overpay the same loan. Loans close themselves at zero.
+- **Dues** for any date (paid, less paid, not paid, arrears) by plan cycle, alerts at day 90/95/100/130 and EMIs past grace, **late charges for defaulters only** (oldest unpaid instalment 30+ days), owner waivers.
+- **Collector** role: sees and collects only the loans assigned to them, with a phone-first home screen.
+- **Reports:** daily collection, monthly cash flow, loan book, defaulters, areas, collectors, interest and recovery; every one exports.
+- **Books:** loans, receipts and late charges post to the ledger (Loans given, Interest income, Late charges), so P&L and the Balance Sheet include lending.
+- Not yet carried over from the original: SMS OTP (mobile verification, borrower acknowledgement), Aadhaar OTP via a provider, restructuring and write-off, daily cash close and collector deposits.
 
 **Weighing scale:** POS reads USB/serial scales (Chrome or Edge on a computer) and bills weighed items by the reading.
 
