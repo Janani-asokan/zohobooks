@@ -14,13 +14,13 @@ import {
 import { T, allowed } from './ctx';
 import type { UserCtx } from '../../auth';
 
-/* Money lending (optional module). Every route needs the module switched on for the business and one of the
+/* Microfinance management (optional module). Every route needs the module switched on for the business and one of the
    lending permissions. Collectors (collect, without "see") only reach the loans assigned to them. */
 export const lendingRouter = Router();
 
 const canSee = (c: UserCtx) => allowed(c, 'lending.read') || allowed(c, 'lending.collect');
 async function gate(db: Db, c: UserCtx, need: 'read' | 'write' | 'collect' | 'any' = 'any') {
-  if (!(await lendingEnabled(db, c.shopId))) throw new HttpError(404, 'Money lending is switched off for this business. The owner can switch it on in Business profile.', 'lending_off');
+  if (!(await lendingEnabled(db, c.shopId))) throw new HttpError(404, 'Microfinance management is switched off for this business. The owner can switch it on in Microfinance settings.', 'lending_off');
   const ok = need === 'any' ? canSee(c) : need === 'collect' ? allowed(c, 'lending.collect') || allowed(c, 'lending.write') : allowed(c, `lending.${need}`);
   if (!ok) throw forbidden();
 }
@@ -47,7 +47,7 @@ lendingRouter.get('/lending/settings', T(async (db, _req, c) => {
 }));
 
 lendingRouter.put('/lending/enabled', T(async (db, req, c) => {
-  if (!allowed(c, 'admin')) throw forbidden('Only the owner can switch money lending on or off');
+  if (!allowed(c, 'admin')) throw forbidden('Only the owner can switch microfinance management on or off');
   const { enabled } = parse(z.object({ enabled: z.boolean() }), req.body);
   await db.query('UPDATE organizations SET lending_enabled = $2 WHERE shop_id = $1', [c.shopId, enabled]);
   if (enabled && !(await one(db, 'SELECT 1 FROM lending_areas WHERE shop_id = $1 LIMIT 1', [c.shopId])))

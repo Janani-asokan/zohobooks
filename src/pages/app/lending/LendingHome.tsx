@@ -11,7 +11,7 @@ import { fmtDate, money, moneyShort, todayISO } from '@/lib/format';
 
 const TABS = ['Not paid', 'Arrears', 'Less paid', 'Paid', 'Upcoming'] as const;
 
-/** Money lending home: where the book stands today, who to collect from, and what needs attention. */
+/** Microfinance home: where the book stands today, who to collect from, and what needs attention. */
 export default function LendingHome() {
   const me = useShopUser();
   const navigate = useNavigate();
@@ -38,14 +38,14 @@ export default function LendingHome() {
 
   return (
     <div className="page">
-      <PageHeader title="Money lending" crumbs={<>Lending</>} icon={HandCoins}
+      <PageHeader title="Microfinance management" crumbs={<>Microfinance</>} icon={HandCoins}
         subtitle={allLoans ? 'Your assigned loans: what to collect today and what is overdue.' : 'Loans given, today’s collections, dues and alerts, area by area.'}
         actions={canWrite && <>
           <Link className="btn btn-secondary" to="/app/lending/borrowers?new=1"><Users size={15} /> New borrower</Link>
           <Link className="btn btn-primary" to="/app/lending/loans/new"><Plus size={16} /> Give a loan</Link>
         </>} />
       {canWrite ? (
-        <Hint id="lending-home" title="How money lending works here" icon={HandCoins}>
+        <Hint id="lending-home" title="How microfinance works here" icon={HandCoins}>
           <p>Register a borrower and verify them, then <strong>Give a loan</strong>: interest is taken upfront and the borrower repays the amount in equal daily, weekly or monthly instalments. Collect from the list below; every receipt posts to your books. Loans close themselves at zero.</p>
         </Hint>
       ) : (

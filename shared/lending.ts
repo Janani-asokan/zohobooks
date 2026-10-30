@@ -1,4 +1,4 @@
-/* Money lending: loan pricing, repayment schedules and loan state. Shared by the API and the screens so a quote on
+/* Microfinance management: loan pricing, repayment schedules and loan state. Shared by the API and the screens so a quote on
    screen is exactly what the server books. Amounts are worked in paise (integers) with half-up rounding, matching the
    original Sri Sakthi Thirumurugan Finance system.
 

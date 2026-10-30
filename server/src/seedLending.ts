@@ -4,7 +4,7 @@ import { nextSeq } from './services/common';
 import { aadhaarAvailable, aadhaarHash, encryptAadhaar } from './services/lending';
 import { addDays, quoteLoan, type LoanType } from '../../shared/lending';
 
-/* Demo money-lending book for the demo shop: four areas, twenty borrowers and fifteen loans in every state
+/* Demo microfinance book for the demo shop: four areas, twenty borrowers and fifteen loans in every state
    (on time, slow, overdue, defaulting, closed, and one existing loan brought in), with their collections. */
 
 const AREAS: Array<[string, string]> = [['KUN', 'Kundi'], ['SLM', 'Salem'], ['NMK', 'Namakkal'], ['ERD', 'Erode']];
@@ -33,7 +33,7 @@ export async function seedLending(db: Db, shopId: string, branchId: string | nul
   const manager = (await db.query(`SELECT id, name FROM users WHERE shop_id = $1 AND role = 'Manager' LIMIT 1`, [shopId])).rows[0];
   // Loans are paid out of, and collected into, the shop's cash account; the owner put lending capital in first.
   const cashAcc = (await db.query(`SELECT id FROM bank_accounts WHERE shop_id = $1 AND type = 'Cash' ORDER BY created_at LIMIT 1`, [shopId])).rows[0]?.id ?? null;
-  if (cashAcc) await db.query(`INSERT INTO bank_transactions (shop_id, account_id, date, description, amount, category) VALUES ($1,$2,$3,'Lending capital from owner',800000,'Owner Contribution')`, [shopId, cashAcc, addDays(today, -350)]);
+  if (cashAcc) await db.query(`INSERT INTO bank_transactions (shop_id, account_id, date, description, amount, category) VALUES ($1,$2,$3,'Microfinance capital from owner',800000,'Owner Contribution')`, [shopId, cashAcc, addDays(today, -350)]);
 
   const borrowers: Array<{ id: string; code: string }> = [];
   for (const [i, [name, father]] of PEOPLE.entries()) {

@@ -34,7 +34,7 @@ export default function BorrowerView() {
 
   return (
     <div className="page">
-      <PageHeader title={b.name} crumbs={<><Link to="/app/lending">Lending</Link> <span>/</span> <Link to="/app/lending/borrowers">Borrowers</Link> <span>/</span> {b.code}</>} icon={UserRound}
+      <PageHeader title={b.name} crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> <Link to="/app/lending/borrowers">Borrowers</Link> <span>/</span> {b.code}</>} icon={UserRound}
         subtitle={<>{b.code} · {b.areaName} · registered {fmtDate(String(b.createdAt).slice(0, 10))} by {b.createdBy}</>}
         actions={canWrite && <>
           <button className="btn btn-secondary" onClick={() => { setErr({}); setEdit({ name: b.name, fatherName: b.fatherName, mobile: b.mobile, address: b.address, areaCode: b.areaCode, guarantor: b.guarantor }); }}><Pencil size={15} /> Edit</button>

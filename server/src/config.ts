@@ -51,7 +51,7 @@ export const config = {
     /** Where the headless browser loads the print page from. In production that is this server; in development, Vite. */
     renderOrigin: (env.RENDER_ORIGIN ?? (env.NODE_ENV === 'production' ? `http://127.0.0.1:${env.PORT ?? 4000}` : 'http://localhost:5173')).replace(/\/$/, ''),
   },
-  /** Money lending: Aadhaar numbers are encrypted with this key. Without it in production, Aadhaar entry is switched off. */
+  /** Microfinance: Aadhaar numbers are encrypted with this key. Without it in production, Aadhaar entry is switched off. */
   lending: { aadhaarKey: env.AADHAAR_KEY ?? (env.NODE_ENV === 'production' ? '' : 'development-only-aadhaar-key') },
   staticDir: env.STATIC_DIR ?? path.resolve(process.cwd(), 'dist'),
 };

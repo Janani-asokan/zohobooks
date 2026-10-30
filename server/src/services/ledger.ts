@@ -134,7 +134,7 @@ export async function ledgerEntries(db: Db, shopId: string, to: string, from?: s
     out.push({ date: m.date, source: m.reason === 'opening' ? 'opening' : 'stock', sourceId: m.ref_id, number: m.number ?? '', description: what, lines: [DR('inventory', v), CR(counter, v)] });
   }
 
-  // Money lending: interest is taken upfront, so a loan books the full principal as receivable, the cash handed over,
+  // Microfinance: interest is taken upfront, so a loan books the full principal as receivable, the cash handed over,
   // and the interest and fee as income. Receipts reduce principal (and late charges, which are booked when applied).
   for (const l of await many(db, `SELECT l.id, l.number, l.borrow_date, l.entered_on, l.principal, l.upfront_interest, l.processing_fee, l.net_disbursed,
       l.account_id, l.existing_loan, l.already_repaid, b.name FROM lending_loans l JOIN borrowers b ON b.id = l.borrower_id

@@ -53,7 +53,7 @@ export const SYSTEM_ACCOUNTS: AccountDef[] = [
 export const LENDING_ACCOUNTS: AccountDef[] = [
   sys('loan_recv', '1400', 'Loans given', 'asset', 'current', 'Principal still owed by borrowers'),
   sys('penalty_recv', '1410', 'Late charges receivable', 'asset', 'current', 'Late charges not yet collected'),
-  sys('lending_interest', '4200', 'Interest income (lending)', 'income', 'operating', 'Interest taken upfront when a loan is given'),
+  sys('lending_interest', '4200', 'Interest income (microfinance)', 'income', 'operating', 'Interest taken upfront when a loan is given'),
   sys('lending_fees', '4210', 'Loan processing fees', 'income', 'operating', 'Processing fees on loans given'),
   sys('lending_penalty', '4220', 'Late charges income', 'income', 'operating', 'Late charges applied to defaulting loans'),
 ];

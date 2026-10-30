@@ -47,7 +47,7 @@ export default function LoanView() {
   return (
     <div className="page">
       <PageHeader title={<>{l.number} <Badge tone={LOAN_TONE[st.status]}>{st.status}</Badge>{st.isDefaulter && <Badge tone="red">Defaulter</Badge>}</>} icon={HandCoins}
-        crumbs={<><Link to="/app/lending">Lending</Link> <span>/</span> <Link to="/app/lending/loans">Loans</Link> <span>/</span> {l.number}</>}
+        crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> <Link to="/app/lending/loans">Loans</Link> <span>/</span> {l.number}</>}
         subtitle={<><Link to={`/app/lending/borrowers/${l.borrowerId}`}>{l.borrowerName}</Link> · {l.borrowerCode} · {l.mobile} · {l.areaName} · {l.loanType}</>}
         actions={<>
           <button className="btn btn-secondary" onClick={() => printWithPage('size: A4 portrait; margin: 14mm;', 'print-loan')}><Printer size={15} /> Loan card</button>

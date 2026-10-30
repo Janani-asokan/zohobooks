@@ -61,7 +61,7 @@ export default function Borrowers() {
 
   return (
     <div className="page">
-      <PageHeader title="Borrowers" crumbs={<><Link to="/app/lending">Lending</Link> <span>/</span> Borrowers</>} icon={Users}
+      <PageHeader title="Borrowers" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Borrowers</>} icon={Users}
         subtitle="Register and verify borrowers. Aadhaar is stored encrypted and shown only as the last four digits."
         actions={<><ExportMenu disabled={!rows.length} table={() => ({
           title: 'Borrowers', subtitle: `${rows.length} borrowers`, filename: 'borrowers',

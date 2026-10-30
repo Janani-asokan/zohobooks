@@ -17,9 +17,9 @@ export const PERMISSIONS = {
   'reports.read': 'View reports & GST returns',
   'audit.read': 'View the audit log',
   'field.view': 'See field staff visits, routes and locations',
-  'lending.read': 'Money lending: see borrowers, loans, dues and reports',
-  'lending.write': 'Money lending: register borrowers, give and close loans, late charges',
-  'lending.collect': 'Money lending: collect instalments (without “see” access, only loans assigned to them)',
+  'lending.read': 'Microfinance: see borrowers, loans, dues and reports',
+  'lending.write': 'Microfinance: register borrowers, give and close loans, late charges',
+  'lending.collect': 'Microfinance: collect instalments (without “see” access, only loans assigned to them)',
   'admin': 'Organization profile, staff, branches, recurring & settings',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
@@ -43,7 +43,7 @@ export const PERMISSION_GROUPS: Array<{ module: string; permissions: Permission[
   { module: 'Purchases', permissions: ['purchases.read', 'purchases.write'] },
   { module: 'Accounting', permissions: ['banking.read', 'banking.write', 'accounting.read', 'accounting.write'] },
   { module: 'Reports', permissions: ['reports.read'] },
-  { module: 'Money lending', permissions: ['lending.read', 'lending.write', 'lending.collect'] },
+  { module: 'Microfinance management', permissions: ['lending.read', 'lending.write', 'lending.collect'] },
   { module: 'Administration', permissions: ['field.view', 'audit.read', 'admin'] },
 ];
 

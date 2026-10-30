@@ -29,7 +29,7 @@ export default function Collections() {
 
   return (
     <div className="page">
-      <PageHeader title="Collections" crumbs={<><Link to="/app/lending">Lending</Link> <span>/</span> Collections</>} icon={ReceiptIndianRupee}
+      <PageHeader title="Collections" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Collections</>} icon={ReceiptIndianRupee}
         subtitle={me.can('lending.read') ? 'Take payments and see every receipt of the day.' : 'Take payments on your loans and see your receipts.'} />
 
       {canCollect && (

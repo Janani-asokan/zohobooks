@@ -13,15 +13,15 @@ export default function LendingSettings() {
   const s = useLendingSettings().data;
   const [area, setArea] = useState({ code: '', name: '' });
   const [err, setErr] = useState<Record<string, string>>({});
-  const toggle = useMut((enabled: boolean) => api.put('/shop/lending/enabled', { enabled }), [...LENDING_KEYS, ['organization']], { success: (_r, v) => (v ? 'Money lending switched on' : 'Money lending switched off') });
+  const toggle = useMut((enabled: boolean) => api.put('/shop/lending/enabled', { enabled }), [...LENDING_KEYS, ['organization']], { success: (_r, v) => (v ? 'Microfinance management switched on' : 'Microfinance management switched off') });
   const add = useMut((b: { code: string; name: string }) => api.post('/shop/lending/areas', b), LENDING_KEYS, { success: (_r, b) => `Area ${b.code} added`, silentError: true });
   const patch = useMut((v: { code: string; active?: boolean; name?: string }) => api.patch(`/shop/lending/areas/${v.code}`, v), LENDING_KEYS, { success: 'Area updated' });
   return (
     <div className="page" style={{ maxWidth: 820 }}>
-      <PageHeader title="Lending settings" crumbs={<><Link to="/app/lending">Lending</Link> <span>/</span> Settings</>} icon={Settings2} />
+      <PageHeader title="Microfinance settings" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Settings</>} icon={Settings2} />
       {me.can('admin') && (
         <section className="card card-body">
-          <Toggle checked={!!s?.enabled} onChange={(v) => toggle.mutate(v)} label={<span><strong>Money lending</strong> <span className="muted small">Borrowers, loans and collections for this business. Switching off hides the module; nothing is deleted.</span></span>} />
+          <Toggle checked={!!s?.enabled} onChange={(v) => toggle.mutate(v)} label={<span><strong>Microfinance management</strong> <span className="muted small">Borrowers, loans and collections for this business. Switching off hides the module; nothing is deleted.</span></span>} />
           {!s?.aadhaarAvailable && <p className="small muted" style={{ marginTop: 10 }}>Aadhaar storage needs the <code>AADHAAR_KEY</code> setting on the server. Until then borrowers are registered without Aadhaar.</p>}
         </section>
       )}

@@ -16,7 +16,7 @@ export default function Planner() {
 
   return (
     <div className="page">
-      <PageHeader title="EMI planner" crumbs={<><Link to="/app/lending">Lending</Link> <span>/</span> Planner</>} icon={Calculator}
+      <PageHeader title="EMI planner" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Planner</>} icon={Calculator}
         subtitle="Show a borrower what each plan means before you lend: cash in hand, instalment, and the last due date." />
       <div className="card card-body form-grid">
         <label className="span-all"><span className="small muted">Loan amount</span>

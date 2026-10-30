@@ -34,7 +34,7 @@ export default function Loans() {
 
   return (
     <div className="page">
-      <PageHeader title="Loans" crumbs={<><Link to="/app/lending">Lending</Link> <span>/</span> Loans</>} icon={HandCoins}
+      <PageHeader title="Loans" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Loans</>} icon={HandCoins}
         subtitle={`${money(tot.principal)} lent · ${money(tot.paid)} repaid · ${money(tot.balance)} outstanding${rows.length !== data.length ? ` (${rows.length} shown)` : ''}`}
         actions={<><ExportMenu disabled={!rows.length} table={() => ({
           title: 'Loan book', subtitle: `${rows.length} loans`, filename: 'loan-book',

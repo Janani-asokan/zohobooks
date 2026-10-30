@@ -72,7 +72,7 @@ export default function LoanNew() {
 
   return (
     <div className="page" style={{ maxWidth: 1180 }}>
-      <PageHeader title="Give a loan" crumbs={<><Link to="/app/lending">Lending</Link> <span>/</span> <Link to="/app/lending/loans">Loans</Link> <span>/</span> New</>} icon={HandCoins}
+      <PageHeader title="Give a loan" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> <Link to="/app/lending/loans">Loans</Link> <span>/</span> New</>} icon={HandCoins}
         subtitle="Interest is taken upfront: the borrower receives the cash shown on the right and repays the full amount in equal instalments." />
       {err.form && <div className="error-state" style={{ marginBottom: 12 }}>{err.form}</div>}
       <div className="lend-grid">

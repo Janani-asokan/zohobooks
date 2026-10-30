@@ -48,7 +48,7 @@ export async function resetDemoPasswords() {
           SELECT u.shop_id, 'Murugan P', $1, $2, 'Warehouse', u.branch_id FROM users u WHERE lower(u.email) = 'owner@shop.com' AND u.role = 'Owner'`, [a.email, hash]);
     }
   }
-  // The money-lending demo arrived later too: give the demo shop its lending book once.
+  // The microfinance demo arrived later too: give the demo shop its lending book once.
   const owner = (await query("SELECT shop_id, branch_id FROM users WHERE lower(email) = 'owner@shop.com' AND role = 'Owner'"))[0];
   if (owner && !(await query('SELECT 1 FROM users WHERE lower(email) = $1', ['collector@shop.com'])).length) {
     const { seedLending } = await import('./seedLending');

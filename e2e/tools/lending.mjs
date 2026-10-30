@@ -1,4 +1,4 @@
-// Browser test of the money-lending module: register and approve a borrower, give a loan through the confirm step,
+// Browser test of the microfinance module: register and approve a borrower, give a loan through the confirm step,
 // collect (with confirm and receipt), close the loan, and check a collector's view. Run on freshly seeded demo data.
 // Usage: BASE=http://localhost:4000 node e2e/tools/lending.mjs
 import { chromium } from 'playwright';
@@ -25,8 +25,8 @@ const p = await session('owner@shop.com', 'owner123');
 let loanUrl = '';
 
 await step('lending appears in the sidebar and opens the overview', async () => {
-  await p.getByRole('link', { name: 'Lending overview' }).click().catch(async () => { await p.getByRole('button', { name: /^Lending/ }).click(); await p.getByRole('link', { name: 'Lending overview' }).click(); });
-  await p.getByRole('heading', { name: 'Money lending' }).waitFor();
+  await p.getByRole('link', { name: 'Microfinance overview' }).click().catch(async () => { await p.getByRole('button', { name: /^Microfinance/ }).click(); await p.getByRole('link', { name: 'Microfinance overview' }).click(); });
+  await p.getByRole('heading', { name: 'Microfinance management' }).waitFor();
   await p.getByText('Collected today').waitFor();
 });
 
@@ -99,7 +99,7 @@ await step('loan income shows in Profit & Loss and the books balance', async () 
   const d = tb.rows.reduce((s, r) => s + r.debit, 0), c = tb.rows.reduce((s, r) => s + r.credit, 0);
   if (Math.abs(d - c) > 0.01) throw new Error(`trial balance off by ${d - c}`);
   await go(p, '/app/reports/profit-loss');
-  await p.getByText('Interest income (lending)').waitFor();
+  await p.getByText('Interest income (microfinance)').waitFor();
 });
 
 await step('reports and export open', async () => {
