@@ -22,9 +22,9 @@ const SOURCE: Record<string, { label: string; link?: (id: string) => string }> =
   expense: { label: 'Expense', link: () => '/app/purchases/expenses' },
   bank: { label: 'Bank transaction', link: () => '/app/banking' },
   journal: { label: 'Journal', link: () => '/app/accounting/journals' },
-  loan: { label: 'Loan given', link: (id) => `/app/lending/loans/${id}` },
-  loan_receipt: { label: 'Loan receipt', link: () => '/app/lending/collections' },
-  loan_charge: { label: 'Late charge', link: () => '/app/lending/loans' },
+  loan: { label: 'Loan given', link: (id) => `/app/microfinance/loans/${id}` },
+  loan_receipt: { label: 'Loan receipt', link: () => '/app/microfinance/collections' },
+  loan_charge: { label: 'Late charge', link: () => '/app/microfinance/loans' },
   stock: { label: 'Stock' },
   opening: { label: 'Opening balance' },
 };

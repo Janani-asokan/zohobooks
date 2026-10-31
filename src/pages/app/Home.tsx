@@ -20,7 +20,7 @@ export default function Home() {
   const me = useShopUser();
   const org = useOrg().data;
   const shopWork = (['sales.write', 'reports.read', 'items.write', 'purchases.read', 'accounting.read'] as const).some((p) => me.can(p));
-  if (org?.lendingEnabled && !shopWork && (me.can('lending.collect') || me.can('lending.read'))) return <Navigate to="/app/lending" replace />;
+  if (org?.lendingEnabled && !shopWork && (me.can('lending.collect') || me.can('lending.read'))) return <Navigate to="/app/microfinance" replace />;
   return <ShopHome />;
 }
 

@@ -18,7 +18,7 @@ export default function LendingSettings() {
   const patch = useMut((v: { code: string; active?: boolean; name?: string }) => api.patch(`/shop/lending/areas/${v.code}`, v), LENDING_KEYS, { success: 'Area updated' });
   return (
     <div className="page" style={{ maxWidth: 820 }}>
-      <PageHeader title="Microfinance settings" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Settings</>} icon={Settings2} />
+      <PageHeader title="Microfinance settings" crumbs={<><Link to="/app/microfinance">Microfinance</Link> <span>/</span> Settings</>} icon={Settings2} />
       {me.can('admin') && (
         <section className="card card-body">
           <Toggle checked={!!s?.enabled} onChange={(v) => toggle.mutate(v)} label={<span><strong>Microfinance management</strong> <span className="muted small">Borrowers, loans and collections for this business. Switching off hides the module; nothing is deleted.</span></span>} />

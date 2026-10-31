@@ -70,13 +70,13 @@ export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavIte
     items.push({
       label: 'Microfinance', icon: HandCoins,
       children: [
-        { label: 'Microfinance overview', to: '/app/lending', end: true },
-        ...(can('lending.read') ? [{ label: 'Borrowers', to: '/app/lending/borrowers' }] : []),
-        { label: 'Loan book', to: '/app/lending/loans' },
-        { label: 'Collections', to: '/app/lending/collections' },
-        { label: 'EMI planner', to: '/app/lending/planner' },
-        ...(can('lending.read') ? [{ label: 'Microfinance reports', to: '/app/lending/reports' }] : []),
-        ...(can('lending.write') ? [{ label: 'Microfinance settings', to: '/app/lending/settings' }] : []),
+        { label: 'Microfinance overview', to: '/app/microfinance', end: true },
+        ...(can('lending.read') ? [{ label: 'Borrowers', to: '/app/microfinance/borrowers' }] : []),
+        { label: 'Loan book', to: '/app/microfinance/loans' },
+        { label: 'Collections', to: '/app/microfinance/collections' },
+        { label: 'EMI planner', to: '/app/microfinance/planner' },
+        ...(can('lending.read') ? [{ label: 'Microfinance reports', to: '/app/microfinance/reports' }] : []),
+        ...(can('lending.write') ? [{ label: 'Microfinance settings', to: '/app/microfinance/settings' }] : []),
       ],
     });
   }
@@ -120,11 +120,11 @@ export function buildActions(can: Can, flags: NavFlags = { lending: false }): Pa
   const out: PaletteAction[] = [];
   const add = (cond: boolean, group: string, label: string, icon: LucideIcon, to: string, keywords = '', meta?: string) => cond && out.push({ group, label, icon, to, keywords, meta });
   const lend = flags.lending;
-  add(lend && can('lending.write'), 'Create', 'Give a loan', HandCoins, '/app/lending/loans/new', 'microfinance lending finance loan disburse daily emi');
-  add(lend && can('lending.write'), 'Create', 'New borrower', Users, '/app/lending/borrowers?new=1', 'lending customer register aadhaar');
-  add(lend && (can('lending.collect') || can('lending.write')), 'Create', 'Collect a loan payment', ReceiptIndianRupee, '/app/lending/collections', 'lending collection instalment receipt');
-  add(lend && (can('lending.read') || can('lending.collect')), 'Go to', 'Microfinance overview', HandCoins, '/app/lending', 'microfinance lending loans finance dues overdue');
-  add(lend && can('lending.read'), 'Go to', 'Microfinance reports', FileBarChart2, '/app/lending/reports', 'defaulters collection cash flow');
+  add(lend && can('lending.write'), 'Create', 'Give a loan', HandCoins, '/app/microfinance/loans/new', 'microfinance lending finance loan disburse daily emi');
+  add(lend && can('lending.write'), 'Create', 'New borrower', Users, '/app/microfinance/borrowers?new=1', 'lending customer register aadhaar');
+  add(lend && (can('lending.collect') || can('lending.write')), 'Create', 'Collect a loan payment', ReceiptIndianRupee, '/app/microfinance/collections', 'lending collection instalment receipt');
+  add(lend && (can('lending.read') || can('lending.collect')), 'Go to', 'Microfinance overview', HandCoins, '/app/microfinance', 'microfinance lending loans finance dues overdue');
+  add(lend && can('lending.read'), 'Go to', 'Microfinance reports', FileBarChart2, '/app/microfinance/reports', 'defaulters collection cash flow');
   add(can('sales.write'), 'Create', 'New invoice', FileText, '/app/sales/invoices/new', 'bill sale gst', 'N');
   add(can('customers.write'), 'Create', 'New customer', UserRound, '/app/sales/customers?new=1', 'client party');
   add(can('items.write'), 'Create', 'New item', Package, '/app/items/new', 'product goods sku');
@@ -198,9 +198,9 @@ const ROUTE_RULES: Array<[RegExp, (can: Can) => boolean]> = [
   [/^\/app\/items\/(new|[^/]+\/edit)/, (can) => can('items.write')],
   [/^\/app\/(sales\/recurring|organization|team|print-settings|billing)/, (can) => can('admin')],
   [/^\/app\/audit/, (can) => can('audit.read') || can('admin')],
-  [/^\/app\/lending\/(borrowers|reports)/, (can) => can('lending.read')],
-  [/^\/app\/lending\/(loans\/new|settings)/, (can) => can('lending.write')],
-  [/^\/app\/lending(\/|$)/, (can) => can('lending.read') || can('lending.collect')],
+  [/^\/app\/microfinance\/(borrowers|reports)/, (can) => can('lending.read')],
+  [/^\/app\/microfinance\/(loans\/new|settings)/, (can) => can('lending.write')],
+  [/^\/app\/microfinance(\/|$)/, (can) => can('lending.read') || can('lending.collect')],
 ];
 export function canOpen(pathname: string, can: Can): boolean {
   const rule = ROUTE_RULES.find(([re]) => re.test(pathname));

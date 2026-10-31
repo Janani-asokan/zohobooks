@@ -16,7 +16,7 @@ export default function Planner() {
 
   return (
     <div className="page">
-      <PageHeader title="EMI planner" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Planner</>} icon={Calculator}
+      <PageHeader title="EMI planner" crumbs={<><Link to="/app/microfinance">Microfinance</Link> <span>/</span> Planner</>} icon={Calculator}
         subtitle="Show a borrower what each plan means before you lend: cash in hand, instalment, and the last due date." />
       <div className="card card-body form-grid">
         <label className="span-all"><span className="small muted">Loan amount</span>
@@ -40,7 +40,7 @@ export default function Planner() {
                 <div><dt>Last due</dt><dd>{fmtDate(q.maturity)}</dd></div>
                 <div><dt>Effective yearly rate</dt><dd>{q.apr.toFixed(1)}%</dd></div>
               </dl>
-              <Link className="btn btn-secondary btn-block" to={`/app/lending/loans/new`}>Use this plan</Link>
+              <Link className="btn btn-secondary btn-block" to={`/app/microfinance/loans/new`}>Use this plan</Link>
             </>}
           </section>
         ))}

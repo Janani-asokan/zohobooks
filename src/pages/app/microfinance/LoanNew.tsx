@@ -68,11 +68,11 @@ export default function LoanNew() {
   const submit = () => create.mutate({
     ...f, principal: Number(f.principal), monthlyRate: Number(f.monthlyRate), periods: Number(f.periods), processingFee: Number(f.processingFee) || 0, lateFee: Number(f.lateFee) || 0,
     cashHandover: f.existingLoan ? null : Number(f.cashHandover) || null, collectorId: f.collectorId || null, accountId: f.accountId || null, alreadyRepaid: Number(f.alreadyRepaid) || 0,
-  }, { onSuccess: (l) => navigate(`/app/lending/loans/${l.id}`, { replace: true }), onError: (x) => { setConfirm(false); setErr({ ...fieldErrors(x), form: x.message }); } });
+  }, { onSuccess: (l) => navigate(`/app/microfinance/loans/${l.id}`, { replace: true }), onError: (x) => { setConfirm(false); setErr({ ...fieldErrors(x), form: x.message }); } });
 
   return (
     <div className="page" style={{ maxWidth: 1180 }}>
-      <PageHeader title="Give a loan" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> <Link to="/app/lending/loans">Loans</Link> <span>/</span> New</>} icon={HandCoins}
+      <PageHeader title="Give a loan" crumbs={<><Link to="/app/microfinance">Microfinance</Link> <span>/</span> <Link to="/app/microfinance/loans">Loans</Link> <span>/</span> New</>} icon={HandCoins}
         subtitle="Interest is taken upfront: the borrower receives the cash shown on the right and repays the full amount in equal instalments." />
       {err.form && <div className="error-state" style={{ marginBottom: 12 }}>{err.form}</div>}
       <div className="lend-grid">
@@ -92,7 +92,7 @@ export default function LoanNew() {
                     <span><strong>{b.name}</strong> <span className="muted small">{b.code} · {b.mobile}</span></span><Badge tone={approved(b.status) ? 'green' : 'amber'}>{approved(b.status) ? 'Verified' : b.status}</Badge>
                   </button></li>
                 ))}</ul>}
-                <div className="small muted" style={{ marginTop: 6 }}>Not registered? <Link to="/app/lending/borrowers?new=1">Add a borrower</Link></div>
+                <div className="small muted" style={{ marginTop: 6 }}>Not registered? <Link to="/app/microfinance/borrowers?new=1">Add a borrower</Link></div>
               </div>
             )}
           </Field>

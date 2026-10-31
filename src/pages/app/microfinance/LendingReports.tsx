@@ -41,7 +41,7 @@ export default function LendingReports() {
 
   return (
     <div className="page">
-      <PageHeader title="Microfinance reports" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Reports</>} icon={FileBarChart2}
+      <PageHeader title="Microfinance reports" crumbs={<><Link to="/app/microfinance">Microfinance</Link> <span>/</span> Reports</>} icon={FileBarChart2}
         actions={<ExportMenu disabled={!r?.rows.length} table={() => ({ title: r!.title, subtitle: '', filename: kind, columns: cols.map((c) => ({ label: head(c), money: MONEY_COLS.has(c) })), rows: r!.rows.map((x) => ({ cells: cols.map((c) => x[c] ?? '') })) })} />} />
       <div className="filter-chips" style={{ padding: 0, marginBottom: 12 }}>
         {REPORTS.map((x) => <button key={x.id} className={`filter-chip ${kind === x.id ? 'active' : ''}`} onClick={() => setKind(x.id)}>{x.label}</button>)}

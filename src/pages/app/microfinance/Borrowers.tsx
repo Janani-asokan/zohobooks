@@ -51,7 +51,7 @@ export default function Borrowers() {
     setErr(e); setDupe(null);
     if (Object.keys(e).length) return;
     create.mutate(form, {
-      onSuccess: (b) => { setForm(null); navigate(`/app/lending/borrowers/${b.id}`); },
+      onSuccess: (b) => { setForm(null); navigate(`/app/microfinance/borrowers/${b.id}`); },
       onError: (x) => {
         if (x instanceof ApiError && x.status === 409 && (x.details as any)?.borrower) { const b = (x.details as any).borrower; setDupe({ id: b.id, name: b.name, code: b.code }); return; }
         setErr({ ...fieldErrors(x), form: x.message });
@@ -61,7 +61,7 @@ export default function Borrowers() {
 
   return (
     <div className="page">
-      <PageHeader title="Borrowers" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Borrowers</>} icon={Users}
+      <PageHeader title="Borrowers" crumbs={<><Link to="/app/microfinance">Microfinance</Link> <span>/</span> Borrowers</>} icon={Users}
         subtitle="Register and verify borrowers. Aadhaar is stored encrypted and shown only as the last four digits."
         actions={<><ExportMenu disabled={!rows.length} table={() => ({
           title: 'Borrowers', subtitle: `${rows.length} borrowers`, filename: 'borrowers',
@@ -86,7 +86,7 @@ export default function Borrowers() {
             <table className="table">
               <thead><tr><th>Borrower</th><th>Area</th><th>Status</th><th>Risk</th><th className="num">Loans</th><th className="num">Outstanding</th><th /></tr></thead>
               <tbody>{rows.map((b) => (
-                <tr key={b.id} className="clickable" onClick={() => navigate(`/app/lending/borrowers/${b.id}`)}>
+                <tr key={b.id} className="clickable" onClick={() => navigate(`/app/microfinance/borrowers/${b.id}`)}>
                   <td><span className="strong">{b.name}</span> <span className="muted small">{b.code}</span><div className="muted small">{b.mobile}{b.fatherName ? ` · S/o, D/o ${b.fatherName}` : ''} · Aadhaar {b.aadhaarMasked}</div></td>
                   <td>{b.areaName}</td>
                   <td><Badge tone={BORROWER_TONE[b.status]}>{b.status === 'Manual Verification Approved' ? 'Manually approved' : b.status}</Badge></td>
@@ -98,7 +98,7 @@ export default function Borrowers() {
                       <button className="btn btn-primary btn-sm" disabled={setStat.isPending} onClick={() => setStat.mutate({ id: b.id, status: 'Verified', note: 'Documents checked' })}><BadgeCheck size={14} /> Approve</button>
                       <button className="icon-btn danger" title="Mark verification failed" onClick={() => setVerify({ b, status: 'Verification Failed', note: '' })}><XCircle size={15} /></button>
                     </>}
-                    {canWrite && (b.status === 'Verified' || b.status === 'Manual Verification Approved') && <Link className="btn btn-secondary btn-sm" to={`/app/lending/loans/new?borrower=${b.id}`}>Give loan</Link>}
+                    {canWrite && (b.status === 'Verified' || b.status === 'Manual Verification Approved') && <Link className="btn btn-secondary btn-sm" to={`/app/microfinance/loans/new?borrower=${b.id}`}>Give loan</Link>}
                   </td>
                 </tr>
               ))}</tbody>
@@ -111,7 +111,7 @@ export default function Borrowers() {
         footer={<><button className="btn btn-secondary" onClick={() => setForm(null)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={create.isPending}><UserPlus size={15} /> Register</button></>}>
         {form && (
           <div className="form-grid">
-            {dupe && <div className="span-all lend-dupe">Already registered: <strong>{dupe.name}</strong> ({dupe.code}). <Link to={`/app/lending/borrowers/${dupe.id}`} onClick={() => setForm(null)}>Open their record</Link></div>}
+            {dupe && <div className="span-all lend-dupe">Already registered: <strong>{dupe.name}</strong> ({dupe.code}). <Link to={`/app/microfinance/borrowers/${dupe.id}`} onClick={() => setForm(null)}>Open their record</Link></div>}
             {err.form && <div className="span-all error-state">{err.form}</div>}
             <Field label="Name" required error={err.name}><input id="nb-name" className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
             <Field label="Father’s / husband’s name"><input id="nb-father" className="input" value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} /></Field>

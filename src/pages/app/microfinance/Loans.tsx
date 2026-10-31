@@ -34,13 +34,13 @@ export default function Loans() {
 
   return (
     <div className="page">
-      <PageHeader title="Loans" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Loans</>} icon={HandCoins}
+      <PageHeader title="Loans" crumbs={<><Link to="/app/microfinance">Microfinance</Link> <span>/</span> Loans</>} icon={HandCoins}
         subtitle={`${money(tot.principal)} lent · ${money(tot.paid)} repaid · ${money(tot.balance)} outstanding${rows.length !== data.length ? ` (${rows.length} shown)` : ''}`}
         actions={<><ExportMenu disabled={!rows.length} table={() => ({
           title: 'Loan book', subtitle: `${rows.length} loans`, filename: 'loan-book',
           columns: [{ label: 'Loan' }, { label: 'Date' }, { label: 'Borrower' }, { label: 'Area' }, { label: 'Plan' }, { label: 'Amount', money: true }, { label: 'Cash given', money: true }, { label: 'Interest', money: true }, { label: 'Paid', money: true }, { label: 'Balance', money: true }, { label: 'Status' }, { label: 'Collector' }],
           rows: rows.map((l) => ({ cells: [l.number, fmtDate(l.borrowDate), `${l.borrowerName} (${l.borrowerCode})`, l.areaCode, l.loanType, l.principal, l.netDisbursed, l.upfrontInterest, l.state.paid, l.state.balance, l.state.status, l.collectorName] })),
-        })} />{me.can('lending.write') && <Link className="btn btn-primary" to="/app/lending/loans/new"><Plus size={16} /> Give a loan</Link>}</>} />
+        })} />{me.can('lending.write') && <Link className="btn btn-primary" to="/app/microfinance/loans/new"><Plus size={16} /> Give a loan</Link>}</>} />
       <div className="card">
         <div className="toolbar">
           <div className="toolbar-left">
@@ -56,12 +56,12 @@ export default function Loans() {
         </div>
         <div className="table-wrap">
           {isLoading ? <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 240 }} /></div> : !rows.length ? (
-            <EmptyState icon={HandCoins} title={data.length ? 'No loans match' : 'No loans yet'} text="Give a loan to a verified borrower to start your book." action={me.can('lending.write') && <Link className="btn btn-primary" to="/app/lending/loans/new"><Plus size={15} /> Give a loan</Link>} />
+            <EmptyState icon={HandCoins} title={data.length ? 'No loans match' : 'No loans yet'} text="Give a loan to a verified borrower to start your book." action={me.can('lending.write') && <Link className="btn btn-primary" to="/app/microfinance/loans/new"><Plus size={15} /> Give a loan</Link>} />
           ) : (
             <table className="table lend-book">
               <thead><tr><th>Loan</th><th>Borrower</th><th>Plan</th><th className="num">Amount</th><th>Repaid</th><th className="num">Balance</th><th>Status</th></tr></thead>
               <tbody>{pg.slice.map((l) => (
-                <tr key={l.id} className="clickable" onClick={() => navigate(`/app/lending/loans/${l.id}`)}>
+                <tr key={l.id} className="clickable" onClick={() => navigate(`/app/microfinance/loans/${l.id}`)}>
                   <td className="strong">{l.number}<div className="muted small">{fmtDate(l.borrowDate)}</div></td>
                   <td>{l.borrowerName} <span className="muted small">{l.borrowerCode}</span><div className="muted small">{l.areaName}{l.collectorName ? ` · ${l.collectorName}` : ''}</div></td>
                   <td>{l.loanType}<div className="muted small">{money(l.instalment)} × {l.periods}</div></td>

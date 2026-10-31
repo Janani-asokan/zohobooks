@@ -35,7 +35,7 @@ export default function LoanView() {
   const waiveM = useMut((b: Record<string, unknown>) => api.post(`/shop/lending/loans/${id}/waive`, b), LENDING_KEYS, { success: 'Late charge waived', silentError: true });
   const lateM = useMut((n: number) => api.post(`/shop/lending/loans/${id}/late-charge`, { instalment: n }), LENDING_KEYS, { success: 'Late charge applied' });
 
-  if (q.isError) return <div className="page"><div className="card"><EmptyState icon={HandCoins} title="Loan not found" text={(q.error as Error).message} action={<Link className="btn btn-primary" to="/app/lending/loans">Back to loans</Link>} /></div></div>;
+  if (q.isError) return <div className="page"><div className="card"><EmptyState icon={HandCoins} title="Loan not found" text={(q.error as Error).message} action={<Link className="btn btn-primary" to="/app/microfinance/loans">Back to loans</Link>} /></div></div>;
   const d = q.data;
   if (!d) return <div className="page"><div className="skeleton" style={{ height: 520 }} /></div>;
   const l = d.loan;
@@ -47,8 +47,8 @@ export default function LoanView() {
   return (
     <div className="page">
       <PageHeader title={<>{l.number} <Badge tone={LOAN_TONE[st.status]}>{st.status}</Badge>{st.isDefaulter && <Badge tone="red">Defaulter</Badge>}</>} icon={HandCoins}
-        crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> <Link to="/app/lending/loans">Loans</Link> <span>/</span> {l.number}</>}
-        subtitle={<><Link to={`/app/lending/borrowers/${l.borrowerId}`}>{l.borrowerName}</Link> · {l.borrowerCode} · {l.mobile} · {l.areaName} · {l.loanType}</>}
+        crumbs={<><Link to="/app/microfinance">Microfinance</Link> <span>/</span> <Link to="/app/microfinance/loans">Loans</Link> <span>/</span> {l.number}</>}
+        subtitle={<><Link to={`/app/microfinance/borrowers/${l.borrowerId}`}>{l.borrowerName}</Link> · {l.borrowerCode} · {l.mobile} · {l.areaName} · {l.loanType}</>}
         actions={<>
           <button className="btn btn-secondary" onClick={() => printWithPage('size: A4 portrait; margin: 14mm;', 'print-loan')}><Printer size={15} /> Loan card</button>
           {open && canCollect && <button className="btn btn-secondary" onClick={() => setCollect('Prepayment')}><Wallet size={15} /> Prepayment</button>}

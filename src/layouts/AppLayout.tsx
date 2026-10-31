@@ -298,9 +298,9 @@ export default function AppLayout() {
         </main>
         {lendingOnly ? (
           <nav className="bottom-nav no-print" aria-label="Quick navigation">
-            <NavLink to="/app/lending" end><LayoutDashboard size={20} />Home</NavLink>
-            <NavLink to="/app/lending/collections"><ReceiptIndianRupee size={20} />Collect</NavLink>
-            <NavLink to="/app/lending/loans"><HandCoins size={20} />Loans</NavLink>
+            <NavLink to="/app/microfinance" end><LayoutDashboard size={20} />Home</NavLink>
+            <NavLink to="/app/microfinance/collections"><ReceiptIndianRupee size={20} />Collect</NavLink>
+            <NavLink to="/app/microfinance/loans"><HandCoins size={20} />Loans</NavLink>
             <button onClick={() => sb.setMobileOpen(true)}><Menu size={20} />More</button>
           </nav>
         ) : (

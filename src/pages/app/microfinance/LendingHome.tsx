@@ -41,8 +41,8 @@ export default function LendingHome() {
       <PageHeader title="Microfinance management" crumbs={<>Microfinance</>} icon={HandCoins}
         subtitle={allLoans ? 'Your assigned loans: what to collect today and what is overdue.' : 'Loans given, today’s collections, dues and alerts, area by area.'}
         actions={canWrite && <>
-          <Link className="btn btn-secondary" to="/app/lending/borrowers?new=1"><Users size={15} /> New borrower</Link>
-          <Link className="btn btn-primary" to="/app/lending/loans/new"><Plus size={16} /> Give a loan</Link>
+          <Link className="btn btn-secondary" to="/app/microfinance/borrowers?new=1"><Users size={15} /> New borrower</Link>
+          <Link className="btn btn-primary" to="/app/microfinance/loans/new"><Plus size={16} /> Give a loan</Link>
         </>} />
       {canWrite ? (
         <Hint id="lending-home" title="How microfinance works here" icon={HandCoins}>
@@ -92,7 +92,7 @@ export default function LendingHome() {
             ) : (
               <table className="table">
                 <thead><tr><th>Borrower</th><th>Plan</th><th className="num">Due this {shown[0]?.frequency === 'Daily' ? 'day' : 'cycle'}</th><th className="num">Pending</th><th /></tr></thead>
-                <tbody>{shown.map((r) => <DueLine key={r.loanId} r={r} canCollect={canCollect && date === todayISO()} onCollect={() => { const l = loans.find((x) => x.id === r.loanId); if (l) setCollect(l); }} onOpen={() => navigate(`/app/lending/loans/${r.loanId}`)} />)}</tbody>
+                <tbody>{shown.map((r) => <DueLine key={r.loanId} r={r} canCollect={canCollect && date === todayISO()} onCollect={() => { const l = loans.find((x) => x.id === r.loanId); if (l) setCollect(l); }} onOpen={() => navigate(`/app/microfinance/loans/${r.loanId}`)} />)}</tbody>
               </table>
             )}
           </div>
@@ -103,7 +103,7 @@ export default function LendingHome() {
             <div className="card-header"><div><h3><Siren size={16} /> Needs attention</h3><p>Day 90/95/100/130 alerts, EMIs past grace, defaulters</p></div></div>
             {!d?.alerts.length ? <div className="card-body small muted">No alerts. Everything is on track.</div> : (
               <ul className="lend-alerts">{d.alerts.slice(0, 8).map((a) => (
-                <li key={a.loanId}><Link to={`/app/lending/loans/${a.loanId}`}>
+                <li key={a.loanId}><Link to={`/app/microfinance/loans/${a.loanId}`}>
                   <span className={`lend-dot ${a.overdueDays >= 60 || a.alert.startsWith('Day 130') ? 'bad' : 'warn'}`} />
                   <span style={{ flex: 1, minWidth: 0 }}><strong>{a.borrower}</strong><span className="small muted"> · {a.number} · {a.area}</span><div className="small">{a.alert}{a.overdueDays ? ` · ${a.overdueDays} days overdue` : ''}</div></span>
                   <span className="strong">{moneyShort(a.balance)}</span>

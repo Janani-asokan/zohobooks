@@ -26,7 +26,7 @@ export default function BorrowerView() {
   const status = useMut((v: { status: string; note: string }) => api.post(`/shop/lending/borrowers/${id}/status`, v), LENDING_KEYS, { success: (_r, v) => `Marked ${v.status.toLowerCase()}` });
   const show = useMut((reason: string) => api.post<{ aadhaar: string }>(`/shop/lending/borrowers/${id}/aadhaar`, { reason }), [], { silentError: true });
 
-  if (q.isError) return <div className="page"><div className="card"><EmptyState icon={UserRound} title="Borrower not found" text={(q.error as Error).message} action={<Link className="btn btn-primary" to="/app/lending/borrowers">Back to borrowers</Link>} /></div></div>;
+  if (q.isError) return <div className="page"><div className="card"><EmptyState icon={UserRound} title="Borrower not found" text={(q.error as Error).message} action={<Link className="btn btn-primary" to="/app/microfinance/borrowers">Back to borrowers</Link>} /></div></div>;
   const d = q.data;
   if (!d) return <div className="page"><div className="skeleton" style={{ height: 480 }} /></div>;
   const b = d.borrower;
@@ -34,11 +34,11 @@ export default function BorrowerView() {
 
   return (
     <div className="page">
-      <PageHeader title={b.name} crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> <Link to="/app/lending/borrowers">Borrowers</Link> <span>/</span> {b.code}</>} icon={UserRound}
+      <PageHeader title={b.name} crumbs={<><Link to="/app/microfinance">Microfinance</Link> <span>/</span> <Link to="/app/microfinance/borrowers">Borrowers</Link> <span>/</span> {b.code}</>} icon={UserRound}
         subtitle={<>{b.code} · {b.areaName} · registered {fmtDate(String(b.createdAt).slice(0, 10))} by {b.createdBy}</>}
         actions={canWrite && <>
           <button className="btn btn-secondary" onClick={() => { setErr({}); setEdit({ name: b.name, fatherName: b.fatherName, mobile: b.mobile, address: b.address, areaCode: b.areaCode, guarantor: b.guarantor }); }}><Pencil size={15} /> Edit</button>
-          {approved && <Link className="btn btn-primary" to={`/app/lending/loans/new?borrower=${b.id}`}><HandCoins size={15} /> Give a loan</Link>}
+          {approved && <Link className="btn btn-primary" to={`/app/microfinance/loans/new?borrower=${b.id}`}><HandCoins size={15} /> Give a loan</Link>}
         </>} />
 
       <div className="lend-grid">
@@ -50,7 +50,7 @@ export default function BorrowerView() {
                 <thead><tr><th>Loan</th><th>Plan</th><th className="num">Amount</th><th>Repaid</th><th className="num">Balance</th><th>Status</th></tr></thead>
                 <tbody>{d.loans.map((l) => (
                   <tr key={l.id}>
-                    <td><Link className="strong" to={`/app/lending/loans/${l.id}`}>{l.number}</Link><div className="muted small">{fmtDate(l.borrowDate)}{l.existingLoan ? ' · existing loan' : ''}</div></td>
+                    <td><Link className="strong" to={`/app/microfinance/loans/${l.id}`}>{l.number}</Link><div className="muted small">{fmtDate(l.borrowDate)}{l.existingLoan ? ' · existing loan' : ''}</div></td>
                     <td>{l.loanType}<div className="muted small">{money(l.instalment)} × {l.periods}</div></td>
                     <td className="num">{money(l.principal)}</td>
                     <td><RepaidBar loan={l} /><div className="muted small">{l.state.instalmentsPaid} of {l.periods}</div></td>

@@ -41,16 +41,16 @@ const StockInsights = lazy(() => import('./pages/app/StockInsights'));
 const DataTransfer = lazy(() => import('./pages/app/DataTransfer'));
 const FieldDay = lazy(() => import('./pages/app/FieldDay'));
 const FieldTeam = lazy(() => import('./pages/app/FieldTeam'));
-const LendingHome = lazy(() => import('./pages/app/lending/LendingHome'));
-const Borrowers = lazy(() => import('./pages/app/lending/Borrowers'));
-const BorrowerView = lazy(() => import('./pages/app/lending/BorrowerView'));
-const Loans = lazy(() => import('./pages/app/lending/Loans'));
-const LoanNew = lazy(() => import('./pages/app/lending/LoanNew'));
-const LoanView = lazy(() => import('./pages/app/lending/LoanView'));
-const Collections = lazy(() => import('./pages/app/lending/Collections'));
-const Planner = lazy(() => import('./pages/app/lending/Planner'));
-const LendingReports = lazy(() => import('./pages/app/lending/LendingReports'));
-const LendingSettings = lazy(() => import('./pages/app/lending/LendingSettings'));
+const LendingHome = lazy(() => import('./pages/app/microfinance/LendingHome'));
+const Borrowers = lazy(() => import('./pages/app/microfinance/Borrowers'));
+const BorrowerView = lazy(() => import('./pages/app/microfinance/BorrowerView'));
+const Loans = lazy(() => import('./pages/app/microfinance/Loans'));
+const LoanNew = lazy(() => import('./pages/app/microfinance/LoanNew'));
+const LoanView = lazy(() => import('./pages/app/microfinance/LoanView'));
+const Collections = lazy(() => import('./pages/app/microfinance/Collections'));
+const Planner = lazy(() => import('./pages/app/microfinance/Planner'));
+const LendingReports = lazy(() => import('./pages/app/microfinance/LendingReports'));
+const LendingSettings = lazy(() => import('./pages/app/microfinance/LendingSettings'));
 const StockSummary = lazy(() => import('./pages/app/StockSummary'));
 const Banking = lazy(() => import('./pages/app/Banking'));
 const Reports = lazy(() => import('./pages/app/Reports'));
@@ -135,16 +135,16 @@ export default function App() {
             <Route path="accounting/accounts" element={<Accounts />} />
             <Route path="accounting/journals" element={<Journals />} />
             <Route path="accounting/ledger" element={<Ledger />} />
-            <Route path="lending" element={<LendingHome />} />
-            <Route path="lending/borrowers" element={<Borrowers />} />
-            <Route path="lending/borrowers/:id" element={<BorrowerView />} />
-            <Route path="lending/loans" element={<Loans />} />
-            <Route path="lending/loans/new" element={<LoanNew />} />
-            <Route path="lending/loans/:id" element={<LoanView />} />
-            <Route path="lending/collections" element={<Collections />} />
-            <Route path="lending/planner" element={<Planner />} />
-            <Route path="lending/reports" element={<LendingReports />} />
-            <Route path="lending/settings" element={<LendingSettings />} />
+            <Route path="microfinance" element={<LendingHome />} />
+            <Route path="microfinance/borrowers" element={<Borrowers />} />
+            <Route path="microfinance/borrowers/:id" element={<BorrowerView />} />
+            <Route path="microfinance/loans" element={<Loans />} />
+            <Route path="microfinance/loans/new" element={<LoanNew />} />
+            <Route path="microfinance/loans/:id" element={<LoanView />} />
+            <Route path="microfinance/collections" element={<Collections />} />
+            <Route path="microfinance/planner" element={<Planner />} />
+            <Route path="microfinance/reports" element={<LendingReports />} />
+            <Route path="microfinance/settings" element={<LendingSettings />} />
             <Route path="reports" element={<ReportsHome />} />
             <Route path="reports/gst" element={<Reports />} />
             <Route path="reports/:id" element={<ReportView />} />

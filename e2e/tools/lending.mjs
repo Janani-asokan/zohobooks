@@ -31,15 +31,15 @@ await step('lending appears in the sidebar and opens the overview', async () => 
 });
 
 await step('register a borrower with Aadhaar; a duplicate mobile is caught', async () => {
-  await go(p, '/app/lending/borrowers');
+  await go(p, '/app/microfinance/borrowers');
   await p.getByRole('button', { name: 'New borrower' }).click();
   await p.fill('#nb-name', 'Ramesh Kannan'); await p.fill('#nb-father', 'Kannan'); await p.fill('#nb-mobile', mobile);
   await p.fill('#nb-addr', '7, Temple Street, Salem'); await p.selectOption('#nb-area', 'SLM'); await p.fill('#nb-guar', 'Kumar (brother)');
   await p.fill('#nb-aadhaar', '5678 1234 9012'); await p.check('#nb-consent');
   await p.getByRole('button', { name: 'Register' }).click();
-  await p.waitForURL(/\/app\/lending\/borrowers\/[0-9a-f-]{36}$/);
+  await p.waitForURL(/\/app\/microfinance\/borrowers\/[0-9a-f-]{36}$/);
   await p.getByText('XXXX XXXX 9012').waitFor();
-  await go(p, '/app/lending/borrowers?new=1');
+  await go(p, '/app/microfinance/borrowers?new=1');
   await p.fill('#nb-name', 'Someone Else'); await p.fill('#nb-mobile', mobile); await p.fill('#nb-addr', '9, Mill Road, Erode'); await p.selectOption('#nb-area', 'ERD');
   await p.getByRole('button', { name: 'Register' }).click();
   await p.getByText('Already registered: Ramesh Kannan').waitFor();
@@ -47,14 +47,14 @@ await step('register a borrower with Aadhaar; a duplicate mobile is caught', asy
 });
 
 await step('approve the borrower', async () => {
-  await go(p, '/app/lending/borrowers');
+  await go(p, '/app/microfinance/borrowers');
   await p.locator('.search-input input, input[placeholder^="Search name"]').first().fill('Ramesh');
   await p.getByRole('button', { name: 'Approve', exact: true }).first().click();
   await p.getByText('Marked verified').waitFor();
 });
 
 await step('give a daily loan: live quote, rounded cash, confirm', async () => {
-  await go(p, '/app/lending/loans/new');
+  await go(p, '/app/microfinance/loans/new');
   await p.fill('#ln-search', 'Ramesh'); await p.getByRole('button', { name: /Ramesh Kannan/ }).click();
   await p.fill('#ln-amt', '50000');
   await p.getByText('₹46,433.33').first().waitFor(); // 50,000 − 2.14% × 100/30 months
@@ -63,7 +63,7 @@ await step('give a daily loan: live quote, rounded cash, confirm', async () => {
   await p.getByRole('button', { name: 'Continue' }).click();
   await p.getByRole('heading', { name: /Hand over ₹46,430.00 to Ramesh Kannan/ }).waitFor();
   await p.getByRole('button', { name: 'Confirm loan' }).click();
-  await p.waitForURL(/\/app\/lending\/loans\/[0-9a-f-]{36}$/);
+  await p.waitForURL(/\/app\/microfinance\/loans\/[0-9a-f-]{36}$/);
   loanUrl = p.url();
   await p.getByText('₹500.00 × 100').first().waitFor();
 });
@@ -103,7 +103,7 @@ await step('loan income shows in Profit & Loss and the books balance', async () 
 });
 
 await step('reports and export open', async () => {
-  await go(p, '/app/lending/reports');
+  await go(p, '/app/microfinance/reports');
   await p.getByText('Daily collection ·').waitFor();
   await p.getByRole('button', { name: 'Defaulters' }).click();
   await p.getByText('Defaulters and overdue loans').waitFor();
@@ -111,7 +111,7 @@ await step('reports and export open', async () => {
 
 const c = await session('collector@shop.com', 'collector123', 390);
 await step('collector lands on lending, sees only their loans and collects from the list', async () => {
-  await c.waitForURL(/\/app\/lending$/);
+  await c.waitForURL(/\/app\/microfinance$/);
   await c.getByText('Your collection round').waitFor();
   const collect = c.getByRole('button', { name: 'Collect' }).first();
   if (!(await collect.count())) { await c.getByRole('button', { name: /Arrears/ }).click(); }
@@ -121,7 +121,7 @@ await step('collector lands on lending, sees only their loans and collects from 
   await c.getByText('PAYMENT RECEIPT').waitFor();
 });
 await step('collector cannot open the borrower register', async () => {
-  await go(c, '/app/lending/borrowers');
+  await go(c, '/app/microfinance/borrowers');
   await c.getByText('This page isn’t part of your role').waitFor();
 });
 

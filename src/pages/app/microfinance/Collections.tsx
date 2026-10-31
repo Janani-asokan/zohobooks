@@ -29,7 +29,7 @@ export default function Collections() {
 
   return (
     <div className="page">
-      <PageHeader title="Collections" crumbs={<><Link to="/app/lending">Microfinance</Link> <span>/</span> Collections</>} icon={ReceiptIndianRupee}
+      <PageHeader title="Collections" crumbs={<><Link to="/app/microfinance">Microfinance</Link> <span>/</span> Collections</>} icon={ReceiptIndianRupee}
         subtitle={me.can('lending.read') ? 'Take payments and see every receipt of the day.' : 'Take payments on your loans and see your receipts.'} />
 
       {canCollect && (
@@ -38,7 +38,7 @@ export default function Collections() {
           {q.trim().length >= 2 && (!found.length ? <p className="small muted" style={{ marginTop: 10 }}>No open loan matches “{q}”.</p> : (
             <ul className="lend-found">{found.map((l) => (
               <li key={l.id}>
-                <button className="lend-found-main" onClick={() => navigate(`/app/lending/loans/${l.id}`)}>
+                <button className="lend-found-main" onClick={() => navigate(`/app/microfinance/loans/${l.id}`)}>
                   <strong>{l.borrowerName}</strong> <span className="muted small">{l.borrowerCode} · {l.number} · {l.mobile}</span>
                   <div className="small">{l.loanType} · {money(l.instalment)} / {l.loanType === 'Daily 100-Day' ? 'day' : l.loanType === 'Weekly' ? 'week' : 'month'} · balance <strong>{money(l.state.balance)}</strong>
                     {l.state.overdueAmount > 0 && <span style={{ color: 'var(--red-600)' }}> · {money(l.state.overdueAmount)} overdue</span>} <Badge tone={LOAN_TONE[l.state.status]}>{l.state.status}</Badge></div>
