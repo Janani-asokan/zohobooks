@@ -53,9 +53,9 @@ export async function applyTemplate(db: Db, shopId: string, key: string, opts: A
       const extra = cleanExtra(allFields, s.extra).value;
       await db.query(
         `INSERT INTO items (shop_id, type, name, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, track_batches, track_serials, category, extra, description)
-         VALUES ($1, 'Goods', $2, $3, $4, 0, $5, $5, $5, $6, 0, $7, $8, $9, $10, $11)`,
-        [shopId, s.name, s.unit, s.hsn, s.price, `tax_${s.gst}`, !!t.trackBatches, !!s.trackSerials, s.category, JSON.stringify(extra),
-          'Added from the business template. Check the price and GST rate before billing.'],
+         VALUES ($1, 'Goods', $2, $3, $4, 0, $5, $5, $5, $6, 0, $7, $8, $9, $10, '')`,
+        // No description: it prints on bills. The owner is told to check prices and rates when the template is applied.
+        [shopId, s.name, s.unit, s.hsn, s.price, `tax_${s.gst}`, !!t.trackBatches, !!s.trackSerials, s.category, JSON.stringify(extra)],
       );
       itemsAdded++;
     }

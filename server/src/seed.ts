@@ -38,8 +38,9 @@ export const DEMO_ACCOUNTS: Array<{ label: string; email: string; password: stri
 /** Demo mode on an existing database: put the demo logins back on their simple passwords. */
 export async function resetDemoPasswords() {
   for (const a of DEMO_ACCOUNTS) {
+    if (a.kind === 'super' && !config.demoSuperAdmin) continue; // see config.demoSuperAdmin
     const hash = await hashPassword(a.password);
-    if (a.kind === 'super') await query('UPDATE super_admins SET password_hash = $2, failed_attempts = 0, locked_until = NULL WHERE lower(email) = $1', [a.email, hash]);
+    if (a.kind === 'super') await query('UPDATE super_admins SET password_hash = $2, failed_attempts = 0, locked_until = NULL, must_change_password = false WHERE lower(email) = $1', [a.email, hash]);
     else {
       const done = await query('UPDATE users SET password_hash = $2, failed_attempts = 0, locked_until = NULL, must_change_password = false WHERE lower(email) = $1 RETURNING id', [a.email, hash]);
       // Demo logins added in later releases are created in the demo shop of an existing database.

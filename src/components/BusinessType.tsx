@@ -22,7 +22,7 @@ export function BusinessTypeCard() {
   const [details, setDetails] = useState<Record<string, string>>({});
   const apply = useMut((p: NonNullable<typeof pick>) => api.post<{ result: ApplyResult }>('/shop/organization/business-type', p), [['org'], ['items'], ['itemFacets'], ['printSettings']], {
     success: (r) => [
-      'Done.', r.result.itemsAdded ? `${r.result.itemsAdded} items added.` : '', r.result.fieldsAdded.length ? `New item fields: ${r.result.fieldsAdded.join(', ')}.` : '',
+      'Done.', r.result.itemsAdded ? `${r.result.itemsAdded} items added: check their prices and GST rates before billing.` : '', r.result.fieldsAdded.length ? `New item fields: ${r.result.fieldsAdded.join(', ')}.` : '',
       r.result.itemsSkipped ? `${r.result.itemsSkipped} items you already had were left as they are.` : '',
     ].filter(Boolean).join(' '),
   });

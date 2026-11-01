@@ -45,7 +45,7 @@ There's no role picker on the login page: the server works out who you are from 
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Janani-asokan/zohobooks)
 
-The `render.yaml` blueprint creates a PostgreSQL database and the web service (built from the `Dockerfile`). On first start it loads the demo shops. **Demo mode is on** (`DEMO_SIMPLE_PASSWORDS=1`): the demo logins use the simple passwords (`owner@shop.com` / `owner123`, `admin@ledgerly.in` / `admin123`, …) and the login page lists them, so anyone with the link can sign in. Before real use, set `DEMO_SIMPLE_PASSWORDS=0`. A fresh seed then gives the demo accounts the generated `DEMO_PASSWORD` instead; an existing database keeps the simple passwords until you change them, so change them yourself. To start with an empty platform instead, remove `SEED_DEMO` and set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`.
+The `render.yaml` blueprint creates a PostgreSQL database and the web service (built from the `Dockerfile`). On first start it loads the demo shops. **Demo mode is on** (`DEMO_SIMPLE_PASSWORDS=1`): the demo shop logins use the simple passwords (`owner@shop.com` / `owner123`, …) and the login page lists them, so anyone with the link can sign in to the demo shop. The super admin is never a public demo login: it can reset any owner's password and download every shop's backup. It is left off the login page, and if it still has the demo password `admin123` it must set a new password at its next sign-in. For local testing only, `DEMO_SUPER_ADMIN=1` keeps the old behaviour. Before real use, set `DEMO_SIMPLE_PASSWORDS=0`. A fresh seed then gives the demo accounts the generated `DEMO_PASSWORD` instead; an existing database keeps the simple passwords until you change them, so change them yourself. To start with an empty platform instead, remove `SEED_DEMO` and set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD`.
 
 Free-tier notes: the service sleeps after 15 minutes without visitors (the first request then takes about 50 seconds), and Render's free PostgreSQL expires after 30 days. Use paid plans for real shops.
 
@@ -114,7 +114,7 @@ How it works:
 - **Nothing is lost:** turning a feature off never deletes data, so turning it back on shows everything again. Every period is kept as history.
 - **New and existing shops:** new shops get a 14-day trial of everything. Shops that existed before pay-per-feature keep every feature.
 
-**Business templates.** At signup, or later from *Settings → Business profile*, the owner picks what the business sells. The 10 types are:
+**Business templates.** At signup, or later from *Settings → Business profile*, the owner picks what the business sells. The 11 types are:
 
 - general
 - fruits & vegetables
@@ -125,6 +125,7 @@ How it works:
 - steel
 - hardware
 - garments
+- toys & games
 - mobiles
 
 The template:
@@ -147,6 +148,15 @@ How it is built:
 
 - **Plain data:** templates live in `shared/templates.ts`, so adding a business type is a data change.
 - **Only adds:** applying one adds fields, units and items; it never deletes or overwrites anything, and applying it twice changes nothing more.
+
+**Barcode counter (toy shops, garments, supermarkets).**
+
+- **Scan to bill:** any USB or Bluetooth barcode scanner works in *POS* with no software. A scan is caught even after the cashier taps a tile or button, so no scan is lost.
+- **Same code, any scanner:** a 12-digit UPC and the same code sent as 13 digits with a leading 0 match the same item.
+- **Unknown barcode:** *POS* offers *Add as a new item* with the code filled in.
+- **Price tags:** generate a barcode for loose items, then print labels on a 50 × 25 mm (or other) label printer or A4 sheets. *Print settings* explains the driver and calibration steps.
+- **Receipts:** 58 or 80 mm thermal receipts. *Print settings → Thermal receipt* explains one-click printing with Chrome's `--kiosk-printing`.
+- **One price is enough:** on a new item, SP2 and SP3 can be left empty and use the standard price.
 
 **Invoices that follow the GST rules and the trade.**
 

@@ -19,7 +19,7 @@ const password = z.string().refine(isStrongPassword, PASSWORD_RULE);
 export async function mePayload(req: Request) {
   const ctx = req.ctx;
   if (!ctx) return null;
-  if (ctx.kind === 'super') return { kind: 'super' as const, user: { id: ctx.id, name: ctx.name, email: ctx.email } };
+  if (ctx.kind === 'super') return { kind: 'super' as const, user: { id: ctx.id, name: ctx.name, email: ctx.email, mustChangePassword: ctx.mustChangePassword } };
   const [shop] = await query(
     `SELECT s.id, s.name, s.plan_id, p.name AS plan_name, s.license_start, s.license_end, s.active,
             p.max_users, p.max_branches, p.max_invoices_per_month
@@ -102,7 +102,7 @@ authRouter.post(
     await createSession(res, req, p.type, r.id, body.remember ?? true);
     req.ctx =
       p.type === 'super'
-        ? { kind: 'super', id: r.id, name: r.name, email: r.email }
+        ? { kind: 'super', id: r.id, name: r.name, email: r.email, mustChangePassword: !!r.must_change_password }
         : {
             kind: 'user', id: r.id, name: r.name, email: r.email, role: r.role as UserRole, shopId: r.shop_id, branchId: r.branch_id, mustChangePassword: r.must_change_password,
             permissions: await permissionsFor(r.shop_id, r.role as UserRole), homeShopId: r.shop_id,
@@ -128,7 +128,7 @@ authRouter.get(
   h(async (_req, res) => {
     if (!config.demoSimplePasswords) return res.json({ enabled: false, accounts: [] });
     const { DEMO_ACCOUNTS } = await import('../seed');
-    res.json({ enabled: true, accounts: DEMO_ACCOUNTS.map(({ label, email, password }) => ({ label, email, password })) });
+    res.json({ enabled: true, accounts: DEMO_ACCOUNTS.filter((a) => a.kind !== 'super' || config.demoSuperAdmin).map(({ label, email, password }) => ({ label, email, password })) });
   }),
 );
 
@@ -216,7 +216,7 @@ authRouter.post(
     const [r] = await query('SELECT * FROM password_resets WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()', [sha256(body.token)]);
     if (!r) throw new HttpError(400, 'This reset link is invalid or has expired. Please request a new one.', 'invalid_token');
     const hash = await hashPassword(body.password);
-    await query(`UPDATE ${table(r.principal_type)} SET password_hash = $2, failed_attempts = 0, locked_until = NULL ${r.principal_type === 'user' ? ', must_change_password = false' : ''} WHERE id = $1`, [r.principal_id, hash]);
+    await query(`UPDATE ${table(r.principal_type)} SET password_hash = $2, failed_attempts = 0, locked_until = NULL , must_change_password = false WHERE id = $1`, [r.principal_id, hash]);
     await query('UPDATE password_resets SET used_at = now() WHERE token_hash = $1', [r.token_hash]);
     // Sign out everywhere after a reset.
     await query('DELETE FROM sessions WHERE principal_type = $1 AND principal_id = $2', [r.principal_type, r.principal_id]);
@@ -234,11 +234,11 @@ authRouter.post(
     const [row] = await query(`SELECT password_hash FROM ${t} WHERE id = $1`, [ctx.id]);
     if (!(await verifyPassword(body.current, row.password_hash))) throw new HttpError(400, 'Current password is incorrect', 'bad_request', { current: 'Current password is incorrect' });
     if (body.current === body.next) throw new HttpError(400, 'Choose a password you haven’t used here', 'bad_request', { next: 'Must differ from the current password' });
-    await query(`UPDATE ${t} SET password_hash = $2 ${t === 'users' ? ', must_change_password = false' : ''} WHERE id = $1`, [ctx.id, await hashPassword(body.next)]);
+    await query(`UPDATE ${t} SET password_hash = $2, must_change_password = false WHERE id = $1`, [ctx.id, await hashPassword(body.next)]);
     // Keep this session, drop all others.
     await query('DELETE FROM sessions WHERE principal_id = $1 AND token_hash <> $2', [ctx.id, req.sessionHash ?? '']);
+    ctx.mustChangePassword = false;
     if (ctx.kind === 'user') {
-      ctx.mustChangePassword = false;
       await withTenant(ctx.shopId, (db) => audit(db, req, ctx.shopId, 'change_password', 'user', ctx.id));
     }
     res.json(await mePayload(req));

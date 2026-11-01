@@ -7,7 +7,7 @@ import { mailStatus } from './mailer';
 import { migrate } from './migrate';
 import { runBackup } from './services/backup';
 import { syncDefaultPrices } from './services/features';
-import { hashPassword } from './auth';
+import { hashPassword, verifyPassword } from './auth';
 import { isStrongPassword } from '../../shared/permissions';
 
 /**
@@ -35,6 +35,20 @@ async function bootstrap() {
   console.log(`[bootstrap] Created super admin ${email}`);
 }
 
+/** A super admin still using a public demo password must choose a new one at next sign-in (see config.demoSuperAdmin). */
+async function guardDemoSuperAdmin() {
+  const { DEMO_ACCOUNTS } = await import('./seed');
+  const demo = DEMO_ACCOUNTS.filter((a) => a.kind === 'super');
+  for (const a of await query('SELECT id, email, password_hash FROM super_admins WHERE NOT must_change_password')) {
+    for (const d of demo) {
+      if (await verifyPassword(d.password, a.password_hash)) {
+        await query('UPDATE super_admins SET must_change_password = true WHERE id = $1', [a.id]);
+        console.warn(`[bootstrap] Super admin ${a.email} still has the public demo password: a new password is required at next sign-in.`);
+      }
+    }
+  }
+}
+
 /** Before changing the schema of a database that has data, take a backup so a bad release can be rolled back. */
 async function backupBeforeMigrating(pending: string[]) {
   if (pending.includes('001_init.sql')) return; // brand-new database, nothing to save yet
@@ -58,6 +72,9 @@ async function main() {
   if (config.demoSimplePasswords) {
     const { resetDemoPasswords } = await import('./seed');
     await resetDemoPasswords();
+  }
+  if (!config.demoSuperAdmin) await guardDemoSuperAdmin();
+  if (config.demoSimplePasswords) {
     console.log('[bootstrap] Demo mode: demo accounts use their simple passwords (owner123, admin123 …). Set DEMO_SIMPLE_PASSWORDS=0 to turn off.');
   }
   const mail = mailStatus();

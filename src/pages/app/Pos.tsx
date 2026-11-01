@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle } from 'lucide-react';
 import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
@@ -21,6 +22,7 @@ import { Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
 import { waLink } from './InvoiceView';
+import { findByCode } from '../../../shared/barcode';
 
 interface CartLine { itemId: string; qty: number }
 
@@ -108,10 +110,10 @@ export default function Pos() {
   const onScanEnter = () => {
     const code = q.trim();
     if (!code) return;
-    const exact = items.find((i) => i.barcode === code || (i.sku && i.sku.toLowerCase() === code.toLowerCase()));
+    const exact = findByCode(items, code);
     const target = exact ?? (shown.length === 1 ? shown[0] : undefined);
     if (target) { add(target); setQ(''); }
-    else toast('error', 'No item matches', code);
+    else toast('error', 'No item has this barcode', me.can('items.write') ? 'Use “Add as a new item” below, or check the code.' : code);
   };
 
   const sale = useMut((b: Record<string, unknown>) => api.post<{ invoice: Invoice; change: number }>('/shop/pos/sale', b), SALES_KEYS, {});
@@ -129,6 +131,20 @@ export default function Pos() {
   };
   const reset = () => { setCart([]); setTendered(''); setReference(''); setCustomerId(''); setDone(null); setSplit({ Cash: '', UPI: '', Card: '' }); setDisc({ kind: 'percent', value: 0 }); setTimeout(() => scanRef.current?.focus(), 50); };
   useShortcuts({ 'mod+enter': charge, f2: () => scanRef.current?.focus() });
+  // A USB scanner types into whatever has focus. After the cashier taps a tile or a button nothing is focused, so
+  // send stray keys to the scan box instead of losing the scan. Fields, menus and the sale dialog are left alone.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1 || done) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]'))) return;
+      e.preventDefault();
+      setQ((v) => v + e.key);
+      scanRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [done]);
 
   return (
     <div className="pos">
@@ -158,7 +174,12 @@ export default function Pos() {
               </button>
             );
           })}
-          {shown.length === 0 && <div className="muted small" style={{ padding: 20 }}>No items match “{q}”.</div>}
+          {shown.length === 0 && (
+            <div className="muted small" style={{ padding: 20 }}>
+              No items match “{q}”.
+              {me.can('items.write') && q.trim() && <> <Link className="link-btn" to={`/app/items/new?type=Goods${/^[0-9A-Za-z-]{4,}$/.test(q.trim()) ? `&barcode=${encodeURIComponent(q.trim())}` : ''}`}><Plus size={12} /> Add as a new item</Link></>}
+            </div>
+          )}
         </div>
       </section>
 
@@ -188,7 +209,7 @@ export default function Pos() {
             return (
             <div key={l.itemId} className="pos-line">
               <div style={{ minWidth: 0 }}>
-                <div className="strong" style={{ color: 'var(--ink-900)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.it.name}</div>
+                <div className="strong pos-line-name" title={l.it.name}>{l.it.name}</div>
                 <div className="small muted">{money(unit(l.it))}{withGst ? ` · GST ${l.it.taxRate}%${inclusive ? ' incl.' : ''}` : ''}</div>
                 {l.qty > have && <div className="small" style={{ color: 'var(--amber-700, #a15c07)' }} role="status"><AlertTriangle size={12} style={{ verticalAlign: -2 }} /> Only {Math.max(have, 0)} {l.it.unit} in stock</div>}
               </div>

@@ -227,6 +227,26 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     ],
   },
   {
+    key: 'toys', name: 'Toys & games',
+    summary: 'Scan the barcode on every box, print price tags for the rest, and bill fast at the counter.',
+    helps: ['Scan the maker’s barcode on the box to bill', 'Print barcode price tags for loose toys', 'Age group printed on the bill', 'GST: 5% on most toys, 18% on electronic or battery toys'],
+    features: ['pos', 'purchases', 'inventory_plus'],
+    itemFields: [
+      { key: 'ageGroup', label: 'Age group', type: 'select', options: ['0–2 years', '3–5 years', '6–8 years', '9–12 years', '13+ years', 'All ages'], print: true },
+      { key: 'electronic', label: 'Electronic / battery toy', type: 'select', options: ['No', 'Yes'], help: 'Electronic toys usually carry 18% GST; other toys 5%' },
+      { key: 'material', label: 'Material', type: 'text', help: 'e.g. Plastic, Wood, Plush' },
+    ],
+    invoiceTerms: 'Exchange within 7 days in the original box with the bill. No exchange on opened or used toys.\nPlease check battery and parts at the counter.',
+    units: ['pcs', 'set', 'box'], defaultUnit: 'pcs', tradeDetails: [], defaultGst: 5, thermalPaper: '3in',
+    samples: [
+      { name: 'Soft teddy bear 30 cm', unit: 'pcs', hsn: '9503', gst: 5, price: 499, category: 'Soft toys', extra: { ageGroup: '0–2 years', electronic: 'No', material: 'Plush' } },
+      { name: 'Building blocks (100 pcs)', unit: 'set', hsn: '9503', gst: 5, price: 699, category: 'Learning', extra: { ageGroup: '3–5 years', electronic: 'No', material: 'Plastic' } },
+      { name: 'Jigsaw puzzle 500 pieces', unit: 'box', hsn: '9503', gst: 5, price: 399, category: 'Puzzles', extra: { ageGroup: '9–12 years', electronic: 'No' } },
+      { name: 'Ludo and snakes board game', unit: 'pcs', hsn: '9504', gst: 5, price: 199, category: 'Board games', extra: { ageGroup: 'All ages', electronic: 'No' } },
+      { name: 'Remote control car', unit: 'pcs', hsn: '9503', gst: 18, price: 1299, category: 'Electronic toys', extra: { ageGroup: '6–8 years', electronic: 'Yes', material: 'Plastic' } },
+    ],
+  },
+  {
     key: 'mobiles', name: 'Mobile phones & accessories',
     summary: 'IMEI on every phone, warranty dates and fast accessory billing.',
     helps: ['IMEI / serial number recorded on every phone sold', 'Warranty period on each item', 'Accessories billed fast at the counter'],

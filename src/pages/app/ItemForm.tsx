@@ -16,6 +16,7 @@ import { Attachments, attachFile } from '@/components/Attachments';
 import { SerialsCard, VariantsSection } from '@/components/ItemExtras';
 import type { ExtractResult } from '../../../shared/extract';
 import { useAiEnabled } from '@/components/Assistant';
+import { sameBarcode } from '../../../shared/barcode';
 
 type ItemType = Item['type'];
 interface Draft {
@@ -131,9 +132,10 @@ export default function ItemForm() {
     name: !draft.name.trim() ? 'Give your item a name' : '',
     cost: !(cost >= 0) ? 'Enter what it costs you (0 for services with no cost)' : '',
     sp1: !(num(draft.sp1) > 0) ? 'Required' : '',
-    sp2: !(num(draft.sp2) > 0) ? 'Required' : '',
-    sp3: !(num(draft.sp3) > 0) ? 'Required' : '',
-    barcode: draft.barcode && items.some((i) => i.barcode === draft.barcode && i.id !== id) ? 'This barcode is already on another item' : '',
+    // SP2 and SP3 are optional: left empty they use the standard price, so a shop with one price types it once.
+    sp2: draft.sp2.trim() !== '' && !(num(draft.sp2) > 0) ? 'Enter a price, or leave it empty to use SP1' : '',
+    sp3: draft.sp3.trim() !== '' && !(num(draft.sp3) > 0) ? 'Enter a price, or leave it empty to use SP1' : '',
+    barcode: draft.barcode && items.some((i) => sameBarcode(i.barcode, draft.barcode) && i.id !== id) ? 'This barcode is already on another item' : '',
     sku: draft.sku && items.some((i) => i.sku.toLowerCase() === draft.sku.toLowerCase() && i.id !== id) ? 'SKU already exists' : '',
     taxSlabId: !draft.taxSlabId ? 'Pick a GST rate' : '',
     hsn: draft.hsn && !/^\d{2,8}$/.test(draft.hsn) ? 'HSN/SAC must be 2–8 digits' : '',
@@ -144,7 +146,7 @@ export default function ItemForm() {
 
   const checklist = useMemo(() => [
     { label: 'Name', done: !!draft.name.trim() },
-    { label: 'Selling prices', done: num(draft.sp1) > 0 && num(draft.sp2) > 0 && num(draft.sp3) > 0 },
+    { label: 'Selling prices', done: num(draft.sp1) > 0 },
     { label: 'Cost price', done: cost >= 0 },
     { label: draft.type === 'Goods' ? 'HSN code (for GST returns)' : 'SAC code (for GST returns)', done: /^\d{2,8}$/.test(draft.hsn) },
     { label: 'Photo', done: !!draft.image, optional: true },
@@ -261,7 +263,7 @@ export default function ItemForm() {
     }
     const body: Record<string, unknown> = {
       type: draft.type, name: draft.name.trim(), sku: draft.sku.trim(), barcode: draft.barcode, unit: draft.unit, hsn: draft.hsn, cost,
-      sp1: num(draft.sp1), sp2: num(draft.sp2), sp3: num(draft.sp3), taxSlabId: draft.taxSlabId, reorderLevel: Number(draft.reorderLevel || 0),
+      sp1: num(draft.sp1), sp2: draft.sp2.trim() === '' ? num(draft.sp1) : num(draft.sp2), sp3: draft.sp3.trim() === '' ? num(draft.sp1) : num(draft.sp3), taxSlabId: draft.taxSlabId, reorderLevel: Number(draft.reorderLevel || 0),
       trackBatches: draft.type === 'Goods' && draft.trackBatches, trackSerials: draft.type === 'Goods' && draft.trackSerials, description: draft.description, category: draft.category.trim(), brand: draft.brand.trim(),
       image: draft.image, mrp: draft.mrp.trim() === '' ? null : num(draft.mrp),
       extra: Object.fromEntries(tradeFields.filter((f) => (draft.extra[f.key] ?? '').trim() !== '').map((f) => [f.key, f.type === 'number' ? Number(draft.extra[f.key]) : draft.extra[f.key]!.trim()])),
@@ -414,7 +416,7 @@ export default function ItemForm() {
               {draft.type === 'Goods' && (
                 <Field label="Barcode" error={e('barcode')} className="span-all" hint={<>Scan with a USB scanner or camera — or <button type="button" className="link-btn" onClick={() => set('barcode', generateEan13())}><ScanBarcode size={12} /> generate one</button> and print labels later.</>}>
                   <BarcodeInput value={draft.barcode} invalid={!!e('barcode')} onChange={(v) => set('barcode', v)}
-                    onScan={(code) => { const ex = items.find((i) => i.barcode === code && i.id !== id); if (ex) toast('error', 'Barcode already in use', ex.name); }} />
+                    onScan={(code) => { const ex = items.find((i) => sameBarcode(i.barcode, code) && i.id !== id); if (ex) toast('error', 'Barcode already in use', ex.name); }} />
                 </Field>
               )}
               <Field label="Description" className="span-all">
@@ -452,8 +454,8 @@ export default function ItemForm() {
                 const m = marginOf(v);
                 return (
                   <div key={t.k} className="price-tier" style={{ borderTop: `3px solid ${t.color}` }}>
-                    <div className="pt-label"><span className="pt-dot" style={{ background: t.color }} />{t.label}<span className="req">*</span></div>
-                    <div className="input-addon"><span>₹</span><input className={`input ${e(t.k) ? 'invalid' : ''}`} type="number" min={0} value={draft[t.k]} onChange={(ev) => set(t.k, ev.target.value)} placeholder="0.00" aria-label={t.label} /></div>
+                    <div className="pt-label"><span className="pt-dot" style={{ background: t.color }} />{t.label}{t.k === 'sp1' && <span className="req">*</span>}</div>
+                    <div className="input-addon"><span>₹</span><input className={`input ${e(t.k) ? 'invalid' : ''}`} type="number" min={0} value={draft[t.k]} onChange={(ev) => set(t.k, ev.target.value)} placeholder={t.k === 'sp1' ? '0.00' : sp1 > 0 ? `${sp1} (same as SP1)` : 'Same as SP1'} aria-label={t.label} /></div>
                     <div className="small muted" style={{ marginTop: 6 }}>{t.hint}</div>
                     {m !== null && <span className={`margin-chip ${m < 0 ? 'bad' : m < 10 ? 'low' : 'good'}`}>{m < 0 ? 'Loss' : 'Margin'} {m}% · {money(v - cost)}/unit</span>}
                     {e(t.k) && <div className="field-error" style={{ marginTop: 6 }}>{e(t.k)}</div>}

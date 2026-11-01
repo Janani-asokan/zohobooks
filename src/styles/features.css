@@ -254,3 +254,11 @@
 .dash-list li a > span:first-child { min-width: 0; display: flex; flex-direction: column; }
 .dash-list strong { color: var(--ink-900); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 640px) { .stat-grid .stat-value { font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: clip; } }
+/* The cashier must read what was scanned: names wrap to two lines, and in a narrow cart (tablet, or sidebar open)
+   the quantity and amount move under the name instead of squeezing it. */
+.pos-cart { container-type: inline-size; }
+.pos-line-name { color: var(--ink-900); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; line-height: 1.3; }
+@container (max-width: 380px) {
+  .pos-line { grid-template-columns: 1fr auto; row-gap: 6px; }
+  .pos-line > :first-child { grid-column: 1 / -1; }
+}

@@ -697,3 +697,7 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .ps-check.locked { opacity: .85; cursor: default; }
 .ps-check-text { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 2px; min-width: 0; }
 .ps-lock { font-size: 11px; font-weight: 600; color: var(--sage-700, #5d6b58); background: var(--sage-soft, #eef1ec); padding: 1px 8px; border-radius: 99px; white-space: nowrap; }
+.ps-setup { margin-top: 14px; text-align: left; }
+.ps-setup summary { cursor: pointer; font-weight: 600; color: var(--ink-900); }
+.ps-setup ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.ps-setup code { font-size: 12px; background: var(--brand-50, #fbeff1); padding: 0 4px; border-radius: 4px; }

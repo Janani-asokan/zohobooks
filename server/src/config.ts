@@ -43,6 +43,12 @@ export const config = {
    * On by default whenever demo data is seeded; set DEMO_SIMPLE_PASSWORDS=0 to turn it off.
    */
   demoSimplePasswords: bool(env.DEMO_SIMPLE_PASSWORDS, env.SEED_DEMO === '1'),
+  /**
+   * The super admin can reset any owner's password and download every shop's backup, so it is never a public demo
+   * login unless DEMO_SUPER_ADMIN=1 (local testing). Otherwise it is left off the login page, its password is not
+   * reset to the demo one, and if it still has the demo password it must set a new one on next sign-in.
+   */
+  demoSuperAdmin: bool(env.DEMO_SUPER_ADMIN, false),
   /** Reads uploaded PDFs and photos into form fields. Without a key, an offline text reader and OCR are used. */
   ai: { apiKey: env.ANTHROPIC_API_KEY ?? '', model: env.AI_MODEL ?? 'claude-opus-5-5' },
   pdf: {

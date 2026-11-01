@@ -9,7 +9,7 @@ import { rolePermissions, type Permission, type UserRole } from '../../shared/pe
 
 export const SESSION_COOKIE = 'lb_session';
 
-export type SuperCtx = { kind: 'super'; id: string; name: string; email: string };
+export type SuperCtx = { kind: 'super'; id: string; name: string; email: string; mustChangePassword: boolean };
 export type UserCtx = {
   kind: 'user';
   id: string;
@@ -102,8 +102,8 @@ export async function loadSession(req: Request, _res: Response, next: NextFuncti
     if (!s) return next();
     req.sessionHash = hash;
     if (s.principal_type === 'super') {
-      const [a] = await query('SELECT id, name, email FROM super_admins WHERE id = $1', [s.principal_id]);
-      if (a) req.ctx = { kind: 'super', id: a.id, name: a.name, email: a.email };
+      const [a] = await query('SELECT id, name, email, must_change_password FROM super_admins WHERE id = $1', [s.principal_id]);
+      if (a) req.ctx = { kind: 'super', id: a.id, name: a.name, email: a.email, mustChangePassword: a.must_change_password };
     } else {
       const u = await resolveUserCtx(s.principal_id, s.active_shop_id);
       if (u) req.ctx = u;
@@ -125,6 +125,7 @@ export function csrfGuard(req: Request, _res: Response, next: NextFunction) {
 
 export function requireSuper(req: Request, _res: Response, next: NextFunction) {
   if (req.ctx?.kind !== 'super') return next(new HttpError(401, 'Please sign in as a Super Admin', 'unauthenticated'));
+  if (req.ctx.mustChangePassword) return next(new HttpError(403, 'Please set a new password to continue', 'password_change_required'));
   next();
 }
 

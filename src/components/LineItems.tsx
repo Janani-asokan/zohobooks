@@ -7,6 +7,7 @@ import { money, uid } from '@/lib/format';
 import { TIER_LABEL, type Item, type LineInput, type PriceTier } from '@/api/types';
 import { ItemPicker } from './ItemPicker';
 import { SerialField } from './SerialField';
+import { findByCode } from '../../shared/barcode';
 
 /** Editable line held in form state (key is client-only). */
 export interface DraftLine extends LineInput {
@@ -60,7 +61,7 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
   };
 
   const addByBarcode = (code: string) => {
-    const it = items.find((i) => i.barcode === code || (i.sku && i.sku.toLowerCase() === code.toLowerCase()));
+    const it = findByCode(items, code);
     setScan('');
     if (!it) return toast('error', 'No item with that barcode', code);
     const existing = lines.find((l) => l.itemId === it.id);

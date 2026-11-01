@@ -6,7 +6,7 @@ export type PriceTier = 'SP1' | 'SP2' | 'SP3';
 export const TIER_LABEL: Record<PriceTier, string> = { SP1: 'Standard', SP2: 'Loyal', SP3: 'New' };
 
 export type Me =
-  | { kind: 'super'; user: { id: string; name: string; email: string } }
+  | { kind: 'super'; user: { id: string; name: string; email: string; mustChangePassword?: boolean } }
   | {
       kind: 'user';
       user: { id: string; name: string; email: string; role: UserRole; branchId: string | null; mustChangePassword: boolean };

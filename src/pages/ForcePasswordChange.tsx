@@ -35,7 +35,7 @@ export default function ForcePasswordChange() {
     try {
       const m = await api.post<Me>('/auth/change-password', { current, next });
       qc.setQueryData(['me'], m);
-      toast('success', 'Password set', 'Welcome to your workspace!');
+      toast('success', 'Password set', m.kind === 'super' ? 'Keep it safe: this login controls every shop.' : 'Welcome to your workspace!');
     } catch (err) {
       setFields(fieldErrors(err));
       setError(err instanceof ApiError ? err.message : 'Could not change the password');
@@ -48,9 +48,11 @@ export default function ForcePasswordChange() {
     <AuthShell>
       <span className="stat-icon tone-green" style={{ marginBottom: 16 }}><ShieldCheck size={20} /></span>
       <h1>Set your own password</h1>
-      <p className="lead">Hi {me?.user.name.split(' ')[0]}, you signed in with a temporary password. Choose a new one to continue.</p>
+      <p className="lead">{me?.kind === 'super'
+        ? <>This super admin login still uses the public demo password, which anyone could find on the login page. Choose your own password to continue.</>
+        : <>Hi {me?.user.name.split(' ')[0]}, you signed in with a temporary password. Choose a new one to continue.</>}</p>
       <form className="login-form" onSubmit={submit} noValidate>
-        <Field label="Temporary password" required error={(touched && !current ? 'Required' : '') || fields.current}>
+        <Field label={me?.kind === 'super' ? 'Current password' : 'Temporary password'} required error={(touched && !current ? 'Required' : '') || fields.current}>
           <PasswordInput value={current} onChange={setCurrent} invalid={touched && !current} autoFocus />
         </Field>
         <Field label="New password" required error={(touched ? nextErr : '') || fields.next} hint={PASSWORD_RULE}>

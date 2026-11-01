@@ -1,6 +1,6 @@
 // Dev check: create an invoice by keyboard only — customer, search item, Enter, quantity, issue.
 import { chromium } from 'playwright';
-const B = 'http://localhost:5173';
+const B = process.env.BASE ?? 'http://localhost:5173';
 const b = await chromium.launch(); const p = await (await b.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
 const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 await p.goto(B + '/login'); await p.fill('input[type=email]', 'owner@shop.com'); await p.fill('input[type=password]', 'owner123'); await p.keyboard.press('Enter'); await p.waitForURL(/app/);

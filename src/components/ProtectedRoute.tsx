@@ -30,6 +30,7 @@ export function ProtectedRoute({ kind }: { kind: 'super' | 'user' }) {
   if (loading) return <FullPageSpinner />;
   if (!me) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   if (me.kind !== kind) return <Navigate to={homeFor(me)} replace />;
+  if (me.kind === 'super' && me.user.mustChangePassword) return <ForcePasswordChange />;
   if (me.kind === 'user') {
     if (me.user.mustChangePassword) return <ForcePasswordChange />;
     if (me.shop.licenseExpired && !location.pathname.startsWith('/app/billing')) return <Navigate to="/app/billing" replace />;

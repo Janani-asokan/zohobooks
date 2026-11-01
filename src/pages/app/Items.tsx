@@ -14,6 +14,7 @@ import { FileUp } from 'lucide-react';
 import { SavedViewsMenu, useSavedViews } from '@/components/SavedViews';
 import { Hint, Thumb } from '@/components/kit';
 import { fmtDate, money, todayISO } from '@/lib/format';
+import { findByCode } from '../../../shared/barcode';
 
 type ItemType = Item['type'];
 type EditableKey = 'name' | 'sku' | 'cost' | 'sp1' | 'sp2' | 'sp3';
@@ -124,7 +125,7 @@ export default function Items() {
   };
 
   const handleScan = (code: string) => {
-    const found = items.find((i) => i.barcode === code);
+    const found = findByCode(items, code);
     setScan('');
     if (found) {
       sv.setFilters({ tab: found.type, q: found.barcode });

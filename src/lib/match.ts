@@ -1,5 +1,6 @@
 import type { Item } from '@/api/types';
 import type { ExtractedLine, ExtractedParty } from '../../shared/extract';
+import { sameBarcode } from '../../shared/barcode';
 
 const norm = (s: string) => s.toLowerCase().replace(/&/g, ' and ').replace(/\b(pvt|private|ltd|limited|llp|co|company|india|the|m\/s)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
 const tokens = (s: string) => new Set(norm(s).split(' ').filter((w) => w.length > 1));
@@ -29,7 +30,7 @@ export function matchParty<T extends { id: string; name: string; gstin: string; 
 export function matchItem(items: Item[], l: ExtractedLine): Item | null {
   const code = (v: string | null) => (v ?? '').trim().toLowerCase();
   if (l.sku) { const m = items.find((i) => i.sku && code(i.sku) === code(l.sku)); if (m) return m; }
-  if (l.barcode) { const m = items.find((i) => i.barcode && i.barcode === l.barcode); if (m) return m; }
+  if (l.barcode) { const m = items.find((i) => sameBarcode(i.barcode, l.barcode)); if (m) return m; }
   let best: Item | null = null, score = 0;
   // Model numbers (tokens with digits) must agree: "HP 682 Ink" is not "HP 680 Ink".
   const models = (s: string) => [...tokens(s)].filter((w) => /\d/.test(w));

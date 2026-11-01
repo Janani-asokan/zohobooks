@@ -109,6 +109,14 @@ export default function PrintSettings() {
               <div className="ps-paper-tag">{th.paper === '2in' ? '2 inch (58 mm) roll' : '3 inch (80 mm) roll'} · {THEMES.find((x) => x.id === th.theme)!.label} theme · sample bill</div>
               <ThermalReceipt data={SAMPLE_RECEIPT} org={org} s={th} />
               <div className="ps-help">Print from <strong>POS</strong> after a sale, or from any invoice with <strong>Print / PDF → Thermal receipt</strong>.</div>
+              <details className="ps-help ps-setup">
+                <summary>Setting up the counter printer and scanner</summary>
+                <ol>
+                  <li><strong>Printer:</strong> install the printer’s Windows driver, then in the print box choose it once, set paper to {th.paper === '2in' ? '58' : '80'} mm, margins to <em>None</em>, and untick <em>Headers and footers</em>. Chrome remembers this.</li>
+                  <li><strong>One-click printing:</strong> to skip the print box on every sale, start Chrome from a shortcut with <code>--kiosk-printing</code> added after <code>chrome.exe</code>. The receipt then goes straight to the default printer.</li>
+                  <li><strong>Barcode scanner:</strong> any USB or Bluetooth scanner works. Plug it in, open <strong>POS</strong> and scan; no software is needed. If scans do not add items, set the scanner to send <em>Enter</em> after each code (see its manual).</li>
+                </ol>
+              </details>
             </>
           ) : (
             <>
@@ -124,6 +132,16 @@ export default function PrintSettings() {
               <div className="ps-help" style={{ marginTop: 40, textAlign: 'center' }}>
                 <Tag size={14} style={{ verticalAlign: -2, marginRight: 6 }} />To print, select items on the <Link to="/app/items">Items</Link> page and choose <strong>Print barcode labels</strong>.
               </div>
+              {bc.printer === 'label' && (
+                <details className="ps-help ps-setup">
+                  <summary>Setting up the label printer</summary>
+                  <ol>
+                    <li>In the printer’s driver (Printing preferences), set the label stock to <strong>{size.w} × {size.h} mm</strong>{size.perRow > 1 ? `, ${size.perRow} across` : ''}, with the gap the roll has (usually 2–3 mm).</li>
+                    <li>Run the printer’s <em>calibrate</em> or <em>auto-detect</em> once after loading a new roll, so labels do not drift.</li>
+                    <li>In Chrome’s print box: margins <em>None</em>, scale <em>100</em>, and untick <em>Headers and footers</em>.</li>
+                  </ol>
+                </details>
+              )}
             </>
           )}
         </div>
