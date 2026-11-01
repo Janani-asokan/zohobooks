@@ -8,6 +8,8 @@ import { badRequest, conflict, h, notFound, parse } from '../http';
 import { mailStatus, sendMail } from '../mailer';
 import { listBackups, runBackup } from '../services/backup';
 import { provisionShop } from '../services/provision';
+import { activateFeature, endFeature, priceList, setPrice, shopFeatureHistory } from '../services/features';
+import { FEATURES } from '../../../shared/features';
 import { EMAIL_RE } from '../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
 
@@ -67,6 +69,8 @@ const createShopBody = z.object({
   years: z.number().int().min(1).max(5).default(1),
   password: z.string().refine(isStrongPassword, PASSWORD_RULE),
   paymentReference: z.string().max(100).default(''),
+  /** Add-on features to turn on until the licence ends. Left out: a 14-day trial of every feature. */
+  features: z.array(z.string()).max(50).optional(),
 });
 
 platformRouter.post(
@@ -75,7 +79,7 @@ platformRouter.post(
     const b = parse(createShopBody, req.body);
     const [dup] = await query('SELECT 1 FROM users WHERE lower(email) = lower($1) UNION SELECT 1 FROM super_admins WHERE lower(email) = lower($1)', [b.email]);
     if (dup) throw conflict('This email is already registered');
-    const shop = await provisionShop(req, { ...b, licenseStart: todayISO(), mustChangePassword: true });
+    const shop = await provisionShop(req, { ...b, licenseStart: todayISO(), mustChangePassword: true, features: b.features ?? 'trial' });
     const plan = (await query('SELECT * FROM plans WHERE id = $1', [b.planId]))[0];
     if (Number(plan.price_per_year) > 0) {
       await query("INSERT INTO subscription_payments (shop_id, plan_id, years, amount, method, reference, status, paid_at) VALUES ($1,$2,$3,$4,'manual',$5,'paid',now())", [
@@ -289,5 +293,101 @@ platformRouter.post(
     const out = await runBackup();
     await tx((db) => audit(db, req, null, 'backup', 'database', out.file, { bytes: out.bytes }));
     res.status(201).json(out);
+  }),
+);
+
+/* ---------------- Features and prices ---------------- */
+
+/** The catalogue with prices, and every open request from shops, for the Features & prices screen. */
+platformRouter.get(
+  '/features',
+  h(async (_req, res) => {
+    const prices = await priceList();
+    const requests = await query(`SELECT f.id, f.shop_id, s.name AS shop_name, f.feature_key, f.level, f.monthly_price, f.note, f.requested_by, f.created_at
+      FROM shop_features f JOIN shops s ON s.id = f.shop_id WHERE f.status = 'requested' ORDER BY f.created_at`);
+    const counts = await query(`SELECT feature_key, count(*)::int AS n FROM shop_features
+      WHERE status = 'active' AND starts_on <= current_date AND (ends_on IS NULL OR ends_on >= current_date) GROUP BY 1`);
+    res.json({
+      features: FEATURES.map((f) => ({
+        key: f.key, name: f.name, group: f.group, summary: f.summary, available: f.available,
+        shops: counts.find((c) => c.feature_key === f.key)?.n ?? 0,
+        levels: f.levels.map((l) => ({ ...l, ...prices.find((p) => p.feature === f.key && p.level === l.key)! })),
+      })),
+      requests: requests.map((r) => ({ id: r.id, shopId: r.shop_id, shopName: r.shop_name, feature: r.feature_key, level: r.level, monthlyPrice: r.monthly_price == null ? null : Number(r.monthly_price), note: r.note, requestedBy: r.requested_by, createdAt: r.created_at })),
+    });
+  }),
+);
+
+platformRouter.put(
+  '/features/prices',
+  h(async (req, res) => {
+    const b = parse(z.object({ prices: z.array(z.object({ feature: z.string(), level: z.string(), monthly: z.number().min(0).max(1_000_000) })).min(1).max(100) }), req.body);
+    const by = req.ctx?.kind === 'super' ? req.ctx.email : '';
+    for (const p of b.prices) await setPrice(p.feature, p.level, p.monthly, by);
+    await tx((db) => audit(db, req, null, 'set_feature_prices', 'feature', '00000000-0000-0000-0000-000000000000', { prices: b.prices }));
+    res.json(await priceList());
+  }),
+);
+
+platformRouter.get(
+  '/shops/:id/features',
+  h(async (req, res) => {
+    const [shop] = await query('SELECT id, name, license_end FROM shops WHERE id = $1', [req.params.id]);
+    if (!shop) throw notFound('Shop');
+    res.json({ shop: { id: shop.id, name: shop.name, licenseEnd: shop.license_end }, history: await shopFeatureHistory(shop.id) });
+  }),
+);
+
+/** Turns a feature on for a shop (approving its request if there is one), or changes its level or end date. */
+platformRouter.post(
+  '/shops/:id/features/:key',
+  h(async (req, res) => {
+    const b = parse(z.object({
+      level: z.string().min(1),
+      source: z.enum(['paid', 'trial', 'complimentary']),
+      endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+      monthlyPrice: z.number().min(0).nullable().optional(),
+      note: z.string().trim().max(300).default(''),
+    }), req.body);
+    const by = req.ctx?.kind === 'super' ? req.ctx.email : '';
+    await tx(async (db) => {
+      const s = await one(db, 'SELECT id, name FROM shops WHERE id = $1', [req.params.id]);
+      if (!s) throw notFound('Shop');
+      await activateFeature(db, s.id, req.params.key!, b, by);
+      await audit(db, req, null, 'turn_on_feature', 'shop', s.id, { shop: s.name, feature: req.params.key, ...b });
+    });
+    res.json(await shopFeatureHistory(req.params.id!));
+  }),
+);
+
+/** Turns a feature off for a shop from today. The shop's data is kept and comes back when it is turned on again. */
+platformRouter.delete(
+  '/shops/:id/features/:key',
+  h(async (req, res) => {
+    const note = parse(z.object({ note: z.string().trim().max(300).default('') }), req.body ?? {}).note;
+    const by = req.ctx?.kind === 'super' ? req.ctx.email : '';
+    await tx(async (db) => {
+      const s = await one(db, 'SELECT id, name FROM shops WHERE id = $1', [req.params.id]);
+      if (!s) throw notFound('Shop');
+      await endFeature(db, s.id, req.params.key!, by, note);
+      await audit(db, req, null, 'turn_off_feature', 'shop', s.id, { shop: s.name, feature: req.params.key, note });
+    });
+    res.json(await shopFeatureHistory(req.params.id!));
+  }),
+);
+
+/** Declines a shop's open request. Only the request is closed: a feature the shop already has stays on. */
+platformRouter.post(
+  '/shops/:id/features/:key/decline',
+  h(async (req, res) => {
+    const note = parse(z.object({ note: z.string().trim().max(300).default('') }), req.body ?? {}).note;
+    const by = req.ctx?.kind === 'super' ? req.ctx.email : '';
+    await tx(async (db) => {
+      const r = await one(db, `UPDATE shop_features SET status = 'ended', decided_by = $3, note = trim(note || ' Declined. ' || $4), updated_at = now()
+        WHERE shop_id = $1 AND feature_key = $2 AND status = 'requested' RETURNING id`, [req.params.id, req.params.key, by, note]);
+      if (!r) throw notFound('Request');
+      await audit(db, req, null, 'decline_feature_request', 'shop', req.params.id!, { feature: req.params.key, note });
+    });
+    res.json(await shopFeatureHistory(req.params.id!));
   }),
 );

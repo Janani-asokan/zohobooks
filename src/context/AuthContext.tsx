@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { hasFeature } from '../../shared/features';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/api/client';
 import type { Me } from '@/api/types';
@@ -104,5 +105,7 @@ export function useAuth() {
 export function useShopUser() {
   const { me, can } = useAuth();
   if (me?.kind !== 'user') throw new Error('Not a shop user');
-  return { ...me, can };
+  /** True when the shop has this add-on feature (at `minLevel` or above). Core billing needs no check. */
+  const has = (key: string, minLevel?: string) => hasFeature(me.shop.features ?? {}, key, minLevel);
+  return { ...me, can, has };
 }

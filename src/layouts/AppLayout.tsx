@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { featureForPage } from '../../shared/features';
+import { FeatureOff } from '@/components/FeatureOff';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Package, UserRound, LogOut, Lock, HandCoins, ReceiptIndianRupee, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { buildActions, buildCreate, buildNav, canOpen } from './nav';
@@ -46,7 +48,7 @@ function QuickCreate({ me }: { me: ReturnType<typeof useShopUser> }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
   const ref = useClickOutside<HTMLDivElement>(close, open);
-  const cols = buildCreate(me.can);
+  const cols = buildCreate(me.can, me.has);
   if (!cols.length) return null;
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -185,7 +187,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const sb = useSidebarState('ledgerly.app.sidebar');
   const online = useOnline();
-  const onDuty = useFieldTracker();
+  const onDuty = useFieldTracker(me.has('field'));
   const [shortcuts, setShortcuts] = useState(false);
   const [palette, setPalette] = useState(false);
   // The search palette loads every item, customer and invoice to search them; only do that once someone opens it.
@@ -193,12 +195,13 @@ export default function AppLayout() {
   useEffect(() => { if (palette) setPaletteUsed(true); }, [palette]);
   const canSell = me.can('sales.write');
   // Staff who only handle loans (collectors) get lending shortcuts in the phone bar instead of shop ones.
-  const lendingOnly = !!org.data?.lendingEnabled && !(['sales.write', 'customers.write', 'items.write', 'reports.read'] as const).some((p) => me.can(p)) && (me.can('lending.collect') || me.can('lending.read'));
+  const lendingOnly = !!org.data?.lendingEnabled && me.has('microfinance') && !(['sales.write', 'customers.write', 'items.write', 'reports.read'] as const).some((p) => me.can(p)) && (me.can('lending.collect') || me.can('lending.read'));
 
-  const lendingOn = !!org.data?.lendingEnabled;
-  const nav = useMemo(() => buildNav(me.can, { lending: lendingOn }), [me, lendingOn]);
+  const lendingOn = !!org.data?.lendingEnabled && me.has('microfinance');
+  const nav = useMemo(() => buildNav(me.can, { lending: lendingOn, has: me.has }), [me, lendingOn]);
   const location = useLocation();
-  const actions = useMemo(() => buildActions(me.can, { lending: lendingOn }), [me, lendingOn]);
+  const actions = useMemo(() => buildActions(me.can, { lending: lendingOn, has: me.has }), [me, lendingOn]);
+  const lockedFeature = featureForPage(location.pathname);
 
   useShortcuts({
     'mod+k': () => setPalette(true),
@@ -289,7 +292,7 @@ export default function AppLayout() {
         </header>
         {onDuty && <Link to="/app/field" className="duty-bar no-print" role="status"><span className="fh-dot" /> On duty · sharing location while the app is open · tap to check in or end your day</Link>}
         <main>
-          {canOpen(location.pathname, me.can) ? <Outlet /> : (
+          {lockedFeature && !me.has(lockedFeature.key) ? <FeatureOff feature={lockedFeature} isOwner={me.can('admin')} /> : canOpen(location.pathname, me.can) ? <Outlet /> : (
             <div className="page"><div className="card">
               <EmptyState icon={Lock} title="This page isn’t part of your role" text={`Your ${me.user.role} login can’t open this page. Ask the shop owner if you need access.`}
                 action={<Link to="/app" className="btn btn-primary">Go to dashboard</Link>} />

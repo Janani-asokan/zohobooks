@@ -4,6 +4,8 @@ import { one, tx } from '../db';
 import { hashPassword } from '../auth';
 import { audit } from '../audit';
 import { badRequest } from '../http';
+import { FEATURES } from '../../../shared/features';
+import { activateFeature, grantTrial } from './features';
 
 export interface NewShop {
   shopName: string;
@@ -16,7 +18,14 @@ export interface NewShop {
   password: string;
   mustChangePassword?: boolean;
   licenseStart: string;
+  /**
+   * Add-on features. 'trial' (the default) lets the shop try every feature for 14 days; a list turns those features on
+   * as paid until the licence ends; 'all' turns every feature on with no end date (demo shops).
+   */
+  features?: 'trial' | 'all' | string[];
 }
+
+export const FEATURE_TRIAL_DAYS = 14;
 
 /**
  * Creates the shop record (platform), its isolated workspace (tenant rows) and the owner login —
@@ -42,6 +51,17 @@ export async function provisionShop(req: Request | null, s: NewShop) {
       `INSERT INTO users (shop_id, name, email, password_hash, role, branch_id, must_change_password) VALUES ($1,$2,$3,$4,'Owner',$5,$6)`,
       [shop.id, s.ownerName, s.email.toLowerCase(), passwordHash, br.id, s.mustChangePassword ?? true],
     );
+    const by = req?.ctx?.kind === 'super' ? req.ctx.email : 'system';
+    const features = s.features ?? 'trial';
+    if (features === 'trial') await grantTrial(db, shop.id, FEATURE_TRIAL_DAYS, by);
+    else {
+      const keys = features === 'all' ? FEATURES.filter((f) => f.available).map((f) => f.key) : features;
+      for (const key of keys) {
+        const f = FEATURES.find((x) => x.key === key);
+        if (!f) throw badRequest(`Unknown feature ${key}`);
+        await activateFeature(db, shop.id, key, { level: f.levels[f.levels.length - 1]!.key, source: features === 'all' ? 'complimentary' : 'paid', endsOn: features === 'all' ? null : String(shop.license_end), startsOn: String(shop.license_start) }, by);
+      }
+    }
     await audit(db, null, shop.id, 'workspace_created', 'shop', shop.id, { plan: s.planId });
     await db.query("SELECT set_config('app.shop_id', '', true)");
     await audit(db, req, null, 'create_shop', 'shop', shop.id, { name: s.shopName, plan: s.planId, years: s.years });

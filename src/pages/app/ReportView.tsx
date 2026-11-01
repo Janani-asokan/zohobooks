@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { usePageOk } from '@/components/FeatureOff';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, BarChart3, CheckCircle2, ChevronLeft, Clock4, Landmark, Package, Scale, TrendingUp, Users, Wallet, type LucideIcon } from 'lucide-react';
@@ -210,6 +211,7 @@ const urlFor = (id: string, r: Range) => {
 export default function ReportView() {
   const { id = '' } = useParams();
   const me = useShopUser();
+  const pageOk = usePageOk();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const meta = REPORTS[id];
@@ -274,7 +276,7 @@ export default function ReportView() {
                 <thead><tr>{built.columns.map((c, i) => <th key={i} className={c.money || c.align === 'right' ? 'num' : ''}>{c.label}</th>)}</tr></thead>
                 <tbody>
                   {built.rows.map((r, i) => (
-                    <tr key={i} className={`${r.kind && r.kind !== 'row' ? `rk-${r.kind}` : ''} ${r.link ? 'clickable' : ''}`} onClick={r.link ? () => navigate(r.link!) : undefined}>
+                    <tr key={i} className={`${r.kind && r.kind !== 'row' ? `rk-${r.kind}` : ''} ${r.link && pageOk(r.link) ? 'clickable' : ''}`} onClick={r.link && pageOk(r.link) ? () => navigate(r.link!) : undefined}>
                       {r.cells.map((v, j) => {
                         const c = built.columns[j]!;
                         const right = c.money || c.align === 'right';

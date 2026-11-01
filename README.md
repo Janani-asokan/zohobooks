@@ -92,6 +92,28 @@ In production the API serves the built web app too, so you deploy one process. M
 
 ## Features
 
+**Pay only for what you use.** Every shop gets core billing: GST invoices, customers, items and stock, payments, banking, and the sales, profit and GST reports. Add-ons are turned on one by one:
+
+- quotes, orders and challans
+- recurring invoices
+- counter billing (POS)
+- purchases and expenses
+- advanced inventory
+- full accounting
+- Tally export and import
+- field sales team
+- AI assistant
+- microfinance management
+
+How it works:
+
+- **The owner** opens *Settings → Features & add-ons* to see each add-on's price and ask for it in one tap.
+- **The platform owner** sets prices and approves requests in *Console → Features & prices*, with an end date, an agreed price and a note.
+- **Levels:** a feature can have levels (attendance will offer manual, face and biometric), each with its own price.
+- **What is in code:** the catalogue in `shared/features.ts` says what each feature unlocks. The server blocks the API calls of features a shop doesn't have, and the app hides their menus and shows a clear "turn this on" screen.
+- **Nothing is lost:** turning a feature off never deletes data, so turning it back on shows everything again. Every period is kept as history.
+- **New and existing shops:** new shops get a 14-day trial of everything. Shops that existed before pay-per-feature keep every feature.
+
 **Upload a PDF or photo, get a filled form.** Every create form has a *Fill from a PDF or photo* box (drop, pick, paste a screenshot, or take a photo on a phone). You see what was read, untick anything wrong, then apply.
 
 | Form | What it reads | What it fills |

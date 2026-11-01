@@ -1,8 +1,8 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon,
-} from 'lucide-react';
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle } from 'lucide-react';
 import type { NavItem } from './Sidebar';
+import { featureForPage } from '../../shared/features';
 import type { PaletteAction } from './CommandPalette';
 import type { Permission } from '../../shared/permissions';
 
@@ -17,7 +17,14 @@ const CHILD_ICONS: Record<string, LucideIcon> = {
 };
 
 /** Sidebar information architecture. Order and grouping follow how a shop actually works through a day. */
-export interface NavFlags { lending: boolean }
+/** lending: the owner switched microfinance on. has: the shop has an add-on feature (shared/features.ts). */
+export interface NavFlags { lending: boolean; has?: (feature: string) => boolean }
+
+/** Links to pages of add-on features the shop doesn't have are left out of the sidebar, + New menu and palette. */
+const featureOk = (to: string, has?: (feature: string) => boolean) => {
+  const f = featureForPage(to.split('?')[0]!);
+  return !f || !has || has(f.key);
+};
 
 export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavItem[] {
   const items: NavItem[] = [{ label: 'Dashboard', icon: LayoutDashboard, to: '/app', end: true }];
@@ -83,13 +90,15 @@ export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavIte
   if (can('reports.read')) items.push({ label: 'Reports', icon: BarChart3, to: '/app/reports' });
   if (can('admin')) items.push({ label: 'Settings', icon: Settings, to: '/app/organization' });
   else if (can('audit.read')) items.push({ label: 'Audit Log', icon: History, to: '/app/audit' });
-  return items.map((it) => (it.children ? { ...it, children: it.children.map((c) => ({ ...c, icon: CHILD_ICONS[c.label] })) } : it));
+  return items
+    .map((it) => (it.children ? { ...it, children: it.children.filter((c) => featureOk(c.to, flags.has)).map((c) => ({ ...c, icon: CHILD_ICONS[c.label] })) } : it))
+    .filter((it) => (it.children ? it.children.length > 0 : featureOk(it.to!, flags.has)));
 }
 
 export interface CreateLink { label: string; icon: LucideIcon; to: string; keys?: string }
 
 /** "+ New" menu, grouped like the sidebar. */
-export function buildCreate(can: Can): Array<{ title: string; links: CreateLink[] }> {
+export function buildCreate(can: Can, has?: (feature: string) => boolean): Array<{ title: string; links: CreateLink[] }> {
   const cols = [
     { title: 'Sales', links: [
       can('sales.write') && { label: 'Invoice', icon: FileText, to: '/app/sales/invoices/new', keys: 'N' },
@@ -112,13 +121,13 @@ export function buildCreate(can: Can): Array<{ title: string; links: CreateLink[
       can('items.write') && { label: 'Transfer', icon: ArrowLeftRight, to: '/app/inventory/transfers?new=1' },
     ] },
   ];
-  return cols.map((c) => ({ ...c, links: c.links.filter(Boolean) as CreateLink[] })).filter((c) => c.links.length);
+  return cols.map((c) => ({ ...c, links: (c.links.filter(Boolean) as CreateLink[]).filter((l) => featureOk(l.to, has)) })).filter((c) => c.links.length);
 }
 
 /** Command palette actions: everything in the sidebar plus the create shortcuts. */
 export function buildActions(can: Can, flags: NavFlags = { lending: false }): PaletteAction[] {
   const out: PaletteAction[] = [];
-  const add = (cond: boolean, group: string, label: string, icon: LucideIcon, to: string, keywords = '', meta?: string) => cond && out.push({ group, label, icon, to, keywords, meta });
+  const add = (cond: boolean, group: string, label: string, icon: LucideIcon, to: string, keywords = '', meta?: string) => cond && featureOk(to, flags.has) && out.push({ group, label, icon, to, keywords, meta });
   const lend = flags.lending;
   add(lend && can('lending.write'), 'Create', 'Give a loan', HandCoins, '/app/microfinance/loans/new', 'microfinance lending finance loan disburse daily emi');
   add(lend && can('lending.write'), 'Create', 'New borrower', Users, '/app/microfinance/borrowers?new=1', 'lending customer register aadhaar');
@@ -178,6 +187,7 @@ export function buildActions(can: Can, flags: NavFlags = { lending: false }): Pa
   add(can('admin'), 'Settings', 'Organisation profile', Building2, '/app/organization', 'logo gstin upi address');
   add(can('admin'), 'Settings', 'Print settings', Printer, '/app/print-settings', 'invoice template thermal barcode label');
   add(can('admin'), 'Settings', 'Users & roles', Users, '/app/team', 'staff team branch warehouse');
+  add(can('admin'), 'Settings', 'Features & add-ons', Puzzle, '/app/features', 'plan price pricing add-on modules subscription turn on upgrade');
   return out;
 }
 
@@ -196,7 +206,7 @@ const ROUTE_RULES: Array<[RegExp, (can: Can) => boolean]> = [
   [/^\/app\/field\/team/, (can) => can('field.view')],
   [/^\/app\/(pos|sales\/invoices\/new|sales\/invoices\/[^/]+\/edit)/, (can) => can('sales.write')],
   [/^\/app\/items\/(new|[^/]+\/edit)/, (can) => can('items.write')],
-  [/^\/app\/(sales\/recurring|organization|team|print-settings|billing)/, (can) => can('admin')],
+  [/^\/app\/(sales\/recurring|organization|team|print-settings|billing|features)/, (can) => can('admin')],
   [/^\/app\/audit/, (can) => can('audit.read') || can('admin')],
   [/^\/app\/microfinance\/(borrowers|reports)/, (can) => can('lending.read')],
   [/^\/app\/microfinance\/(loans\/new|settings)/, (can) => can('lending.write')],

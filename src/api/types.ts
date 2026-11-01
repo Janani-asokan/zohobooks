@@ -11,7 +11,9 @@ export type Me =
       user: { id: string; name: string; email: string; role: UserRole; branchId: string | null; mustChangePassword: boolean };
       permissions: Permission[];
       orgCount: number;
-      shop: { id: string; name: string; planId: string; planName: string; licenseStart: string; licenseEnd: string; licenseExpired: boolean; active: boolean; limits: { users: number; branches: number; invoicesPerMonth: number | null } };
+      shop: { id: string; name: string; planId: string; planName: string; licenseStart: string; licenseEnd: string; licenseExpired: boolean; active: boolean; limits: { users: number; branches: number; invoicesPerMonth: number | null };
+        /** Add-on features this shop has: feature key → level (see shared/features.ts). */
+        features: Record<string, string> };
       platform: { customerIdPrefix: string; fyStartMonth: number; autoResetInvoiceNumbering: boolean };
     };
 

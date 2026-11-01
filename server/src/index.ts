@@ -6,6 +6,7 @@ import { startJobs } from './jobs';
 import { mailStatus } from './mailer';
 import { migrate } from './migrate';
 import { runBackup } from './services/backup';
+import { syncDefaultPrices } from './services/features';
 import { hashPassword } from './auth';
 import { isStrongPassword } from '../../shared/permissions';
 
@@ -52,6 +53,7 @@ async function backupBeforeMigrating(pending: string[]) {
 
 async function main() {
   await migrate(undefined, console.log, { beforeApply: backupBeforeMigrating });
+  await syncDefaultPrices();
   await bootstrap();
   if (config.demoSimplePasswords) {
     const { resetDemoPasswords } = await import('./seed');

@@ -375,6 +375,7 @@ function StockAlerts({ onOpen }: { onOpen: (itemId: string) => void }) {
 
 function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item; onClose: () => void; canWrite: boolean; showCost: boolean; onEdit: (it: Item) => void }) {
   const navigate = useNavigate();
+  const me = useShopUser();
   const goods = item.type === 'Goods';
   const branches = useBranches().data ?? [];
   const { data, isLoading } = useMovements(goods ? item.id : undefined);
@@ -425,7 +426,7 @@ function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item
           <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
             {goods && item.barcode && <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/app/items/labels?ids=${item.id}`)}><Tag size={14} /> Print labels</button>}
             <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/app/sales/invoices/new?item=${item.id}`)}><ExternalLink size={14} /> Sell on invoice</button>
-            {goods && <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/app/purchases/orders?new=1&item=${item.id}`)}><Boxes size={14} /> Reorder</button>}
+            {goods && me.has('purchases') && me.can('purchases.write') && <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/app/purchases/orders?new=1&item=${item.id}`)}><Boxes size={14} /> Reorder</button>}
           </div>
           {!goods ? null : (<>
           <div className="section-title mt-24">Stock · reorder at {item.reorderLevel} {item.unit}</div>
@@ -436,7 +437,7 @@ function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item
           {canWrite && (
             <div className="row" style={{ gap: 8, marginTop: 14 }}>
               <button className={`btn btn-sm ${mode === 'adjust' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode(mode === 'adjust' ? 'none' : 'adjust')}><SlidersHorizontal size={14} /> Adjust stock</button>
-              {branches.length > 1 && <button className={`btn btn-sm ${mode === 'transfer' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode(mode === 'transfer' ? 'none' : 'transfer')}><ArrowLeftRight size={14} /> Transfer</button>}
+              {branches.length > 1 && me.has('inventory_plus') && <button className={`btn btn-sm ${mode === 'transfer' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode(mode === 'transfer' ? 'none' : 'transfer')}><ArrowLeftRight size={14} /> Transfer</button>}
             </div>
           )}
           {mode !== 'none' && (

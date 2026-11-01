@@ -74,10 +74,10 @@ export async function seed({ quiet = false } = {}) {
 
   const demo = await provisionShop(null, {
     shopName: 'Aravind Computer Store', ownerName: 'Aravind Kumar', email: 'owner@shop.com', phone: '+91 98400 12345', city: 'Chennai',
-    planId: 'premium', years: 1, password: pw('owner123'), mustChangePassword: false, licenseStart: day(-120),
+    planId: 'premium', years: 1, password: pw('owner123'), mustChangePassword: false, licenseStart: day(-120), features: 'all',
   });
   for (const [i, [name, owner, email, city, plan, start]] of others.entries()) {
-    const s = await provisionShop(null, { shopName: name, ownerName: owner, email, phone: `+91 98${String(41000000 + i * 1234567).slice(0, 8)}`, city, planId: plan, years: 1, password: pw('welcome123'), mustChangePassword: true, licenseStart: day(start) });
+    const s = await provisionShop(null, { shopName: name, ownerName: owner, email, phone: `+91 98${String(41000000 + i * 1234567).slice(0, 8)}`, city, planId: plan, years: 1, password: pw('welcome123'), mustChangePassword: true, licenseStart: day(start), features: 'all' });
     if (name === 'Annapoorna Sweets') await query('UPDATE shops SET active = false WHERE id = $1', [s.id]);
   }
   await query('UPDATE shops SET created_at = license_start::timestamptz');

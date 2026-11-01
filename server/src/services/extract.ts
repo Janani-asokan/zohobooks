@@ -198,11 +198,12 @@ async function aiExtract(bytes: Buffer, mime: UploadType, kind: ExtractKind, sho
 
 /* ---------------- Entry point ---------------- */
 
-export async function extractDocument(dataUrl: string, kind: ExtractKind, shop: { name: string; gstin: string }): Promise<ExtractResult> {
+/** `useAi` is false when the shop doesn't have the AI feature: the offline reader is used, at no AI cost. */
+export async function extractDocument(dataUrl: string, kind: ExtractKind, shop: { name: string; gstin: string }, useAi = true): Promise<ExtractResult> {
   const { mime, bytes } = decodeDataUrl(dataUrl);
   const warnings: string[] = [];
 
-  if (aiEnabled()) {
+  if (useAi && aiEnabled()) {
     try {
       const data = await aiExtract(bytes, mime, kind, shop);
       if (data.party.gstin && data.party.gstin.toUpperCase() === shop.gstin.toUpperCase()) data.party = { ...emptyExtract().party };

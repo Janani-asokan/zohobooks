@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { shopHas } from '../../services/features';
 import { rateLimit } from '../../auth';
 import { config } from '../../config';
 import { audit } from '../../audit';
@@ -20,21 +21,21 @@ export const filesRouter = Router();
 /* ---------- Read an uploaded PDF or photo into form fields ---------- */
 const KINDS = ['item', 'items', 'bill', 'expense', 'customer', 'vendor', 'invoice', 'order'] as const;
 
-filesRouter.get('/extract/status', T(async () => ({ ai: aiEnabled() })));
+filesRouter.get('/extract/status', T(async (_db, req) => ({ ai: aiEnabled() && (await shopHas(req, 'ai')) })));
 filesRouter.post(
   '/extract',
   rateLimit('extract', 30, 60_000),
   T(async (db, req, c) => {
     const b = parse(z.object({ kind: z.enum(KINDS), file: z.string().min(20), filename: z.string().max(200).default('') }), req.body);
     const org = await getOrg(db, c.shopId);
-    const result = await extractDocument(b.file, b.kind, { name: org.company_name, gstin: org.gstin ?? '' });
+    const result = await extractDocument(b.file, b.kind, { name: org.company_name, gstin: org.gstin ?? '' }, await shopHas(req, 'ai'));
     await audit(db, req, c.shopId, 'extract', b.kind, c.shopId, { file: b.filename, method: result.method, lines: result.data.lines.length });
     return result;
   }),
 );
 
 /* ---------- AI: business assistant and item suggestions ---------- */
-filesRouter.get('/ai/status', T(async () => ({ enabled: aiEnabled() })));
+filesRouter.get('/ai/status', T(async (_db, req) => ({ enabled: aiEnabled() && (await shopHas(req, 'ai')) })));
 // The assistant runs several tool calls over tens of seconds, so it must not hold one DB transaction open:
 // each tool opens its own tenant-scoped transaction.
 filesRouter.post(

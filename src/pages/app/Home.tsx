@@ -1,4 +1,5 @@
 import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { usePageOk } from '@/components/FeatureOff';
 import { useMemo, useState } from 'react';
 import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays, Receipt, Landmark, Sparkles } from 'lucide-react';
 import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
@@ -26,6 +27,7 @@ export default function Home() {
 
 function ShopHome() {
   const me = useShopUser();
+  const pageOk = usePageOk();
   const { t } = usePrefs();
   const navigate = useNavigate();
   const dash = useDashboard();
@@ -71,7 +73,7 @@ function ShopHome() {
     me.can('customers.write') && { label: 'Add Customer', sub: 'Name & phone', icon: UserPlus, to: '/app/sales/customers?new=1', tone: 'blush' },
     me.can('purchases.write') && { label: 'Purchase Bill', sub: 'Upload a photo of it', icon: Receipt, to: '/app/purchases/bills?new=1', tone: 'gold' },
     me.can('reports.read') && { label: 'Reports', sub: 'Profit, GST, stock', icon: BarChart3, to: '/app/reports', tone: 'cocoa' },
-  ].filter(Boolean) as Array<{ label: string; sub: string; icon: typeof FileText; to: string; tone: string }>;
+  ].filter(Boolean).filter((a) => pageOk((a as { to: string }).to)) as Array<{ label: string; sub: string; icon: typeof FileText; to: string; tone: string }>;
 
   if (dash.isError) {
     return (
@@ -114,7 +116,7 @@ function ShopHome() {
 
       <div className="stat-grid">
         <StatCard label="Receivables" value={d ? money(d.receivable) : '—'} icon={Wallet} tone="amber" foot={d && (d.overdueCount ? <Link to="/app/reports/receivables" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{money(d.overdue)} overdue · {d.overdueCount} invoice{d.overdueCount === 1 ? '' : 's'}</Link> : `${d.openCount} open invoice${d.openCount === 1 ? '' : 's'}`)} />
-        {d?.payable != null ? (
+        {d?.payable != null && me.has('purchases') ? (
           <StatCard label="Payables" value={money(d.payable)} icon={Receipt} tone="red" foot={d.payableOverdueCount ? <Link to="/app/reports/payables" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{money(d.payableOverdue ?? 0)} overdue</Link> : 'Nothing overdue'} />
         ) : <StatCard label="Total Revenue" value={d ? money(d.fySales) : '—'} icon={IndianRupee} tone="green" foot={d && <>FY {d.fy}</>} />}
         {d?.cash ? (
@@ -193,7 +195,7 @@ function ShopHome() {
           )}
         </div>
         <div className="card">
-          <div className="card-header"><div><h3>Low stock</h3><p>At or below the reorder level</p></div><Link to="/app/inventory/reorder" className="btn btn-ghost btn-sm">Smart reorder <ArrowRight size={14} /></Link></div>
+          <div className="card-header"><div><h3>Low stock</h3><p>At or below the reorder level</p></div>{pageOk('/app/inventory/reorder') && <Link to="/app/inventory/reorder" className="btn btn-ghost btn-sm">Smart reorder <ArrowRight size={14} /></Link>}</div>
           {!d ? <div className="skeleton" style={{ height: 150, margin: 16 }} /> : d.lowStockList.length === 0 ? <div className="card-body muted small"><Check size={14} style={{ verticalAlign: -2, color: 'var(--green-600)' }} /> Every item is above its reorder level.</div> : (
             <ul className="dash-list">{d.lowStockList.map((x) => (
               <li key={x.id}><Link to={`/app/items?open=${x.id}`}><span><strong>{x.name}</strong><span className="muted small">Reorder at {x.reorderLevel} {x.unit}</span></span><span className="num strong" style={{ color: x.stock <= 0 ? 'var(--red-600)' : 'var(--amber-700)' }}>{x.stock} {x.unit}</span></Link></li>
@@ -202,7 +204,7 @@ function ShopHome() {
         </div>
         <div className="card">
           {d?.cash ? (<>
-            <div className="card-header"><div><h3>Cash &amp; bank</h3><p>Current balances</p></div><Link to="/app/reports/cash-flow" className="btn btn-ghost btn-sm">Cash flow <ArrowRight size={14} /></Link></div>
+            <div className="card-header"><div><h3>Cash &amp; bank</h3><p>Current balances</p></div>{pageOk('/app/reports/cash-flow') && <Link to="/app/reports/cash-flow" className="btn btn-ghost btn-sm">Cash flow <ArrowRight size={14} /></Link>}</div>
             <ul className="dash-list">{d.cash.map((a) => (
               <li key={a.id}><Link to="/app/banking"><span><strong>{a.name}</strong><span className="muted small">{a.type}</span></span><span className="num strong" style={a.balance < 0 ? { color: 'var(--red-600)' } : undefined}>{money(a.balance)}</span></Link></li>
             ))}</ul>
@@ -227,7 +229,7 @@ function GettingStarted() {
   const items = useItems().data;
   const customers = useCustomers().data;
   const invoices = useInvoices().data;
-  const vendors = useVendors(me.can('purchases.read')).data;
+  const vendors = useVendors(me.can('purchases.read') && me.has('purchases')).data;
   const staff = useStaff(admin).data;
   const [hidden, setHidden] = useLocalFlag(`ledgerly.gs.${me.shop.id}`);
   if (!admin || hidden || !org || !items || !customers || !invoices) return null;

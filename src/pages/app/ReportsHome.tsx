@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BarChart3, BookOpen, Boxes, Clock4, FileText, History, Landmark, NotebookPen, Package, Percent, Scale, TrendingUp, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { useShopUser } from '@/context/AuthContext';
+import { usePageOk } from '@/components/FeatureOff';
 import { PageHeader, SearchInput } from '@/components/ui';
 import type { Permission } from '../../../shared/permissions';
 import { REPORTS } from './ReportView';
@@ -27,11 +28,12 @@ const GROUPS = ['Business overview', 'Sales', 'Purchases', 'Inventory', 'Taxes',
 /** All reports in one place, grouped the way an owner or accountant looks for them. */
 export default function ReportsHome() {
   const me = useShopUser();
+  const pageOk = usePageOk();
   const [q, setQ] = useState('');
   const entries = useMemo<Entry[]>(() => [
     ...Object.entries(REPORTS).map(([id, r]) => ({ to: `/app/reports/${id}`, title: r.title, description: r.description, icon: ICON[id] ?? FileText, perm: r.perm, group: r.group })),
     ...EXTRA,
-  ].filter((e) => me.can(e.perm)), [me]);
+  ].filter((e) => me.can(e.perm) && pageOk(e.to)), [me]);
   const s = q.trim().toLowerCase();
   const shown = entries.filter((e) => !s || `${e.title} ${e.description} ${e.group}`.toLowerCase().includes(s));
 

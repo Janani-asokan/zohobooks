@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { copyFeatures } from '../../services/features';
 import { perm } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, query, tx } from '../../db';
@@ -126,6 +127,7 @@ adminRouter.post(
       await audit(t, req, s!.id, 'workspace_created', 'shop', s!.id, { from: c.shopId });
       await t.query("SELECT set_config('app.shop_id', '', true)");
       await t.query("INSERT INTO user_shops (user_id, shop_id, role) VALUES ($1,$2,'Owner')", [c.id, s!.id]);
+      await copyFeatures(t, c.shopId, s!.id, c.email);
       return s!;
     });
     await audit(db, req, c.shopId, 'create_organization', 'shop', shop.id, { name: b.companyName });

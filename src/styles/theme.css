@@ -648,3 +648,29 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
   .loan-card-print table { width: 100%; border-collapse: collapse; margin: 8px 0; }
   .loan-card-print th, .loan-card-print td { border: 1px solid #999; padding: 3px 6px; text-align: left; }
 }
+
+/* ---------- Features & add-ons ---------- */
+.feature-core { display: flex; gap: 20px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.feature-core h3 { display: flex; align-items: center; gap: 8px; color: var(--ink-900); }
+.feature-includes { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.feature-includes.cols { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.feature-includes li { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--ink-700); }
+.feature-includes li svg { flex: none; margin-top: 2px; color: var(--sage, #7d8c77); }
+.feature-total { display: grid; justify-items: end; padding: 10px 14px; border-radius: 12px; background: var(--brand-50); }
+.feature-total strong { font-size: 22px; color: var(--brand-700); }
+.feature-group { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-500); }
+.feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+.feature-card { padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; border: 1px solid var(--border); transition: box-shadow .2s, border-color .2s; }
+.feature-card h4 { margin: 0; font-size: 16px; color: var(--ink-900); }
+.feature-card p { margin: 0; }
+.feature-card .feature-includes { margin-top: 0; flex: 1; }
+.feature-card.is-on { border-color: var(--brand-200); background: linear-gradient(180deg, var(--brand-50), var(--surface) 60%); }
+.feature-card.is-focus { box-shadow: 0 0 0 3px var(--brand-200); }
+.feature-price strong { font-size: 20px; color: var(--ink-900); }
+.feature-level { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.feature-level.active { border-color: var(--brand-500); background: var(--brand-50); }
+.feature-off { max-width: 560px; margin: 24px auto; padding: 32px 24px; text-align: center; display: grid; gap: 12px; justify-items: center; }
+.feature-off h2 { margin: 0; font-size: 22px; color: var(--ink-900); }
+.feature-off p { margin: 0; }
+.feature-off .feature-includes { text-align: left; margin: 4px 0 8px; }
+.feature-off-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--brand-50); color: var(--brand-600); }

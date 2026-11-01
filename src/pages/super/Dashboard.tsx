@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Store, UserPlus, IndianRupee, AlarmClock, Plus, Mail, Phone, MapPin, RefreshCw, ArrowUpRight, Wand2, KeyRound, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Puzzle, Store, UserPlus, IndianRupee, AlarmClock, Plus, Mail, Phone, MapPin, RefreshCw, ArrowUpRight, Wand2, KeyRound, Loader2 } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
 import { useMut, usePlans, usePlatformOverview } from '@/api/hooks';
 import type { Shop } from '@/api/types';
@@ -178,6 +179,7 @@ export default function SuperDashboard() {
                     <td><Toggle checked={s.active} onChange={(v) => toggle.mutate({ id: s.id, active: v })} size="sm" tone="success" label={<span className="small">{s.active ? 'Active' : 'Inactive'}</span>} /></td>
                     <td className="num" style={{ whiteSpace: 'nowrap' }}>
                       <button className="icon-btn" title="Email owner a password-reset link" onClick={() => sendReset(s.id)}><KeyRound size={15} /></button>
+                      <Link className="icon-btn" title="Features" aria-label="Features" to={`/super-admin/features?shop=${s.id}`}><Puzzle size={15} /></Link>
                       <button className="btn btn-secondary btn-sm" onClick={() => { setRenew(s); setRenewPlan(s.planId === 'trial' ? 'standard' : s.planId); setRenewYears(1); setRenewRef(''); }}><RefreshCw size={14} /> Renew</button>
                     </td>
                   </tr>

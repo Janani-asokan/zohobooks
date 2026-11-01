@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { shopHas } from '../../services/features';
 import { z } from 'zod';
 import { rateLimit, todayISO, userCtx } from '../../auth';
 import { many, one, withTenant } from '../../db';
@@ -63,7 +64,7 @@ briefingRouter.post('/ai/briefing', rateLimit('ai-brief', 12, 60_000), h(async (
     customersOwe: inr(Number(k.receivable)), healthScore: `${health.score}/100 (${health.grade})`, weakestArea: [...health.parts].sort((a, x) => a.score - x.score)[0]?.label,
     bestSeller30Days: best ? `${best.name} (${best.sold30} sold)` : null,
   };
-  if (aiEnabled()) {
+  if (aiEnabled() && (await shopHas(req, 'ai'))) {
     const ai = await dailyBriefing({ shop: org.company_name, owner: c.name.split(' ')[0]!, today, facts, refs: actions.map((a) => ({ ref: a.ref, about: a.about })) }, b.lang).catch(aiError);
     const byRef = new Map(actions.map((a) => [a.ref, a]));
     out = { greeting: ai.greeting, tip: ai.tip, actions: ai.actions.map((a) => ({ ...byRef.get(a.ref)!, title: a.title, detail: a.detail })), method: 'ai' };

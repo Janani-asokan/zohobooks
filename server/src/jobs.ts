@@ -22,15 +22,22 @@ const addDays = (iso: string, n: number) => {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 };
 
-/** Generates invoices for every recurring profile that is due (catches up missed periods). */
+/**
+ * Generates invoices for every recurring profile that is due (catches up missed periods). Shops without the
+ * Recurring invoices feature are skipped and their profiles are left untouched. When the feature is turned on again,
+ * periods that fell while it was off are passed over rather than billed all at once.
+ */
 export async function runRecurring(today = todayISO()) {
-  const shops = await query('SELECT id FROM shops WHERE active AND license_end >= $1', [today]);
+  const shops = await query(`SELECT s.id, f.starts_on AS feature_since FROM shops s
+    JOIN shop_features f ON f.shop_id = s.id AND f.feature_key = 'recurring' AND f.status = 'active' AND f.starts_on <= $1 AND (f.ends_on IS NULL OR f.ends_on >= $1)
+    WHERE s.active AND s.license_end >= $1`, [today]);
   let created = 0;
   for (const s of shops) {
     await withTenant(s.id, async (db) => {
       const due = (await db.query("SELECT * FROM recurring_profiles WHERE shop_id = $1 AND active AND next_date <= $2 AND (end_date IS NULL OR next_date <= end_date) FOR UPDATE SKIP LOCKED", [s.id, today])).rows;
       for (const p of due) {
         let next = p.next_date as string;
+        while (next < s.feature_since && next <= today) next = addPeriod(next, p.frequency); // periods while the feature was off
         while (next <= today && (!p.end_date || next <= p.end_date)) {
           await db.query('SAVEPOINT rec');
           try {

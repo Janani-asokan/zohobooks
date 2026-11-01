@@ -15,8 +15,10 @@ const Landing = lazy(() => import('./pages/Landing'));
 const SuperDashboard = lazy(() => import('./pages/super/Dashboard'));
 const Configuration = lazy(() => import('./pages/super/Configuration'));
 const Plans = lazy(() => import('./pages/super/Plans'));
+const SuperFeatures = lazy(() => import('./pages/super/Features'));
 const Activity = lazy(() => import('./pages/super/Activity'));
 const Home = lazy(() => import('./pages/app/Home'));
+const Features = lazy(() => import('./pages/app/Features'));
 const Pos = lazy(() => import('./pages/app/Pos'));
 const Items = lazy(() => import('./pages/app/Items'));
 const ItemForm = lazy(() => import('./pages/app/ItemForm'));
@@ -94,6 +96,7 @@ export default function App() {
             <Route index element={<SuperDashboard />} />
             <Route path="configuration" element={<Configuration />} />
             <Route path="plans" element={<Plans />} />
+            <Route path="features" element={<SuperFeatures />} />
             <Route path="activity" element={<Activity />} />
           </Route>
         </Route>
@@ -152,6 +155,7 @@ export default function App() {
               <Route path="organization" element={<Organization />} />
               <Route path="team" element={<Team />} />
               <Route path="print-settings" element={<PrintSettings />} />
+              <Route path="features" element={<Features />} />
               <Route path="billing" element={<Billing />} />
               <Route path="audit" element={<AuditLog />} />
             </Route>

@@ -42,8 +42,8 @@ function Form({ existing }: { existing?: Invoice }) {
   const { data: customers = [] } = useCustomers();
   const { data: branches = [] } = useBranches();
   const { data: items = [] } = useItems();
-  const orders = useSalesOrders('order');
-  const quotes = useSalesOrders('quote');
+  const orders = useSalesOrders('order', me.has('quotes_orders'));
+  const quotes = useSalesOrders('quote', me.has('quotes_orders'));
   const fromSO = params.get('fromSO') ? [...(orders.data ?? []), ...(quotes.data ?? [])].find((s) => s.id === params.get('fromSO')) : undefined;
 
   const [customerId, setCustomerId] = useState(existing?.customerId ?? params.get('customer') ?? '');

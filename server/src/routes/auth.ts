@@ -1,5 +1,6 @@
 import { Router, type Request } from 'express';
 import { z } from 'zod';
+import { loadEntitlements } from '../services/features';
 import { burnPasswordCheck, permissionsFor, resolveUserCtx, clearSessionCookie, createSession, hashPassword, randomToken, rateLimit, sha256, todayISO, verifyPassword } from '../auth';
 import { audit } from '../audit';
 import { config } from '../config';
@@ -41,6 +42,8 @@ export async function mePayload(req: Request) {
       licenseExpired: shop.license_end < todayISO(),
       active: shop.active,
       limits: { users: shop.max_users, branches: shop.max_branches, invoicesPerMonth: shop.max_invoices_per_month },
+      /** Add-on features this shop has: feature key → level. Core billing is not listed; every shop has it. */
+      features: await loadEntitlements(ctx.shopId),
     },
     platform: {
       customerIdPrefix: platform.customer_id_prefix,

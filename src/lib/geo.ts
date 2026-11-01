@@ -27,14 +27,15 @@ export interface FieldVisit {
   id: string; userId: string; userName: string; customerId: string | null; customerName: string; purpose: string; lat: number | null; lng: number | null; accuracy: number | null;
   checkedInAt: string; checkedOutAt: string | null; outcome: string; orderValue: number; collected: number; notes: string; nextVisit: string | null; minutes: number | null;
 }
-export const useFieldMe = () => useQuery({ queryKey: ['fieldMe'], queryFn: () => api.get<FieldMe>('/shop/field/me'), staleTime: 60_000 });
+export const useFieldMe = (enabled = true) => useQuery({ queryKey: ['fieldMe'], queryFn: () => api.get<FieldMe>('/shop/field/me'), staleTime: 60_000, enabled });
 
 /**
  * While the day is started, send the location every 2 minutes as long as the app is open and visible.
  * Browsers pause this when the screen is off or the app is in the background; check-ins always record a fresh fix.
  */
-export function useFieldTracker() {
-  const me = useFieldMe();
+/** `enabled` is false when the shop doesn't have the field-team feature: nothing is fetched or sent. */
+export function useFieldTracker(enabled = true) {
+  const me = useFieldMe(enabled);
   const onDuty = !!me.data?.day && !me.data.day.endedAt;
   useEffect(() => {
     if (!onDuty) return;

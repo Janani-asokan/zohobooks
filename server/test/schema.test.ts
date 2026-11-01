@@ -29,7 +29,9 @@ const POLYMORPHIC = new Set([
   'sessions.principal_id', 'password_resets.principal_id', // a shop user or a super admin
 ]);
 /** Tables with shop_id that are read before the shop is known (sign-in, public links), so they cannot use RLS. */
-const NO_RLS = new Set(['users', 'user_shops', 'public_links', 'role_permissions', 'subscription_payments']);
+const NO_RLS = new Set(['users', 'user_shops', 'public_links', 'role_permissions', 'subscription_payments',
+  'shop_features', // platform billing, read on every request before the shop context is set
+]);
 
 const MIGRATIONS = path.resolve(__dirname, '../migrations');
 /** Migrations up to this one were written before the rules; the scan below covers every later file. */

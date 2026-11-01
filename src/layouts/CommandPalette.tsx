@@ -19,7 +19,7 @@ export function CommandPalette({ open, onClose, actions }: { open: boolean; onCl
   const items = useItems();
   const customers = useCustomers();
   const invoices = useInvoices();
-  const vendors = useVendors(me.can('purchases.read'));
+  const vendors = useVendors(me.can('purchases.read') && me.has('purchases'));
 
   useEffect(() => {
     if (open) {
