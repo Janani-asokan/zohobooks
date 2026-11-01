@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ExportMenu } from '@/components/ExportMenu';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Users, Building2, UserRound, Pencil, Trash2, Lock, Mail, Phone, FileText, Upload, Loader2 } from 'lucide-react';
+import { Plus, Users, Building2, UserRound, Pencil, Trash2, Lock, Mail, Phone, FileText, Upload, Loader2, Archive, ArchiveRestore } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
 import { useCustomers, useMut, useNextCustomerId, useOrg } from '@/api/hooks';
 import { TIER_LABEL, type Customer, type PriceTier } from '@/api/types';
@@ -32,6 +32,7 @@ export default function Customers() {
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState(params.get('q') ?? '');
   const [type, setType] = useState<'all' | Customer['type']>('all');
+  const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'new' | 'edit'; c?: Customer } | null>(null);
   const [draft, setDraft] = useState<Draft>(blank(orgState));
   const [touched, setTouched] = useState(false);
@@ -50,6 +51,8 @@ export default function Customers() {
   const create = useMut((b: Draft) => api.post<Customer>('/shop/customers', b), keys, { silentError: true });
   const update = useMut((v: { id: string; body: Draft }) => api.put<Customer>(`/shop/customers/${v.id}`, v.body), keys, { silentError: true });
   const remove = useMut((id: string) => api.del(`/shop/customers/${id}`), keys, { success: 'Customer deleted' });
+  const archive = useMut((v: { id: string; archived: boolean }) => api.post<Customer>(`/shop/customers/${v.id}/archive`, { archived: v.archived }), keys, { success: (_r, v) => (v.archived ? 'Customer archived. Their invoices and history are kept.' : 'Customer restored') });
+  const archivedCount = customers.filter((c) => c.archived).length;
 
   const openNew = () => {
     setDraft(blank(orgState));
@@ -69,10 +72,11 @@ export default function Customers() {
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
     return customers
+      .filter((c) => c.archived === showArchived)
       .filter((c) => type === 'all' || c.type === type)
       .filter((c) => !s || [c.name, c.companyName, c.customId, c.email, c.phone, c.gstin].some((v) => v.toLowerCase().includes(s)))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [customers, q, type]);
+  }, [customers, q, type, showArchived]);
   const pg = usePagination(rows, 8);
 
   const errs = {
@@ -134,11 +138,14 @@ export default function Customers() {
               ))}
             </div>
           </div>
-          <div className="toolbar-right small muted">{customers.length} customers</div>
+          <div className="toolbar-right small muted row" style={{ gap: 10 }}>
+            {(archivedCount > 0 || showArchived) && <button className={`btn btn-sm ${showArchived ? 'btn-soft' : 'btn-ghost'}`} onClick={() => { setShowArchived(!showArchived); pg.setPage(1); }}><Archive size={14} /> {showArchived ? 'Back to active customers' : `Archived (${archivedCount})`}</button>}
+            {showArchived ? `${archivedCount} archived` : `${customers.length - archivedCount} customers`}
+          </div>
         </div>
         <div className="table-wrap">
           {isLoading ? <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 200 }} /></div> : rows.length === 0 ? (
-            <EmptyState icon={Users} title={customers.length ? 'No customers match' : 'No customers yet'} text="Add individuals or GST-registered businesses, or import them from a spreadsheet." action={canWrite && <button className="btn btn-primary" onClick={openNew}><Plus size={15} /> New Customer</button>} />
+            <EmptyState icon={Users} title={showArchived ? 'No archived customers match' : customers.length ? 'No customers match' : 'No customers yet'} text="Add individuals or GST-registered businesses, or import them from a spreadsheet." action={canWrite && <button className="btn btn-primary" onClick={openNew}><Plus size={15} /> New Customer</button>} />
           ) : (
             <table className="table">
               <thead>
@@ -161,7 +168,7 @@ export default function Customers() {
                           <span className="avatar" style={c.type === 'Business' ? { background: 'var(--violet-50)', color: 'var(--violet-600)', borderRadius: 8 } : undefined}>{initials(c.companyName || c.name)}</span>
                           <div>
                             <div className="title">{c.companyName || c.name}</div>
-                            <div className="sub">{c.type === 'Business' ? `${c.name} · GSTIN ${c.gstin}` : c.state}</div>
+                            <div className="sub">{c.type === 'Business' ? `${c.name} · GSTIN ${c.gstin}` : c.state}{c.archived && <> · <Badge tone="gray" plain>Archived</Badge></>}</div>
                           </div>
                         </div>
                       </td>
@@ -179,7 +186,11 @@ export default function Customers() {
                       <td className="num hide-split" style={{ whiteSpace: 'nowrap' }} onClick={(ev) => ev.stopPropagation()}>
                         {me.can('sales.write') && <button className="icon-btn" title="New invoice" onClick={() => navigate(`/app/sales/invoices/new?customer=${c.id}`)}><FileText size={15} /></button>}
                         {canWrite && <button className="icon-btn" title="Edit" onClick={() => openEdit(c)}><Pencil size={15} /></button>}
-                        {canWrite && <button className="icon-btn danger" title={c.invoiceCount ? 'Customers with invoices can’t be deleted' : 'Delete'} disabled={c.invoiceCount > 0} onClick={() => setDel(c)}><Trash2 size={15} /></button>}
+                        {canWrite && (c.archived
+                          ? <button className="icon-btn" title="Restore to active customers" aria-label="Restore" onClick={() => archive.mutate({ id: c.id, archived: false })}><ArchiveRestore size={15} /></button>
+                          : c.invoiceCount > 0
+                            ? <button className="icon-btn" title="Archive: hide from lists and pickers, keep all history" aria-label="Archive" onClick={() => archive.mutate({ id: c.id, archived: true })}><Archive size={15} /></button>
+                            : <button className="icon-btn danger" title="Delete" aria-label="Delete" onClick={() => setDel(c)}><Trash2 size={15} /></button>)}
                       </td>
                     </tr>
                   );

@@ -52,6 +52,8 @@ export interface ItemFacets { categories: Array<{ name: string; count: number }>
 export interface Customer {
   id: string; customId: string; type: 'Individual' | 'Business'; name: string; companyName: string; gstin: string; email: string; phone: string;
   state: string; address: string; tier: PriceTier; createdAt: string; billed: number; due: number; invoiceCount: number; creditLimit: number;
+  /** Hidden from pickers; history kept. */
+  archived: boolean;
 }
 
 export interface Line {

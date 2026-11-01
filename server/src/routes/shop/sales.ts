@@ -60,7 +60,7 @@ async function listCustomers(db: Db, shopId: string, id?: string) {
   return rows.map((c) => ({
     id: c.id, customId: c.custom_id, type: c.type, name: c.name, companyName: c.company_name, gstin: c.gstin, email: c.email, phone: c.phone,
     state: c.state, address: c.address, tier: c.tier, createdAt: c.created_at, billed: Number(c.billed), due: Math.max(0, Number(c.due)), invoiceCount: Number(c.invoice_count),
-    creditLimit: Number(c.credit_limit ?? 0),
+    creditLimit: Number(c.credit_limit ?? 0), archived: !!c.archived,
   }));
 }
 
@@ -219,9 +219,22 @@ salesRouter.delete(
   T(async (db, req, c) => {
     const cur = await requireRow(db, 'customers', c.shopId, req.params.id!, 'Customer');
     const used = await one(db, 'SELECT 1 FROM invoices WHERE shop_id = $1 AND customer_id = $2 UNION SELECT 1 FROM sales_orders WHERE shop_id = $1 AND customer_id = $2 LIMIT 1', [c.shopId, cur.id]);
-    if (used) throw conflict('This customer has invoices or orders and can’t be deleted');
+    if (used) throw conflict('This customer has invoices or orders, so it can’t be deleted. Archive it instead: it leaves your lists and pickers, and its history stays.');
     await db.query('DELETE FROM customers WHERE shop_id = $1 AND id = $2', [c.shopId, cur.id]);
     await audit(db, req, c.shopId, 'delete', 'customer', cur.id, { customId: cur.custom_id });
+  }),
+);
+
+/** Archived customers drop out of pickers but keep every invoice, payment and note; restoring brings them back. */
+salesRouter.post(
+  '/customers/:id/archive',
+  perm('customers.write'),
+  T(async (db, req, c) => {
+    const cur = await requireRow(db, 'customers', c.shopId, req.params.id!, 'Customer');
+    const { archived } = parse(z.object({ archived: z.boolean() }), req.body);
+    await db.query('UPDATE customers SET archived = $3 WHERE shop_id = $1 AND id = $2', [c.shopId, cur.id, archived]);
+    await audit(db, req, c.shopId, archived ? 'archive' : 'restore', 'customer', cur.id, { customId: cur.custom_id });
+    return (await listCustomers(db, c.shopId, cur.id))[0];
   }),
 );
 

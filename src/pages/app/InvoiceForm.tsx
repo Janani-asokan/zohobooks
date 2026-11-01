@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle } from 'lucide-react';
 import { api, ApiError, fieldErrors } from '@/api/client';
-import { SALES_KEYS, useBranches, useCustomers, useInvoice, useItems, useMut, useNextInvoiceNumber, useOrg, useSalesOrders } from '@/api/hooks';
+import { SALES_KEYS, useBranches, useCustomers, useInvoice, useItems, useMut, useNextInvoiceNumber, useOrg, useSalesOrders, pickable } from '@/api/hooks';
 import { TIER_LABEL, type Invoice } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -203,8 +203,8 @@ function Form({ existing }: { existing?: Invoice }) {
               <div className="row" style={{ gap: 8 }}>
                 <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => selectCustomer(e.target.value)} autoFocus={!existing} aria-label="Customer">
                   <option value="">Select a customer…</option>
-                  <optgroup label="Business (B2B)">{customers.filter((c) => c.type === 'Business').map((c) => <option key={c.id} value={c.id}>{c.companyName} · {c.customId}</option>)}</optgroup>
-                  <optgroup label="Individuals">{customers.filter((c) => c.type === 'Individual').map((c) => <option key={c.id} value={c.id}>{c.name} · {c.customId}</option>)}</optgroup>
+                  <optgroup label="Business (B2B)">{pickable(customers, customerId).filter((c) => c.type === 'Business').map((c) => <option key={c.id} value={c.id}>{c.companyName} · {c.customId}</option>)}</optgroup>
+                  <optgroup label="Individuals">{pickable(customers, customerId).filter((c) => c.type === 'Individual').map((c) => <option key={c.id} value={c.id}>{c.name} · {c.customId}</option>)}</optgroup>
                 </select>
                 {me.can('customers.write') && <Link to="/app/sales/customers?new=1" className="btn btn-secondary" title="New customer"><Plus size={15} /></Link>}
               </div>

@@ -21,6 +21,8 @@ export const usePurchaseOrders = (enabled = true) => useQuery(q<PurchaseOrder[]>
 export const useExpenses = (enabled = true) => useQuery(q<Expense[]>(['expenses'], `${S}/expenses`, enabled));
 export const usePrintSettings = () => useQuery({ ...q<PrintSettings>(['printSettings'], `${S}/print-settings`), staleTime: 5 * 60_000 });
 export const useCustomers = () => useQuery(q<Customer[]>(['customers'], `${S}/customers`));
+/** Customers a picker should offer: not archived, plus the one already chosen (so an old draft still shows it). */
+export const pickable = <T extends { id: string; archived?: boolean }>(list: T[], selectedId?: string | null) => list.filter((c) => !c.archived || c.id === selectedId);
 export const useInvoices = () => useQuery(q<Invoice[]>(['invoices'], `${S}/invoices`));
 export const useInvoice = (id?: string) => useQuery(q<InvoiceDetail>(['invoice', id], `${S}/invoices/${id}`, !!id));
 export const usePayments = () => useQuery(q<PaymentRow[]>(['payments'], `${S}/payments`));

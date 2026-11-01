@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Repeat, Plus, Pencil, Trash2, Pause, Play, Loader2 } from 'lucide-react';
 import { api } from '@/api/client';
-import { useBranches, useCustomers, useMut, useOrg, useRecurring } from '@/api/hooks';
+import { useBranches, useCustomers, useMut, useOrg, useRecurring, pickable } from '@/api/hooks';
 import type { Recurring as Rec } from '@/api/types';
 import { usePrefs } from '@/context/PrefsContext';
 import { useToast } from '@/context/ToastContext';
@@ -88,7 +88,7 @@ export default function Recurring() {
         <div className="form-grid cols-3">
           <Field label="Profile name" required error={touched && !f.name.trim() ? 'Required' : ''}><input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. Monthly AMC — BrightPath" autoFocus /></Field>
           <Field label="Customer" required error={touched && !f.customerId ? 'Select a customer' : ''}>
-            <select className="select" value={f.customerId} onChange={(e) => setF({ ...f, customerId: e.target.value })}><option value="">Select…</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}</select>
+            <select className="select" value={f.customerId} onChange={(e) => setF({ ...f, customerId: e.target.value })}><option value="">Select…</option>{pickable(customers, f.customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}</select>
           </Field>
           <Field label="Repeat"><select className="select" value={f.frequency} onChange={(e) => setF({ ...f, frequency: e.target.value as Rec['frequency'] })}>{Object.entries(FREQ).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Field>
           <Field label="Start on"><input className="input" type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} /></Field>

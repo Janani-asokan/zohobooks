@@ -87,7 +87,8 @@ In production the API serves the built web app too, so you deploy one process. M
 - **Lock-out:** 5 failed attempts lock the account for 15 minutes. Login, forgot-password and reset are rate-limited. Unknown emails get the same error and response time as wrong passwords, so attackers can't discover accounts.
 - **CSRF:** write requests must carry an `X-Requested-With` header and come from an allowed origin.
 - **Invoice numbering is atomic:** the counter is incremented under a row lock, so simultaneous invoices never share a number. Drafts get no number. Issued invoices can't be deleted, only cancelled (the number stays in the series) or corrected with a credit note.
-- **Audit log** of every change, per shop and for the platform. **Backups** with `pg_dump`. They can't be downloaded from the console because they hold every shop's data.
+- **Audit log** of every change, per shop and for the platform. **Backups** with `pg_dump`, which reads through row-level security with a read-only `backup_read` policy that only the backup job switches on. A backup is refused rather than saved incomplete, and the tests restore one on every run. Backups can't be downloaded from the console because they hold every shop's data.
+- **No data is lost when features change.** Migrations only add, and never edit, drop, rename or delete. Foreign keys refuse deletes instead of cascading, records with history are archived or cancelled, and switching a module off hides it without deleting anything. Applied migrations are checksummed, only one server migrates at a time, and with backups on a backup is taken first. The rules are in [docs/DATABASE.md](docs/DATABASE.md), and `server/test/schema.test.ts` enforces them.
 
 ## Features
 

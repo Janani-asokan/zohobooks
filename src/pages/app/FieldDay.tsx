@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Clock3, IndianRupee, Loader2, LogIn, LogOut, MapPin, MapPinned, Navigation, Play, ShieldCheck, Square, Store } from 'lucide-react';
 import { api } from '@/api/client';
-import { useCustomers, useMut } from '@/api/hooks';
+import { useCustomers, useMut, pickable } from '@/api/hooks';
 import { useToast } from '@/context/ToastContext';
 import { Field, Modal, PageHeader } from '@/components/ui';
 import { getPosition, useFieldMe, type FieldVisit } from '@/lib/geo';
@@ -125,7 +125,7 @@ export default function FieldDay() {
           <div className="stack" style={{ gap: 14 }}>
             <Field label="Customer">
               <select className="select" value={checkIn.customerId} onChange={(e) => setCheckIn({ ...checkIn, customerId: e.target.value })} aria-label="Customer">
-                <option value="">New shop / not in the list</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name}{c.phone ? ` · ${c.phone}` : ''}</option>)}
+                <option value="">New shop / not in the list</option>{pickable(customers, checkIn.customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name}{c.phone ? ` · ${c.phone}` : ''}</option>)}
               </select>
             </Field>
             {!checkIn.customerId && <Field label="Shop or person"><input className="input" autoFocus value={checkIn.customerName} maxLength={150} onChange={(e) => setCheckIn({ ...checkIn, customerName: e.target.value })} placeholder="e.g. Sri Murugan Stores, Adyar" /></Field>}

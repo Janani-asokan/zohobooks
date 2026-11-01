@@ -5,6 +5,7 @@ import { query } from './db';
 import { startJobs } from './jobs';
 import { mailStatus } from './mailer';
 import { migrate } from './migrate';
+import { runBackup } from './services/backup';
 import { hashPassword } from './auth';
 import { isStrongPassword } from '../../shared/permissions';
 
@@ -33,8 +34,24 @@ async function bootstrap() {
   console.log(`[bootstrap] Created super admin ${email}`);
 }
 
+/** Before changing the schema of a database that has data, take a backup so a bad release can be rolled back. */
+async function backupBeforeMigrating(pending: string[]) {
+  if (pending.includes('001_init.sql')) return; // brand-new database, nothing to save yet
+  if (!config.backups.enabled) {
+    console.warn(`[migrate] Applying ${pending.join(', ')} without a backup first: backups are off (BACKUPS_ENABLED=0). Make sure the database host keeps daily backups.`);
+    return;
+  }
+  try {
+    const b = await runBackup();
+    console.log(`[migrate] Backup before migrating: ${b.file} (${Math.round(b.bytes / 1024)} KB)`);
+  } catch (e) {
+    if (process.env.MIGRATE_WITHOUT_BACKUP === '1') console.warn(`[migrate] Backup failed, continuing because MIGRATE_WITHOUT_BACKUP=1: ${(e as Error).message}`);
+    else throw new Error(`Backup before migrating failed, so the database was not changed. Fix the backup or set MIGRATE_WITHOUT_BACKUP=1 once: ${(e as Error).message}`);
+  }
+}
+
 async function main() {
-  await migrate();
+  await migrate(undefined, console.log, { beforeApply: backupBeforeMigrating });
   await bootstrap();
   if (config.demoSimplePasswords) {
     const { resetDemoPasswords } = await import('./seed');

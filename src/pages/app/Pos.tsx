@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle } from 'lucide-react';
 import { api } from '@/api/client';
-import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
+import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
 import { withPrintDefaults, type PaperSize } from '../../../shared/printSettings';
 import type { Invoice, Item, PriceTier } from '@/api/types';
@@ -168,7 +168,7 @@ export default function Pos() {
             <UserRound size={16} className="muted" />
             <select className="select" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label="Customer">
               <option value="">Walk-in customer</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.phone}</option>)}
+              {pickable(customers, customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.phone}</option>)}
             </select>
             {branches.length > 1 && <select className="select" style={{ width: 160 }} value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Branch">{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
           </div>

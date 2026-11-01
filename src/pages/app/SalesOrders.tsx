@@ -5,7 +5,7 @@ import { PdfButton } from '@/components/PdfButton';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ClipboardList, LayoutGrid, List, ArrowRight, FileText, Pencil, Trash2, Send, CheckCircle2, FilePen, FileSignature, XCircle, Truck } from 'lucide-react';
 import { api } from '@/api/client';
-import { useCustomers, useMut, useOrg, useSalesOrders } from '@/api/hooks';
+import { useCustomers, useMut, useOrg, useSalesOrders, pickable } from '@/api/hooks';
 import type { SalesOrder } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, SearchInput, Segmented } from '@/components/ui';
@@ -297,7 +297,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
           <Field label="Customer" required error={touched ? errs.customer : ''}>
             <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => { setCustomerId(e.target.value); const c = customerList.find((x) => x.id === e.target.value); if (c?.type === 'Business' && org?.gstin && !org.compositionScheme) setWithGst(true); }}>
               <option value="">Select customer…</option>
-              {customerList.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}
+              {pickable(customerList, customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}
             </select>
           </Field>
           <Field label={L.date}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>

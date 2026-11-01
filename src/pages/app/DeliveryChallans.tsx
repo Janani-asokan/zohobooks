@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Truck, Loader2, PackageCheck, Ban, FileText, Send, MapPin } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
-import { useChallans, useCustomers, useItems, useMut, useSalesOrders } from '@/api/hooks';
+import { useChallans, useCustomers, useItems, useMut, useSalesOrders, pickable } from '@/api/hooks';
 import type { DeliveryChallan } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { ConfirmModal, EmptyState, Field, Modal, PageHeader, SearchInput, StatCard } from '@/components/ui';
@@ -148,7 +148,7 @@ export default function DeliveryChallans() {
             <div className="form-grid cols-3">
               <Field label="Customer" required error={err.customerId}>
                 <select className={`select ${err.customerId ? 'invalid' : ''}`} value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })} aria-label="Customer">
-                  <option value="">Select customer…</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}
+                  <option value="">Select customer…</option>{pickable(customers, form.customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}
                 </select>
               </Field>
               <Field label="Date"><input className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
