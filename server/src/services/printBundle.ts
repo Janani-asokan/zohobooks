@@ -1,24 +1,34 @@
 import crypto from 'node:crypto';
 import type { Db } from '../db';
 import { withPrintDefaults } from '../../../shared/printSettings';
-import { getOrg } from './common';
+import { one } from '../db';
+import { takePrintSnapshot, type PrintSnapshot } from './printSnapshot';
+import { templateByKey } from '../../../shared/templates';
 import { getInvoice } from './documents';
 
-/** Everything the printable invoice needs, in one payload. The same bundle feeds the screen, the print dialog and the server PDF. */
+/**
+ * Everything the printable invoice needs, in one payload. The same bundle feeds the screen, the print dialog and the
+ * server PDF. An issued invoice prints from the snapshot taken when it was issued, so reprints match the original
+ * (FUN-11); a draft uses today's details.
+ */
 export async function invoicePrintBundle(db: Db, shopId: string, invoiceId: string) {
   const inv = await getInvoice(db, shopId, invoiceId);
-  const org = await getOrg(db, shopId);
-  const branch = inv.branchId ? (await db.query('SELECT name, address, phone FROM branches WHERE id = $1', [inv.branchId])).rows[0] : null;
-  const settings = (await db.query('SELECT print_settings FROM organizations WHERE shop_id = $1', [shopId])).rows[0]?.print_settings;
+  const row = await one(db, 'SELECT print_snapshot, branch_id, customer_id FROM invoices WHERE shop_id = $1 AND id = $2', [shopId, invoiceId]);
+  const snap: PrintSnapshot = inv.status !== 'Draft' && row?.print_snapshot
+    ? row.print_snapshot
+    : await takePrintSnapshot(db, shopId, { id: invoiceId, branch_id: row?.branch_id ?? null, customer_id: row?.customer_id ?? null });
+  const tradeLabels = Object.fromEntries((templateByKey(String(snap.org.businessType ?? ''))?.tradeDetails ?? []).map((d) => [d.key, d.label]));
+  const tradeDetails = Object.entries((snap.org.tradeDetails ?? {}) as Record<string, string>).filter(([, v]) => v).map(([k, v]) => ({ label: tradeLabels[k] ?? k, value: v }));
   return {
     invoice: { ...inv, createdBy: undefined, recurringId: undefined, salesOrderId: undefined },
-    branch: branch ? { name: branch.name as string, address: branch.address as string, phone: branch.phone as string } : null,
-    org: {
-      companyName: org.company_name, legalName: org.legal_name, gstin: org.gstin, email: org.email, phone: org.phone, address: org.address,
-      state: org.state, logo: org.logo, invoiceFooter: org.invoice_footer, upiId: org.upi_id, bankDetails: org.bank_details,
-      invoiceTemplate: org.invoice_template, compositionScheme: org.composition_scheme,
-    },
-    settings: withPrintDefaults(settings),
+    branch: snap.branch,
+    org: { ...snap.org, tradeDetails },
+    settings: withPrintDefaults(snap.settings),
+    itemFields: snap.itemFields ?? [],
+    invoiceFields: snap.invoiceFields ?? [],
+    /** Shown on the bill only when the snapshot recorded it (not for invoices issued before this was kept). */
+    previousBalance: snap.previousBalance ?? null,
+    snapshotAt: inv.status !== 'Draft' && row?.print_snapshot ? snap.takenAt : null,
   };
 }
 

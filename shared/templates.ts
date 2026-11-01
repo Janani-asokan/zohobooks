@@ -18,6 +18,8 @@ export interface ItemField {
   /** Shown after a number, e.g. "g" or "%". */
   suffix?: string;
   help?: string;
+  /** Printed with the item on invoices (under its name). */
+  print?: boolean;
 }
 
 /** A shop-level registration the trade needs, e.g. a drug licence number. */
@@ -48,6 +50,12 @@ export interface BusinessTemplate {
   units: string[];
   defaultUnit: string;
   tradeDetails: TradeDetail[];
+  /** Details asked for on each invoice, e.g. patient and doctor for a pharmacy, vehicle number for steel. */
+  invoiceFields?: ItemField[];
+  /** Print each item's MRP on the invoice (pharmacy, supermarket). */
+  printMrp?: boolean;
+  /** Default terms printed on the invoice, e.g. an exchange policy. */
+  invoiceTerms?: string;
   /** Receipt paper for the counter printer. */
   thermalPaper: '2in' | '3in';
   /** GST rate a new item starts with, when the trade has one usual rate (e.g. 0% for fresh vegetables). */
@@ -59,7 +67,7 @@ export interface BusinessTemplate {
   samples: SampleItem[];
 }
 
-const localName: ItemField = { key: 'localName', label: 'Name in local language', type: 'text', help: 'Printed with the name, e.g. தக்காளி or टमाटर' };
+const localName: ItemField = { key: 'localName', label: 'Name in local language', type: 'text', help: 'Printed with the name, e.g. தக்காளி or टमाटर', print: true };
 
 export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
   {
@@ -120,7 +128,7 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     summary: 'Barcode billing at several counters, weighing-scale items and MRP savings on the bill.',
     helps: ['Scan barcodes at the counter', 'Loose items weighed on the scale', '“You saved ₹X” against MRP on the receipt', 'Stock across godowns'],
     features: ['pos', 'purchases', 'inventory_plus'],
-    itemFields: [], units: ['kg', 'g', 'ltr', 'ml', 'pcs', 'pack'], defaultUnit: 'pcs', tradeDetails: [], thermalPaper: '3in',
+    itemFields: [], printMrp: true, units: ['kg', 'g', 'ltr', 'ml', 'pcs', 'pack'], defaultUnit: 'pcs', tradeDetails: [], thermalPaper: '3in',
     samples: [
       { name: 'Basmati rice 5 kg', unit: 'pack', hsn: '1006', gst: 5, price: 650, category: 'Grains' },
       { name: 'Sunflower oil 1 L', unit: 'pack', hsn: '1512', gst: 5, price: 150, category: 'Oils' },
@@ -134,11 +142,13 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     helps: ['Batch and expiry tracked, with alerts before medicines expire', 'Schedule H, H1 and X marked on each medicine', 'Manufacturer and composition on each item', 'Drug licence number kept with your profile'],
     features: ['pos', 'purchases', 'inventory_plus'],
     itemFields: [
-      { key: 'manufacturer', label: 'Manufacturer', type: 'text' },
+      { key: 'manufacturer', label: 'Manufacturer', type: 'text', print: true },
       { key: 'composition', label: 'Composition / salt', type: 'text', help: 'e.g. Paracetamol 500 mg' },
-      { key: 'schedule', label: 'Schedule', type: 'select', options: ['None', 'H', 'H1', 'X'] },
+      { key: 'schedule', label: 'Schedule', type: 'select', options: ['None', 'H', 'H1', 'X'], print: true },
       { key: 'pack', label: 'Pack', type: 'text', help: 'e.g. 10 tablets' },
     ],
+    invoiceFields: [{ key: 'patientName', label: 'Patient name', type: 'text' }, { key: 'doctorName', label: 'Doctor’s name', type: 'text' }],
+    printMrp: true,
     units: ['strip', 'pcs', 'bottle', 'box', 'tube'], defaultUnit: 'strip',
     tradeDetails: [{ key: 'drugLicence', label: 'Drug licence number(s)', help: 'Form 20 / 21' }],
     thermalPaper: '3in', trackBatches: true, samples: [],
@@ -150,13 +160,13 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     features: ['purchases', 'quotes_orders'],
     itemFields: [
       { key: 'metal', label: 'Metal', type: 'select', options: ['Gold', 'Silver', 'Platinum'] },
-      { key: 'purity', label: 'Purity', type: 'select', options: ['24K', '22K', '18K', '14K', '925 silver', '999 silver'] },
-      { key: 'grossWeight', label: 'Gross weight', type: 'number', suffix: 'g' },
-      { key: 'stoneWeight', label: 'Stone weight', type: 'number', suffix: 'g' },
-      { key: 'netWeight', label: 'Net weight', type: 'number', suffix: 'g' },
-      { key: 'makingCharge', label: 'Making charge', type: 'number', suffix: '%' },
-      { key: 'wastage', label: 'Wastage', type: 'number', suffix: '%' },
-      { key: 'huid', label: 'HUID', type: 'text', help: '6-character hallmark ID' },
+      { key: 'purity', label: 'Purity', type: 'select', options: ['24K', '22K', '18K', '14K', '925 silver', '999 silver'], print: true },
+      { key: 'grossWeight', label: 'Gross weight', type: 'number', suffix: 'g', print: true },
+      { key: 'stoneWeight', label: 'Stone weight', type: 'number', suffix: 'g', print: true },
+      { key: 'netWeight', label: 'Net weight', type: 'number', suffix: 'g', print: true },
+      { key: 'makingCharge', label: 'Making charge', type: 'number', suffix: '%', print: true },
+      { key: 'wastage', label: 'Wastage', type: 'number', suffix: '%', print: true },
+      { key: 'huid', label: 'HUID', type: 'text', help: '6-character hallmark ID', print: true },
     ],
     units: ['g', 'pcs'], defaultUnit: 'g',
     tradeDetails: [{ key: 'bisRegistration', label: 'BIS hallmarking registration number' }],
@@ -168,11 +178,12 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     helps: ['Grade, diameter and length on each bar', 'Sell by kg, ton, piece or bundle', 'Quotes for contractors before the order', 'Update today’s steel rate on one screen'],
     features: ['purchases', 'quotes_orders', 'inventory_plus'],
     itemFields: [
-      { key: 'grade', label: 'Grade', type: 'select', options: ['Fe415', 'Fe500', 'Fe500D', 'Fe550', 'Fe550D'] },
-      { key: 'diameter', label: 'Diameter', type: 'number', suffix: 'mm' },
-      { key: 'length', label: 'Length', type: 'number', suffix: 'm' },
+      { key: 'grade', label: 'Grade', type: 'select', options: ['Fe415', 'Fe500', 'Fe500D', 'Fe550', 'Fe550D'], print: true },
+      { key: 'diameter', label: 'Diameter', type: 'number', suffix: 'mm', print: true },
+      { key: 'length', label: 'Length', type: 'number', suffix: 'm', print: true },
       { key: 'weightPerPiece', label: 'Weight per piece', type: 'number', suffix: 'kg' },
     ],
+    invoiceFields: [{ key: 'vehicleNo', label: 'Vehicle number', type: 'text', help: 'e.g. TN 30 AB 1234' }],
     units: ['kg', 'ton', 'pcs', 'bundle'], defaultUnit: 'kg', tradeDetails: [], defaultGst: 18, thermalPaper: '3in', dailyRates: true,
     samples: [
       { name: 'TMT bar Fe500D 8 mm', unit: 'kg', hsn: '7214', gst: 18, price: 62, category: 'TMT bars', extra: { grade: 'Fe500D', diameter: 8, length: 12 } },
@@ -187,7 +198,7 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     helps: ['Sell the same item by piece, box or metre', 'Size and material on each item', 'Quotes and credit for contractors'],
     features: ['purchases', 'quotes_orders', 'inventory_plus'],
     itemFields: [
-      { key: 'size', label: 'Size', type: 'text', help: 'e.g. 1 inch, 6 mm' },
+      { key: 'size', label: 'Size', type: 'text', help: 'e.g. 1 inch, 6 mm', print: true },
       { key: 'material', label: 'Material', type: 'text', help: 'e.g. PVC, brass, MS' },
     ],
     units: ['pcs', 'box', 'mtr', 'kg', 'set', 'ltr'], defaultUnit: 'pcs', tradeDetails: [], defaultGst: 18, thermalPaper: '3in',
@@ -207,6 +218,7 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
       { key: 'fabric', label: 'Fabric', type: 'text', help: 'e.g. Cotton, Linen' },
       { key: 'fit', label: 'Fit', type: 'select', options: ['Regular', 'Slim', 'Relaxed'] },
     ],
+    invoiceTerms: 'Exchange within 7 days with the bill and tags intact. No exchange on sale items.\nGoods once sold will not be taken back for refund.',
     units: ['pcs', 'set', 'pair'], defaultUnit: 'pcs', tradeDetails: [], defaultGst: 5, thermalPaper: '3in',
     samples: [
       { name: 'Cotton shirt', unit: 'pcs', hsn: '6205', gst: 5, price: 799, category: 'Men', extra: { fabric: 'Cotton', fit: 'Regular' } },
@@ -220,8 +232,8 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     helps: ['IMEI / serial number recorded on every phone sold', 'Warranty period on each item', 'Accessories billed fast at the counter'],
     features: ['pos', 'purchases'],
     itemFields: [
-      { key: 'model', label: 'Model', type: 'text' },
-      { key: 'warrantyMonths', label: 'Warranty', type: 'number', suffix: 'months' },
+      { key: 'model', label: 'Model', type: 'text', print: true },
+      { key: 'warrantyMonths', label: 'Warranty', type: 'number', suffix: 'months', print: true },
     ],
     units: ['pcs'], defaultUnit: 'pcs', tradeDetails: [], defaultGst: 18, thermalPaper: '3in',
     samples: [

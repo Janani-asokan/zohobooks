@@ -148,6 +148,18 @@ How it is built:
 - **Plain data:** templates live in `shared/templates.ts`, so adding a business type is a data change.
 - **Only adds:** applying one adds fields, units and items; it never deletes or overwrites anything, and applying it twice changes nothing more.
 
+**Invoices that follow the GST rules and the trade.**
+
+- **Reprints match the original:** when an invoice is issued, its business details, layout, trade field labels, branch and the customer's earlier dues are saved with it. Changing the profile or print settings later changes new invoices only. Drafts always use the current settings.
+- **GST fields stay on:** HSN/SAC, unit, place of supply, authorised signatory and the e-invoice IRN/QR cannot be turned off in *Print settings*; they show "Required by GST".
+- **Trade details on the bill:** the drug licence or BIS number prints under the GSTIN. Item fields marked for print (schedule and manufacturer for medicines, purity and weights for jewellery, grade and size for steel, model and warranty for mobiles) print under the item name, with MRP when the template prints it.
+- **Invoice fields:** some templates add boxes to the invoice itself, such as patient and doctor for a pharmacy or vehicle number for steel. They print next to the place of supply.
+- **Copies:** print or download as *Original for recipient*, *Duplicate for transporter*, *Triplicate for supplier*, or all three in one file.
+- **More on the bill:** a Paid, Part paid or Due stamp; an optional HSN summary; and for credit customers, the previous balance, this invoice and the total outstanding.
+- **Share links can be turned off:** *Turn off link and make a new one* on the invoice stops the old WhatsApp or email link and makes a fresh one.
+- **Clear PDF names,** for example `INV-2026-27-0012-Nila-Textiles.pdf`.
+- **Safe upgrade:** existing issued invoices got their saved layout from the shop's settings at upgrade time, so they look the same as before.
+
 **AI credits.** Every AI call is metered, so a shop can never run up an unlimited AI bill.
 
 - **What a credit is:** one credit is US$0.004 of real AI cost. Input, output and cached tokens are each counted at their own price (`shared/features.ts`).

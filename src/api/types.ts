@@ -23,7 +23,7 @@ export interface Organization {
   invoiceFooter: string; upiId: string; bankDetails: string; invoiceTemplate: 'classic' | 'modern' | 'compact'; compositionScheme: boolean;
   autoReminders: boolean; reminderDays: number; lendingEnabled: boolean;
   /** Business template key (shared/templates.ts), '' when not chosen. */
-  businessType: string; itemFields: ItemField[]; units: string[]; tradeDetails: Record<string, string>;
+  businessType: string; itemFields: ItemField[]; invoiceFields: ItemField[]; units: string[]; tradeDetails: Record<string, string>;
 }
 export interface TaxSlab { id: string; name: string; rate: number; active: boolean }
 export interface Branch { id: string; name: string; address: string; phone: string; isPrimary: boolean }
@@ -68,6 +68,8 @@ export interface Line {
   taxRate: number; discount: number; amount: number; batchNo?: string; serials?: string[]; batches?: Array<{ batchNo: string; qty: number; expiryDate: string | null }>;
   /** What was typed, when MRP billing or a bill discount changed the effective rate/discount. */
   enteredRate?: number; enteredDiscount?: number;
+  /** The item's trade field values and MRP when the line was saved (printed with the item). */
+  extra?: Record<string, string | number>; mrp?: number;
 }
 export interface LineInput { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number; serials?: string[] }
 
@@ -81,6 +83,8 @@ export interface Invoice {
   notes: string; source: 'app' | 'pos' | 'recurring'; salesOrderId: string | null; recurringId: string | null; publicToken: string | null;
   lastReminderAt: string | null; cancelReason: string; cancelledAt: string | null; issuedAt: string | null; createdAt: string;
   shipTo?: ShipTo | null; terms?: string;
+  /** Invoice-level trade details (patient and doctor, vehicle number …). */
+  extra: Record<string, string | number>;
   einvoice?: { irn: string; ackNo: string; ackDate: string; signedQr: string } | null;
   eway?: { number: string; date: string; vehicleNo: string } | null;
   billDiscount?: BillDiscount | null; pricesIncludeTax?: boolean;

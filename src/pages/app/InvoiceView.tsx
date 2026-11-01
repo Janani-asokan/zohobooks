@@ -11,7 +11,7 @@ import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { ConfirmModal, EmptyState, Field, Modal, Segmented } from '@/components/ui';
 import { StatusBadge } from '@/components/StatusBadge';
-import { TaxInvoice } from '@/components/TaxInvoice';
+import { TaxInvoice, printOrgFrom, type PrintBundle } from '@/components/TaxInvoice';
 import { Attachments } from '@/components/Attachments';
 import { useClickOutside } from '@/components/useClickOutside';
 import { fmtDate, money, todayISO } from '@/lib/format';
@@ -58,6 +58,7 @@ export default function InvoiceView() {
   const q = useInvoice(id);
   const org = useOrg().data;
   const printCfg = withPrintDefaults(usePrintSettings().data);
+  const bundle = useQuery({ queryKey: ['invoice', id, 'print'], enabled: !!id, queryFn: () => api.get<PrintBundle>(`/shop/invoices/${id}/print-data`) });
   const branches = useBranches().data ?? [];
   const accounts = useBankAccounts().data ?? [];
   const inv = q.data;
@@ -86,6 +87,7 @@ export default function InvoiceView() {
   const keys = SALES_KEYS;
   const payMut = useMut((b: Record<string, unknown>) => api.post(`/shop/invoices/${id}/payments`, b), keys, { silentError: true });
   const delPay = useMut((pid: string) => api.del(`/shop/payments/${pid}`), keys, { success: 'Payment removed' });
+  const renewLink = useMut(() => api.post<{ publicToken: string }>(`/shop/invoices/${id}/share-link/renew`, {}), keys, { success: 'Old link turned off. A new link is ready to share.' });
   const cnMut = useMut((b: Record<string, unknown>) => api.post<{ number: string }>('/shop/credit-notes', b), keys, { success: (r) => `Credit note ${r.number} created` });
   const cancelMut = useMut((reason: string) => api.post(`/shop/invoices/${id}/cancel`, { reason }), keys, { success: 'Invoice cancelled — stock restored' });
   const delMut = useMut(() => api.del(`/shop/invoices/${id}`), keys, { success: 'Draft deleted' });
@@ -191,6 +193,7 @@ export default function InvoiceView() {
                   )}
                   <div className="dropdown-sep" />
                   <button className="dropdown-item" onClick={() => { close(); navigator.clipboard?.writeText(shareUrl(inv.publicToken!)); toast('success', 'Link copied', 'Anyone with the link can view this invoice.'); }}><Link2 size={16} /> Copy public link</button>
+                  {canSell && <button className="dropdown-item" onClick={() => { close(); if (window.confirm('Turn off the current link? Anyone who has it will no longer be able to open this invoice. A new link is made for you to share.')) renewLink.mutate(undefined); }}><Link2 size={16} /> Turn off link and make a new one</button>}
                 </>
               )}
             </Menu>
@@ -232,7 +235,10 @@ export default function InvoiceView() {
         <div>
           <div className="paper-stage">
             <div className="paper-scale" style={{ ['--paper-zoom' as string]: printCfg.invoice.paper === 'a5' ? 1 : 0.86 }}>
-              <TaxInvoice inv={inv} org={org} branch={branchInfo} s={printCfg.invoice} />
+              {/* The same bundle as Print and the PDF: an issued invoice shows the details it was issued with. */}
+              {bundle.data ? <TaxInvoice inv={inv} org={bundle.data.org} branch={bundle.data.branch} s={bundle.data.settings.invoice}
+                extras={{ itemFields: bundle.data.itemFields, invoiceFields: bundle.data.invoiceFields, previousBalance: bundle.data.previousBalance }} />
+                : <TaxInvoice inv={inv} org={printOrgFrom(org)} branch={branchInfo} s={printCfg.invoice} />}
             </div>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import { perm, todayISO, userCtx } from '../../auth';
@@ -527,16 +528,34 @@ salesRouter.post(
 /* ---------- Printing, PDF and email ---------- */
 const paperOf = (v: unknown): PdfPaper => (v === 'a5' || v === 'thermal' ? v : 'a4');
 const rollOf = (v: unknown) => (v === '2in' || v === '3in' ? v : undefined);
-export const pdfName = (inv: { number: string | null; status: string }) => `${(inv.number ?? 'draft-invoice').replace(/[^\w.-]+/g, '-')}.pdf`;
+/** e.g. INV-2026-27-0012-BrightPath-Academy.pdf: the invoice number and the customer (OUT-06). */
+export const pdfName = (inv: { number: string | null; status: string; customer?: { name?: string; companyName?: string } }) =>
+  `${[inv.number ?? 'draft-invoice', inv.customer?.companyName || inv.customer?.name || ''].filter(Boolean).join(' ').replace(/[^\w.-]+/g, '-').replace(/-+/g, '-').slice(0, 90)}.pdf`;
 
 salesRouter.get('/invoices/:id/print-data', T(async (db, req, c) => invoicePrintBundle(db, c.shopId, req.params.id!)));
+
+/** Turns off the invoice's share link and makes a new one; anyone with the old link can no longer open it (NFR-04). */
+salesRouter.post(
+  '/invoices/:id/share-link/renew',
+  perm('sales.write'),
+  T(async (db, req, c) => {
+    const inv = await requireRow(db, 'invoices', c.shopId, req.params.id!, 'Invoice');
+    if (inv.status === 'Draft') throw badRequest('Issue the invoice first; drafts have no share link');
+    const token = crypto.randomBytes(18).toString('hex');
+    await db.query('UPDATE public_links SET revoked_at = now() WHERE shop_id = $1 AND invoice_id = $2 AND revoked_at IS NULL', [c.shopId, inv.id]);
+    await db.query('UPDATE invoices SET public_token = $3 WHERE shop_id = $1 AND id = $2', [c.shopId, inv.id, token]);
+    await db.query('INSERT INTO public_links (token, shop_id, invoice_id) VALUES ($1,$2,$3)', [token, c.shopId, inv.id]);
+    await audit(db, req, c.shopId, 'renew_share_link', 'invoice', inv.id, { number: inv.number });
+    return { publicToken: token };
+  }),
+);
 
 salesRouter.get(
   '/invoices/:id/pdf',
   h(async (req, res) => {
     const c = userCtx(req);
     const inv = await withTenant(c.shopId, (db) => getInvoice(db, c.shopId, req.params.id!));
-    const pdf = await renderPdfOr503(c.shopId, inv.id, paperOf(req.query.paper), rollOf(req.query.roll));
+    const pdf = await renderPdfOr503(c.shopId, inv.id, paperOf(req.query.paper), rollOf(req.query.roll), copyOf(req.query.copy));
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `${req.query.inline ? 'inline' : 'attachment'}; filename="${pdfName(inv)}"`);
     res.setHeader('Cache-Control', 'private, no-store');
@@ -544,9 +563,14 @@ salesRouter.get(
   }),
 );
 
-export async function renderPdfOr503(shopId: string, invoiceId: string, paper: PdfPaper, roll?: '2in' | '3in') {
+/** Original / duplicate / triplicate copy labels (OUT-10); 'all' prints the three copies one after another. */
+const COPIES = ['original', 'duplicate', 'triplicate', 'all'] as const;
+export type CopyKind = (typeof COPIES)[number];
+const copyOf = (v: unknown): CopyKind | undefined => (COPIES as readonly string[]).includes(String(v)) ? (v as CopyKind) : undefined;
+
+export async function renderPdfOr503(shopId: string, invoiceId: string, paper: PdfPaper, roll?: '2in' | '3in', copy?: CopyKind) {
   try {
-    return await invoicePdf(shopId, invoiceId, paper, roll);
+    return await invoicePdf(shopId, invoiceId, paper, roll, copy);
   } catch (e) {
     console.error('[pdf]', (e as Error).message);
     throw new HttpError(503, 'Could not create the PDF right now. Use Print → Save as PDF instead.', 'pdf_unavailable');

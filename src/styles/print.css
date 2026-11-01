@@ -147,3 +147,15 @@ body.print-route { background: #e9ebef; }
   /* Fixed elements repeat on every printed page. */
   body.print-route .ti-mark { position: fixed; }
 }
+
+/* ---------- Copy label, payment stamp, previous balance (OUT-10, FUN-10, FUN-04) ---------- */
+.ti-topline { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; min-height: 18px; }
+.ti-copy { font-size: 8.5pt; font-weight: 700; letter-spacing: .08em; color: #333; border: 1px solid #999; padding: 2px 8px; border-radius: 3px; }
+.ti-stamp { margin-left: auto; font-size: 9pt; font-weight: 800; letter-spacing: .12em; padding: 3px 10px; border: 2px solid currentColor; border-radius: 4px; transform: rotate(-2deg); }
+.ti-stamp-paid { color: #2f6b3a; }
+.ti-stamp-part { color: #9a6212; }
+.ti-stamp-due { color: #a3283c; }
+.ti-totals .ti-prev { border-top: 1px dashed #bbb; padding-top: 6px; margin-top: 4px; }
+/* All three copies: each starts on a new sheet. */
+.ti-copies { display: grid; gap: 24px; }
+@media print { .ti-copy-page + .ti-copy-page { break-before: page; } }

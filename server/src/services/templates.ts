@@ -20,12 +20,14 @@ export interface ApplyResult { template: string; fieldsAdded: string[]; unitsAdd
 export async function applyTemplate(db: Db, shopId: string, key: string, opts: ApplyOptions): Promise<ApplyResult> {
   const t = templateByKey(key);
   if (!t) throw badRequest('Unknown business type');
-  const org = await one(db, 'SELECT item_fields, units, print_settings FROM organizations WHERE shop_id = $1', [shopId]);
+  const org = await one(db, 'SELECT item_fields, invoice_fields, units, print_settings FROM organizations WHERE shop_id = $1', [shopId]);
   if (!org) throw badRequest('Business profile not found');
 
   const fields: ItemField[] = Array.isArray(org.item_fields) ? org.item_fields : [];
   const fieldsAdded = t.itemFields.filter((f) => !fields.some((x) => x.key === f.key));
   const allFields = [...fields, ...fieldsAdded];
+  const invFields: ItemField[] = Array.isArray(org.invoice_fields) ? org.invoice_fields : [];
+  const invoiceFieldsAdded = (t.invoiceFields ?? []).filter((f) => !invFields.some((x) => x.key === f.key));
   const units: string[] = Array.isArray(org.units) ? org.units : [];
   const unitsAdded = t.units.filter((u) => !units.includes(u));
 
@@ -34,10 +36,13 @@ export async function applyTemplate(db: Db, shopId: string, key: string, opts: A
   if (opts.printLayout) {
     const p = withPrintDefaults(org.print_settings);
     printUpdated = p.thermal.paper !== t.thermalPaper;
-    print = { ...p, thermal: { ...p.thermal, paper: t.thermalPaper } };
+    print = {
+      ...p, thermal: { ...p.thermal, paper: t.thermalPaper },
+      invoice: { ...p.invoice, terms: t.invoiceTerms ?? p.invoice.terms, fields: { ...p.invoice.fields, ...(t.printMrp ? { mrp: true } : {}) } },
+    };
   }
-  await db.query('UPDATE organizations SET business_type = $2, item_fields = $3, units = $4, print_settings = $5 WHERE shop_id = $1',
-    [shopId, t.key, JSON.stringify(allFields), JSON.stringify([...units, ...unitsAdded]), print == null ? null : JSON.stringify(print)]);
+  await db.query('UPDATE organizations SET business_type = $2, item_fields = $3, units = $4, print_settings = $5, invoice_fields = $6 WHERE shop_id = $1',
+    [shopId, t.key, JSON.stringify(allFields), JSON.stringify([...units, ...unitsAdded]), print == null ? null : JSON.stringify(print), JSON.stringify([...invFields, ...invoiceFieldsAdded])]);
 
   let itemsAdded = 0;
   let itemsSkipped = 0;
@@ -55,5 +60,5 @@ export async function applyTemplate(db: Db, shopId: string, key: string, opts: A
       itemsAdded++;
     }
   }
-  return { template: t.key, fieldsAdded: fieldsAdded.map((f) => f.label), unitsAdded, itemsAdded, itemsSkipped, printUpdated };
+  return { template: t.key, fieldsAdded: [...fieldsAdded, ...invoiceFieldsAdded].map((f) => f.label), unitsAdded, itemsAdded, itemsSkipped, printUpdated };
 }

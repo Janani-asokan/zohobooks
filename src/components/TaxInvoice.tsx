@@ -1,12 +1,63 @@
-import { useEffect, type CSSProperties } from 'react';
+import { Fragment, useEffect, type CSSProperties } from 'react';
 import { amountInWords, fmtDate, initials, money, num2 } from '@/lib/format';
 import type { Invoice, Organization } from '@/api/types';
 import type { InvoicePaper, InvoicePrintSettings } from '../../shared/printSettings';
+import { templateByKey, type ItemField } from '../../shared/templates';
 import { stateCode } from '../../shared/gst';
 import { upiLink, useQrState } from './qr';
 
-export type PrintOrg = Pick<Organization, 'companyName' | 'legalName' | 'gstin' | 'email' | 'phone' | 'address' | 'state' | 'logo' | 'invoiceFooter' | 'upiId' | 'bankDetails' | 'compositionScheme'>;
+export type PrintOrg = Pick<Organization, 'companyName' | 'legalName' | 'gstin' | 'email' | 'phone' | 'address' | 'state' | 'logo' | 'invoiceFooter' | 'upiId' | 'bankDetails' | 'compositionScheme'> & {
+  /** Trade registrations printed under the GSTIN (drug licence, BIS registration …), already labelled. */
+  tradeDetails?: Array<{ label: string; value: string }>;
+};
 export interface PrintBranch { name: string; address: string; phone: string }
+
+/** Trade fields and dues frozen with the invoice (shared/templates.ts, server printSnapshot). */
+export interface PrintExtras {
+  itemFields?: ItemField[];
+  invoiceFields?: ItemField[];
+  previousBalance?: number | null;
+  /** ORIGINAL FOR RECIPIENT, DUPLICATE FOR TRANSPORTER, TRIPLICATE FOR SUPPLIER (OUT-10). */
+  copyLabel?: string;
+}
+
+/** The live business profile as the invoice prints it, with trade registrations labelled (drafts and previews). */
+export function printOrgFrom(org: Organization): PrintOrg {
+  const labels = Object.fromEntries((templateByKey(org.businessType ?? '')?.tradeDetails ?? []).map((d) => [d.key, d.label]));
+  return { ...org, tradeDetails: Object.entries(org.tradeDetails ?? {}).filter(([, v]) => v).map(([k, v]) => ({ label: labels[k] ?? k, value: v })) };
+}
+
+/** The payload of /print-data: the invoice and what it prints with. */
+export interface PrintBundle {
+  invoice: Invoice; org: PrintOrg; branch: PrintBranch | null; settings: import('../../shared/printSettings').PrintSettings;
+  itemFields: ItemField[]; invoiceFields: ItemField[]; previousBalance: number | null; snapshotAt: string | null;
+}
+
+export const COPY_LABEL = { original: 'ORIGINAL FOR RECIPIENT', duplicate: 'DUPLICATE FOR TRANSPORTER', triplicate: 'TRIPLICATE FOR SUPPLIER' } as const;
+
+/** "22K · Gross 12.5 g · HUID AB12CD": an item's printable trade details, in the shop's field order. */
+export function tradeLine(fields: ItemField[], extra: Record<string, string | number> | undefined) {
+  if (!extra) return '';
+  return fields.filter((f) => f.print && f.key !== 'localName' && extra[f.key] !== undefined && extra[f.key] !== '')
+    .map((f) => {
+      const v = `${extra[f.key]}${f.suffix ? ` ${f.suffix}` : ''}`;
+      // Choices like 22K or Fe500D read on their own; numbers and codes need their label.
+      return f.type === 'select' && f.key !== 'schedule' ? v : `${f.label} ${v}`;
+    }).join(' · ');
+}
+
+/** HSN-wise summary (FUN-05): taxable value and tax per HSN code and rate. */
+export function hsnSummary(inv: Invoice) {
+  const map = new Map<string, { hsn: string; rate: number; taxable: number; tax: number }>();
+  for (const l of inv.lines) {
+    const k = `${l.hsn || '—'}|${l.taxRate}`;
+    const b = map.get(k) ?? { hsn: l.hsn || '—', rate: l.taxRate, taxable: 0, tax: 0 };
+    b.taxable = r2(b.taxable + l.amount);
+    b.tax = r2(b.tax + (inv.withGst ? (l.amount * l.taxRate) / 100 : 0));
+    map.set(k, b);
+  }
+  return [...map.values()].sort((a, b) => a.hsn.localeCompare(b.hsn) || a.rate - b.rate);
+}
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -40,8 +91,8 @@ const placeLabel = (state: string) => (state ? `${state}${stateCode(state) ? ` (
  * shared link, so every channel produces the same document. Layout rules (repeating header, unsplit rows, totals kept
  * together) live in styles/print.css.
  */
-export function TaxInvoice({ inv, org, branch, s, paper, onReady }: {
-  inv: Invoice; org: PrintOrg; branch?: PrintBranch | null; s: InvoicePrintSettings; paper?: InvoicePaper; onReady?: () => void;
+export function TaxInvoice({ inv, org, branch, s, paper, onReady, extras = {} }: {
+  inv: Invoice; org: PrintOrg; branch?: PrintBranch | null; s: InvoicePrintSettings; paper?: InvoicePaper; onReady?: () => void; extras?: PrintExtras;
 }) {
   const narrow = (paper ?? s.paper) === 'a5';
   // A5 has room for nine columns: unit joins quantity and the line total is left to the totals block.
@@ -63,10 +114,24 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady }: {
   const ship = f.shipTo ? inv.shipTo : null;
   const cols = 4 + (showAmount ? 1 : 0) + (f.hsn ? 1 : 0) + (f.unit ? 1 : 0) + (showDisc ? 1 : 0) + (gst ? 3 : 0);
   const mark = inv.status === 'Cancelled' ? 'VOID' : inv.status === 'Draft' ? 'DRAFT' : '';
+  const itemFields = extras.itemFields ?? [];
+  const invFields = (extras.invoiceFields ?? []).filter((x) => inv.extra?.[x.key] !== undefined && inv.extra[x.key] !== '');
+  // Payment status (FUN-10) is the only part of an issued invoice that changes after it is issued.
+  const stamp = f.paymentStamp && inv.status === 'Issued'
+    ? inv.paymentStatus === 'Paid' ? 'PAID' : inv.paymentStatus === 'Partially Paid' ? 'PARTLY PAID' : 'DUE'
+    : '';
+  const prev = f.previousBalance && c && (inv.customerId ?? null) && (extras.previousBalance ?? 0) > 0.004 ? extras.previousBalance! : 0;
+  const hsnRows = f.hsnSummary ? hsnSummary(inv) : [];
 
   return (
     <article className={`print-doc ti ti-${s.template} ti-${paper ?? s.paper}`} style={{ '--ti-color': s.color } as CSSProperties} aria-label={`${inv.docType} ${inv.number ?? 'draft'}`}>
       {mark && <div className="ti-mark" aria-hidden>{mark}</div>}
+      {(extras.copyLabel || stamp) && (
+        <div className="ti-topline">
+          {extras.copyLabel && <span className="ti-copy">{extras.copyLabel}</span>}
+          {stamp && <span className={`ti-stamp ti-stamp-${stamp === 'PAID' ? 'paid' : stamp === 'DUE' ? 'due' : 'part'}`}>{stamp}</span>}
+        </div>
+      )}
 
       <header className="ti-head">
         <div className="ti-from">
@@ -77,6 +142,7 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady }: {
             <div className="ti-pre">{org.address}</div>
             <div>{[org.phone, org.email].filter(Boolean).join(' · ')}</div>
             {org.gstin && <div className="ti-strong">GSTIN {org.gstin}</div>}
+            {org.tradeDetails?.map((d) => <div key={d.label}>{d.label}: <span className="ti-strong">{d.value}</span></div>)}
           </div>
         </div>
         <div className="ti-title">
@@ -129,6 +195,7 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady }: {
             <dt>Supply</dt><dd>{c.gstin ? 'B2B' : 'B2C'} · {inv.interState ? 'Inter-state' : 'Intra-state'}</dd>
             <dt>Reverse charge</dt><dd>{inv.reverseCharge ? 'Yes' : 'No'}</dd>
             {branch?.name && (<><dt>Dispatch from</dt><dd>{branch.name}</dd></>)}
+            {invFields.map((x) => <Fragment key={x.key}><dt>{x.label}</dt><dd>{inv.extra[x.key]}</dd></Fragment>)}
           </dl>
         </div>
       </section>
@@ -155,6 +222,9 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady }: {
               <td className="c-sno">{i + 1}</td>
               <td className="c-item">
                 <div className="ti-strong">{l.name}</div>
+                {f.itemDetails && l.extra?.localName ? <div>{String(l.extra.localName)}</div> : null}
+                {f.itemDetails && tradeLine(itemFields, l.extra) ? <div className="ti-muted">{tradeLine(itemFields, l.extra)}</div> : null}
+                {f.mrp && l.mrp ? <div className="ti-muted">MRP {money(l.mrp)}</div> : null}
                 {l.batches?.length ? <div className="ti-muted">Batch {l.batches.map((b) => `${b.batchNo}${b.expiryDate ? ` · exp ${fmtDate(b.expiryDate)}` : ''}`).join(', ')}</div> : null}
                 {l.serials?.length ? <div className="ti-muted">S/N {l.serials.join(", ")}</div> : null}
               </td>
@@ -200,6 +270,12 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady }: {
               </tbody>
             </table>
           )}
+          {hsnRows.length > 0 && (
+            <table className="ti-tax ti-hsn">
+              <thead><tr><th>HSN/SAC</th><th className="r">Rate</th><th className="r">Taxable value</th><th className="r">Tax</th></tr></thead>
+              <tbody>{hsnRows.map((h) => <tr key={`${h.hsn}-${h.rate}`}><td>{h.hsn}</td><td className="r">{h.rate}%</td><td className="r">{num2(h.taxable)}</td><td className="r">{num2(h.tax)}</td></tr>)}</tbody>
+            </table>
+          )}
           {f.amountInWords && (
             <div className="ti-words">
               <div className="ti-label">Amount in words</div>
@@ -218,6 +294,11 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady }: {
           {inv.amountPaid > 0 && <><dt>Received</dt><dd>−{money(inv.amountPaid)}</dd></>}
           {inv.amountCredited > 0 && <><dt>Credit notes</dt><dd>−{money(inv.amountCredited)}</dd></>}
           {inv.status === 'Issued' && (inv.amountPaid > 0 || inv.amountCredited > 0) && <><dt className="ti-strong">Balance due</dt><dd className="ti-strong">{money(Math.max(0, inv.balance))}</dd></>}
+          {prev > 0 && <>
+            <dt className="ti-prev">Previous balance</dt><dd className="ti-prev">{money(prev)}</dd>
+            <dt>This invoice</dt><dd>{money(inv.total)}</dd>
+            <dt className="ti-strong">Total outstanding</dt><dd className="ti-strong">{money(r2(prev + inv.total))}</dd>
+          </>}
         </dl>
       </section>
 

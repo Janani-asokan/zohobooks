@@ -13,7 +13,7 @@ import { createOrder, razorpayEnabled, verifySignature } from '../../integration
 import { extendLicense } from '../platform';
 import { EMAIL_RE, GSTIN_RE, gstinMatchesState } from '../../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE, STAFF_ROLES } from '../../../../shared/permissions';
-import { BARCODE_FIELDS, INVOICE_FIELDS, LABEL_SIZES, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
+import { BARCODE_FIELDS, INVOICE_FIELDS, LABEL_SIZES, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
 import { T, allowed } from './ctx';
 
 export const coreRouter = Router();
@@ -23,7 +23,7 @@ const serializeOrg = (o: any) => ({
   companyName: o.company_name, legalName: o.legal_name, gstin: o.gstin, email: o.email, phone: o.phone, address: o.address, state: o.state,
   logo: o.logo, invoiceFooter: o.invoice_footer, upiId: o.upi_id, bankDetails: o.bank_details, invoiceTemplate: o.invoice_template,
   compositionScheme: o.composition_scheme, autoReminders: o.auto_reminders, reminderDays: o.reminder_days, lendingEnabled: !!o.lending_enabled,
-  businessType: o.business_type ?? '', itemFields: o.item_fields ?? [], units: o.units ?? [], tradeDetails: o.trade_details ?? {},
+  businessType: o.business_type ?? '', itemFields: o.item_fields ?? [], invoiceFields: o.invoice_fields ?? [], units: o.units ?? [], tradeDetails: o.trade_details ?? {},
 });
 
 coreRouter.get('/organization', T(async (db, _req, c) => serializeOrg(await getOrg(db, c.shopId))));
@@ -114,7 +114,7 @@ const printSchema = z.object({
       template: z.enum(['standard', 'modern', 'compact']),
       paper: z.enum(['a4', 'a5']),
       color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Pick a colour'),
-      fields: z.object(Object.fromEntries(INVOICE_FIELDS.map((k) => [k, z.boolean()])) as Record<(typeof INVOICE_FIELDS)[number], z.ZodBoolean>),
+      fields: z.object(Object.fromEntries(INVOICE_FIELDS.map((k) => [k, z.boolean()])) as Record<(typeof INVOICE_FIELDS)[number], z.ZodBoolean>).partial(),
       terms: z.string().max(1500),
       signatoryLabel: z.string().trim().min(1).max(60),
       signatureImage: z.string().max(400_000).refine((v) => v === '' || /^data:image\/(png|jpeg|webp);base64,/.test(v), 'Upload a PNG, JPG or WebP image'),
@@ -129,7 +129,12 @@ coreRouter.put(
   T(async (db, req, c) => {
     const parsed = parse(printSchema, req.body);
     // Older clients send only thermal + barcode; keep the saved invoice layout in that case.
-    const b = { ...parsed, invoice: parsed.invoice ?? withPrintDefaults((await one(db, 'SELECT print_settings FROM organizations WHERE shop_id = $1', [c.shopId]))?.print_settings).invoice };
+    const saved = withPrintDefaults((await one(db, 'SELECT print_settings FROM organizations WHERE shop_id = $1', [c.shopId]))?.print_settings).invoice;
+    // Fields GST law requires stay on whatever is sent (CMP-14); fields a client doesn't know yet keep their saved value.
+    const invoice = parsed.invoice
+      ? { ...parsed.invoice, fields: { ...saved.fields, ...parsed.invoice.fields, ...Object.fromEntries(MANDATORY_INVOICE_FIELDS.map((k) => [k, true])) } }
+      : saved;
+    const b = { ...parsed, invoice };
     await db.query('UPDATE organizations SET print_settings = $2 WHERE shop_id = $1', [c.shopId, JSON.stringify(b)]);
     await audit(db, req, c.shopId, 'update', 'print_settings', c.shopId, { theme: b.thermal.theme, paper: b.thermal.paper, label: b.barcode.labelSize, invoice: b.invoice.template });
     return withPrintDefaults(b);

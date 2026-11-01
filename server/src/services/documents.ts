@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import { takePrintSnapshot } from './printSnapshot';
+import { cleanExtra } from '../../../shared/templates';
 import type { Request } from 'express';
 import { z } from 'zod';
 import type { Db } from '../db';
@@ -46,6 +48,9 @@ export interface StoredLine {
   /** What the user typed, when the bill discount or MRP billing changed the effective rate/discount. */
   enteredRate?: number;
   enteredDiscount?: number;
+  /** The item's trade field values (purity, schedule, warranty …) and MRP when the line was saved, for printing. */
+  extra?: Record<string, string | number>;
+  mrp?: number;
 }
 
 /** Resolves item details, tier prices and the authoritative tax rate on the server. */
@@ -75,6 +80,8 @@ export async function buildLines(db: Db, shopId: string, input: LineInput[]): Pr
       cost: Number(it.cost ?? 0),
       ...(l.batchNo ? { batchNo: l.batchNo } : {}),
       ...(it.track_serials && l.serials?.length ? { serials: [...new Set(l.serials.map((x) => x.trim()))] } : {}),
+      ...(it.extra && Object.keys(it.extra).length ? { extra: it.extra } : {}),
+      ...(it.mrp != null && Number(it.mrp) > 0 ? { mrp: Number(it.mrp) } : {}),
     };
     line.amount = lineAmount(line);
     return line;
@@ -119,6 +126,8 @@ export const invoiceInput = z.object({
   /** MRP billing: the rates typed include GST. */
   pricesIncludeTax: z.boolean().optional(),
   billDiscount: z.object({ kind: z.enum(['percent', 'amount']), value: z.number().min(0).max(1e9) }).nullable().optional(),
+  /** Invoice-level trade details (patient and doctor, vehicle number …), checked against the shop's invoice fields. */
+  extra: z.record(z.union([z.string().max(120), z.number()])).optional(),
 });
 export type InvoiceInput = z.infer<typeof invoiceInput>;
 
@@ -168,6 +177,8 @@ async function issue(db: Db, req: Request | null, shopId: string, inv: any) {
     await sellSerials(db, shopId, l, inv.branch_id, inv.id);
   }
   await db.query("UPDATE invoices SET status = 'Issued', number = $3, fy = $4, lines = $5, issued_at = now() WHERE shop_id = $1 AND id = $2", [shopId, inv.id, number, fy, JSON.stringify(lines)]);
+  // Freeze what it prints with, so a reprint matches the original even after the profile or layout changes.
+  await db.query('UPDATE invoices SET print_snapshot = $3 WHERE shop_id = $1 AND id = $2', [shopId, inv.id, JSON.stringify(await takePrintSnapshot(db, shopId, inv))]);
   await db.query('INSERT INTO public_links (token, shop_id, invoice_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [inv.public_token, shopId, inv.id]);
   return number;
 }
@@ -232,6 +243,12 @@ async function checkCreditLimit(db: Db, req: Request | null, shopId: string, cus
 }
 
 async function saveDeliveryFields(db: Db, shopId: string, id: string, input: InvoiceInput) {
+  if (input.extra !== undefined) {
+    const org = await one(db, 'SELECT invoice_fields FROM organizations WHERE shop_id = $1', [shopId]);
+    const { value, errors } = cleanExtra(Array.isArray(org?.invoice_fields) ? org.invoice_fields : [], input.extra);
+    if (Object.keys(errors).length) throw badRequest(Object.values(errors)[0]!, Object.fromEntries(Object.entries(errors).map(([k, v]) => [`extra.${k}`, v])));
+    await db.query('UPDATE invoices SET extra = $3 WHERE shop_id = $1 AND id = $2', [shopId, id, JSON.stringify(value)]);
+  }
   if (input.shipTo !== undefined) await db.query('UPDATE invoices SET ship_to = $3 WHERE shop_id = $1 AND id = $2', [shopId, id, input.shipTo && (input.shipTo.name || input.shipTo.address) ? JSON.stringify(input.shipTo) : null]);
   if (input.terms !== undefined) await db.query('UPDATE invoices SET terms = $3 WHERE shop_id = $1 AND id = $2', [shopId, id, input.terms]);
   await db.query('UPDATE invoices SET bill_discount = $3, prices_include_tax = $4 WHERE shop_id = $1 AND id = $2',
@@ -339,6 +356,7 @@ export function serializeInvoice(r: any) {
     publicToken: r.status === 'Issued' ? r.public_token : null,
     einvoice: r.einvoice,
     shipTo: r.ship_to ?? null,
+    extra: r.extra ?? {},
     terms: r.terms ?? '',
     eway: r.eway ?? null,
     billDiscount: r.bill_discount ?? null,

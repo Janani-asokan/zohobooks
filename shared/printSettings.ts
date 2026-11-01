@@ -50,13 +50,23 @@ export interface BarcodeSettings { printer: PrinterType; labelSize: string; fiel
 /* ---------------- A4 / A5 tax invoice ---------------- */
 export type InvoiceTemplate = 'standard' | 'modern' | 'compact';
 export type InvoicePaper = 'a4' | 'a5';
-export const INVOICE_FIELDS = ['logo', 'hsn', 'unit', 'discount', 'taxBreakup', 'amountInWords', 'bankDetails', 'upiQr', 'terms', 'notes', 'signature', 'shipTo', 'placeOfSupply', 'eInvoice'] as const;
+export const INVOICE_FIELDS = ['logo', 'hsn', 'unit', 'discount', 'taxBreakup', 'amountInWords', 'bankDetails', 'upiQr', 'terms', 'notes', 'signature', 'shipTo', 'placeOfSupply', 'eInvoice',
+  'itemDetails', 'mrp', 'previousBalance', 'paymentStamp', 'hsnSummary'] as const;
 export type InvoiceFieldKey = (typeof INVOICE_FIELDS)[number];
 export const INVOICE_FIELD_LABEL: Record<InvoiceFieldKey, string> = {
   logo: 'Logo', hsn: 'HSN / SAC column', unit: 'Unit column', discount: 'Discount column', taxBreakup: 'Tax breakup by rate', amountInWords: 'Amount in words',
   bankDetails: 'Bank details', upiQr: 'UPI QR code', terms: 'Terms and conditions', notes: 'Customer notes', signature: 'Authorised signatory',
   shipTo: 'Ship-to address', placeOfSupply: 'Place of supply', eInvoice: 'E-invoice IRN and QR',
+  itemDetails: 'Trade details under each item (purity, schedule, warranty …)', mrp: 'MRP of each item', previousBalance: 'Previous balance and total outstanding',
+  paymentStamp: 'Paid / partly paid / due stamp', hsnSummary: 'HSN-wise tax summary',
 };
+
+/**
+ * Fields GST law requires on a tax invoice (CMP-06, -09, -12, -14). They can't be switched off: saved settings are
+ * corrected on every read and write. (A5 shows the unit with the quantity instead of in its own column.)
+ */
+export const MANDATORY_INVOICE_FIELDS: readonly InvoiceFieldKey[] = ['hsn', 'unit', 'placeOfSupply', 'signature', 'eInvoice'];
+const OFF_BY_DEFAULT: readonly InvoiceFieldKey[] = ['mrp', 'hsnSummary'];
 export interface InvoicePrintSettings {
   template: InvoiceTemplate;
   paper: InvoicePaper;
@@ -93,7 +103,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   },
   invoice: {
     template: 'standard', paper: 'a4', color: '#A9475A',
-    fields: Object.fromEntries(INVOICE_FIELDS.map((k) => [k, true])) as Record<InvoiceFieldKey, boolean>,
+    fields: Object.fromEntries(INVOICE_FIELDS.map((k) => [k, !OFF_BY_DEFAULT.includes(k)])) as Record<InvoiceFieldKey, boolean>,
     terms: 'Goods once sold will not be taken back.\nInterest at 18% p.a. is charged on payments received after the due date.\nSubject to local jurisdiction.',
     signatoryLabel: 'Authorised Signatory',
     signatureImage: '',
@@ -112,7 +122,7 @@ export function withPrintDefaults(saved: unknown): PrintSettings {
   return {
     thermal: { ...d.thermal, ...(s.thermal ?? {}) },
     barcode: { ...d.barcode, ...(s.barcode ?? {}), fields },
-    invoice: { ...d.invoice, ...(s.invoice ?? {}), fields: { ...d.invoice.fields, ...(s.invoice?.fields ?? {}) } },
+    invoice: { ...d.invoice, ...(s.invoice ?? {}), fields: { ...d.invoice.fields, ...(s.invoice?.fields ?? {}), ...Object.fromEntries(MANDATORY_INVOICE_FIELDS.map((k) => [k, true])) } },
   };
 }
 

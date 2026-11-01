@@ -14,5 +14,5 @@ export const SAMPLE_INVOICE: Invoice = {
   status: 'Issued', paymentStatus: 'Sent', subTotal: 22775, discount: 725, taxTotal: 3649.5, cgst: 1824.75, sgst: 1824.75, igst: 0, tcs: 0,
   roundOff: -0.5, total: 26424, amountPaid: 0, amountCredited: 0, balance: 26424, notes: 'Delivery within 3 working days.', source: 'app',
   salesOrderId: null, recurringId: null, publicToken: null, lastReminderAt: null, cancelReason: '', cancelledAt: null, issuedAt: null, createdAt: '2026-10-18T10:00:00Z',
-  terms: '', einvoice: null, eway: null,
+  terms: '', einvoice: null, eway: null, extra: {},
 };

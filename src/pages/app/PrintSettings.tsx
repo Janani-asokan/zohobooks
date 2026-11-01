@@ -5,13 +5,13 @@ import { api } from '@/api/client';
 import { useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { TaxInvoice } from '@/components/TaxInvoice';
+import { TaxInvoice, printOrgFrom } from '@/components/TaxInvoice';
 import { SAMPLE_INVOICE } from '@/components/sampleInvoice';
 import { readLogo } from '@/lib/image';
 import { SALES_KEYS } from '@/api/hooks';
 import { BarcodeLabel, SAMPLE_LABEL_ITEM, SAMPLE_RECEIPT, ThermalReceipt, printReceipt } from '@/components/printing';
 import {
-  BARCODE_FIELD_LABEL, INVOICE_FIELDS, INVOICE_FIELD_LABEL, LABEL_SIZES, MAX_BARCODE_FIELDS, labelSize, withPrintDefaults,
+  BARCODE_FIELD_LABEL, INVOICE_FIELDS, INVOICE_FIELD_LABEL, LABEL_SIZES, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, labelSize, withPrintDefaults,
   type BarcodeSettings, type InvoicePrintSettings, type InvoiceTemplate, type PrintSettings as PS, type ThermalSettings, type ThermalTheme,
 } from '../../../shared/printSettings';
 
@@ -41,8 +41,10 @@ function Mini({ theme }: { theme: ThermalTheme }) {
   );
 }
 
-const Check = ({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) => (
-  <label className="ps-check"><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />{children}</label>
+const Check = ({ checked, onChange, children, locked }: { checked: boolean; onChange: (v: boolean) => void; children: React.ReactNode; locked?: boolean }) => (
+  <label className={`ps-check ${locked ? 'locked' : ''}`} title={locked ? 'Required on a GST tax invoice, so it always prints' : undefined}>
+    <input type="checkbox" checked={locked || checked} disabled={locked} onChange={(e) => onChange(e.target.checked)} /><span className="ps-check-text">{children}{locked && <span className="ps-lock">Required by GST</span>}</span>
+  </label>
 );
 
 export default function PrintSettings() {
@@ -98,7 +100,7 @@ export default function PrintSettings() {
             <>
               <div className="ps-paper-tag">{iv.paper.toUpperCase()} · {INVOICE_TEMPLATES.find((x) => x.id === iv.template)!.label} · sample invoice</div>
               <div className="ps-doc" style={{ zoom: iv.paper === 'a5' ? 0.82 : 0.6 } as React.CSSProperties}>
-                <TaxInvoice inv={{ ...SAMPLE_INVOICE, terms: '' }} org={org} s={iv} />
+                <TaxInvoice inv={{ ...SAMPLE_INVOICE, terms: '' }} org={printOrgFrom(org)} s={iv} />
               </div>
               <div className="ps-help">Print from any invoice with <strong>Print</strong>. Downloads, emails and WhatsApp links use this same layout.</div>
             </>
@@ -175,7 +177,7 @@ export default function PrintSettings() {
               <div className="ps-sec">
                 <h3>Show on the invoice</h3>
                 <div className="ps-grid2">
-                  {INVOICE_FIELDS.map((k) => <Check key={k} checked={iv.fields[k]} onChange={(v) => setI({ fields: { ...iv.fields, [k]: v } })}>{INVOICE_FIELD_LABEL[k]}</Check>)}
+                  {INVOICE_FIELDS.map((k) => <Check key={k} locked={MANDATORY_INVOICE_FIELDS.includes(k)} checked={iv.fields[k]} onChange={(v) => setI({ fields: { ...iv.fields, [k]: v } })}>{INVOICE_FIELD_LABEL[k]}</Check>)}
                 </div>
               </div>
               <div className="ps-sec">

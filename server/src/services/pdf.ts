@@ -59,9 +59,10 @@ export class PdfUnavailableError extends Error {}
  * Renders /invoices/:id/print in headless Chromium and prints it to PDF. The browser applies the page's own
  * @page rules (size, margins, "Page X of Y"), so the file matches what the print dialog produces.
  */
-export async function invoicePdf(shopId: string, invoiceId: string, paper: PdfPaper, roll?: '2in' | '3in'): Promise<Buffer> {
+export async function invoicePdf(shopId: string, invoiceId: string, paper: PdfPaper, roll?: '2in' | '3in', copy?: string): Promise<Buffer> {
   const rollQ = paper === 'thermal' && roll ? `&roll=${roll}` : '';
-  const url = `${config.pdf.renderOrigin}/invoices/${invoiceId}/print?paper=${paper}${rollQ}&rt=${encodeURIComponent(renderToken(shopId, invoiceId))}`;
+  const copyQ = paper !== 'thermal' && copy ? `&copy=${copy}` : '';
+  const url = `${config.pdf.renderOrigin}/invoices/${invoiceId}/print?paper=${paper}${rollQ}${copyQ}&rt=${encodeURIComponent(renderToken(shopId, invoiceId))}`;
   return slot(async () => {
     try {
       return await render(url, paper);

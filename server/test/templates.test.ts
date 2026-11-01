@@ -93,7 +93,8 @@ describe('an existing shop choosing a business type', () => {
     const [{ n: itemsBefore }] = await withTenant(shopId, async (db) => (await db.query('SELECT count(*)::int AS n FROM items WHERE shop_id = $1', [shopId])).rows);
     const r = await owner.post('/api/shop/organization/business-type').send({ key: 'pharmacy', samples: true, printLayout: false });
     expect(r.status).toBe(200);
-    expect(r.body.result.fieldsAdded).toEqual(['Manufacturer', 'Composition / salt', 'Schedule', 'Pack']);
+    expect(r.body.result.fieldsAdded).toEqual(['Manufacturer', 'Composition / salt', 'Schedule', 'Pack', 'Patient name', 'Doctor’s name']);
+    expect(r.body.organization.invoiceFields.map((f: { key: string }) => f.key)).toEqual(['patientName', 'doctorName']);
     expect(r.body.organization.units).toEqual(expect.arrayContaining(['strip', 'bottle']));
     const [{ n: itemsAfter }] = await withTenant(shopId, async (db) => (await db.query('SELECT count(*)::int AS n FROM items WHERE shop_id = $1', [shopId])).rows);
     expect(itemsAfter).toBe(itemsBefore);

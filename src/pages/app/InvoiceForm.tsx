@@ -58,6 +58,9 @@ function Form({ existing }: { existing?: Invoice }) {
   const [lines, setLines] = useState<DraftLine[]>(() => existing?.lines.map(toDraft) ?? [emptyLine('SP1')]);
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [docTerms, setDocTerms] = useState(existing?.terms ?? '');
+  // Trade details asked on each invoice (patient and doctor, vehicle number …), from the business type.
+  const invFields = org?.invoiceFields ?? [];
+  const [invExtra, setInvExtra] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(existing?.extra ?? {}).map(([k, v]) => [k, String(v)])));
   const [shipTo, setShipTo] = useState(existing?.shipTo ?? null);
   const [billOpts, setBillOpts] = useState<BillOptions>({ pricesIncludeTax: existing?.pricesIncludeTax ?? false, billDiscount: existing?.billDiscount ?? null });
   const [touched, setTouched] = useState(false);
@@ -155,7 +158,8 @@ function Form({ existing }: { existing?: Invoice }) {
     setTouched(true);
     setServerErr({});
     if (Object.values(errs).some(Boolean)) return toast('error', 'Please fix the highlighted fields');
-    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount };
+    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount,
+      extra: Object.fromEntries(invFields.filter((x) => (invExtra[x.key] ?? '').trim()).map((x) => [x.key, invExtra[x.key]!.trim()])) };
     const onSuccess = (inv: Invoice) => {
       toast('success', inv.status === 'Draft' ? 'Draft saved' : existing?.status === 'Issued' ? 'Invoice updated' : 'Invoice issued', inv.number ?? undefined);
       if (invFile) void attachFile('invoice', inv.id, invFile.file.name, invFile.dataUrl).catch(() => undefined);
@@ -251,6 +255,15 @@ function Form({ existing }: { existing?: Invoice }) {
 
           <div className="grid-2 mt-24" style={{ alignItems: 'start' }}>
             <div className="stack" style={{ gap: 14 }}>
+              {invFields.length > 0 && (
+                <div className="trade-fields">
+                  {invFields.map((x) => (
+                    <Field key={x.key} label={x.label} hint={x.help} error={serverErr[`extra.${x.key}`]}>
+                      <input id={`inv-extra-${x.key}`} className="input" value={invExtra[x.key] ?? ''} onChange={(e) => setInvExtra({ ...invExtra, [x.key]: e.target.value })} />
+                    </Field>
+                  ))}
+                </div>
+              )}
               <Field label="Customer notes" hint="Printed on the invoice">
                 <textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Thanks for your business." />
               </Field>

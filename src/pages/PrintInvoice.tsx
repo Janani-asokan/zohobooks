@@ -3,13 +3,15 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Download, FileX, Loader2, Printer } from 'lucide-react';
 import { download } from '@/api/client';
 import type { Invoice } from '@/api/types';
-import { TaxInvoice, type PrintBranch, type PrintOrg } from '@/components/TaxInvoice';
+import { COPY_LABEL, TaxInvoice, type PrintBranch, type PrintOrg } from '@/components/TaxInvoice';
+import type { ItemField } from '../../shared/templates';
 import { ThermalReceipt, receiptFromInvoice } from '@/components/printing';
 import { Segmented } from '@/components/ui';
 import { withPrintDefaults, type PaperSize, type PrintSettings } from '../../shared/printSettings';
 
 export type Paper = 'a4' | 'a5' | 'thermal';
-interface Bundle { invoice: Invoice; org: PrintOrg; branch: PrintBranch | null; settings: PrintSettings }
+interface Bundle { invoice: Invoice; org: PrintOrg; branch: PrintBranch | null; settings: PrintSettings; itemFields?: ItemField[]; invoiceFields?: ItemField[]; previousBalance?: number | null }
+type Copy = 'none' | keyof typeof COPY_LABEL | 'all';
 
 declare global { interface Window { __PRINT_READY?: boolean | string } }
 
@@ -51,6 +53,9 @@ export default function PrintInvoice() {
   // The roll width can be picked per print; otherwise it comes from Print settings.
   const rollParam = params.get('roll');
   const roll: PaperSize = rollParam === '2in' || rollParam === '3in' ? rollParam : data?.settings.thermal.paper ?? '3in';
+  // Original / duplicate / triplicate label (OUT-10); "all" prints the three copies, each on its own pages.
+  const copyParam = params.get('copy');
+  const copy: Copy = copyParam === 'original' || copyParam === 'duplicate' || copyParam === 'triplicate' || copyParam === 'all' ? copyParam : 'none';
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -113,8 +118,11 @@ export default function PrintInvoice() {
     if (!data || !inv) return null;
     if (paper === 'thermal')
       return <div className="print-doc"><ThermalReceipt data={receiptFromInvoice(inv, [], undefined, undefined)} org={data.org} s={{ ...data.settings.thermal, paper: roll }} /></div>;
-    return <TaxInvoice inv={inv} org={data.org} branch={data.branch} s={data.settings.invoice} paper={paper} onReady={onDocReady} />;
-  }, [data, paper, roll, onDocReady]);
+    const extras = { itemFields: data.itemFields, invoiceFields: data.invoiceFields, previousBalance: data.previousBalance };
+    const one = (label: string | undefined, ready?: () => void) => <TaxInvoice inv={inv} org={data.org} branch={data.branch} s={data.settings.invoice} paper={paper} onReady={ready} extras={{ ...extras, copyLabel: label }} />;
+    if (copy === 'all') return <div className="ti-copies">{(['original', 'duplicate', 'triplicate'] as const).map((k, i) => <div key={k} className="ti-copy-page">{one(COPY_LABEL[k], i === 2 ? onDocReady : undefined)}</div>)}</div>;
+    return one(copy === 'none' ? undefined : COPY_LABEL[copy], onDocReady);
+  }, [data, paper, roll, copy, onDocReady]);
 
   if (error)
     return (
@@ -128,7 +136,7 @@ export default function PrintInvoice() {
       </div>
     );
 
-  const pdfHref = share ? `/public/invoices/${share}/pdf` : `/shop/invoices/${id}/pdf?paper=${paper}${paper === 'thermal' ? `&roll=${roll}` : ''}`;
+  const pdfHref = share ? `/public/invoices/${share}/pdf` : `/shop/invoices/${id}/pdf?paper=${paper}${paper === 'thermal' ? `&roll=${roll}` : copy !== 'none' ? `&copy=${copy}` : ''}`;
   // The server PDF matches this page exactly; if it can't be made right now, the browser's own print-to-PDF is used.
   const savePdf = () => {
     setPdfBusy(true);
@@ -150,6 +158,14 @@ export default function PrintInvoice() {
               }}
               options={[{ value: 'a4', label: 'A4' }, { value: 'a5', label: 'A5' }, { value: '2in', label: '58mm' }, { value: '3in', label: '80mm' }]}
             />
+          )}
+          {!share && paper !== 'thermal' && inv?.status !== 'Draft' && (
+            <select className="select" style={{ width: 'auto', height: 38 }} aria-label="Copy" value={copy}
+              onChange={(e) => { if (e.target.value === 'none') params.delete('copy'); else params.set('copy', e.target.value); setParams(params, { replace: true }); }}>
+              <option value="none">No copy label</option><option value="original">Original for recipient</option>
+              <option value="duplicate">Duplicate for transporter</option><option value="triplicate">Triplicate for supplier</option>
+              <option value="all">All three copies</option>
+            </select>
           )}
           <button className="btn btn-secondary" disabled={!data || pdfBusy} onClick={savePdf}>{pdfBusy ? <Loader2 size={15} className="spin" /> : <Download size={15} />} PDF</button>
           <button className="btn btn-primary" onClick={() => window.print()} disabled={!data}><Printer size={15} /> Print</button>

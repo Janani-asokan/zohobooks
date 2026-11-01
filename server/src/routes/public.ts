@@ -11,7 +11,8 @@ export const publicRouter = Router();
 
 async function linkFor(token: string) {
   if (!/^[0-9a-f]{36}$/.test(token)) throw notFound('Invoice');
-  const [link] = await query('SELECT shop_id, invoice_id FROM public_links WHERE token = $1', [token]);
+  // A link the owner turned off stops working at once (NFR-04).
+  const [link] = await query('SELECT shop_id, invoice_id FROM public_links WHERE token = $1 AND revoked_at IS NULL', [token]);
   if (!link) throw notFound('Invoice');
   return link as { shop_id: string; invoice_id: string };
 }
