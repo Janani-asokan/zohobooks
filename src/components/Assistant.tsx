@@ -14,7 +14,8 @@ const SUGGESTIONS = [
   'What are my top 5 selling items this year?',
 ];
 
-const useAiStatusQuery = () => useQuery({ queryKey: ['ai-status'], queryFn: () => api.get<{ enabled: boolean }>('/shop/ai/status'), staleTime: 10 * 60_000 });
+export interface AiCredits { allowance: number; used: number; left: number; pct: number }
+const useAiStatusQuery = () => useQuery({ queryKey: ['ai-status'], queryFn: () => api.get<{ enabled: boolean; credits: AiCredits | null }>('/shop/ai/status'), staleTime: 10 * 60_000 });
 // Voice: speech-to-text (Chrome, Edge, Safari) and read-aloud answers, in the app's language.
 const Recog = (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) as any;
 const VOICE_LANG: Record<string, string> = { en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN' };
@@ -34,6 +35,8 @@ function speak(text: string, lang: string) {
 export const useAiEnabled = () => useAiStatusQuery().data?.enabled ?? false;
 /** undefined while the server hasn't answered yet. */
 export const useAiStatus = () => useAiStatusQuery().data?.enabled;
+/** This month's AI credits (null when AI is off). */
+export const useAiCredits = () => useAiStatusQuery().data?.credits ?? null;
 
 /** **bold** and `code` inside a line. */
 function inline(s: string): ReactNode[] {
@@ -116,6 +119,8 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const status = useAiStatusQuery();
+  const credits = status.data?.credits ?? null;
   const { lang } = usePrefs();
   const vlang = VOICE_LANG[lang] ?? 'en-IN';
   const [listening, setListening] = useState(false);
@@ -148,6 +153,7 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
       setTurns([...next, { role: 'assistant', content: (e as Error).message, error: true }]);
     } finally {
       setBusy(false);
+      void status.refetch(); // the answer used credits
       input.current?.focus();
     }
   };
@@ -188,7 +194,10 @@ function AssistantPanel({ onClose }: { onClose: () => void }) {
           <button className="btn btn-primary" type="submit" disabled={busy || !draft.trim()} aria-label="Send"><SendHorizontal size={16} /></button>
         </form>
         {listening && <div className="small qb-listening" style={{ padding: '0 16px' }}><span className="qb-dot" /> Listening… ask your question, then pause. The answer is read aloud.</div>}
-        <div className="ai-foot small muted">AI can make mistakes. Check important numbers in Reports.</div>
+        <div className="ai-foot small muted">
+          {credits && <span className={credits.pct >= 80 ? 'ai-credits low' : 'ai-credits'}>{Math.floor(credits.left)} of {credits.allowance} AI credits left this month · </span>}
+          AI can make mistakes. Check important numbers in Reports.
+        </div>
       </aside>
     </div>
   );

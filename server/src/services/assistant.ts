@@ -9,6 +9,7 @@ import { config } from '../config';
 import { many, one, withTenant } from '../db';
 import { HttpError } from '../http';
 import { stockInsights, type StockInsights } from './stockInsights';
+import { meteredCall, meteredRunner } from './aiUsage';
 import type { Permission } from '../../../shared/permissions';
 
 let client: Anthropic | null = null;
@@ -172,7 +173,7 @@ You answer the shop team's questions about their own business using the tools, w
 export type ChatTurn = { role: 'user' | 'assistant'; content: string };
 
 export async function askAssistant(c: UserCtx, shop: { name: string; state: string }, history: ChatTurn[]): Promise<string> {
-  const runner = ai().beta.messages.toolRunner({
+  const final = await meteredRunner('assistant', () => ai().beta.messages.toolRunner({
     model: config.ai.model,
     max_tokens: 16000,
     max_iterations: 8,
@@ -182,8 +183,7 @@ export async function askAssistant(c: UserCtx, shop: { name: string; state: stri
     system: `${ASSISTANT_SYSTEM}\nShop: ${shop.name}${shop.state ? `, ${shop.state}` : ''}. User role: ${c.role}. Today is ${todayISO()}.${festivalLine()}`,
     tools: shopTools(c),
     messages: history.map((m) => ({ role: m.role, content: m.content })),
-  });
-  const final = await runner;
+  }));
   if (final.stop_reason === 'refusal') return 'Sorry, I can’t help with that one.';
   const text = final.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
   return text || 'I couldn’t find an answer to that. Try asking another way.';
@@ -204,7 +204,7 @@ const ItemSuggestion = z.object({
 export type ItemSuggestion = z.infer<typeof ItemSuggestion>;
 
 export async function suggestItem(name: string, hint: string): Promise<ItemSuggestion> {
-  const response = await ai().beta.messages.parse({
+  const response = await meteredCall('item_suggest', () => ai().beta.messages.parse({
     model: config.ai.model,
     max_tokens: 4000,
     betas: ['server-side-fallback-2026-07-01'],
@@ -212,7 +212,7 @@ export async function suggestItem(name: string, hint: string): Promise<ItemSugge
     output_config: { effort: 'low', format: zodOutputFormat(ItemSuggestion) },
     system: 'You help Indian shopkeepers fill in item details for GST billing. Give the most likely HSN/SAC code and GST rate under current Indian GST law for the item described.',
     messages: [{ role: 'user', content: `Item: ${name}${hint ? `\nMore details: ${hint}` : ''}` }],
-  });
+  }));
   if (response.stop_reason === 'refusal' || !response.parsed_output) throw new HttpError(422, 'Couldn’t suggest details for this item. Fill them in by hand.', 'ai_no_answer');
   return response.parsed_output;
 }
@@ -272,7 +272,7 @@ export async function stockAdvice(ins: StockInsights, shop: { name: string; stat
     topMovers: ins.topMovers,
     upcomingFestivals: upcomingFestivals(todayISO()),
   };
-  const response = await ai().beta.messages.parse({
+  const response = await meteredCall('stock_advice', () => ai().beta.messages.parse({
     model: config.ai.model,
     max_tokens: 8000,
     betas: ['server-side-fallback-2026-07-01'],
@@ -284,7 +284,7 @@ export async function stockAdvice(ins: StockInsights, shop: { name: string; stat
 - For seasons, use only upcomingFestivals (dates are given); if it is empty, set seasonal to null. Never say a festival has passed or is coming unless its date is listed.
 - Keep each detail to one or two sentences. At most 8 actions.`,
     messages: [{ role: 'user', content: JSON.stringify(data) }],
-  });
+  }));
   if (response.stop_reason === 'refusal' || !response.parsed_output) throw new HttpError(422, 'Couldn’t prepare stock advice right now.', 'ai_no_answer');
   return response.parsed_output;
 }
@@ -358,7 +358,7 @@ export async function parseBill(c: UserCtx, text: string, context: 'invoice' | '
       },
     }),
   ];
-  await ai().beta.messages.toolRunner({
+  await meteredRunner('bill_parse', () => ai().beta.messages.toolRunner({
     model: config.ai.model,
     max_tokens: 8000,
     max_iterations: 10,
@@ -370,7 +370,7 @@ Search for every product mentioned and pick the closest match; if two are equall
 Never invent ids. Then call fill_bill exactly once.`,
     tools,
     messages: [{ role: 'user', content: text }],
-  });
+  }));
   if (!result) throw new HttpError(422, 'Couldn’t understand that bill. Try naming the items and quantities, e.g. “2 USB cable, 1 mouse”.', 'ai_no_answer');
   return result;
 }
@@ -387,7 +387,7 @@ export async function draftReminder(inv: { number: string; date: string; dueDate
     dueStatus: daysToDue > 0 ? `due on ${fmt(inv.dueDate)} (in ${daysToDue} day${daysToDue === 1 ? '' : 's'})` : daysToDue === 0 ? `due today, ${fmt(inv.dueDate)}` : `overdue by ${-daysToDue} day${daysToDue === -1 ? '' : 's'} (was due on ${fmt(inv.dueDate)})`,
     payLink: inv.payLink, upiId: inv.upiId,
   };
-  const response = await ai().beta.messages.create({
+  const response = await meteredCall('reminder', () => ai().beta.messages.create({
     model: config.ai.model,
     max_tokens: 2000,
     betas: ['server-side-fallback-2026-07-01'],
@@ -398,7 +398,7 @@ Tone: ${tone === 'firm' ? 'firm but respectful; if overdue, ask for payment with
 Take the timing from dueStatus (translate it into the message language, keeping its dates and numbers). Include the amount due, the invoice number, and the payment link and UPI ID when given. Under 80 words, no subject line, no placeholders. You may end with 🙏.
 Reply with the finished message only.`,
     messages: [{ role: 'user', content: JSON.stringify(facts) }],
-  });
+  }));
   if (response.stop_reason === 'refusal') throw new HttpError(422, 'Couldn’t write this reminder.', 'ai_no_answer');
   const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
   if (!text) throw new HttpError(502, 'The AI returned an empty message. Try again.', 'ai_failed');
@@ -413,7 +413,7 @@ export async function mapColumns(kind: 'customers' | 'vendors' | 'items' | null,
     mapping: z.array(z.object({ field: z.string().describe('our field key'), column: z.string().nullable().describe('exact header from the file, or null') })),
     note: z.string().nullable().describe('One short sentence if something needs the user’s attention, e.g. prices include GST, or quantities are in boxes'),
   });
-  const response = await ai().beta.messages.parse({
+  const response = await meteredCall('column_map', () => ai().beta.messages.parse({
     model: config.ai.model,
     max_tokens: 4000,
     betas: ['server-side-fallback-2026-07-01'],
@@ -421,7 +421,7 @@ export async function mapColumns(kind: 'customers' | 'vendors' | 'items' | null,
     output_config: { effort: 'low', format: zodOutputFormat(Out) },
     system: 'You map spreadsheet columns exported from Indian billing software (Tally, Vyapar, Busy, Marg, Zoho, Excel) to an app\'s import fields. Use the header names and the sample values. Each column maps to at most one field. Use exact header text. Leave a field null when no column fits. Currency symbols, commas, "/-" and formats like "GST@18%" are cleaned automatically, so never mention them in the note.',
     messages: [{ role: 'user', content: JSON.stringify({ expectedKind: kind, ourFields: fields, headers, sampleRows: sample.slice(0, 5) }) }],
-  });
+  }));
   if (!response.parsed_output) throw new HttpError(422, 'Couldn’t read the columns. Map them by hand.', 'ai_no_answer');
   const p = response.parsed_output;
   const valid = new Set(headers);
@@ -437,7 +437,7 @@ const FieldSummary = z.object({
 });
 
 export async function fieldSummary(date: string, people: unknown[], shop: string) {
-  const response = await ai().beta.messages.parse({
+  const response = await meteredCall('field_summary', () => ai().beta.messages.parse({
     model: config.ai.model,
     max_tokens: 6000,
     betas: ['server-side-fallback-2026-07-01'],
@@ -446,7 +446,7 @@ export async function fieldSummary(date: string, people: unknown[], shop: string
     system: `You summarise a day of field sales staff for the owner of ${shop}, an Indian business. Times are already IST clock times; use them as given. Money in ₹ with Indian grouping.
 Be factual and fair: use only the data given, never guess where someone was beyond the visits listed. Plain, short sentences.`,
     messages: [{ role: 'user', content: JSON.stringify({ date, people }) }],
-  });
+  }));
   if (!response.parsed_output) throw new HttpError(422, 'Couldn’t summarise the day.', 'ai_no_answer');
   return response.parsed_output;
 }
@@ -466,7 +466,7 @@ export type BriefingOut = z.infer<typeof Briefing>;
 
 export async function dailyBriefing(input: { shop: string; owner: string; today: string; facts: unknown; refs: Array<{ ref: string; about: string }> }, lang: 'en' | 'hi' | 'ta'): Promise<BriefingOut> {
   const language = { en: 'simple Indian English', hi: 'simple Hindi (Devanagari)', ta: 'simple Tamil (Tamil script)' }[lang];
-  const response = await ai().beta.messages.parse({
+  const response = await meteredCall('briefing', () => ai().beta.messages.parse({
     model: config.ai.model,
     max_tokens: 6000,
     betas: ['server-side-fallback-2026-07-01'],
@@ -475,7 +475,7 @@ export async function dailyBriefing(input: { shop: string; owner: string; today:
     system: `You write the morning briefing for ${input.owner}, who runs ${input.shop}, a small Indian business. Write in ${language}; keep names, invoice numbers and ₹ amounts as given.
 Pick the 3 to 5 most useful things to do today from the action refs (money to collect first, then stock that is running out or expiring, then follow-ups). Use only the facts given; amounts as ₹ with Indian grouping. Warm, brief, practical.`,
     messages: [{ role: 'user', content: JSON.stringify({ today: input.today, facts: input.facts, actionRefs: input.refs, upcomingFestivals: upcomingFestivals(input.today) }) }],
-  });
+  }));
   if (!response.parsed_output) throw new HttpError(422, 'Couldn’t write the briefing right now.', 'ai_no_answer');
   const valid = new Set(input.refs.map((r) => r.ref));
   return { ...response.parsed_output, actions: response.parsed_output.actions.filter((a) => valid.has(a.ref)) };

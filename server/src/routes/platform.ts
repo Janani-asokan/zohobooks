@@ -9,6 +9,7 @@ import { mailStatus, sendMail } from '../mailer';
 import { listBackups, runBackup } from '../services/backup';
 import { provisionShop } from '../services/provision';
 import { activateFeature, endFeature, priceList, setPrice, shopFeatureHistory } from '../services/features';
+import { aiBalance } from '../services/aiUsage';
 import { FEATURES } from '../../../shared/features';
 import { EMAIL_RE } from '../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
@@ -321,9 +322,9 @@ platformRouter.get(
 platformRouter.put(
   '/features/prices',
   h(async (req, res) => {
-    const b = parse(z.object({ prices: z.array(z.object({ feature: z.string(), level: z.string(), monthly: z.number().min(0).max(1_000_000) })).min(1).max(100) }), req.body);
+    const b = parse(z.object({ prices: z.array(z.object({ feature: z.string(), level: z.string(), monthly: z.number().min(0).max(1_000_000), includedCredits: z.number().int().min(0).max(10_000_000).optional() })).min(1).max(100) }), req.body);
     const by = req.ctx?.kind === 'super' ? req.ctx.email : '';
-    for (const p of b.prices) await setPrice(p.feature, p.level, p.monthly, by);
+    for (const p of b.prices) await setPrice(p.feature, p.level, p.monthly, by, p.includedCredits);
     await tx((db) => audit(db, req, null, 'set_feature_prices', 'feature', '00000000-0000-0000-0000-000000000000', { prices: b.prices }));
     res.json(await priceList());
   }),
@@ -389,5 +390,76 @@ platformRouter.post(
       await audit(db, req, null, 'decline_feature_request', 'shop', req.params.id!, { feature: req.params.key, note });
     });
     res.json(await shopFeatureHistory(req.params.id!));
+  }),
+);
+
+/* ---------------- AI credits ---------------- */
+
+/** Every shop's AI use this month (credits and real cost), open top-up requests, and the pack on offer. */
+platformRouter.get(
+  '/ai',
+  h(async (_req, res) => {
+    const rows = await query(`SELECT s.id, s.name, coalesce(sum(a.credits), 0) AS credits, coalesce(sum(a.cost_usd), 0) AS cost_usd, count(a.id)::int AS calls
+      FROM shops s LEFT JOIN ai_usage a ON a.shop_id = s.id AND a.created_at >= date_trunc('month', current_date)
+      GROUP BY s.id ORDER BY 3 DESC, s.name`);
+    const shops = [];
+    for (const r of rows) {
+      const b = await aiBalance(r.id);
+      shops.push({ id: r.id, name: r.name, level: b.level, allowance: b.allowance, used: b.used, pct: b.pct, calls: r.calls, costUsd: Math.round(Number(r.cost_usd) * 100) / 100 });
+    }
+    const requests = await query(`SELECT t.id, t.shop_id, s.name AS shop_name, t.credits, t.price, t.requested_by, t.created_at FROM ai_topups t
+      JOIN shops s ON s.id = t.shop_id WHERE t.status = 'requested' ORDER BY t.created_at`);
+    const [pack] = await query('SELECT ai_topup_credits AS credits, ai_topup_price AS price FROM platform_config WHERE id = 1');
+    res.json({
+      shops, totalCostUsd: Math.round(shops.reduce((s, x) => s + x.costUsd, 0) * 100) / 100,
+      requests: requests.map((r) => ({ id: r.id, shopId: r.shop_id, shopName: r.shop_name, credits: r.credits, price: Number(r.price), requestedBy: r.requested_by, createdAt: r.created_at })),
+      pack: { credits: pack.credits, price: Number(pack.price) },
+    });
+  }),
+);
+
+platformRouter.put(
+  '/ai/pack',
+  h(async (req, res) => {
+    const b = parse(z.object({ credits: z.number().int().min(1).max(1_000_000), price: z.number().min(0).max(1_000_000) }), req.body);
+    await tx(async (db) => {
+      await db.query('UPDATE platform_config SET ai_topup_credits = $1, ai_topup_price = $2, updated_at = now() WHERE id = 1', [b.credits, b.price]);
+      await audit(db, req, null, 'set_ai_pack', 'feature', '00000000-0000-0000-0000-000000000000', b);
+    });
+    res.json(b);
+  }),
+);
+
+/** Grants extra credits for this month (approving the shop's open request, if any). */
+platformRouter.post(
+  '/shops/:id/ai/topups',
+  h(async (req, res) => {
+    const b = parse(z.object({ credits: z.number().int().min(1).max(1_000_000).optional(), price: z.number().min(0).optional(), note: z.string().trim().max(300).default('') }), req.body ?? {});
+    const by = req.ctx?.kind === 'super' ? req.ctx.email : '';
+    await tx(async (db) => {
+      const s = await one(db, 'SELECT id, name FROM shops WHERE id = $1', [req.params.id]);
+      if (!s) throw notFound('Shop');
+      const [pack] = (await db.query('SELECT ai_topup_credits AS credits, ai_topup_price AS price FROM platform_config WHERE id = 1')).rows;
+      const open = await one(db, "SELECT id, credits, price FROM ai_topups WHERE shop_id = $1 AND status = 'requested' FOR UPDATE", [s.id]);
+      const credits = b.credits ?? open?.credits ?? pack.credits;
+      const price = b.price ?? (open ? Number(open.price) : Number(pack.price));
+      if (open) await db.query(`UPDATE ai_topups SET status = 'granted', month = date_trunc('month', current_date)::date, credits = $2, price = $3, note = $4, decided_by = $5, decided_at = now() WHERE id = $1`, [open.id, credits, price, b.note, by]);
+      else await db.query(`INSERT INTO ai_topups (shop_id, month, credits, price, status, note, decided_by, decided_at) VALUES ($1, date_trunc('month', current_date)::date, $2, $3, 'granted', $4, $5, now())`, [s.id, credits, price, b.note, by]);
+      await audit(db, req, null, 'grant_ai_topup', 'shop', s.id, { shop: s.name, credits, price, note: b.note });
+    });
+    res.json(await aiBalance(req.params.id!));
+  }),
+);
+
+platformRouter.post(
+  '/shops/:id/ai/topups/decline',
+  h(async (req, res) => {
+    const by = req.ctx?.kind === 'super' ? req.ctx.email : '';
+    await tx(async (db) => {
+      const r = await one(db, "UPDATE ai_topups SET status = 'declined', decided_by = $2, decided_at = now() WHERE shop_id = $1 AND status = 'requested' RETURNING id", [req.params.id, by]);
+      if (!r) throw notFound('Request');
+      await audit(db, req, null, 'decline_ai_topup', 'shop', req.params.id!, {});
+    });
+    res.json({ ok: true });
   }),
 );

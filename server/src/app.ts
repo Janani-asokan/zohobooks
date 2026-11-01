@@ -28,6 +28,7 @@ import { accountingRouter } from './routes/shop/accounting';
 import { adminRouter } from './routes/shop/admin';
 import { featuresRouter } from './routes/shop/features';
 import { featureGate } from './services/features';
+import { aiContext } from './services/aiUsage';
 
 export function createApp() {
   const app = express();
@@ -71,7 +72,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), featureGate, auditWrites, featuresRouter, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, dataRouter, fieldRouter, briefingRouter, lendingRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), featureGate, aiContext, auditWrites, featuresRouter, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, dataRouter, fieldRouter, briefingRouter, lendingRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

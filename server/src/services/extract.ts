@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { isAiLimit, meteredCall } from './aiUsage';
 import os from 'node:os';
 import { createRequire } from 'node:module';
 import Anthropic from '@anthropic-ai/sdk';
@@ -174,12 +175,12 @@ let client: Anthropic | null = null;
 export const aiEnabled = () => !!config.ai.apiKey;
 
 async function aiExtract(bytes: Buffer, mime: UploadType, kind: ExtractKind, shop: { name: string; gstin: string }): Promise<Extracted> {
-  client ??= new Anthropic({ apiKey: config.ai.apiKey, timeout: 90_000, maxRetries: 1 });
+  const ai = (client ??= new Anthropic({ apiKey: config.ai.apiKey, timeout: 90_000, maxRetries: 1 }));
   const data = bytes.toString('base64');
   const file: Anthropic.Beta.BetaContentBlockParam = mime === 'application/pdf'
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }
     : { type: 'image', source: { type: 'base64', media_type: mime, data } };
-  const response = await client.beta.messages.parse({
+  const response = await meteredCall('smart_reader', () => ai.beta.messages.parse({
     model: config.ai.model,
     max_tokens: 16000,
     betas: ['server-side-fallback-2026-07-01'],
@@ -190,7 +191,7 @@ async function aiExtract(bytes: Buffer, mime: UploadType, kind: ExtractKind, sho
       role: 'user',
       content: [file, { type: 'text', text: `${KIND_HINT[kind]}\nThe shop using this app is "${shop.name}"${shop.gstin ? ` (GSTIN ${shop.gstin})` : ''}.` }],
     }],
-  });
+  }));
   if (response.stop_reason === 'refusal') throw new HttpError(422, 'This document couldn’t be read automatically. Fill the form by hand.', 'extract_refused');
   if (!response.parsed_output) throw new Error(`No structured output (stop_reason ${response.stop_reason})`);
   return response.parsed_output as Extracted;
@@ -209,9 +210,10 @@ export async function extractDocument(dataUrl: string, kind: ExtractKind, shop: 
       if (data.party.gstin && data.party.gstin.toUpperCase() === shop.gstin.toUpperCase()) data.party = { ...emptyExtract().party };
       return { data, method: 'ai', confidence: 0.9, warnings, textPreview: '' };
     } catch (e) {
-      if (e instanceof HttpError) throw e;
-      console.error('[extract] AI extraction failed, using offline reader:', e instanceof Anthropic.APIError ? `${e.status} ${e.message}` : (e as Error).message);
-      warnings.push('The smart reader was unavailable, so a basic text reader was used. Please check the values.');
+      if (isAiLimit(e)) warnings.push('This month’s AI credits are used up, so the basic reader was used. Please check the values.');
+      else if (e instanceof HttpError) throw e;
+      else console.error('[extract] AI extraction failed, using offline reader:', e instanceof Anthropic.APIError ? `${e.status} ${e.message}` : (e as Error).message);
+      if (!isAiLimit(e)) warnings.push('The smart reader was unavailable, so a basic text reader was used. Please check the values.');
     }
   }
 

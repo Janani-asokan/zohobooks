@@ -114,6 +114,17 @@ How it works:
 - **Nothing is lost:** turning a feature off never deletes data, so turning it back on shows everything again. Every period is kept as history.
 - **New and existing shops:** new shops get a 14-day trial of everything. Shops that existed before pay-per-feature keep every feature.
 
+**AI credits.** Every AI call is metered, so a shop can never run up an unlimited AI bill.
+
+- **What a credit is:** one credit is US$0.004 of real AI cost. Input, output and cached tokens are each counted at their own price (`shared/features.ts`).
+- **Allowance:** AI Standard includes 600 credits a month and AI Plus 2,500. Credits reset on the 1st.
+- **Every call checked:** each call is checked first (AI feature on, credits left), and every step of a multi-step answer is recorded by shop, user and tool (`server/src/services/aiUsage.ts`). An AI call made outside a shop request is refused, so nothing goes unmetered.
+- **Alerts:** at 80% the owner gets an email and an alert in the bell. At 100% AI tools pause until the 1st with a clear message.
+  - Bill photos fall back to the offline reader, and the daily plan to its plain-words version.
+  - Billing and everything else keep working.
+- **Owner's view:** *Settings → Features & add-ons* shows credits left, use by person and by tool, and *Ask for more*.
+- **Platform owner's view:** the console shows every shop's use and real cost, adds top-up packs (500 credits for ₹249 by default) and sets the credits included with each level.
+
 **Upload a PDF or photo, get a filled form.** Every create form has a *Fill from a PDF or photo* box (drop, pick, paste a screenshot, or take a photo on a phone). You see what was read, untick anything wrong, then apply.
 
 | Form | What it reads | What it fills |

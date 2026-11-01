@@ -31,6 +31,8 @@ export interface FeatureDef {
   pages: RegExp[];
   /** Default price per month in rupees for each level, used until the platform owner sets one. */
   defaultMonthly: Record<string, number>;
+  /** AI credits included per month for each level (AI only). The platform owner can change them. */
+  defaultCredits?: Record<string, number>;
 }
 
 const one = (description: string): FeatureLevel[] => [{ key: 'standard', name: 'Standard', description }];
@@ -120,10 +122,15 @@ export const FEATURES: FeatureDef[] = [
     key: 'ai', name: 'AI assistant', group: 'AI',
     summary: 'Ask questions about your business, read bills from a photo and get daily advice.',
     includes: ['Ask AI about sales, dues and stock', 'Smart reader for bills and price lists', 'Type or speak a bill', 'Morning briefing and health score', 'AI payment reminders'],
-    levels: one('All AI tools'), available: true,
+    levels: [
+      { key: 'standard', name: 'Standard', description: '600 AI credits a month: about 30 questions or 75 bill photos' },
+      { key: 'plus', name: 'Plus', description: '2,500 AI credits a month, for busy shops and bigger teams' },
+    ],
+    available: true,
     // Core keeps the health score and the plain-words daily plan; they use AI only when the shop has this feature.
-    api: [/^\/ai\/(?!status$|briefing$)/], pages: [],
-    defaultMonthly: { standard: 299 },
+    api: [/^\/ai\/(?!status$|briefing$|usage$|topup$)/], pages: [],
+    defaultMonthly: { standard: 299, plus: 999 },
+    defaultCredits: { standard: 600, plus: 2500 },
   },
   {
     key: 'microfinance', name: 'Microfinance management', group: 'Finance',
@@ -158,3 +165,28 @@ export const featureForApi = (path: string) => FEATURES.find((f) => f.api.some((
 export const featureForPage = (pathname: string) => FEATURES.find((f) => f.pages.some((re) => re.test(pathname)));
 
 export const yearlyFromMonthly = (m: number) => m * 10; // two months free when paying for a year
+
+/*
+ * AI credits. One credit is US$0.004 of AI cost, so a credit means the same whichever model answers and however the
+ * tokens split between reading and writing. Prices are per million tokens, from Anthropic's price list.
+ */
+export const USD_PER_CREDIT = 0.004;
+export const AI_PRICES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
+  'claude-fable-5-1': { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 },
+  'claude-fable-5': { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
+  'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+  'claude-opus-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  'claude-opus-4-8': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  'claude-sonnet-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+};
+/** A model not in the list is charged at the dearest known price, so usage is never under-counted. */
+const DEAREST = AI_PRICES['claude-fable-5-1']!;
+
+export interface TokenUsage { input: number; output: number; cacheRead: number; cacheWrite: number }
+export function aiCost(model: string, u: TokenUsage) {
+  const p = AI_PRICES[model] ?? AI_PRICES[model.replace(/-\d{8}$/, '')] ?? DEAREST;
+  const usd = (u.input * p.input + u.output * p.output + u.cacheRead * p.cacheRead + u.cacheWrite * p.cacheWrite) / 1_000_000;
+  return { usd, credits: usd / USD_PER_CREDIT };
+}

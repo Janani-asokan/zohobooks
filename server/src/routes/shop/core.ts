@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { aiEnabled } from '../../services/extract';
+import { aiBalance } from '../../services/aiUsage';
 import { z } from 'zod';
 import { hashPassword, perm, todayISO } from '../../auth';
 import { audit } from '../../audit';
@@ -10,7 +12,7 @@ import { extendLicense } from '../platform';
 import { EMAIL_RE, GSTIN_RE, gstinMatchesState } from '../../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE, STAFF_ROLES } from '../../../../shared/permissions';
 import { BARCODE_FIELDS, INVOICE_FIELDS, LABEL_SIZES, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
-import { T } from './ctx';
+import { T, allowed } from './ctx';
 
 export const coreRouter = Router();
 
@@ -230,6 +232,10 @@ coreRouter.get(
     if (low.n) out.push({ kind: 'stock', tone: 'amber', text: `${low.n} item${low.n > 1 ? 's' : ''} at or below reorder level`, link: '/app/items?stock=low' });
     if (exp.n) out.push({ kind: 'expiry', tone: 'amber', text: `${exp.n} batch${exp.n > 1 ? 'es' : ''} expiring within 30 days`, link: '/app/inventory' });
     if (bills.n) out.push({ kind: 'bills', tone: 'blue', text: `${bills.n} vendor bill${bills.n > 1 ? 's' : ''} due soon`, link: '/app/purchases' });
+    if (allowed(c, 'admin') && aiEnabled()) {
+      const ai = await aiBalance(c.shopId);
+      if (ai.level && ai.allowance && ai.pct >= 80) out.push({ kind: 'ai', tone: ai.pct >= 100 ? 'red' : 'amber', text: ai.pct >= 100 ? 'AI credits for this month are used up' : `${ai.pct}% of this month’s AI credits used`, link: '/app/features?f=ai' });
+    }
     return out;
   }),
 );

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Check, Clock, Puzzle, Sparkles } from 'lucide-react';
+import { Check, Clock, Puzzle, Sparkles, Zap } from 'lucide-react';
 import { api } from '@/api/client';
 import { useMut } from '@/api/hooks';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, useShopUser } from '@/context/AuthContext';
 import { Badge, Field, Modal, PageHeader } from '@/components/ui';
 import { fmtDate, money } from '@/lib/format';
 
@@ -23,6 +23,7 @@ const SOURCE: Record<string, string> = { trial: 'Trial', paid: 'On', complimenta
 /** The owner picks the add-ons the business needs, sees what each costs, and asks for one in one tap. */
 export default function Features() {
   const { refresh } = useAuth();
+  const me = useShopUser();
   const [params] = useSearchParams();
   const focus = params.get('f');
   const q = useQuery({ queryKey: ['features'], queryFn: () => api.get<{ features: ShopFeature[]; history: HistoryRow[] }>('/shop/features') });
@@ -53,6 +54,8 @@ export default function Features() {
           <ul className="feature-includes cols">{CORE.map((c) => <li key={c}><Check size={14} /> {c}</li>)}</ul></div>
         {monthly > 0 && <div className="feature-total"><span className="small muted">Your add-ons</span><strong>{money(monthly)}</strong><span className="small muted">per month</span></div>}
       </section>
+
+      {me.has('ai') && <AiCreditsCard />}
 
       {q.isLoading && <div className="skeleton mt-16" style={{ height: 320 }} />}
       {groups.map(([group, list]) => (
@@ -123,5 +126,56 @@ export default function Features() {
         </div>}
       </Modal>
     </div>
+  );
+}
+
+interface AiUsage {
+  balance: { level: string | null; included: number; topups: number; allowance: number; used: number; left: number; pct: number };
+  byUser: Array<{ name: string; credits: number; calls: number }>;
+  byPurpose: Array<{ purpose: string; label: string; credits: number; calls: number }>;
+  months: Array<{ month: string; credits: number }>;
+  pack: { credits: number; price: number };
+  requested: { credits: number; price: number; at: string } | null;
+}
+
+/** This month's AI credits: how much is left, who used it on what, and asking for more. */
+function AiCreditsCard() {
+  const q = useQuery({ queryKey: ['ai-usage'], queryFn: () => api.get<AiUsage>('/shop/ai/usage') });
+  const ask = useMut(() => api.post('/shop/ai/topup', {}), [['ai-usage']], { success: 'Request sent. We will call you to add the credits.' });
+  const withdraw = useMut(() => api.del('/shop/ai/topup'), [['ai-usage']], { success: 'Request withdrawn' });
+  const d = q.data;
+  if (!d) return <div className="skeleton mt-16" style={{ height: 160 }} />;
+  const b = d.balance;
+  const tone = b.pct >= 100 ? 'full' : b.pct >= 80 ? 'warn' : '';
+  return (
+    <section className="card card-body mt-16" id="ai-credits">
+      <div className="row between" style={{ alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ margin: 0, display: 'flex', gap: 8, alignItems: 'center' }}><Zap size={16} /> AI credits this month</h3>
+          <p className="small muted" style={{ margin: '4px 0 0' }}>Every AI answer, bill photo or suggestion uses a few credits. They reset on the 1st.</p>
+        </div>
+        <div style={{ textAlign: 'right' }}><strong style={{ fontSize: 22 }}>{Math.floor(b.left).toLocaleString('en-IN')}</strong><span className="small muted"> of {b.allowance.toLocaleString('en-IN')} left</span></div>
+      </div>
+      <div className={`ai-meter mt-16 ${tone}`} role="progressbar" aria-valuenow={b.pct} aria-valuemin={0} aria-valuemax={100} aria-label="AI credits used"><span style={{ width: `${b.pct}%` }} /></div>
+      <p className="small muted" style={{ margin: '6px 0 0' }}>
+        {b.pct >= 100 ? 'Used up. AI tools are paused until the 1st; bills, invoices and everything else keep working, and bill photos use the basic reader.'
+          : b.pct >= 80 ? `${b.pct}% used. Ask for more before it runs out.` : `${b.pct}% used`}
+        {b.topups > 0 && ` · includes ${b.topups.toLocaleString('en-IN')} extra credits added this month`}
+      </p>
+      <div className="ai-usage-grid">
+        <div><div className="small strong">By person</div>
+          {d.byUser.length ? <ul className="feature-includes">{d.byUser.map((u) => <li key={u.name}><span style={{ flex: 1 }}>{u.name}</span><span className="muted">{Math.round(u.credits)} · {u.calls} use{u.calls === 1 ? '' : 's'}</span></li>)}</ul> : <p className="small muted">Nobody has used AI yet this month.</p>}</div>
+        <div><div className="small strong">By tool</div>
+          {d.byPurpose.length ? <ul className="feature-includes">{d.byPurpose.map((p) => <li key={p.purpose}><span style={{ flex: 1 }}>{p.label}</span><span className="muted">{Math.round(p.credits)}</span></li>)}</ul> : <p className="small muted">—</p>}</div>
+        <div><div className="small strong">More credits</div>
+          {d.requested ? <>
+            <p className="small" style={{ margin: '8px 0' }}>You asked for {d.requested.credits.toLocaleString('en-IN')} more credits ({money(d.requested.price)}). We will call you to add them.</p>
+            <button className="btn btn-secondary btn-sm" disabled={withdraw.isPending} onClick={() => withdraw.mutate(undefined)}>Withdraw request</button>
+          </> : <>
+            <p className="small muted" style={{ margin: '8px 0' }}>{d.pack.credits.toLocaleString('en-IN')} extra credits for this month cost {money(d.pack.price)}.</p>
+            <button className="btn btn-primary btn-sm" disabled={ask.isPending} onClick={() => ask.mutate(undefined)}><Zap size={14} /> Ask for {d.pack.credits.toLocaleString('en-IN')} more</button>
+          </>}</div>
+      </div>
+    </section>
   );
 }

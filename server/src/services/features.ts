@@ -45,23 +45,26 @@ export const featureGate = async (req: Request, _res: Response, next: NextFuncti
 
 /* ---------------- Prices ---------------- */
 
-export interface PriceRow { feature: string; level: string; monthly: number; yearly: number; custom: boolean }
+export interface PriceRow { feature: string; level: string; monthly: number; yearly: number; custom: boolean; includedCredits: number | null }
 
 /** Every feature and level with its price: the platform owner's price, or the catalogue default. */
 export async function priceList(): Promise<PriceRow[]> {
-  const set = new Map((await query('SELECT feature_key, level, monthly, updated_by FROM feature_prices')).map((r) => [`${r.feature_key}:${r.level}`, r]));
+  const set = new Map((await query('SELECT feature_key, level, monthly, updated_by, included_credits FROM feature_prices')).map((r) => [`${r.feature_key}:${r.level}`, r]));
   return FEATURES.flatMap((f) => f.levels.map((l) => {
     const row = set.get(`${f.key}:${l.key}`);
     const monthly = row ? Number(row.monthly) : f.defaultMonthly[l.key] ?? 0;
-    return { feature: f.key, level: l.key, monthly, yearly: yearlyFromMonthly(monthly), custom: !!row && row.updated_by !== 'default' };
+    const includedCredits = row?.included_credits ?? f.defaultCredits?.[l.key] ?? null;
+    return { feature: f.key, level: l.key, monthly, yearly: yearlyFromMonthly(monthly), custom: !!row && row.updated_by !== 'default', includedCredits: includedCredits == null ? null : Number(includedCredits) };
   }));
 }
 
-export async function setPrice(feature: string, level: string, monthly: number, by: string) {
+export async function setPrice(feature: string, level: string, monthly: number, by: string, includedCredits?: number) {
   const f = featureByKey(feature);
   if (!f || !f.levels.some((l) => l.key === level)) throw badRequest('Unknown feature or level');
-  await query(`INSERT INTO feature_prices (feature_key, level, monthly, updated_by) VALUES ($1,$2,$3,$4)
-    ON CONFLICT (feature_key, level) DO UPDATE SET monthly = EXCLUDED.monthly, updated_by = EXCLUDED.updated_by, updated_at = now()`, [feature, level, monthly, by]);
+  if (includedCredits !== undefined && !f.defaultCredits) throw badRequest(`${f.name} has no AI credits`);
+  await query(`INSERT INTO feature_prices (feature_key, level, monthly, updated_by, included_credits) VALUES ($1,$2,$3,$4,$5)
+    ON CONFLICT (feature_key, level) DO UPDATE SET monthly = EXCLUDED.monthly, updated_by = EXCLUDED.updated_by, updated_at = now(),
+      included_credits = coalesce(EXCLUDED.included_credits, feature_prices.included_credits)`, [feature, level, monthly, by, includedCredits ?? f.defaultCredits?.[level] ?? null]);
 }
 
 const priceOf = async (feature: string, level: string) => (await priceList()).find((p) => p.feature === feature && p.level === level)?.monthly ?? 0;
@@ -145,6 +148,8 @@ export async function copyFeatures(db: Db, fromShopId: string, toShopId: string,
 /** Saves the catalogue's default prices for any feature or level that has none yet, so the console shows them. */
 export async function syncDefaultPrices() {
   for (const f of FEATURES) for (const l of f.levels) {
-    await pool.query('INSERT INTO feature_prices (feature_key, level, monthly, updated_by) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING', [f.key, l.key, f.defaultMonthly[l.key] ?? 0, 'default']);
+    await pool.query(`INSERT INTO feature_prices (feature_key, level, monthly, updated_by, included_credits) VALUES ($1,$2,$3,$4,$5)
+      ON CONFLICT (feature_key, level) DO UPDATE SET included_credits = coalesce(feature_prices.included_credits, EXCLUDED.included_credits)`,
+    [f.key, l.key, f.defaultMonthly[l.key] ?? 0, 'default', f.defaultCredits?.[l.key] ?? null]);
   }
 }

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { aiBalance } from '../../services/aiUsage';
 import { z } from 'zod';
 import { shopHas } from '../../services/features';
 import { rateLimit } from '../../auth';
@@ -35,7 +36,11 @@ filesRouter.post(
 );
 
 /* ---------- AI: business assistant and item suggestions ---------- */
-filesRouter.get('/ai/status', T(async (_db, req) => ({ enabled: aiEnabled() && (await shopHas(req, 'ai')) })));
+/** enabled: AI tools can be offered (server key + AI feature). credits: this month's balance, so the app can warn early. */
+filesRouter.get('/ai/status', T(async (_db, req, c) => {
+  const on = aiEnabled() && (await shopHas(req, 'ai'));
+  return { enabled: on, credits: on ? await aiBalance(c.shopId) : null };
+}));
 // The assistant runs several tool calls over tens of seconds, so it must not hold one DB transaction open:
 // each tool opens its own tenant-scoped transaction.
 filesRouter.post(

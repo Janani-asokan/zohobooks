@@ -674,3 +674,10 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .feature-off p { margin: 0; }
 .feature-off .feature-includes { text-align: left; margin: 4px 0 8px; }
 .feature-off-icon { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; background: var(--brand-50); color: var(--brand-600); }
+.ai-credits { color: var(--ink-600); }
+.ai-credits.low { color: var(--amber-700, #a15c07); font-weight: 600; }
+.ai-meter { height: 10px; border-radius: 99px; background: var(--ink-50, #f3efec); overflow: hidden; }
+.ai-meter > span { display: block; height: 100%; border-radius: 99px; background: var(--sage, #7d8c77); transition: width .4s; }
+.ai-meter.warn > span { background: var(--amber-500, #d08a2b); }
+.ai-meter.full > span { background: var(--red-600, #b53a3a); }
+.ai-usage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; margin-top: 14px; }
