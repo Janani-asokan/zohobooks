@@ -111,7 +111,7 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     key: 'kirana', name: 'Kirana / general store',
     summary: 'Quick billing, credit for regulars (khata) and loose items by weight.',
     helps: ['Loose rice, dal and atta by weight', 'Credit book for regular customers', 'Fast counter billing on a small printer'],
-    features: ['pos', 'purchases'],
+    features: ['pos', 'purchases', 'offers_loyalty'],
     itemFields: [localName], units: ['kg', 'g', 'ltr', 'pcs', 'pack'], defaultUnit: 'pcs', tradeDetails: [], thermalPaper: '2in',
     samples: [
       { name: 'Rice (loose)', unit: 'kg', hsn: '1006', gst: 0, price: 55, category: 'Grains' },
@@ -127,7 +127,7 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     key: 'supermarket', name: 'Supermarket',
     summary: 'Barcode billing at several counters, weighing-scale items and MRP savings on the bill.',
     helps: ['Scan barcodes at the counter', 'Loose items weighed on the scale', '“You saved ₹X” against MRP on the receipt', 'Stock across godowns'],
-    features: ['pos', 'purchases', 'inventory_plus'],
+    features: ['pos', 'purchases', 'inventory_plus', 'offers_loyalty'],
     itemFields: [], printMrp: true, units: ['kg', 'g', 'ltr', 'ml', 'pcs', 'pack'], defaultUnit: 'pcs', tradeDetails: [], thermalPaper: '3in',
     samples: [
       { name: 'Basmati rice 5 kg', unit: 'pack', hsn: '1006', gst: 5, price: 650, category: 'Grains' },
@@ -213,7 +213,7 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     key: 'garments', name: 'Garments & readymade',
     summary: 'Size and colour for every style, barcode tags and an exchange policy on the bill.',
     helps: ['Size × colour for each style', 'Barcode tags for every piece', 'Exchange policy on the receipt', 'GST by price: 5% up to ₹2,500 a piece, 18% above'],
-    features: ['pos', 'purchases', 'inventory_plus'],
+    features: ['pos', 'purchases', 'inventory_plus', 'offers_loyalty'],
     itemFields: [
       { key: 'fabric', label: 'Fabric', type: 'text', help: 'e.g. Cotton, Linen' },
       { key: 'fit', label: 'Fit', type: 'select', options: ['Regular', 'Slim', 'Relaxed'] },
@@ -230,7 +230,7 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     key: 'toys', name: 'Toys & games',
     summary: 'Scan the barcode on every box, print price tags for the rest, and bill fast at the counter.',
     helps: ['Scan the maker’s barcode on the box to bill', 'Print barcode price tags for loose toys', 'Age group printed on the bill', 'GST: 5% on most toys, 18% on electronic or battery toys'],
-    features: ['pos', 'purchases', 'inventory_plus'],
+    features: ['pos', 'purchases', 'inventory_plus', 'offers_loyalty'],
     itemFields: [
       { key: 'ageGroup', label: 'Age group', type: 'select', options: ['0–2 years', '3–5 years', '6–8 years', '9–12 years', '13+ years', 'All ages'], print: true },
       { key: 'electronic', label: 'Electronic / battery toy', type: 'select', options: ['No', 'Yes'], help: 'Electronic toys usually carry 18% GST; other toys 5%' },

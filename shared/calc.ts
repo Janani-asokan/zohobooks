@@ -83,13 +83,15 @@ const r4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
  *   (as the GST law requires for discounts shown on the invoice) and credit notes stay line-accurate.
  * Returns new lines; the inputs are not changed.
  */
-export function applyBillAdjustments<L extends CalcLine>(lines: L[], opts: { pricesIncludeTax?: boolean; billDiscount?: BillDiscount | null; withGst: boolean }): L[] {
+export function applyBillAdjustments<L extends CalcLine>(lines: L[], opts: { pricesIncludeTax?: boolean; billDiscount?: BillDiscount | null; withGst: boolean; extra?: BillDiscount[] }): L[] {
   let out = lines.map((l) => ({ ...l, rate: opts.pricesIncludeTax && opts.withGst && l.taxRate > 0 ? r4(l.rate / (1 + l.taxRate / 100)) : l.rate }));
-  const d = opts.billDiscount;
-  if (d && d.value > 0) {
+  // The typed bill discount first, then any others in order (a bill offer, loyalty points), each on what is left.
+  for (const d of [opts.billDiscount, ...(opts.extra ?? [])]) {
+    if (!d || !(d.value > 0)) continue;
     const sub = out.reduce((s, l) => s + lineAmount(l), 0);
     // An amount entered on an MRP bill is a cut in what the customer pays, so convert it to the pre-tax share.
-    const inclusiveSub = opts.pricesIncludeTax && opts.withGst ? out.reduce((s, l) => s + lineAmount(l) * (1 + l.taxRate / 100), 0) : sub;
+    // On a GST bill an amount (a bill offer in rupees, points used) is also what the customer pays less.
+    const inclusiveSub = opts.withGst && (opts.pricesIncludeTax || d !== opts.billDiscount) ? out.reduce((s, l) => s + lineAmount(l) * (1 + l.taxRate / 100), 0) : sub;
     const pct = d.kind === 'percent' ? Math.min(100, d.value) : inclusiveSub > 0 ? Math.min(100, (d.value / inclusiveSub) * 100) : 0;
     out = out.map((l) => ({ ...l, discount: r4(100 - (100 - (l.discount || 0)) * (1 - pct / 100)) }));
   }

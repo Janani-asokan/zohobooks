@@ -682,6 +682,8 @@ salesRouter.post(
         split: z.array(z.object({ mode: z.enum(['Cash', 'UPI', 'Card']), amount: z.number().positive(), reference: z.string().max(100).default('') })).min(2).max(3).optional(),
         pricesIncludeTax: z.boolean().optional(),
         billDiscount: z.object({ kind: z.enum(['percent', 'amount']), value: z.number().min(0).max(1e9) }).nullable().optional(),
+        skipOffers: z.array(z.string().uuid()).max(50).optional(),
+        redeemPoints: z.number().int().min(0).max(1e8).optional(),
       }),
       req.body,
     );
@@ -689,7 +691,7 @@ salesRouter.post(
     const inv = await createInvoice(
       db, req, c.shopId,
       { customerId: b.customerId, date: today, dueDate: today, branchId: b.branchId ?? c.branchId, lines: b.lines, withGst: b.withGst, reverseCharge: false, tcsRate: 0, notes: '',
-        pricesIncludeTax: b.pricesIncludeTax, billDiscount: b.billDiscount },
+        pricesIncludeTax: b.pricesIncludeTax, billDiscount: b.billDiscount, skipOffers: b.skipOffers, redeemPoints: b.redeemPoints },
       { issue: true, source: 'pos' },
     );
     if (b.split) {

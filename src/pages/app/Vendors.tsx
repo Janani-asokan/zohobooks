@@ -7,7 +7,7 @@ import { useBills, useMut, usePurchaseOrders, useVendors } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
 import { EmptyState, Field, Modal, PageHeader, SearchInput, StatCard } from '@/components/ui';
 import { Hint, Thumb } from '@/components/kit';
-import { money } from '@/lib/format';
+import { money, todayISO } from '@/lib/format';
 import { GSTIN_RE, INDIAN_STATES } from '../../../shared/gst';
 import { PartyStatement } from '@/components/PartyStatement';
 import { Attachments, attachFile } from '@/components/Attachments';
@@ -28,7 +28,7 @@ function VendorPanel({ v, bills, onClose }: { v: Vendor; bills: Bill[]; onClose:
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   const mine = bills.filter((b) => b.vendorId === v.id);
-  const overdue = mine.filter((b) => b.status === 'Overdue' || (b.balance > 0 && b.dueDate < new Date().toISOString().slice(0, 10)));
+  const overdue = mine.filter((b) => b.status === 'Overdue' || (b.balance > 0 && b.dueDate < todayISO()));
   return (
     <aside className="split-panel" aria-label={`${v.name} details`}>
       <div className="split-panel-head">

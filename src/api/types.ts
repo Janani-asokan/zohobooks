@@ -85,6 +85,10 @@ export interface Invoice {
   shipTo?: ShipTo | null; terms?: string;
   /** Invoice-level trade details (patient and doctor, vehicle number …). */
   extra: Record<string, string | number>;
+  /** Offers that changed this bill, with what each saved (shared/offers.ts). */
+  offersApplied?: Array<{ id: string; name: string; kind: 'item' | 'bill'; message: string; amount: number }>;
+  offersSkipped?: string[];
+  loyalty?: { pointsUsed: number; discount: number; pointsEarned: number; balanceAfter: number | null };
   einvoice?: { irn: string; ackNo: string; ackDate: string; signedQr: string } | null;
   eway?: { number: string; date: string; vehicleNo: string } | null;
   billDiscount?: BillDiscount | null; pricesIncludeTax?: boolean;

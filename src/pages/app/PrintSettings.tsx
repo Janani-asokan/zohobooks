@@ -205,6 +205,11 @@ export default function PrintSettings() {
                   <span className="field-hint">An invoice can override these with its own terms.</span>
                 </div>
                 <div className="field" style={{ marginTop: 12 }}>
+                  <label htmlFor="inv-promo">Promotional message</label>
+                  <input id="inv-promo" className="input" maxLength={140} value={iv.promo ?? ''} onChange={(e) => setI({ promo: e.target.value })} placeholder="e.g. Diwali sale: 10% off all toys till 5 Nov" />
+                  <span className="field-hint">Printed on every invoice. A running offer prints its own message on bills that get it.</span>
+                </div>
+                <div className="field" style={{ marginTop: 12 }}>
                   <label htmlFor="sig-label">Signatory label</label>
                   <input id="sig-label" className="input" maxLength={60} value={iv.signatoryLabel} onChange={(e) => setI({ signatoryLabel: e.target.value })} />
                 </div>
@@ -274,6 +279,11 @@ export default function PrintSettings() {
                       <label>Receipt footer</label>
                       <input className="input" maxLength={200} value={th.footer} onChange={(e) => setT({ footer: e.target.value })} placeholder={org.invoiceFooter || 'Thank you, visit again!'} />
                       <span className="field-hint">Leave empty to use the footer from your Business profile.</span>
+                    </div>
+                    <div className="field" style={{ marginTop: 10 }}>
+                      <label htmlFor="th-promo">Promotional message</label>
+                      <input id="th-promo" className="input" maxLength={140} value={th.promo ?? ''} onChange={(e) => setT({ promo: e.target.value })} placeholder="e.g. Diwali sale: 10% off all toys!" />
+                      <span className="field-hint">Printed on every receipt, above the footer.</span>
                     </div>
                   </div>
                 )}

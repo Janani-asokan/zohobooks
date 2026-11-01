@@ -34,6 +34,7 @@ const InvoiceView = lazy(() => import('./pages/app/InvoiceView'));
 const PaymentsReceived = lazy(() => import('./pages/app/PaymentsReceived'));
 const CreditNotes = lazy(() => import('./pages/app/CreditNotes'));
 const Recurring = lazy(() => import('./pages/app/Recurring'));
+const Offers = lazy(() => import('./pages/app/Offers'));
 const Purchases = lazy(() => import('./pages/app/Purchases'));
 const PaymentsMade = lazy(() => import('./pages/app/PaymentsMade'));
 const Warehouses = lazy(() => import('./pages/app/Warehouses'));
@@ -124,6 +125,7 @@ export default function App() {
             <Route path="sales/payments" element={<PaymentsReceived />} />
             <Route path="sales/credit-notes" element={<CreditNotes />} />
             <Route path="sales/recurring" element={<Recurring />} />
+            <Route path="sales/offers" element={<Offers />} />
             <Route path="purchases" element={<Navigate to="/app/purchases/bills" replace />} />
             <Route path="purchases/vendors" element={<Vendors />} />
             <Route path="purchases/orders" element={<PurchaseOrders />} />

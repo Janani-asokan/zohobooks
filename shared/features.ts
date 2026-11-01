@@ -64,6 +64,14 @@ export const FEATURES: FeatureDef[] = [
     defaultMonthly: { standard: 199 },
   },
   {
+    key: 'offers_loyalty', name: 'Offers & loyalty points', group: 'Sales',
+    summary: 'Run festival offers that apply by themselves at the counter, and reward regular customers with points.',
+    includes: ['Festival and sale offers with start and end dates', 'Offer on items, categories or the whole bill', 'Offer message printed on the bill', 'Loyalty points earned and used at billing'],
+    levels: one('All offers and loyalty points'), available: true,
+    api: [/^\/offers(\/|$)/, /^\/loyalty(\/|$)/], pages: [/^\/app\/sales\/offers(\/|$)/],
+    defaultMonthly: { standard: 99 },
+  },
+  {
     key: 'purchases', name: 'Purchases & expenses', group: 'Purchases',
     summary: 'Record what you buy and spend, and know what you owe each supplier.',
     includes: ['Vendors and vendor statements', 'Purchase orders', 'Bills that add stock', 'Payments made', 'Expenses', 'Payables ageing'],

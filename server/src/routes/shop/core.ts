@@ -95,6 +95,8 @@ const printSchema = z.object({
     showLogo: z.boolean(), showPartyBalance: z.boolean(), showItemDescription: z.boolean(), showTime: z.boolean(),
     showGstin: z.boolean(), showHsn: z.boolean(), showTaxBreakup: z.boolean(), showSavings: z.boolean(), showUpiQr: z.boolean(),
     footer: z.string().max(200),
+    /** Left out by older clients: the saved line is kept. */
+    promo: z.string().trim().max(140).optional(),
   }),
   barcode: z
     .object({
@@ -118,6 +120,7 @@ const printSchema = z.object({
       terms: z.string().max(1500),
       signatoryLabel: z.string().trim().min(1).max(60),
       signatureImage: z.string().max(400_000).refine((v) => v === '' || /^data:image\/(png|jpeg|webp);base64,/.test(v), 'Upload a PNG, JPG or WebP image'),
+      promo: z.string().trim().max(140).optional(),
     })
     .optional(),
 });
@@ -129,12 +132,13 @@ coreRouter.put(
   T(async (db, req, c) => {
     const parsed = parse(printSchema, req.body);
     // Older clients send only thermal + barcode; keep the saved invoice layout in that case.
-    const saved = withPrintDefaults((await one(db, 'SELECT print_settings FROM organizations WHERE shop_id = $1', [c.shopId]))?.print_settings).invoice;
+    const savedAll = withPrintDefaults((await one(db, 'SELECT print_settings FROM organizations WHERE shop_id = $1', [c.shopId]))?.print_settings);
+    const saved = savedAll.invoice;
     // Fields GST law requires stay on whatever is sent (CMP-14); fields a client doesn't know yet keep their saved value.
     const invoice = parsed.invoice
-      ? { ...parsed.invoice, fields: { ...saved.fields, ...parsed.invoice.fields, ...Object.fromEntries(MANDATORY_INVOICE_FIELDS.map((k) => [k, true])) } }
+      ? { ...parsed.invoice, promo: parsed.invoice.promo ?? saved.promo, fields: { ...saved.fields, ...parsed.invoice.fields, ...Object.fromEntries(MANDATORY_INVOICE_FIELDS.map((k) => [k, true])) } }
       : saved;
-    const b = { ...parsed, invoice };
+    const b = { ...parsed, thermal: { ...parsed.thermal, promo: parsed.thermal.promo ?? savedAll.thermal.promo }, invoice };
     await db.query('UPDATE organizations SET print_settings = $2 WHERE shop_id = $1', [c.shopId, JSON.stringify(b)]);
     await audit(db, req, c.shopId, 'update', 'print_settings', c.shopId, { theme: b.thermal.theme, paper: b.thermal.paper, label: b.barcode.labelSize, invoice: b.invoice.template });
     return withPrintDefaults(b);

@@ -29,6 +29,8 @@ export interface ReceiptData {
   lines: ReceiptLine[];
   withGst: boolean; interState: boolean; subTotal: number; discount: number; cgst: number; sgst: number; igst: number; roundOff: number; total: number;
   amountPaid: number; paymentMode?: string; partyBalance?: number;
+  offers?: Array<{ name: string; message: string; amount: number }>;
+  loyalty?: { pointsUsed: number; discount: number; pointsEarned: number; balanceAfter: number | null };
 }
 type ReceiptOrg = Pick<Organization, 'companyName' | 'address' | 'gstin' | 'phone' | 'logo' | 'invoiceFooter' | 'upiId'>;
 
@@ -43,6 +45,7 @@ export function receiptFromInvoice(inv: Invoice, items: Item[] = [], partyBalanc
     }),
     withGst: inv.withGst, interState: inv.interState, subTotal: inv.subTotal, discount: inv.discount, cgst: inv.cgst, sgst: inv.sgst, igst: inv.igst, roundOff: inv.roundOff,
     total: inv.total, amountPaid: inv.amountPaid, paymentMode, partyBalance,
+    offers: inv.offersApplied ?? [], loyalty: inv.loyalty,
   };
 }
 
@@ -117,6 +120,7 @@ export function ThermalReceipt({ data, org, s }: { data: ReceiptData; org: Recei
     <div className="rc-totals">
       <div className="rr"><span>Sub total ({data.lines.reduce((q, l) => q + l.qty, 0)} items)</span><span>{n2(data.subTotal)}</span></div>
       {data.discount > 0 && <div className="rr"><span>Discount</span><span>-{n2(data.discount)}</span></div>}
+
       {data.withGst && (data.interState
         ? <div className="rr"><span>IGST</span><span>{n2(data.igst)}</span></div>
         : <><div className="rr"><span>CGST</span><span>{n2(data.cgst)}</span></div><div className="rr"><span>SGST</span><span>{n2(data.sgst)}</span></div></>)}
@@ -150,7 +154,13 @@ export function ThermalReceipt({ data, org, s }: { data: ReceiptData; org: Recei
       {totals}
       {breakup && <><hr />{breakup}</>}
       {s.showSavings && savings > 0 && <div className="rc-saved">** YOU SAVED ₹{n2(savings)} **</div>}
+      {(data.offers ?? []).map((o) => <div key={o.name} className="c">{o.name}: you saved ₹{n2(o.amount)}</div>)}
+      {(data.loyalty?.discount ?? 0) > 0 && <div className="c">Paid with {data.loyalty!.pointsUsed} points: ₹{n2(data.loyalty!.discount)}</div>}
       {qr && <div className="c" style={{ marginTop: 6 }}><img src={qr} alt="UPI QR" style={{ width: '28mm', height: '28mm' }} /><div>Scan to pay via UPI</div></div>}
+      {data.loyalty && (data.loyalty.pointsEarned > 0 || data.loyalty.pointsUsed > 0) && (
+        <div className="c rc-points">Points: {data.loyalty.pointsEarned > 0 ? `+${data.loyalty.pointsEarned}` : ''}{data.loyalty.pointsUsed > 0 ? ` -${data.loyalty.pointsUsed}` : ''}{data.loyalty.balanceAfter != null ? ` · Balance ${data.loyalty.balanceAfter}` : ''}</div>
+      )}
+      {[...new Set([...(data.offers ?? []).map((o) => o.message), s.promo ?? ''].map((m) => m.trim()).filter(Boolean))].map((m) => <div key={m} className="c rc-promo">{m}</div>)}
       {footer && <><hr /><div className="c">{footer}</div></>}
     </div>
   );

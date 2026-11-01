@@ -159,3 +159,7 @@ body.print-route { background: #e9ebef; }
 /* All three copies: each starts on a new sheet. */
 .ti-copies { display: grid; gap: 24px; }
 @media print { .ti-copy-page + .ti-copy-page { break-before: page; } }
+.ti-offer { color: var(--ti-ink); font-size: 0.9em; font-style: italic; }
+.ti-promo { margin-top: 2mm; padding: 1.5mm 2.5mm; border: 0.3mm dashed var(--ti-color); border-radius: 1mm; font-weight: 600; color: var(--ti-ink); text-align: center; }
+.rc-promo { margin-top: 4px; font-weight: 700; }
+.rc-points { margin-top: 4px; }

@@ -16,6 +16,8 @@ export interface ThermalSettings {
   showSavings: boolean;
   showUpiQr: boolean;
   footer: string;
+  /** A promotional line printed on every receipt, e.g. "Diwali sale: 10% off all toys till 5 Nov". */
+  promo: string;
 }
 
 export const BARCODE_FIELDS = ['businessName', 'itemCode', 'itemName', 'mrp', 'sellingPrice', 'category', 'brand', 'unit'] as const;
@@ -77,6 +79,8 @@ export interface InvoicePrintSettings {
   signatoryLabel: string;
   /** Signature or stamp image (data URL). */
   signatureImage: string;
+  /** A promotional line printed on every invoice (FUN-09), e.g. a festival offer. */
+  promo: string;
 }
 
 export interface PrintSettings { thermal: ThermalSettings; barcode: BarcodeSettings; invoice: InvoicePrintSettings }
@@ -84,7 +88,7 @@ export interface PrintSettings { thermal: ThermalSettings; barcode: BarcodeSetti
 export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   thermal: {
     theme: 'compact', paper: '3in', showLogo: true, showPartyBalance: false, showItemDescription: true, showTime: false,
-    showGstin: true, showHsn: false, showTaxBreakup: true, showSavings: true, showUpiQr: false, footer: '',
+    showGstin: true, showHsn: false, showTaxBreakup: true, showSavings: true, showUpiQr: false, footer: '', promo: '',
   },
   barcode: {
     printer: 'label',
@@ -107,6 +111,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
     terms: 'Goods once sold will not be taken back.\nInterest at 18% p.a. is charged on payments received after the due date.\nSubject to local jurisdiction.',
     signatoryLabel: 'Authorised Signatory',
     signatureImage: '',
+    promo: '',
   },
 };
 

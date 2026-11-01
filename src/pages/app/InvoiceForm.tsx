@@ -21,6 +21,9 @@ import type { ExtractResult } from '../../../shared/extract';
 import { addDays, todayISO } from '@/lib/format';
 import { fyLabel } from '@/lib/fy';
 import { INDIAN_STATES, isInterState } from '../../../shared/gst';
+import { OffersSummary, PointsBox, usePromo } from '@/components/OffersLoyalty';
+import { payable, pointsEarned, priceBill } from '../../../shared/offers';
+import { computeTotals } from '../../../shared/calc';
 
 const TERMS = [
   { label: 'Due on receipt', days: 0 }, { label: 'Net 7', days: 7 }, { label: 'Net 15', days: 15 }, { label: 'Net 30', days: 30 }, { label: 'Net 45', days: 45 },
@@ -85,6 +88,15 @@ function Form({ existing }: { existing?: Invoice }) {
   }, [preItem, items, existing]);
 
   const calc = useCalcLines(lines);
+  // Festival offers and loyalty points (shop add-on), worked out the same way the server will.
+  const promo = usePromo(customerId, date);
+  const [skip, setSkip] = useState<string[]>(existing?.offersSkipped ?? []);
+  const [usePoints, setUsePoints] = useState({ on: (existing?.loyalty?.pointsUsed ?? 0) > 0, points: existing?.loyalty?.pointsUsed ?? 0 });
+  const pricedBase = priceBill({ lines: calc, withGst, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount, offers: promo.offers, skip });
+  // An issued bill being edited already holds its points, so the customer can use them again here.
+  const pointsHave = promo.balance + (existing?.status === 'Issued' ? (existing.loyalty?.pointsUsed ?? 0) - (existing.loyalty?.pointsEarned ?? 0) : 0);
+  const redeem = promo.loyaltyOn && customerId && usePoints.on && usePoints.points > 0 ? { points: usePoints.points, pointValue: promo.settings.pointValue } : null;
+  const priced = redeem ? priceBill({ lines: calc, withGst, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount, offers: promo.offers, skip, redeem }) : pricedBase;
   const interState = !!org && !!customer && isInterState(org.state, customer.state || org.state);
   const gstBlocked = org?.compositionScheme ? 'Composition dealers issue a Bill of Supply without GST' : org && !org.gstin ? 'Add your GSTIN in Organization profile to charge GST' : undefined;
 
@@ -159,6 +171,7 @@ function Form({ existing }: { existing?: Invoice }) {
     setServerErr({});
     if (Object.values(errs).some(Boolean)) return toast('error', 'Please fix the highlighted fields');
     const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount,
+      ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
       extra: Object.fromEntries(invFields.filter((x) => (invExtra[x.key] ?? '').trim()).map((x) => [x.key, invExtra[x.key]!.trim()])) };
     const onSuccess = (inv: Invoice) => {
       toast('success', inv.status === 'Draft' ? 'Draft saved' : existing?.status === 'Issued' ? 'Invoice updated' : 'Invoice issued', inv.number ?? undefined);
@@ -299,7 +312,16 @@ function Form({ existing }: { existing?: Invoice }) {
             </div>
             <div className="stack" style={{ gap: 14 }}>
               <BillOptionsCard value={billOpts} withGst={withGst} onChange={(v) => { if (v.pricesIncludeTax !== billOpts.pricesIncludeTax) setLines((ls) => convertRates(ls, items, v.pricesIncludeTax)); setBillOpts(v); }} />
-              <TotalsPanel lines={calc} withGst={withGst} interState={interState} tcsRate={withGst ? tcsRate : 0} options={billOpts} />
+              <TotalsPanel lines={calc} withGst={withGst} interState={interState} tcsRate={withGst ? tcsRate : 0} options={billOpts}
+                priced={promo.on ? { lines: priced.lines, billOff: billOpts.billDiscount?.value
+                  ? computeTotals(priceBill({ lines: calc, withGst, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: null, offers: promo.offers, skip }).lines, withGst, interState).subTotal - computeTotals(pricedBase.lines, withGst, interState).subTotal
+                  : 0, summary: (
+                  <div className="stack" style={{ gap: 8, margin: '6px 0' }}>
+                    <OffersSummary applied={priced.applied} offers={promo.offers} skipped={skip} onSkip={(id) => setSkip((x) => [...x, id])} onUndo={(id) => setSkip((x) => x.filter((y) => y !== id))} />
+                    {promo.loyaltyOn && customerId && <PointsBox settings={promo.settings} balance={pointsHave} payable={payable(pricedBase.lines, withGst)} use={usePoints.on} points={usePoints.points}
+                      onChange={(on, points) => setUsePoints({ on, points })} earn={pointsEarned(promo.settings, computeTotals(priced.lines, withGst, interState).total)} />}
+                  </div>
+                ) } : undefined} />
             </div>
           </div>
         </div>

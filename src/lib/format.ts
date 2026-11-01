@@ -15,7 +15,15 @@ export const moneyShort = (n: number) => {
 export const fmtDate = (iso: string) =>
   iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-export const todayISO = () => toISO(new Date());
+/**
+ * Today in the business's time zone (India), the same day the server uses, so a counter PC whose clock is set to
+ * another zone still bills on the right date around midnight.
+ */
+export const BUSINESS_TZ = 'Asia/Kolkata';
+export const todayISO = () => {
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+  catch { return toISO(new Date()); }
+};
 export const toISO = (d: Date) => {
   const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
   return z.toISOString().slice(0, 10);

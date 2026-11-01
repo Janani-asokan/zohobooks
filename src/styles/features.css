@@ -262,3 +262,17 @@
   .pos-line { grid-template-columns: 1fr auto; row-gap: 6px; }
   .pos-line > :first-child { grid-column: 1 / -1; }
 }
+/* Offers & loyalty */
+.offer-items { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.offer-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--ink-150); font-size: var(--fs-13); cursor: pointer; }
+.offer-item:last-child { border-bottom: 0; }
+.offer-preview { margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--sage-soft, #eef1ec); color: var(--ink-800); font-size: var(--fs-13); display: flex; gap: 8px; align-items: center; }
+.chip-btn.active { border-color: var(--brand-600); color: var(--brand-600); background: var(--brand-50); }
+.offer-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.offer-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--sage-700, #5d6b58); background: var(--sage-soft, #eef1ec); padding: 1px 8px; border-radius: 99px; }
+.offer-tag button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 0 0 2px; font-size: 13px; line-height: 1; }
+.offer-tag.off { color: var(--ink-500); background: var(--ink-100, #f1f1f1); text-decoration: line-through; }
+.promo-box { border: 1px dashed var(--brand-200, #e9c3ca); background: var(--surface); border-radius: var(--radius-sm); padding: 8px 10px; display: grid; gap: 4px; }
+.promo-row .icon-btn.sm { width: 22px; height: 22px; }
+.ok { color: var(--green-700, #3f7a4f); }
+.pos-line .offer-tag { margin-top: 2px; }

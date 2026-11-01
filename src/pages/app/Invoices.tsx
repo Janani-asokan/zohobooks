@@ -10,7 +10,7 @@ import { usePrefs } from '@/context/PrefsContext';
 import { Badge, EmptyState, PageHeader, Pagination, SearchInput, usePagination } from '@/components/ui';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SavedViewsMenu, useSavedViews } from '@/components/SavedViews';
-import { fmtDate, money } from '@/lib/format';
+import { fmtDate, money, todayISO } from '@/lib/format';
 import { daysUntil, fyLabel } from '@/lib/fy';
 import { ExportMenu } from '@/components/ExportMenu';
 import type { ReportTable } from '@/lib/report';
@@ -24,7 +24,7 @@ const TABS: Array<'All' | InvoiceStatus> = ['All', 'Draft', 'Sent', 'Partially P
 function invoiceTable(rows: Invoice[], title = 'Invoices'): ReportTable {
   const sum = (f: (i: Invoice) => number) => rows.reduce((s, i) => s + f(i), 0);
   return {
-    title, subtitle: `${rows.length} invoice${rows.length === 1 ? '' : 's'}`, filename: `invoices-${new Date().toISOString().slice(0, 10)}`, landscape: true,
+    title, subtitle: `${rows.length} invoice${rows.length === 1 ? '' : 's'}`, filename: `invoices-${todayISO()}`, landscape: true,
     columns: [{ label: 'Invoice #' }, { label: 'Date' }, { label: 'Due' }, { label: 'Customer' }, { label: 'GSTIN' }, { label: 'Status' }, { label: 'Taxable', money: true }, { label: 'GST', money: true }, { label: 'Total', money: true }, { label: 'Paid', money: true }, { label: 'Balance', money: true }],
     rows: [
       ...rows.map((i) => ({ cells: [i.number ?? 'Draft', i.date, i.dueDate, i.customer.companyName || i.customer.name, i.customer.gstin || '', i.paymentStatus, i.subTotal, i.taxTotal, i.total, i.amountPaid, i.balance] as Array<string | number | null> })),

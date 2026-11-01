@@ -291,6 +291,9 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady, extras = {} }:
           {inv.tcs > 0 && <><dt>TCS @ {inv.tcsRate}%</dt><dd>{money(inv.tcs)}</dd></>}
           {Math.abs(inv.roundOff) > 0.001 && <><dt>Round off</dt><dd>{inv.roundOff > 0 ? '+' : '−'}{money(Math.abs(inv.roundOff))}</dd></>}
           <dt className="ti-grand">Total</dt><dd className="ti-grand">{money(inv.total)}</dd>
+          {/* What offers and points took off the total, GST included (already in the discount column and total above). */}
+          {(inv.offersApplied ?? []).map((o) => <Fragment key={o.id}><dt className="ti-offer">You saved · {o.name}</dt><dd className="ti-offer">{money(o.amount)}</dd></Fragment>)}
+          {(inv.loyalty?.discount ?? 0) > 0 && <><dt className="ti-offer">Paid with {inv.loyalty!.pointsUsed} points</dt><dd className="ti-offer">{money(inv.loyalty!.discount)}</dd></>}
           {inv.amountPaid > 0 && <><dt>Received</dt><dd>−{money(inv.amountPaid)}</dd></>}
           {inv.amountCredited > 0 && <><dt>Credit notes</dt><dd>−{money(inv.amountCredited)}</dd></>}
           {inv.status === 'Issued' && (inv.amountPaid > 0 || inv.amountCredited > 0) && <><dt className="ti-strong">Balance due</dt><dd className="ti-strong">{money(Math.max(0, inv.balance))}</dd></>}
@@ -316,6 +319,10 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady, extras = {} }:
           )}
           {f.terms && terms && (<div><div className="ti-label">Terms and conditions</div><div className="ti-pre ti-small">{terms}</div></div>)}
           {f.notes && inv.notes && (<div><div className="ti-label">Notes</div><div className="ti-pre ti-small">{inv.notes}</div></div>)}
+          {inv.loyalty && (inv.loyalty.pointsEarned > 0 || inv.loyalty.pointsUsed > 0) && (
+            <div className="ti-small">Loyalty points: {inv.loyalty.pointsEarned > 0 ? `${inv.loyalty.pointsEarned} earned` : ''}{inv.loyalty.pointsEarned > 0 && inv.loyalty.pointsUsed > 0 ? ' · ' : ''}{inv.loyalty.pointsUsed > 0 ? `${inv.loyalty.pointsUsed} used` : ''}{inv.loyalty.balanceAfter != null ? ` · balance ${inv.loyalty.balanceAfter}` : ''}</div>
+          )}
+          {[...new Set([...(inv.offersApplied ?? []).map((o) => o.message), s.promo ?? ''].map((m) => m.trim()).filter(Boolean))].map((m) => <div key={m} className="ti-promo">{m}</div>)}
         </div>
         {f.signature && (
           <div className="ti-sign">

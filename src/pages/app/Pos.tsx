@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle } from 'lucide-react';
+import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle } from 'lucide-react';
 import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
@@ -23,6 +23,8 @@ import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
 import { waLink } from './InvoiceView';
 import { findByCode } from '../../../shared/barcode';
+import { CustomerByPhone, OffersSummary, PointsBox, usePromo } from '@/components/OffersLoyalty';
+import { payable, pointsEarned, priceBill } from '../../../shared/offers';
 
 interface CartLine { itemId: string; qty: number }
 
@@ -53,11 +55,14 @@ export default function Pos() {
   const [tendered, setTendered] = useState('');
   const [reference, setReference] = useState('');
   const [done, setDone] = useState<{ invoice: Invoice; change: number } | null>(null);
+  const [skip, setSkip] = useState<string[]>([]);
+  const [usePoints, setUsePoints] = useState<{ on: boolean; points: number }>({ on: false, points: 0 });
   const scanRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (!branchId && branches.length) setBranchId(branches.find((b) => b.isPrimary)?.id ?? branches[0]!.id); }, [branches, branchId]);
   useEffect(() => { if (org && (org.compositionScheme || !org.gstin)) setWithGst(false); }, [org]);
   useEffect(() => { scanRef.current?.focus(); }, []);
+  useEffect(() => { setUsePoints({ on: false, points: 0 }); }, [customerId]);
 
   const customer = customers.find((c) => c.id === customerId);
   const tier: PriceTier = customer?.tier ?? 'SP1';
@@ -65,10 +70,16 @@ export default function Pos() {
   const lines = cart.map((l) => ({ ...l, it: byId.get(l.itemId)! })).filter((l) => l.it);
   const inclusive = withGst && mrp;
   const unit = (it: Item) => priceFor(it, tier, inclusive);
-  const calc = lines.map((l) => ({ qty: l.qty, rate: unit(l.it), taxRate: l.it.taxRate, discount: 0 }));
+  const calc = lines.map((l) => ({ itemId: l.itemId, category: l.it.category ?? '', qty: l.qty, rate: unit(l.it), taxRate: l.it.taxRate, discount: 0 }));
   const inter = !!org && !!customer && isInterState(org.state, customer.state || org.state);
   const billDiscount = disc.value > 0 ? disc : null;
-  const totals = computeTotals(applyBillAdjustments(calc, { withGst, pricesIncludeTax: inclusive, billDiscount }), withGst, inter);
+  // Festival offers and points (shop add-on): the same rules the server uses, so the total shown is the total charged.
+  const promo = usePromo(customerId);
+  const pricedBase = priceBill({ lines: calc, withGst, pricesIncludeTax: inclusive, billDiscount, offers: promo.offers, skip });
+  const redeem = promo.loyaltyOn && customer && usePoints.on && usePoints.points > 0 ? { points: usePoints.points, pointValue: promo.settings.pointValue } : null;
+  const priced = redeem ? priceBill({ lines: calc, withGst, pricesIncludeTax: inclusive, billDiscount, offers: promo.offers, skip, redeem }) : pricedBase;
+  const totals = computeTotals(promo.on ? priced.lines : applyBillAdjustments(calc, { withGst, pricesIncludeTax: inclusive, billDiscount }), withGst, inter);
+  const willEarn = promo.loyaltyOn && customer ? pointsEarned(promo.settings, totals.total) : 0;
   const change = mode === 'Cash' && tendered ? Number(tendered) - totals.total : 0;
   const splitPaid = (['Cash', 'UPI', 'Card'] as const).reduce((a, m) => a + (Number(split[m]) || 0), 0);
   const splitLeft = Math.round((totals.total - splitPaid) * 100) / 100;
@@ -125,11 +136,12 @@ export default function Pos() {
     sale.mutate(
       { customerId: customerId || null, branchId: branchId || null, withGst, mode: mode === 'Split' ? 'Cash' : mode, reference, tendered: mode === 'Cash' && tendered ? Number(tendered) : undefined,
         ...(mode === 'Split' ? { split: parts } : {}), pricesIncludeTax: inclusive, billDiscount,
+        ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
         lines: lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier, discount: 0, rate: unit(l.it) })) },
       { onSuccess: (r) => setDone(r) },
     );
   };
-  const reset = () => { setCart([]); setTendered(''); setReference(''); setCustomerId(''); setDone(null); setSplit({ Cash: '', UPI: '', Card: '' }); setDisc({ kind: 'percent', value: 0 }); setTimeout(() => scanRef.current?.focus(), 50); };
+  const reset = () => { setCart([]); setTendered(''); setReference(''); setCustomerId(''); setDone(null); setSplit({ Cash: '', UPI: '', Card: '' }); setDisc({ kind: 'percent', value: 0 }); setSkip([]); setUsePoints({ on: false, points: 0 }); setTimeout(() => scanRef.current?.focus(), 50); };
   useShortcuts({ 'mod+enter': charge, f2: () => scanRef.current?.focus() });
   // A USB scanner types into whatever has focus. After the cashier taps a tile or a button nothing is focused, so
   // send stray keys to the scan box instead of losing the scan. Fields, menus and the sale dialog are left alone.
@@ -191,6 +203,7 @@ export default function Pos() {
               <option value="">Walk-in customer</option>
               {pickable(customers, customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.phone}</option>)}
             </select>
+            {promo.loyaltyOn && !customerId && <div style={{ width: 210 }}><CustomerByPhone customers={customers} onPick={setCustomerId} /></div>}
             {branches.length > 1 && <select className="select" style={{ width: 160 }} value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Branch">{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
           </div>
           <div className="row between small muted">
@@ -203,7 +216,8 @@ export default function Pos() {
         </div>
         <div className="pos-cart">
           {lines.length === 0 && <div className="muted small" style={{ padding: 24, textAlign: 'center' }}>Scan an item or tap a tile to start a bill.</div>}
-          {lines.map((l) => {
+          {lines.map((l, i) => {
+            const lo = priced.lineOffers[i];
             // Selling more than the shelf holds is allowed (stock can be entered later), but the cashier should know.
             const have = l.it.type === 'Goods' ? (branchId ? l.it.stockByBranch[branchId] ?? 0 : l.it.stock) : Infinity;
             return (
@@ -211,6 +225,7 @@ export default function Pos() {
               <div style={{ minWidth: 0 }}>
                 <div className="strong pos-line-name" title={l.it.name}>{l.it.name}</div>
                 <div className="small muted">{money(unit(l.it))}{withGst ? ` · GST ${l.it.taxRate}%${inclusive ? ' incl.' : ''}` : ''}</div>
+                {lo && <div className="offer-tags"><span className="offer-tag"><Gift size={11} /> {lo.name} −{lo.value}%</span></div>}
                 {l.qty > have && <div className="small" style={{ color: 'var(--amber-700, #a15c07)' }} role="status"><AlertTriangle size={12} style={{ verticalAlign: -2 }} /> Only {Math.max(have, 0)} {l.it.unit} in stock</div>}
               </div>
               <div className="row" style={{ gap: 6 }}>
@@ -220,7 +235,10 @@ export default function Pos() {
                 {scale.connected && scale.reading && isWeighed(l.it.unit) && <button className="qty-btn" title="Use the scale reading" aria-label="Use weight" onClick={() => setQty(l.itemId, qtyFromReading(scale.reading!.kg, l.it.unit))}><Scale size={13} /></button>}
               </div>
               <div className="row" style={{ gap: 4 }}>
-                <strong style={{ minWidth: 80, textAlign: 'right' }}>{money(lineAmount({ qty: l.qty, rate: unit(l.it), taxRate: 0 }))}</strong>
+                <strong style={{ minWidth: 80, textAlign: 'right' }}>
+                  {lo && <div className="small muted" style={{ textDecoration: 'line-through', fontWeight: 400 }}>{money(lineAmount({ qty: l.qty, rate: unit(l.it), taxRate: 0 }))}</div>}
+                  {money(lineAmount({ qty: l.qty, rate: unit(l.it), taxRate: 0, discount: lo ? lo.value : 0 }))}
+                </strong>
                 <button className="icon-btn sm danger" onClick={() => setQty(l.itemId, 0)} aria-label="Remove"><Trash2 size={13} /></button>
               </div>
             </div>
@@ -236,6 +254,8 @@ export default function Pos() {
               <select className="select" style={{ width: 58, height: 30 }} aria-label="Bill discount type" value={disc.kind} onChange={(e) => setDisc({ ...disc, kind: e.target.value as BillDiscount['kind'] })}><option value="percent">%</option><option value="amount">₹</option></select>
             </span>
           </div>
+          {promo.on && <OffersSummary applied={priced.applied} offers={promo.offers} skipped={skip} onSkip={(id) => setSkip((x) => [...x, id])} onUndo={(id) => setSkip((x) => x.filter((y) => y !== id))} />}
+          {promo.loyaltyOn && customer && <PointsBox settings={promo.settings} balance={promo.balance} payable={payable(pricedBase.lines, withGst)} use={usePoints.on} points={usePoints.points} onChange={(on, points) => setUsePoints({ on, points })} earn={willEarn} />}
           <div className="row between small"><span className="muted">{inclusive ? 'Taxable value' : 'Sub total'}{totals.discount > 0 ? ' (after discount)' : ''}</span><span>{money(totals.subTotal)}</span></div>
           {withGst && <div className="row between small"><span className="muted">GST{inter ? ' (IGST)' : ' (CGST + SGST)'}</span><span>{money(totals.taxTotal)}</span></div>}
           <div className="row between"><strong style={{ fontSize: 14 }}>Total</strong><strong style={{ fontSize: 24, color: 'var(--brand-700)' }}>{money(totals.total)}</strong></div>

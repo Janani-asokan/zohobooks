@@ -80,4 +80,4 @@ export function useMut<TVars, TOut = unknown>(fn: (v: TVars) => Promise<TOut>, i
 }
 
 /** Keys touched by anything that changes invoices/money. */
-export const SALES_KEYS: QueryKey[] = [['invoices'], ['invoice'], ['dashboard'], ['customers'], ['payments'], ['creditNotes'], ['notifications'], ['bankAccounts'], ['bankTxns'], ['items'], ['salesOrders'], ['nextInvoiceNumber'], ['stockAlerts'], ['movements']];
+export const SALES_KEYS: QueryKey[] = [['invoices'], ['invoice'], ['dashboard'], ['customers'], ['payments'], ['creditNotes'], ['notifications'], ['bankAccounts'], ['bankTxns'], ['items'], ['salesOrders'], ['nextInvoiceNumber'], ['stockAlerts'], ['movements'], ['loyalty'], ['loyalty-customers']];

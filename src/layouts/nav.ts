@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp } from 'lucide-react';
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import { featureForPage } from '../../shared/features';
 import type { PaletteAction } from './CommandPalette';
@@ -10,7 +10,7 @@ type Can = (p: Permission) => boolean;
 
 const CHILD_ICONS: Record<string, LucideIcon> = {
   Customers: UserRound, Quotes: FileSignature, 'Sales Orders': ClipboardList, Invoices: FileText, 'Delivery Challans': Truck, 'Payments Received': IndianRupee,
-  'Credit Notes': FileMinus, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, 'My Day (field)': MapPin, 'Field Team': MapPinned, Vendors: Truck, 'Purchase Orders': ClipboardList,
+  'Credit Notes': FileMinus, 'Offers & loyalty': Gift, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, 'My Day (field)': MapPin, 'Field Team': MapPinned, Vendors: Truck, 'Purchase Orders': ClipboardList,
   Bills: Receipt, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Stock Adjustments': SlidersHorizontal,
   Transfers: ArrowLeftRight, 'Smart Reorder': BrainCircuit, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank, 'Tally & Import': RefreshCw,
   'Today’s rates': TrendingUp, 'Microfinance overview': LayoutDashboard, Borrowers: Users, 'Loan book': HandCoins, Collections: ReceiptIndianRupee, 'EMI planner': Calculator, 'Microfinance reports': FileBarChart2, 'Microfinance settings': Settings2,
@@ -38,6 +38,7 @@ export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavIte
       { label: 'Invoices', to: '/app/sales/invoices' },
       { label: 'Payments Received', to: '/app/sales/payments' },
       { label: 'Credit Notes', to: '/app/sales/credit-notes' },
+      { label: 'Offers & loyalty', to: '/app/sales/offers' },
       ...(can('admin') ? [{ label: 'Recurring Invoices', to: '/app/sales/recurring' }] : []),
       ...(can('sales.write') ? [{ label: 'Point of Sale', to: '/app/pos' }] : []),
       { label: 'My Day (field)', to: '/app/field' },
@@ -152,6 +153,7 @@ export function buildActions(can: Can, flags: NavFlags = { lending: false }): Pa
   add(true, 'Go to', 'Payments received', IndianRupee, '/app/sales/payments', 'collections receipts');
   add(true, 'Go to', 'Credit notes', FileMinus, '/app/sales/credit-notes', 'returns refund');
   add(can('admin'), 'Go to', 'Recurring invoices', Repeat, '/app/sales/recurring', 'subscription monthly');
+  add(true, 'Go to', 'Offers & loyalty', Gift, '/app/sales/offers', 'festival diwali discount sale loyalty points rewards');
   add(can('purchases.read'), 'Go to', 'Vendors', Truck, '/app/purchases/vendors', 'suppliers');
   add(can('purchases.read'), 'Go to', 'Purchase orders', ClipboardList, '/app/purchases/orders', 'po');
   add(can('purchases.read'), 'Go to', 'Bills', Receipt, '/app/purchases/bills', 'payables');

@@ -14,6 +14,8 @@ import { getOrg, nextSeq, planLimits, platformConfig, primaryBranchId } from './
 import { moveStock, releaseSerials, sellSerials } from './stock';
 import { audit } from '../audit';
 import { todayISO, type UserCtx } from '../auth';
+import { payable, priceBill, redeemablePoints, runningOn, type AppliedOffer } from '../../../shared/offers';
+import { loyaltySettings, offersOn, pointsBalance, reversePointsForReturn, reverseInvoicePoints, settleInvoicePoints, shopHasOffers } from './offersLoyalty';
 
 export const lineInput = z.object({
   itemId: z.string().uuid('Select an item'),
@@ -128,6 +130,10 @@ export const invoiceInput = z.object({
   billDiscount: z.object({ kind: z.enum(['percent', 'amount']), value: z.number().min(0).max(1e9) }).nullable().optional(),
   /** Invoice-level trade details (patient and doctor, vehicle number …), checked against the shop's invoice fields. */
   extra: z.record(z.union([z.string().max(120), z.number()])).optional(),
+  /** Running offers the cashier took off this bill (offers apply by themselves otherwise). */
+  skipOffers: z.array(z.string().uuid()).max(50).optional(),
+  /** Loyalty points the customer uses on this bill (whole points). */
+  redeemPoints: z.number().int().min(0).max(1e8).optional(),
 });
 export type InvoiceInput = z.infer<typeof invoiceInput>;
 
@@ -143,19 +149,68 @@ export function adjustLines(built: StoredLine[], input: { pricesIncludeTax?: boo
   });
 }
 
-async function computeInvoiceFields(db: Db, shopId: string, input: InvoiceInput, source: string) {
+async function computeInvoiceFields(db: Db, shopId: string, input: InvoiceInput, source: string, invoiceId?: string) {
   if (input.dueDate < input.date) throw badRequest('Due date can’t be before invoice date', { dueDate: 'Due date can’t be before invoice date' });
   if (!input.customerId && source !== 'pos') throw badRequest('Select a customer', { customerId: 'Select a customer' });
   const org = await getOrg(db, shopId);
   const built = await buildLines(db, shopId, input.lines);
   const { snap, id: customerId } = await customerSnapshot(db, shopId, input.customerId, org.state);
   const { withGst, docType } = taxTreatment(org, built, input.withGst);
-  const lines = adjustLines(built, input, withGst);
+  const promo = await applyOffersAndPoints(db, shopId, input, source, built, withGst, customerId, invoiceId);
+  const lines = promo?.lines ?? adjustLines(built, input, withGst);
   const pos = snap.state || org.state;
   const inter = isInterState(org.state, pos);
   const t = computeTotals(lines, withGst, inter, input.tcsRate);
   const branchId = await primaryBranchId(db, shopId, input.branchId);
-  return { org, lines, snap, customerId, withGst, docType, pos, inter, t, branchId };
+  return { org, lines, snap, customerId, withGst, docType, pos, inter, t, branchId, promo };
+}
+
+/**
+ * Festival offers and loyalty points (shared/offers.ts), for shops with the add-on. Recurring invoices are left as
+ * they were set up. Returns null when nothing changes the bill, so it is saved exactly as before.
+ */
+async function applyOffersAndPoints(db: Db, shopId: string, input: InvoiceInput, source: string, built: StoredLine[], withGst: boolean, customerId: string | null, invoiceId?: string) {
+  const wantsPoints = (input.redeemPoints ?? 0) > 0;
+  if (source === 'recurring') return null;
+  if (!(await shopHasOffers(db, shopId))) {
+    if (wantsPoints) throw badRequest('Loyalty points are not switched on for this shop');
+    return null;
+  }
+  const offers = runningOn(await offersOn(db, shopId, input.date), input.date);
+  const cats = new Map((await many(db, 'SELECT id, category FROM items WHERE shop_id = $1 AND id = ANY($2::uuid[])', [shopId, built.map((l) => l.itemId)])).map((r) => [r.id, r.category ?? '']));
+  const withCat = built.map((l) => ({ ...l, category: cats.get(l.itemId) }));
+  const base = { lines: withCat, withGst, pricesIncludeTax: input.pricesIncludeTax, billDiscount: input.billDiscount, offers, skip: input.skipOffers ?? [] };
+  let points = 0;
+  let pointValue = 0;
+  if (wantsPoints) {
+    if (!customerId) throw badRequest('Points can only be used on a bill for a saved customer', { redeemPoints: 'Pick the customer first' });
+    const s = await loyaltySettings(db, shopId);
+    if (!s.enabled) throw badRequest('Loyalty points are switched off in Offers & loyalty', { redeemPoints: 'Loyalty is off' });
+    const balance = await pointsBalance(db, shopId, customerId, invoiceId);
+    const due = payable(priceBill(base).lines, withGst);
+    const max = redeemablePoints(s, balance, due);
+    if (input.redeemPoints! > max) {
+      const why = balance < s.minRedeem ? `Points can be used from ${s.minRedeem} points; this customer has ${balance}` : `This customer can use up to ${max} points on this bill`;
+      throw badRequest(why, { redeemPoints: why });
+    }
+    points = input.redeemPoints!;
+    pointValue = s.pointValue;
+  }
+  const priced = priceBill({ ...base, redeem: points ? { points, pointValue } : null });
+  if (!priced.changed) return null;
+  const lines: StoredLine[] = priced.lines.map((l, i) => {
+    const { category: _c, ...rest } = l;
+    const typed = built[i]!;
+    const out: StoredLine = { ...rest, enteredRate: typed.rate, enteredDiscount: typed.discount };
+    out.amount = lineAmount(out);
+    return out;
+  });
+  return { lines, applied: priced.applied as AppliedOffer[], points, redeemValue: priced.redeemValue };
+}
+
+async function savePromo(db: Db, shopId: string, id: string, input: InvoiceInput, promo: Awaited<ReturnType<typeof applyOffersAndPoints>>) {
+  await db.query('UPDATE invoices SET offers_applied = $3, offers_skipped = $4, loyalty_points_used = $5, loyalty_discount = $6 WHERE shop_id = $1 AND id = $2',
+    [shopId, id, JSON.stringify(promo?.applied ?? []), JSON.stringify(input.skipOffers ?? []), promo?.points ?? 0, promo?.redeemValue ?? 0]);
 }
 
 /** Assigns the next number in the (FY-scoped) series and moves stock out. */
@@ -180,6 +235,7 @@ async function issue(db: Db, req: Request | null, shopId: string, inv: any) {
   // Freeze what it prints with, so a reprint matches the original even after the profile or layout changes.
   await db.query('UPDATE invoices SET print_snapshot = $3 WHERE shop_id = $1 AND id = $2', [shopId, inv.id, JSON.stringify(await takePrintSnapshot(db, shopId, inv))]);
   await db.query('INSERT INTO public_links (token, shop_id, invoice_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [inv.public_token, shopId, inv.id]);
+  await settleInvoicePoints(db, req, shopId, inv.id);
   return number;
 }
 
@@ -211,6 +267,7 @@ export async function createInvoice(db: Db, req: Request | null, shopId: string,
     ],
   );
   await saveDeliveryFields(db, shopId, row.id, input);
+  await savePromo(db, shopId, row.id, input, f.promo);
   if (opts.issue && source === 'app') await checkCreditLimit(db, req, shopId, f.customerId, f.t.total, row.id, input.overrideCreditLimit);
   let number: string | null = null;
   if (opts.issue) number = await issue(db, req, shopId, row);
@@ -260,8 +317,9 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
   if (inv.status === 'Cancelled') throw conflict('Cancelled invoices can’t be edited');
   if (inv.status === 'Issued' && (Number(inv.amount_paid) > 0 || Number(inv.amount_credited) > 0))
     throw conflict('This invoice has payments or credit notes. Issue a credit note instead of editing it.');
-  const f = await computeInvoiceFields(db, shopId, input, inv.source);
+  const f = await computeInvoiceFields(db, shopId, input, inv.source, id);
   if (inv.status === 'Issued') {
+    await reverseInvoicePoints(db, req, shopId, id, `Edit ${inv.number}`);
     // Issued invoice keeps its number and date-FY; stock is re-applied for the new lines.
     const cfg = await platformConfig(db);
     if (fyLabel(input.date, cfg.fyStartMonth) !== inv.fy) throw badRequest('An issued invoice can’t be moved to a different financial year');
@@ -283,6 +341,8 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
     ],
   );
   await saveDeliveryFields(db, shopId, id, input);
+  await savePromo(db, shopId, id, input, f.promo);
+  if (inv.status === 'Issued') await settleInvoicePoints(db, req, shopId, id);
   if ((inv.status === 'Draft' && issueNow) || inv.status === 'Issued') await checkCreditLimit(db, req, shopId, f.customerId, f.t.total, id, input.overrideCreditLimit);
   if (inv.status === 'Draft' && issueNow) {
     const fresh = await one(db, 'SELECT * FROM invoices WHERE shop_id = $1 AND id = $2', [shopId, id]);
@@ -298,6 +358,7 @@ export async function cancelInvoice(db: Db, req: Request, shopId: string, id: st
   if (Number(inv.amount_paid) > 0) throw conflict('Remove the recorded payments before cancelling this invoice');
   if (Number(inv.amount_credited) > 0) throw conflict('This invoice has credit notes and can’t be cancelled');
   await restock(db, req, shopId, inv, 'sale_cancel', `Cancel ${inv.number}`);
+  await reverseInvoicePoints(db, req, shopId, id, `Cancelled ${inv.number}`);
   await db.query("UPDATE invoices SET status = 'Cancelled', cancelled_at = now(), cancel_reason = $3 WHERE shop_id = $1 AND id = $2", [shopId, id, reason]);
   await audit(db, req, shopId, 'cancel', 'invoice', id, { number: inv.number, reason });
   return getInvoice(db, shopId, id);
@@ -357,6 +418,12 @@ export function serializeInvoice(r: any) {
     einvoice: r.einvoice,
     shipTo: r.ship_to ?? null,
     extra: r.extra ?? {},
+    offersApplied: r.offers_applied ?? [],
+    offersSkipped: r.offers_skipped ?? [],
+    loyalty: {
+      pointsUsed: Number(r.loyalty_points_used ?? 0), discount: Number(r.loyalty_discount ?? 0),
+      pointsEarned: Number(r.loyalty_points_earned ?? 0), balanceAfter: r.loyalty_balance_after == null ? null : Number(r.loyalty_balance_after),
+    },
     terms: r.terms ?? '',
     eway: r.eway ?? null,
     billDiscount: r.bill_discount ?? null,
@@ -465,6 +532,7 @@ export async function createCreditNote(db: Db, req: Request, shopId: string, inp
     [shopId, number, fy, inv.id, input.date, input.reason, JSON.stringify(lines), inv.with_gst, inv.inter_state, t.subTotal, t.taxTotal, t.cgst, t.sgst, t.igst, t.total, input.restock, req.ctx?.id ?? null],
   );
   await db.query('UPDATE invoices SET amount_credited = amount_credited + $3 WHERE shop_id = $1 AND id = $2', [shopId, inv.id, t.total]);
+  await reversePointsForReturn(db, req, shopId, inv.id, cn.id, t.total, number);
   if (input.restock)
     for (const l of lines)
       if (l.type === 'Goods') await moveStock(db, { shopId, itemId: l.itemId, branchId: inv.branch_id, qty: l.qty, reason: 'credit_note', refType: 'credit_note', refId: cn.id, userId: req.ctx?.id, note: number });

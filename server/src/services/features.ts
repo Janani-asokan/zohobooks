@@ -11,8 +11,13 @@ import { HttpError, badRequest } from '../http';
 
 const ACTIVE = `status = 'active' AND starts_on <= current_date AND (ends_on IS NULL OR ends_on >= current_date)`;
 
-export async function loadEntitlements(shopId: string): Promise<Entitlements> {
-  const rows = await query<{ feature_key: string; level: string }>(`SELECT feature_key, level FROM shop_features WHERE shop_id = $1 AND ${ACTIVE}`, [shopId]);
+/**
+ * A shop's live add-ons. Inside a transaction, pass its connection: asking the pool for a second connection while
+ * holding one can use up the pool when many bills are saved at once.
+ */
+export async function loadEntitlements(shopId: string, db?: Db): Promise<Entitlements> {
+  const sql = `SELECT feature_key, level FROM shop_features WHERE shop_id = $1 AND ${ACTIVE}`;
+  const rows: Array<{ feature_key: string; level: string }> = db ? (await db.query(sql, [shopId])).rows : await query(sql, [shopId]);
   const ent: Entitlements = {};
   for (const r of rows) if (featureByKey(r.feature_key)) ent[r.feature_key] = r.level;
   return ent;

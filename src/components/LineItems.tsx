@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Plus, Trash2, ScanBarcode, Percent, ReceiptIndianRupee, AlertTriangle, Tag, BadgeIndianRupee } from 'lucide-react';
 import { useItems } from '@/api/hooks';
 import { useToast } from '@/context/ToastContext';
@@ -39,7 +39,7 @@ export function useCalcLines(lines: DraftLine[]) {
     .filter((l) => l.itemId)
     .map((l) => {
       const it = items.find((i) => i.id === l.itemId);
-      return { qty: l.qty, rate: l.rate ?? (it ? priceFor(it, l.tier) : 0), discount: l.discount, taxRate: it?.taxRate ?? 0 };
+      return { itemId: l.itemId, category: it?.category ?? '', qty: l.qty, rate: l.rate ?? (it ? priceFor(it, l.tier) : 0), discount: l.discount, taxRate: it?.taxRate ?? 0 };
     });
 }
 
@@ -195,10 +195,17 @@ export function BillOptionsCard({ value, onChange, withGst }: { value: BillOptio
   );
 }
 
-export function TotalsPanel({ lines, withGst, interState, tcsRate = 0, options }: { lines: Array<{ qty: number; rate: number; taxRate: number; discount?: number }>; withGst: boolean; interState: boolean; tcsRate?: number; options?: BillOptions }) {
-  const adjusted = options ? applyBillAdjustments(lines, { ...options, withGst }) : lines;
+/**
+ * priced: lines with festival offers and points already applied (shared/offers.ts priceBill), and what to show for
+ * them. Without it the panel works out the bill discount and MRP billing itself, as before.
+ */
+export function TotalsPanel({ lines, withGst, interState, tcsRate = 0, options, priced }: {
+  lines: Array<{ qty: number; rate: number; taxRate: number; discount?: number }>; withGst: boolean; interState: boolean; tcsRate?: number; options?: BillOptions;
+  priced?: { lines: Array<{ qty: number; rate: number; taxRate: number; discount?: number }>; summary: ReactNode; billOff?: number };
+}) {
+  const adjusted = priced ? priced.lines : options ? applyBillAdjustments(lines, { ...options, withGst }) : lines;
   const t = computeTotals(adjusted, withGst, interState, tcsRate);
-  const billOff = options?.billDiscount?.value ? computeTotals(options.pricesIncludeTax ? applyBillAdjustments(lines, { pricesIncludeTax: true, withGst }) : lines, withGst, interState).subTotal - t.subTotal : 0;
+  const billOff = priced ? priced.billOff ?? 0 : options?.billDiscount?.value ? computeTotals(options.pricesIncludeTax ? applyBillAdjustments(lines, { pricesIncludeTax: true, withGst }) : lines, withGst, interState).subTotal - t.subTotal : 0;
   const Row = ({ l, v, strong }: { l: string; v: string; strong?: boolean }) => (
     <div className="row between" style={{ padding: '7px 0', fontWeight: strong ? 700 : 500, color: strong ? 'var(--ink-900)' : 'var(--ink-600)' }}>
       <span>{l}</span>
@@ -209,7 +216,8 @@ export function TotalsPanel({ lines, withGst, interState, tcsRate = 0, options }
     <div className="card" style={{ padding: 18, background: 'var(--ink-50)', boxShadow: 'none' }}>
       <Row l="Sub total" v={money(t.subTotal)} strong />
       {billOff > 0.004 && <Row l={`Bill discount${options?.billDiscount?.kind === 'percent' ? ` ${options.billDiscount.value}%` : ''} (incl. above)`} v={`− ${money(billOff)}`} />}
-      {t.discount - billOff > 0.004 && <Row l="Item discounts (incl. above)" v={`− ${money(t.discount - billOff)}`} />}
+      {t.discount - billOff > 0.004 && <Row l={priced ? 'Discounts and offers (incl. above)' : 'Item discounts (incl. above)'} v={`− ${money(t.discount - billOff)}`} />}
+      {priced?.summary}
       {options?.pricesIncludeTax && withGst && <div className="small muted" style={{ padding: '2px 0 6px' }}>Prices include GST · taxable value shown</div>}
       {withGst ? (
         t.breakup.map((b) =>

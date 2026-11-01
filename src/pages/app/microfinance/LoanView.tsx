@@ -8,7 +8,7 @@ import { useShopUser } from '@/context/AuthContext';
 import { Badge, EmptyState, Field, Modal, PageHeader, Segmented, StatCard } from '@/components/ui';
 import { CollectModal, ReceiptModal, RepaidBar } from '@/components/lending';
 import { printWithPage } from '@/components/printing';
-import { fmtDate, money } from '@/lib/format';
+import { fmtDate, money, todayISO } from '@/lib/format';
 
 const ROW_TONE: Record<string, string> = { Paid: 'green', 'Part paid': 'amber', Overdue: 'red', 'Due today': 'blue', Upcoming: 'gray' };
 
@@ -144,7 +144,7 @@ export default function LoanView() {
         <p>{l.loanType} · Loan amount {money(l.principal)} · Cash given {money(l.netDisbursed)} · Interest {money(l.upfrontInterest)} · {money(l.instalment)} × {l.periods} from {fmtDate(l.firstDue)}</p>
         <table><thead><tr><th>#</th><th>Due</th><th>Amount</th><th>Paid</th><th>Status</th></tr></thead>
           <tbody>{d.schedule.map((r) => <tr key={r.n}><td>{r.n}</td><td>{fmtDate(r.due)}</td><td>{money(r.amount)}</td><td>{r.paid ? money(r.paid) : ''}</td><td>{r.state}</td></tr>)}</tbody></table>
-        <p>Balance {money(st.balance)} as on {fmtDate(new Date().toISOString().slice(0, 10))}</p>
+        <p>Balance {money(st.balance)} as on {fmtDate(todayISO())}</p>
       </div>
 
       {collect && <CollectModal loan={l} kind={collect} onClose={() => setCollect(null)} onDone={(p) => { setCollect(null); setReceipt(p); }} />}

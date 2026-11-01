@@ -27,6 +27,8 @@ export function CustomerPanel({ customer: c, onClose, onEdit }: { customer: Cust
   }, [onClose]);
 
   const used = c.creditLimit > 0 ? c.due / c.creditLimit : 0;
+  const promoOn = me.has('offers_loyalty');
+  const pts = useQuery({ queryKey: ['loyalty', c.id], enabled: promoOn, queryFn: () => api.get<{ balance: number; history: Array<{ id: string; points: number; kind: string; note: string; at: string }> }>(`/shop/loyalty/customers/${c.id}`) });
   return (
     <aside className="split-panel" aria-label={`${c.companyName || c.name} details`}>
       <div className="split-panel-head">
@@ -55,7 +57,16 @@ export function CustomerPanel({ customer: c, onClose, onEdit }: { customer: Cust
               </div>
               <div><div className="k">Billed to date</div><div className="v">{money(c.billed)}</div></div>
               <div><div className="k">Invoices</div><div className="v">{c.invoiceCount}</div></div>
+              {promoOn && <div><div className="k">Loyalty points</div><div className="v">{pts.data?.balance ?? '—'}</div></div>}
             </div>
+            {promoOn && (pts.data?.history.length ?? 0) > 0 && (
+              <details className="small">
+                <summary className="muted" style={{ cursor: 'pointer' }}>Points history</summary>
+                <table className="table" style={{ marginTop: 6 }}><tbody>
+                  {pts.data!.history.slice(0, 20).map((h) => <tr key={h.id}><td>{new Date(h.at).toLocaleDateString('en-IN')}</td><td>{h.note || h.kind}</td><td className="num strong">{h.points > 0 ? '+' : ''}{h.points}</td></tr>)}
+                </tbody></table>
+              </details>
+            )}
             {c.creditLimit > 0 && used > 1 && <div className="field-error">Over the credit limit by {money(c.due - c.creditLimit)}. New invoices need confirmation.</div>}
             <dl className="kv-list">
               <dt><Phone size={14} /></dt><dd>{c.phone || '—'}</dd>

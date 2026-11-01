@@ -158,6 +158,19 @@ How it is built:
 - **Receipts:** 58 or 80 mm thermal receipts. *Print settings → Thermal receipt* explains one-click printing with Chrome's `--kiosk-printing`.
 - **One price is enough:** on a new item, SP2 and SP3 can be left empty and use the standard price.
 
+**Festival offers, promo line and loyalty points** (add-on *Offers & loyalty*, *Sales → Offers & loyalty*).
+
+- **Offers start themselves:** create a Diwali, Children's Day, Christmas or other offer from a one-tap preset, with start and end dates. Between those dates it applies by itself at the counter and on invoices.
+- **Item or bill offers:** an item offer is a percentage off every item, some categories or chosen items. A bill offer is a percentage or rupee amount off bills above a minimum.
+- **No double discounts:** a line gets the bigger of its own discount and the best item offer, and only the best bill offer applies. The cashier can take an offer off one bill.
+- **On the bill:** the discount is spread into the lines, so GST is charged on the reduced price and returns stay exact. The bill shows what each offer saved and prints the offer's message.
+- **Promo line:** a message printed on every receipt and invoice (*Print settings*), for example "Diwali sale till 5 Nov".
+- **Loyalty points:** the owner sets the rules: points per ₹100, what a point is worth, the minimum before points can be used, and the share of a bill points may pay.
+  - Points are earned on bills for a saved customer. At the counter, typing the customer's mobile number finds them, or adds them in one step.
+  - Points can pay part of a later bill. Cancelling a bill undoes its points, and a return takes back the points earned on what came back.
+  - Every change is kept in a points history, with owner adjustments and their reasons. Two counters can't spend the same points at once.
+- **Safe for existing data:** offers and points live in their own tables (`offers`, `loyalty_ledger`). Shops without the add-on bill exactly as before.
+
 **Invoices that follow the GST rules and the trade.**
 
 - **Reprints match the original:** when an invoice is issued, its business details, layout, trade field labels, branch and the customer's earlier dues are saved with it. Changing the profile or print settings later changes new invoices only. Drafts always use the current settings.
