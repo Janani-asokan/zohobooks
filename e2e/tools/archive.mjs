@@ -24,7 +24,8 @@ await step('a customer with invoices offers Archive, not Delete', async () => {
   const row = p.locator('tr', { hasText: c.customId });
   await row.getByRole('button', { name: 'Archive' }).click();
   await p.getByText('Customer archived. Their invoices and history are kept.').waitFor();
-  if (await p.locator('tbody tr', { hasText: c.customId }).count()) throw new Error('archived customer still in the active list');
+  // The list refreshes after the toast; on a slow connection give it time before calling it a failure.
+  await p.locator('tbody tr', { hasText: c.customId }).waitFor({ state: 'detached', timeout: 15000 }).catch(() => { throw new Error('archived customer still in the active list'); });
 });
 
 await step('the archived customer leaves the invoice picker', async () => {
