@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { templateByKey } from '../../shared/templates';
 import { featureForPage } from '../../shared/features';
 import { FeatureOff } from '@/components/FeatureOff';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -198,7 +199,8 @@ export default function AppLayout() {
   const lendingOnly = !!org.data?.lendingEnabled && me.has('microfinance') && !(['sales.write', 'customers.write', 'items.write', 'reports.read'] as const).some((p) => me.can(p)) && (me.can('lending.collect') || me.can('lending.read'));
 
   const lendingOn = !!org.data?.lendingEnabled && me.has('microfinance');
-  const nav = useMemo(() => buildNav(me.can, { lending: lendingOn, has: me.has }), [me, lendingOn]);
+  const dailyRates = !!(org.data?.businessType && templateByKey(org.data.businessType)?.dailyRates);
+  const nav = useMemo(() => buildNav(me.can, { lending: lendingOn, has: me.has, dailyRates }), [me, lendingOn, dailyRates]);
   const location = useLocation();
   const actions = useMemo(() => buildActions(me.can, { lending: lendingOn, has: me.has }), [me, lendingOn]);
   const lockedFeature = featureForPage(location.pathname);

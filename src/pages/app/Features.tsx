@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Check, Clock, Puzzle, Sparkles, Zap } from 'lucide-react';
 import { api } from '@/api/client';
-import { useMut } from '@/api/hooks';
+import { useMut, useOrg } from '@/api/hooks';
+import { templateByKey } from '../../../shared/templates';
 import { useAuth, useShopUser } from '@/context/AuthContext';
 import { Badge, Field, Modal, PageHeader } from '@/components/ui';
 import { fmtDate, money } from '@/lib/format';
@@ -24,6 +25,8 @@ const SOURCE: Record<string, string> = { trial: 'Trial', paid: 'On', complimenta
 export default function Features() {
   const { refresh } = useAuth();
   const me = useShopUser();
+  const orgType = useOrg().data?.businessType;
+  const trade = orgType ? templateByKey(orgType) : undefined;
   const [params] = useSearchParams();
   const focus = params.get('f');
   const q = useQuery({ queryKey: ['features'], queryFn: () => api.get<{ features: ShopFeature[]; history: HistoryRow[] }>('/shop/features') });
@@ -67,7 +70,7 @@ export default function Features() {
               return (
                 <article key={f.key} id={`feature-${f.key}`} className={`card feature-card ${f.on ? 'is-on' : ''} ${focus === f.key ? 'is-focus' : ''}`}>
                   <div className="row between" style={{ alignItems: 'flex-start', gap: 8 }}>
-                    <h4>{f.name}</h4>
+                    <div style={{ minWidth: 0 }}><h4>{f.name}</h4>{trade?.features.includes(f.key) && <span className="small" style={{ color: 'var(--brand-700)', fontWeight: 600 }}>Recommended for {trade.name.toLowerCase()}</span>}</div>
                     {f.on ? <Badge tone={f.source === 'trial' ? 'amber' : 'green'}>{SOURCE[f.source ?? ''] ?? 'On'}{f.endsOn ? ` till ${fmtDate(f.endsOn)}` : ''}</Badge>
                       : f.requested ? <Badge tone="violet"><Clock size={12} /> Asked {fmtDate(String(f.requested.at).slice(0, 10))}</Badge> : <Badge tone="gray">Off</Badge>}
                   </div>

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Camera, Package, Wrench, Trash2, Wand2, Sparkles, Loader2, CheckCircle2, Circle, Percent, Info, Boxes, Tag, IndianRupee, ScanBarcode } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
-import { useBranches, useItemFacets, useItems, useMut, useTaxSlabs } from '@/api/hooks';
+import { useBranches, useItemFacets, useItems, useMut, useOrg, useTaxSlabs } from '@/api/hooks';
+import { templateByKey } from '../../../shared/templates';
 import type { Item } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -21,6 +22,8 @@ interface Draft {
   type: ItemType; name: string; sku: string; barcode: string; unit: string; hsn: string; category: string; brand: string; image: string; description: string;
   cost: string; mrp: string; sp1: string; sp2: string; sp3: string; taxSlabId: string;
   reorderLevel: string; trackBatches: boolean; trackSerials: boolean; openingStock: string; branchId: string; batchNo: string; expiryDate: string;
+  /** Trade field values as typed, keyed by the shop's item field keys. */
+  extra: Record<string, string>;
 }
 
 const GOODS_UNITS = ['pcs', 'nos', 'box', 'pack', 'kg', 'g', 'ltr', 'ml', 'mtr', 'ream', 'dozen', 'set', 'pair'];
@@ -45,7 +48,7 @@ const skuFrom = (name: string, brand: string) => {
 
 const blank = (type: ItemType, taxSlabId: string, branchId: string, barcode = ''): Draft => ({
   type, name: '', sku: '', barcode, unit: type === 'Goods' ? 'pcs' : 'job', hsn: '', category: '', brand: '', image: '', description: '',
-  cost: '', mrp: '', sp1: '', sp2: '', sp3: '', taxSlabId, reorderLevel: '10', trackBatches: false, trackSerials: false, openingStock: '', branchId, batchNo: '', expiryDate: '',
+  cost: '', mrp: '', sp1: '', sp2: '', sp3: '', taxSlabId, reorderLevel: '10', trackBatches: false, trackSerials: false, openingStock: '', branchId, batchNo: '', expiryDate: '', extra: {},
 });
 
 function Section({ n, title, sub, children, right }: { n: number; title: string; sub: string; children: React.ReactNode; right?: React.ReactNode }) {
@@ -72,11 +75,15 @@ export default function ItemForm() {
   const items = itemsQ.data ?? [];
   const current = editing ? items.find((i) => i.id === id) : undefined;
   const facets = useItemFacets().data;
+  const org = useOrg().data;
+  const tradeFields = org?.itemFields ?? [];
+  const trade = org?.businessType ? templateByKey(org.businessType) : undefined;
   const slabsQ = useTaxSlabs();
   const activeSlabs = (slabsQ.data ?? []).filter((s) => s.active);
   const branches = useBranches().data ?? [];
   const primaryBranch = branches.find((b) => b.isPrimary)?.id ?? branches[0]?.id ?? '';
-  const defaultSlab = activeSlabs.find((s) => s.rate === 18)?.id ?? activeSlabs[0]?.id ?? '';
+  // A new item starts at the trade's usual GST rate (0% for vegetables), else 18%.
+  const defaultSlab = activeSlabs.find((s) => s.rate === (trade?.defaultGst ?? 18))?.id ?? activeSlabs.find((s) => s.rate === 18)?.id ?? activeSlabs[0]?.id ?? '';
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [draft, setDraft] = useState<Draft>(() => blank(params.get('type') === 'Services' ? 'Services' : 'Goods', '', '', params.get('barcode') ?? ''));
@@ -91,7 +98,7 @@ export default function ItemForm() {
 
   // Initialise once reference data has loaded.
   useEffect(() => {
-    if (ready || !slabsQ.data || !itemsQ.data) return;
+    if (ready || !slabsQ.data || !itemsQ.data || !org) return;
     if (editing) {
       const it = items.find((i) => i.id === id);
       if (!it) return;
@@ -99,10 +106,15 @@ export default function ItemForm() {
         ...blank(it.type, it.taxSlabId, primaryBranch), type: it.type, name: it.name, sku: it.sku, barcode: it.barcode, unit: it.unit, hsn: it.hsn, category: it.category ?? '', brand: it.brand ?? '',
         image: it.image ?? '', description: it.description, cost: String(it.cost ?? 0), mrp: it.mrp == null ? '' : String(it.mrp), sp1: String(it.sp1), sp2: String(it.sp2), sp3: String(it.sp3),
         reorderLevel: String(it.reorderLevel), trackBatches: it.trackBatches, trackSerials: it.trackSerials,
+        extra: Object.fromEntries(Object.entries(it.extra ?? {}).map(([k, v]) => [k, String(v)])),
       });
-    } else setDraft((d) => ({ ...d, taxSlabId: d.taxSlabId || defaultSlab, branchId: d.branchId || primaryBranch }));
+    } else setDraft((d) => ({
+      ...d, taxSlabId: d.taxSlabId || defaultSlab, branchId: d.branchId || primaryBranch,
+      // The business type's defaults for a new item: its usual unit, and batch tracking for medicines.
+      ...(trade && d.type === 'Goods' ? { unit: trade.defaultUnit, trackBatches: !!trade.trackBatches } : {}),
+    }));
     setReady(true);
-  }, [slabsQ.data, itemsQ.data, branches.length]);
+  }, [slabsQ.data, itemsQ.data, branches.length, org]);
   useEffect(() => { if (!draft.branchId && primaryBranch) set('branchId', primaryBranch); }, [primaryBranch]);
 
   const keys = [['items'], ['itemFacets'], ['stockAlerts'], ['notifications'], ['dashboard'], ['movements']];
@@ -252,6 +264,7 @@ export default function ItemForm() {
       sp1: num(draft.sp1), sp2: num(draft.sp2), sp3: num(draft.sp3), taxSlabId: draft.taxSlabId, reorderLevel: Number(draft.reorderLevel || 0),
       trackBatches: draft.type === 'Goods' && draft.trackBatches, trackSerials: draft.type === 'Goods' && draft.trackSerials, description: draft.description, category: draft.category.trim(), brand: draft.brand.trim(),
       image: draft.image, mrp: draft.mrp.trim() === '' ? null : num(draft.mrp),
+      extra: Object.fromEntries(tradeFields.filter((f) => (draft.extra[f.key] ?? '').trim() !== '').map((f) => [f.key, f.type === 'number' ? Number(draft.extra[f.key]) : draft.extra[f.key]!.trim()])),
     };
     const onError = (err: Error) => {
       const f = fieldErrors(err);
@@ -294,7 +307,7 @@ export default function ItemForm() {
   if (!me.can('items.write')) return <div className="page"><p className="muted">You don’t have permission to edit items.</p></div>;
   if (editing && itemsQ.data && !items.some((i) => i.id === id)) return <div className="page"><p className="muted">Item not found. <Link to="/app/items">Back to items</Link></p></div>;
 
-  const units = [...new Set([...(draft.type === 'Goods' ? GOODS_UNITS : SERVICE_UNITS), ...(facets?.units ?? []), draft.unit])];
+  const units = [...new Set([...(draft.type === 'Goods' ? [...(org?.units ?? []), ...GOODS_UNITS] : SERVICE_UNITS), ...(facets?.units ?? []), draft.unit])];
   const sp1 = num(draft.sp1);
   const inclusive = sp1 > 0 && slab ? sp1 * (1 + slab.rate / 100) : NaN;
 
@@ -368,6 +381,25 @@ export default function ItemForm() {
                 </Field>
               </div>
             </div>
+
+            {tradeFields.length > 0 && (
+              <div className="trade-fields" style={{ marginTop: 16 }}>
+                {tradeFields.map((f) => {
+                  const v = draft.extra[f.key] ?? '';
+                  const setV = (x: string) => setDraft((d) => ({ ...d, extra: { ...d.extra, [f.key]: x } }));
+                  const err = serverErr[`extra.${f.key}`];
+                  return (
+                    <Field key={f.key} label={f.label} hint={f.help} error={err}>
+                      {f.type === 'select'
+                        ? <select id={`extra-${f.key}`} className={`select ${err ? 'invalid' : ''}`} value={v} onChange={(ev) => setV(ev.target.value)}><option value="">—</option>{f.options?.map((o) => <option key={o}>{o}</option>)}</select>
+                        : f.suffix
+                          ? <div className="input-addon right"><input id={`extra-${f.key}`} className={`input ${err ? 'invalid' : ''}`} inputMode={f.type === 'number' ? 'decimal' : undefined} value={v} onChange={(ev) => setV(f.type === 'number' ? ev.target.value.replace(/[^\d.]/g, '') : ev.target.value)} /><span>{f.suffix}</span></div>
+                          : <input id={`extra-${f.key}`} className={`input ${err ? 'invalid' : ''}`} inputMode={f.type === 'number' ? 'decimal' : undefined} value={v} onChange={(ev) => setV(f.type === 'number' ? ev.target.value.replace(/[^\d.]/g, '') : ev.target.value)} />}
+                    </Field>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="form-grid" style={{ marginTop: 16 }}>
               <Field label="SKU / item code" error={e('sku')} hint="Your own short code — handy for search">

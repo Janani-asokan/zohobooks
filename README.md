@@ -114,6 +114,40 @@ How it works:
 - **Nothing is lost:** turning a feature off never deletes data, so turning it back on shows everything again. Every period is kept as history.
 - **New and existing shops:** new shops get a 14-day trial of everything. Shops that existed before pay-per-feature keep every feature.
 
+**Business templates.** At signup, or later from *Settings → Business profile*, the owner picks what the business sells. The 10 types are:
+
+- general
+- fruits & vegetables
+- kirana
+- supermarket
+- pharmacy
+- gold & silver jewellery
+- steel
+- hardware
+- garments
+- mobiles
+
+The template:
+
+- **Add-ons:** a new shop tries only that trade's add-ons, so the menus start simple.
+- **Trade fields on items:**
+  - local name for vegetables and kirana;
+  - manufacturer, composition and schedule for pharmacy;
+  - purity, weights, making charge, wastage and HUID for jewellery;
+  - grade, size and weight for steel;
+  - model and warranty for mobiles.
+- **Units:** the trade's units (bunch, strip, ton, …).
+- **New items:** the usual GST rate, for example 0% for fresh vegetables.
+- **Receipt paper:** 58 or 80 mm.
+- **Common items:** loaded with HSN codes and local names. Their prices are examples to change, and the GST rates are the usual ones, to be checked with the shop's CA.
+- **Today's rates:** for daily-price trades, *Inventory → Today's rates* updates every selling price on one screen, with Enter moving down the list.
+- **Trade details:** drug licence or BIS number on the business profile.
+
+How it is built:
+
+- **Plain data:** templates live in `shared/templates.ts`, so adding a business type is a data change.
+- **Only adds:** applying one adds fields, units and items; it never deletes or overwrites anything, and applying it twice changes nothing more.
+
 **AI credits.** Every AI call is metered, so a shop can never run up an unlimited AI bill.
 
 - **What a credit is:** one credit is US$0.004 of real AI cost. Input, output and cached tokens are each counted at their own price (`shared/features.ts`).

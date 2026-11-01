@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { BUSINESS_TEMPLATES } from '../../../../shared/templates';
+import { applyTemplate } from '../../services/templates';
 import { aiEnabled } from '../../services/extract';
 import { aiBalance } from '../../services/aiUsage';
 import { z } from 'zod';
@@ -21,6 +23,7 @@ const serializeOrg = (o: any) => ({
   companyName: o.company_name, legalName: o.legal_name, gstin: o.gstin, email: o.email, phone: o.phone, address: o.address, state: o.state,
   logo: o.logo, invoiceFooter: o.invoice_footer, upiId: o.upi_id, bankDetails: o.bank_details, invoiceTemplate: o.invoice_template,
   compositionScheme: o.composition_scheme, autoReminders: o.auto_reminders, reminderDays: o.reminder_days, lendingEnabled: !!o.lending_enabled,
+  businessType: o.business_type ?? '', itemFields: o.item_fields ?? [], units: o.units ?? [], tradeDetails: o.trade_details ?? {},
 });
 
 coreRouter.get('/organization', T(async (db, _req, c) => serializeOrg(await getOrg(db, c.shopId))));
@@ -48,6 +51,8 @@ coreRouter.put(
           compositionScheme: z.boolean().default(false),
           autoReminders: z.boolean().default(false),
           reminderDays: z.number().int().min(1).max(60).default(3),
+          // Trade registrations (drug licence, BIS number, …); left out = unchanged.
+          tradeDetails: z.record(z.string().trim().max(120)).refine((v) => Object.keys(v).length <= 12, 'Too many details').optional(),
         })
         .superRefine((v, ctx) => {
           if (v.gstin && !GSTIN_RE.test(v.gstin)) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'Invalid GSTIN' });
@@ -60,8 +65,24 @@ coreRouter.put(
          upi_id=$11, bank_details=$12, invoice_template=$13, composition_scheme=$14, auto_reminders=$15, reminder_days=$16 WHERE shop_id=$1`,
       [c.shopId, b.companyName, b.legalName, b.gstin, b.email, b.phone, b.address, b.state, b.logo, b.invoiceFooter, b.upiId, b.bankDetails, b.invoiceTemplate, b.compositionScheme, b.autoReminders, b.reminderDays],
     );
+    if (b.tradeDetails) await db.query('UPDATE organizations SET trade_details = $2 WHERE shop_id = $1', [c.shopId, JSON.stringify(Object.fromEntries(Object.entries(b.tradeDetails).filter(([, v]) => v)))]);
     await audit(db, req, c.shopId, 'update', 'organization', c.shopId, { gstin: b.gstin, composition: b.compositionScheme, template: b.invoiceTemplate });
     return serializeOrg(await getOrg(db, c.shopId));
+  }),
+);
+
+/* ---------- Business type (templates) ---------- */
+coreRouter.get('/business-templates', T(async () => BUSINESS_TEMPLATES));
+
+/** Sets up the shop for a business type. Only adds fields, units and items; nothing the shop has is changed or removed. */
+coreRouter.post(
+  '/organization/business-type',
+  perm('admin'),
+  T(async (db, req, c) => {
+    const b = parse(z.object({ key: z.string().min(1).max(40), samples: z.boolean().default(true), printLayout: z.boolean().default(false) }), req.body);
+    const result = await applyTemplate(db, c.shopId, b.key, { samples: b.samples, printLayout: b.printLayout });
+    await audit(db, req, c.shopId, 'apply_business_type', 'organization', c.shopId, { ...result });
+    return { result, organization: serializeOrg(await getOrg(db, c.shopId)) };
   }),
 );
 

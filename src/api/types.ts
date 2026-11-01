@@ -1,4 +1,5 @@
 import type { Permission, UserRole } from '../../shared/permissions';
+import type { ItemField } from '../../shared/templates';
 import type { InvoiceStatus } from '../../shared/status';
 
 export type PriceTier = 'SP1' | 'SP2' | 'SP3';
@@ -21,6 +22,8 @@ export interface Organization {
   companyName: string; legalName: string; gstin: string; email: string; phone: string; address: string; state: string; logo: string;
   invoiceFooter: string; upiId: string; bankDetails: string; invoiceTemplate: 'classic' | 'modern' | 'compact'; compositionScheme: boolean;
   autoReminders: boolean; reminderDays: number; lendingEnabled: boolean;
+  /** Business template key (shared/templates.ts), '' when not chosen. */
+  businessType: string; itemFields: ItemField[]; units: string[]; tradeDetails: Record<string, string>;
 }
 export interface TaxSlab { id: string; name: string; rate: number; active: boolean }
 export interface Branch { id: string; name: string; address: string; phone: string; isPrimary: boolean }
@@ -31,6 +34,8 @@ export interface Item {
   stock: number; stockByBranch: Record<string, number>; createdAt: string;
   category: string; brand: string; image: string; mrp: number | null;
   trackSerials: boolean; parentId: string | null; isGroup: boolean; variantAttrs: Record<string, string>; attributes: Array<{ name: string; values: string[] }>;
+  /** Trade field values (purity, schedule, warranty …), keyed by the shop's item field keys. */
+  extra: Record<string, string | number>;
 }
 export interface StockAdjustment {
   id: string; number: string; branchId: string; branchName: string; date: string; reason: string; mode: 'change' | 'count'; value: number; notes: string; createdBy: string; createdAt: string;

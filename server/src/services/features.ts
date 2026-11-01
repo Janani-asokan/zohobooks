@@ -129,9 +129,9 @@ export async function endFeature(db: Db, shopId: string, feature: string, by: st
       decided_by = $3, note = trim(note || ' ' || $4), updated_at = now() WHERE shop_id = $1 AND feature_key = $2 AND status = 'active'`, [shopId, feature, by, note]);
 }
 
-/** A new shop tries every available feature for `days` days. */
-export async function grantTrial(db: Db, shopId: string, days: number, by: string) {
-  for (const f of FEATURES.filter((x) => x.available)) {
+/** A new shop tries the given features (every available one when not given) for `days` days. */
+export async function grantTrial(db: Db, shopId: string, days: number, by: string, only?: string[]) {
+  for (const f of FEATURES.filter((x) => x.available && (!only || only.includes(x.key)))) {
     await db.query(`INSERT INTO shop_features (shop_id, feature_key, level, status, source, starts_on, ends_on, monthly_price, note, decided_by)
       VALUES ($1,$2,$3,'active','trial',current_date,current_date + $4::int,0,$5,$6) ON CONFLICT DO NOTHING`,
     [shopId, f.key, f.levels[f.levels.length - 1]!.key, days, `${days}-day trial`, by]);

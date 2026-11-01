@@ -6,6 +6,8 @@ import { audit } from '../audit';
 import { badRequest } from '../http';
 import { FEATURES } from '../../../shared/features';
 import { activateFeature, grantTrial } from './features';
+import { applyTemplate } from './templates';
+import { templateByKey } from '../../../shared/templates';
 
 export interface NewShop {
   shopName: string;
@@ -23,6 +25,11 @@ export interface NewShop {
    * as paid until the licence ends; 'all' turns every feature on with no end date (demo shops).
    */
   features?: 'trial' | 'all' | string[];
+  /**
+   * Business template (shared/templates.ts). The shop is set up for that trade, and its trial covers that trade's
+   * add-ons instead of every add-on, so the menus start simple.
+   */
+  businessType?: string;
 }
 
 export const FEATURE_TRIAL_DAYS = 14;
@@ -53,7 +60,9 @@ export async function provisionShop(req: Request | null, s: NewShop) {
     );
     const by = req?.ctx?.kind === 'super' ? req.ctx.email : 'system';
     const features = s.features ?? 'trial';
-    if (features === 'trial') await grantTrial(db, shop.id, FEATURE_TRIAL_DAYS, by);
+    const template = s.businessType ? templateByKey(s.businessType) : undefined;
+    if (s.businessType && !template) throw badRequest('Unknown business type');
+    if (features === 'trial') await grantTrial(db, shop.id, FEATURE_TRIAL_DAYS, by, template?.features);
     else {
       const keys = features === 'all' ? FEATURES.filter((f) => f.available).map((f) => f.key) : features;
       for (const key of keys) {
@@ -62,7 +71,8 @@ export async function provisionShop(req: Request | null, s: NewShop) {
         await activateFeature(db, shop.id, key, { level: f.levels[f.levels.length - 1]!.key, source: features === 'all' ? 'complimentary' : 'paid', endsOn: features === 'all' ? null : String(shop.license_end), startsOn: String(shop.license_start) }, by);
       }
     }
-    await audit(db, null, shop.id, 'workspace_created', 'shop', shop.id, { plan: s.planId });
+    if (template) await applyTemplate(db, shop.id, template.key, { samples: true, printLayout: true });
+    await audit(db, null, shop.id, 'workspace_created', 'shop', shop.id, { plan: s.planId, businessType: template?.key ?? null });
     await db.query("SELECT set_config('app.shop_id', '', true)");
     await audit(db, req, null, 'create_shop', 'shop', shop.id, { name: s.shopName, plan: s.planId, years: s.years });
     return shop;

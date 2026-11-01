@@ -102,7 +102,7 @@ export default function Pos() {
   };
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return items.filter((i) => (kind === 'all' || i.type === kind) && (!s || [i.name, i.sku, i.barcode].some((v) => v.toLowerCase().includes(s)))).slice(0, 60);
+    return items.filter((i) => (kind === 'all' || i.type === kind) && (!s || [i.name, i.sku, i.barcode, String(i.extra?.localName ?? '')].some((v) => v.toLowerCase().includes(s)))).slice(0, 60);
   }, [items, q, kind]);
 
   const onScanEnter = () => {

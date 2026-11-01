@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle } from 'lucide-react';
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import { featureForPage } from '../../shared/features';
 import type { PaletteAction } from './CommandPalette';
@@ -13,12 +13,12 @@ const CHILD_ICONS: Record<string, LucideIcon> = {
   'Credit Notes': FileMinus, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, 'My Day (field)': MapPin, 'Field Team': MapPinned, Vendors: Truck, 'Purchase Orders': ClipboardList,
   Bills: Receipt, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Stock Adjustments': SlidersHorizontal,
   Transfers: ArrowLeftRight, 'Smart Reorder': BrainCircuit, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank, 'Tally & Import': RefreshCw,
-  'Microfinance overview': LayoutDashboard, Borrowers: Users, 'Loan book': HandCoins, Collections: ReceiptIndianRupee, 'EMI planner': Calculator, 'Microfinance reports': FileBarChart2, 'Microfinance settings': Settings2,
+  'Today’s rates': TrendingUp, 'Microfinance overview': LayoutDashboard, Borrowers: Users, 'Loan book': HandCoins, Collections: ReceiptIndianRupee, 'EMI planner': Calculator, 'Microfinance reports': FileBarChart2, 'Microfinance settings': Settings2,
 };
 
 /** Sidebar information architecture. Order and grouping follow how a shop actually works through a day. */
 /** lending: the owner switched microfinance on. has: the shop has an add-on feature (shared/features.ts). */
-export interface NavFlags { lending: boolean; has?: (feature: string) => boolean }
+export interface NavFlags { lending: boolean; has?: (feature: string) => boolean; dailyRates?: boolean }
 
 /** Links to pages of add-on features the shop doesn't have are left out of the sidebar, + New menu and palette. */
 const featureOk = (to: string, has?: (feature: string) => boolean) => {
@@ -60,6 +60,7 @@ export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavIte
     label: 'Inventory', icon: Boxes,
     children: [
       { label: 'Items', to: '/app/items' },
+      ...(flags.dailyRates && can('items.write') ? [{ label: 'Today’s rates', to: '/app/items/rates' }] : []),
       ...(can('items.write') || can('purchases.read') || can('reports.read') ? [{ label: 'Smart Reorder', to: '/app/inventory/reorder' }] : []),
       { label: 'Warehouses', to: '/app/inventory/warehouses' },
       { label: 'Stock Adjustments', to: '/app/inventory/adjustments' },
@@ -157,6 +158,7 @@ export function buildActions(can: Can, flags: NavFlags = { lending: false }): Pa
   add(can('purchases.read'), 'Go to', 'Payments made', IndianRupee, '/app/purchases/payments', 'vendor payments payables ageing');
   add(can('purchases.read'), 'Go to', 'Expenses', Wallet, '/app/purchases/expenses');
   add(true, 'Go to', 'Items', Package, '/app/items', 'inventory products catalogue stock');
+  add(can('items.write'), 'Go to', 'Today’s rates', TrendingUp, '/app/items/rates', 'daily price rate board update prices vegetable gold silver steel');
   add(true, 'Go to', 'Warehouses', Warehouse, '/app/inventory/warehouses', 'branches godown store locations');
   add(true, 'Go to', 'Stock adjustments', SlidersHorizontal, '/app/inventory/adjustments', 'stock count damaged expired write off');
   add(true, 'Go to', 'Transfers', ArrowLeftRight, '/app/inventory/transfers', 'move stock between branches in transit');
@@ -205,7 +207,7 @@ const ROUTE_RULES: Array<[RegExp, (can: Can) => boolean]> = [
   [/^\/app\/inventory\/reorder/, (can) => can('items.write') || can('purchases.read') || can('reports.read')],
   [/^\/app\/field\/team/, (can) => can('field.view')],
   [/^\/app\/(pos|sales\/invoices\/new|sales\/invoices\/[^/]+\/edit)/, (can) => can('sales.write')],
-  [/^\/app\/items\/(new|[^/]+\/edit)/, (can) => can('items.write')],
+  [/^\/app\/items\/(new|rates|[^/]+\/edit)/, (can) => can('items.write')],
   [/^\/app\/(sales\/recurring|organization|team|print-settings|billing|features)/, (can) => can('admin')],
   [/^\/app\/audit/, (can) => can('audit.read') || can('admin')],
   [/^\/app\/microfinance\/(borrowers|reports)/, (can) => can('lending.read')],

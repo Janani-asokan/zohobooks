@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { cleanExtra } from '../../../../shared/templates';
 import { z } from 'zod';
 import { perm } from '../../auth';
 import { audit } from '../../audit';
@@ -33,7 +34,17 @@ const itemBody = z.object({
   // small data-URL thumbnail (client downscales to ~400px)
   image: z.string().max(250_000).refine((v) => !v || v.startsWith('data:image/'), 'Image must be a picture').default(''),
   mrp: z.number().min(0).nullable().default(null),
+  /** Values of the shop's trade fields (purity, IMEI warranty, schedule, …), checked against its field list. */
+  extra: z.record(z.union([z.string().max(120), z.number()])).optional(),
 });
+
+/** Cleans trade field values against the shop's own field list; a bad value is reported on its field. */
+async function shopExtra(db: Db, shopId: string, extra: Record<string, unknown> | undefined) {
+  const org = await one(db, 'SELECT item_fields FROM organizations WHERE shop_id = $1', [shopId]);
+  const { value, errors } = cleanExtra(Array.isArray(org?.item_fields) ? org.item_fields : [], extra);
+  if (Object.keys(errors).length) throw badRequest(Object.values(errors)[0]!, Object.fromEntries(Object.entries(errors).map(([k, v]) => [`extra.${k}`, v])));
+  return value;
+}
 
 export async function listItems(db: Db, shopId: string, showCost: boolean, ids?: string[]) {
   const rows = await many(
@@ -67,6 +78,7 @@ export async function listItems(db: Db, shopId: string, showCost: boolean, ids?:
     isGroup: r.is_group,
     variantAttrs: r.variant_attrs ?? {},
     attributes: r.attributes ?? [],
+    extra: r.extra ?? {},
     description: r.description,
     category: r.category,
     brand: r.brand,
@@ -96,11 +108,12 @@ catalogRouter.post(
     );
     const slab = await assertSlab(db, b.taxSlabId);
     if (!slab.active) throw badRequest('This tax slab is disabled', { taxSlabId: 'Disabled slab' });
+    const extra = await shopExtra(db, c.shopId, b.extra);
     const it = await one(
       db,
-      `INSERT INTO items (shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, track_batches, description, category, brand, image, mrp, track_serials)
-       VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING id`,
-      [c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.type === 'Goods' && b.trackBatches, b.description, b.category, b.brand, b.image, b.mrp, b.type === 'Goods' && b.trackSerials],
+      `INSERT INTO items (shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, track_batches, description, category, brand, image, mrp, track_serials, extra)
+       VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
+      [c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.type === 'Goods' && b.trackBatches, b.description, b.category, b.brand, b.image, b.mrp, b.type === 'Goods' && b.trackSerials, JSON.stringify(extra)],
     );
     if (b.type === 'Goods' && b.openingStock > 0) {
       const branchId = await primaryBranchId(db, c.shopId, b.branchId);
@@ -128,8 +141,30 @@ catalogRouter.patch(
         merged.category, merged.brand, merged.image, b.mrp !== undefined ? b.mrp : cur.mrp, merged.type === 'Goods' && (b.trackSerials ?? cur.track_serials),
       ],
     );
+    if (b.extra !== undefined) await db.query('UPDATE items SET extra = $3 WHERE shop_id = $1 AND id = $2', [c.shopId, cur.id, JSON.stringify(await shopExtra(db, c.shopId, b.extra))]);
     await audit(db, req, c.shopId, 'update', 'item', cur.id, b);
     return (await listItems(db, c.shopId, allowed(c, 'items.cost'), [cur.id]))[0];
+  }),
+);
+
+/**
+ * Today's rates: change the selling prices of many items in one save (vegetables, gold, steel change every day).
+ * Each update sets all three price levels to one rate unless sp2/sp3 are given. Past invoices keep their prices.
+ */
+catalogRouter.post(
+  '/items/rates',
+  perm('items.write'),
+  T(async (db, req, c) => {
+    const price = z.number().positive('Price must be more than 0').max(100_000_000);
+    const b = parse(z.object({ updates: z.array(z.object({ id: z.string().uuid(), sp1: price, sp2: price.optional(), sp3: price.optional() })).min(1).max(1000) }), req.body);
+    let changed = 0;
+    for (const u of b.updates) {
+      const r = await db.query('UPDATE items SET sp1 = $3, sp2 = $4, sp3 = $5 WHERE shop_id = $1 AND id = $2 AND NOT archived AND (sp1, sp2, sp3) IS DISTINCT FROM ($3::numeric, $4::numeric, $5::numeric)',
+        [c.shopId, u.id, u.sp1, u.sp2 ?? u.sp1, u.sp3 ?? u.sp1]);
+      changed += r.rowCount ?? 0;
+    }
+    await audit(db, req, c.shopId, 'update_rates', 'item', c.shopId, { changed, items: b.updates.slice(0, 50) });
+    return { changed };
   }),
 );
 

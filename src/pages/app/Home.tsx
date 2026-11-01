@@ -234,6 +234,7 @@ function GettingStarted() {
   const [hidden, setHidden] = useLocalFlag(`ledgerly.gs.${me.shop.id}`);
   if (!admin || hidden || !org || !items || !customers || !invoices) return null;
   const steps = [
+    { label: 'Choose your business type', sub: 'Sets up items, units and receipts for your trade', done: !!org.businessType, to: '/app/organization#business-type' },
     { label: 'Add your shop logo', sub: 'Shown on every invoice', done: !!org.logo, to: '/app/organization' },
     { label: 'Add your GSTIN', sub: 'Needed for tax invoices', done: !!org.gstin, to: '/app/organization' },
     { label: 'Set up UPI payments', sub: 'QR code on invoices', done: !!org.upiId, to: '/app/organization' },

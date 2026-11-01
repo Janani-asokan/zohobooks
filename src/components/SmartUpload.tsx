@@ -97,7 +97,7 @@ export function SmartUpload({ kind, toRows, onApply, title = 'Fill from a PDF or
         <input ref={pickRef} type="file" accept={ACCEPT_UPLOADS} hidden onChange={(e) => { take(e.target.files); e.target.value = ''; }} />
         <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { take(e.target.files); e.target.value = ''; }} />
       </div>
-      {status.data && !status.data.ai && <div className="su-note">Basic reader: works best on PDFs with selectable text and clear photos. Add an Anthropic API key on the server for the smart reader.</div>}
+      {status.data && !status.data.ai && <div className="su-note">Basic reader: works best on PDFs with selectable text and clear photos. The smart reader, which also reads unclear photos, comes with the AI assistant add-on.</div>}
 
       <Modal open={!!review} onClose={() => setReview(null)} size="lg" title="Check what we read" subtitle={review ? `${review.file.file.name} · ${METHOD_LABEL[review.r.method]}` : ''}
         footer={<><button className="btn btn-secondary" onClick={() => setReview(null)}>Cancel</button><button className="btn btn-primary" disabled={!review?.keep.size && !review?.r.data.lines.length} onClick={apply}><CheckCircle2 size={15} /> Fill the form</button></>}>

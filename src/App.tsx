@@ -19,6 +19,7 @@ const SuperFeatures = lazy(() => import('./pages/super/Features'));
 const Activity = lazy(() => import('./pages/super/Activity'));
 const Home = lazy(() => import('./pages/app/Home'));
 const Features = lazy(() => import('./pages/app/Features'));
+const TodayRates = lazy(() => import('./pages/app/TodayRates'));
 const Pos = lazy(() => import('./pages/app/Pos'));
 const Items = lazy(() => import('./pages/app/Items'));
 const ItemForm = lazy(() => import('./pages/app/ItemForm'));
@@ -108,6 +109,7 @@ export default function App() {
             <Route path="pos" element={<Pos />} />
             <Route path="items" element={<Items />} />
             <Route path="items/new" element={<ItemForm />} />
+            <Route path="items/rates" element={<TodayRates />} />
             <Route path="items/:id/edit" element={<ItemForm />} />
             <Route path="sales/customers" element={<Customers />} />
             <Route path="sales/quotes" element={<SalesOrders key="quote" kind="quote" />} />

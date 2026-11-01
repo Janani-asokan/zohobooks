@@ -11,6 +11,7 @@ import { provisionShop } from '../services/provision';
 import { activateFeature, endFeature, priceList, setPrice, shopFeatureHistory } from '../services/features';
 import { aiBalance } from '../services/aiUsage';
 import { FEATURES } from '../../../shared/features';
+import { BUSINESS_TEMPLATES } from '../../../shared/templates';
 import { EMAIL_RE } from '../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
 
@@ -72,6 +73,8 @@ const createShopBody = z.object({
   paymentReference: z.string().max(100).default(''),
   /** Add-on features to turn on until the licence ends. Left out: a 14-day trial of every feature. */
   features: z.array(z.string()).max(50).optional(),
+  /** Business template (shared/templates.ts): sets the shop up for its trade and trials that trade's add-ons. */
+  businessType: z.string().max(40).optional(),
 });
 
 platformRouter.post(
@@ -80,7 +83,7 @@ platformRouter.post(
     const b = parse(createShopBody, req.body);
     const [dup] = await query('SELECT 1 FROM users WHERE lower(email) = lower($1) UNION SELECT 1 FROM super_admins WHERE lower(email) = lower($1)', [b.email]);
     if (dup) throw conflict('This email is already registered');
-    const shop = await provisionShop(req, { ...b, licenseStart: todayISO(), mustChangePassword: true, features: b.features ?? 'trial' });
+    const shop = await provisionShop(req, { ...b, licenseStart: todayISO(), mustChangePassword: true, features: b.features ?? 'trial', businessType: b.businessType || undefined });
     const plan = (await query('SELECT * FROM plans WHERE id = $1', [b.planId]))[0];
     if (Number(plan.price_per_year) > 0) {
       await query("INSERT INTO subscription_payments (shop_id, plan_id, years, amount, method, reference, status, paid_at) VALUES ($1,$2,$3,$4,'manual',$5,'paid',now())", [
@@ -463,3 +466,8 @@ platformRouter.post(
     res.json({ ok: true });
   }),
 );
+
+/** Business types for the new-shop form. */
+platformRouter.get('/business-templates', h(async (_req, res) => {
+  res.json(BUSINESS_TEMPLATES.map((t) => ({ key: t.key, name: t.name, summary: t.summary, features: t.features })));
+}));

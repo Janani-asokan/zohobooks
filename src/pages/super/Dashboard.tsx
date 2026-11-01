@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Puzzle, Store, UserPlus, IndianRupee, AlarmClock, Plus, Mail, Phone, MapPin, RefreshCw, ArrowUpRight, Wand2, KeyRound, Loader2 } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
@@ -25,7 +26,7 @@ const genPassword = () => {
   return Array.from(arr, (n) => chars[n % chars.length]).join('') + (arr[0]! % 10);
 };
 
-const emptyForm = () => ({ shopName: '', ownerName: '', email: '', phone: '', city: '', planId: 'standard', years: 1, password: genPassword(), paymentReference: '' });
+const emptyForm = () => ({ shopName: '', ownerName: '', email: '', phone: '', city: '', planId: 'standard', years: 1, password: genPassword(), paymentReference: '', businessType: '' });
 
 export default function SuperDashboard() {
   const overview = usePlatformOverview();
@@ -40,6 +41,7 @@ export default function SuperDashboard() {
   const [renewYears, setRenewYears] = useState(1);
   const [renewRef, setRenewRef] = useState('');
   const [form, setForm] = useState(emptyForm);
+  const templates = useQuery({ queryKey: ['platform', 'business-templates'], queryFn: () => api.get<Array<{ key: string; name: string; summary: string }>>('/platform/business-templates'), staleTime: Infinity }).data ?? [];
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
@@ -198,6 +200,11 @@ export default function SuperDashboard() {
         <div className="form-grid">
           <Field label="Shop / business name" required error={err('shopName')}><input className={`input ${err('shopName') ? 'invalid' : ''}`} value={form.shopName} onChange={(e) => setForm({ ...form, shopName: e.target.value })} placeholder="e.g. Aravind Computer Store" autoFocus /></Field>
           <Field label="City"><input className="input" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="e.g. Chennai" /></Field>
+          <Field label="Business type" className="span-all" hint={form.businessType ? templates.find((t) => t.key === form.businessType)?.summary : 'Not chosen: the owner picks it later, and tries every add-on for 14 days.'}>
+            <select id="ns-type" className="select" value={form.businessType} onChange={(e) => setForm({ ...form, businessType: e.target.value })}>
+              <option value="">Let the owner choose</option>{templates.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
+            </select>
+          </Field>
         </div>
         <div className="section-title mt-24">Owner account</div>
         <div className="form-grid">

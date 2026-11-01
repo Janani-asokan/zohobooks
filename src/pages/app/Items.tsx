@@ -3,7 +3,7 @@ import { ExportMenu } from '@/components/ExportMenu';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Package, Wrench, Pencil, Trash2, ScanBarcode, Upload, Boxes, Tag, ArrowLeftRight, SlidersHorizontal, X, CalendarClock, Archive, List, LayoutGrid, ExternalLink } from 'lucide-react';
 import { api, download } from '@/api/client';
-import { useBranches, useItemFacets, useItems, useMovements, useMut, useStockAlerts, useTaxSlabs } from '@/api/hooks';
+import { useBranches, useItemFacets, useItems, useMovements, useMut, useStockAlerts, useTaxSlabs, useOrg } from '@/api/hooks';
 import type { Item } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -298,7 +298,7 @@ export default function Items() {
                               <button className="thumb-btn" onClick={() => setOpenId(it.id)} title="Open item"><Thumb name={it.name} image={it.image} /></button>
                               <div>
                                 <div className="title">{cell(it, 'name')}{it.isGroup && <span className="variant-tag">{items.filter((c) => c.parentId === it.id).length} variants</span>}</div>
-                                <div className="sub">{[it.sku, it.category, it.barcode || (it.hsn ? `${it.type === 'Goods' ? 'HSN' : 'SAC'} ${it.hsn}` : ''), it.trackBatches ? 'batches' : '', it.trackSerials ? 'serial nos.' : ''].filter(Boolean).join(' · ') || 'No barcode'}</div>
+                                <div className="sub">{[it.extra?.localName ? String(it.extra.localName) : '', it.sku, it.category, it.barcode || (it.hsn ? `${it.type === 'Goods' ? 'HSN' : 'SAC'} ${it.hsn}` : ''), it.trackBatches ? 'batches' : '', it.trackSerials ? 'serial nos.' : ''].filter(Boolean).join(' · ') || 'No barcode'}</div>
                               </div>
                             </div>
                           </td>
@@ -376,6 +376,7 @@ function StockAlerts({ onOpen }: { onOpen: (itemId: string) => void }) {
 function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item; onClose: () => void; canWrite: boolean; showCost: boolean; onEdit: (it: Item) => void }) {
   const navigate = useNavigate();
   const me = useShopUser();
+  const org = useOrg().data;
   const goods = item.type === 'Goods';
   const branches = useBranches().data ?? [];
   const { data, isLoading } = useMovements(goods ? item.id : undefined);
@@ -421,6 +422,7 @@ function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item
             <div><span>MRP</span><strong>{item.mrp == null ? '—' : money(item.mrp)}</strong></div>
             <div><span>{goods ? 'HSN' : 'SAC'}</span><strong>{item.hsn || '—'}</strong></div>
             {goods && <div><span>Barcode</span><strong className="mono" style={{ fontSize: 13 }}>{item.barcode || '—'}</strong></div>}
+            {(org?.itemFields ?? []).filter((f) => item.extra?.[f.key] !== undefined && item.extra[f.key] !== '').map((f) => <div key={f.key}><span>{f.label}</span><strong>{item.extra[f.key]}{f.suffix ? ` ${f.suffix}` : ''}</strong></div>)}
           </div>
           {item.description && <p className="small muted" style={{ marginTop: 10 }}>{item.description}</p>}
           <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: 'wrap' }}>

@@ -5,6 +5,7 @@ import { useMut, useOrg } from '@/api/hooks';
 import type { Organization as Org } from '@/api/types';
 import { useToast } from '@/context/ToastContext';
 import { Field, PageHeader, Toggle } from '@/components/ui';
+import { BusinessTypeCard } from '@/components/BusinessType';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { useQr, upiLink } from '@/components/qr';
 import { EMAIL_RE, initials } from '@/lib/format';
@@ -25,7 +26,8 @@ function OrgForm({ initial }: { initial: Org }) {
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
-  const save = useMut((b: Org) => api.put<Org>('/shop/organization', b), [['org'], ['invoice']], { silentError: true });
+  // Trade details are saved by the Business type card; they are left out here so this form never overwrites them.
+  const save = useMut((b: Org) => { const { tradeDetails: _t, ...rest } = b; return api.put<Org>('/shop/organization', rest); }, [['org'], ['invoice']], { silentError: true });
   const qr = useQr(org.upiId && /^[\w.-]{2,}@[a-zA-Z]{2,}$/.test(org.upiId) ? upiLink(org, 1, 'Test') : null);
 
   const errs = {
@@ -59,7 +61,8 @@ function OrgForm({ initial }: { initial: Org }) {
   return (
     <div className="page" style={{ maxWidth: 1100 }}>
       <PageHeader title="Organization profile" subtitle="Your company details, logo and payment details appear on every invoice." />
-      <div className="grid-3-1" style={{ alignItems: 'start' }}>
+      <BusinessTypeCard />
+      <div className="grid-3-1 mt-16" style={{ alignItems: 'start' }}>
         <div className="stack">
           <div className="card">
             <div className="card-body">
