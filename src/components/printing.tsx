@@ -13,13 +13,40 @@ export function printWithPage(pageCss: string, bodyClass: string) {
   const style = document.createElement('style');
   style.textContent = `@media print { @page { ${pageCss} } }`;
   document.head.appendChild(style);
-  document.body.classList.add(bodyClass);
-  const done = () => { style.remove(); document.body.classList.remove(bodyClass); window.removeEventListener('afterprint', done); };
+  // Print a copy of the printable part on its own: the hidden app behind it would otherwise still take up space and
+  // add blank pages (a 1-page receipt came out as 3–5 pages).
+  const root = document.createElement('div');
+  root.id = 'print-root';
+  for (const el of document.querySelectorAll<HTMLElement>('.print-area')) {
+    if (el.closest('#print-root') || !el.getClientRects().length) continue;
+    root.appendChild(el.cloneNode(true));
+  }
+  document.body.appendChild(root);
+  document.body.classList.add(bodyClass, 'printing');
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    style.remove(); root.remove(); document.body.classList.remove(bodyClass, 'printing'); window.removeEventListener('afterprint', done);
+  };
   window.addEventListener('afterprint', done);
   window.print();
   setTimeout(done, 1500);
 }
-export const printReceipt = (s: ThermalSettings) => printWithPage(`size: ${s.paper === '2in' ? 58 : 80}mm auto; margin: 0;`, 'print-receipt');
+/**
+ * Receipt roll: the page is exactly the roll width and as long as the receipt, measured just before printing.
+ * (CSS "size: 80mm auto" is invalid, so browsers ignored it and printed on A4.) The receipt is drawn at the roll
+ * width on screen, so its on-screen height in CSS pixels converts straight to millimetres.
+ */
+/** @page size for a receipt roll: the roll width, and the receipt's own length (at least 40 mm). */
+export function rollPageSize(widthMm: number, el: Element | null) {
+  const height = el ? Math.ceil((el.getBoundingClientRect().height * 25.4) / 96) + 4 : 200;
+  return `size: ${widthMm}mm ${Math.max(40, height)}mm; margin: 0;`;
+}
+export function printRoll(widthMm: number, selector = '.print-area .receipt') {
+  printWithPage(rollPageSize(widthMm, document.querySelector(selector)), 'print-receipt');
+}
+export const printReceipt = (s: ThermalSettings) => printRoll(s.paper === '2in' ? 58 : 80);
 
 /* ---------------- Thermal receipt ---------------- */
 

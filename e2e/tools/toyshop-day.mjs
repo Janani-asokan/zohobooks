@@ -141,7 +141,7 @@ try {
   // Price tags for loose toys
   await o.goto(`${B}/app/items/labels?ids=${teddy.id}`); await o.waitForSelector('.blabel');
   ok(await o.locator('.blabel svg.bl-code rect, .blabel svg.bl-code path').count() > 10, 'teddy price tags show a scannable barcode');
-  await o.locator('.print-area').screenshot({ path: `${out}/05-teddy-labels.png` });
+  await o.locator('.print-area').first().screenshot({ path: `${out}/05-teddy-labels.png` });
 
   // Receipt look: 80 mm and a promo line
   const ps = (await oa('GET', '/shop/print-settings')).body;

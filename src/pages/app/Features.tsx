@@ -61,14 +61,15 @@ export default function Features() {
       {me.has('ai') && <AiCreditsCard />}
 
       {q.isLoading && <div className="skeleton mt-16" style={{ height: 320 }} />}
-      {groups.map(([group, list]) => (
-        <section key={group} className="mt-16">
-          <h3 className="feature-group">{group}</h3>
+      {/* One continuous grid (each card names its area), so a group with a single add-on leaves no empty half-row. */}
+      {groups.length > 0 && (
+        <section className="mt-16 feature-grid-wrap">
           <div className="feature-grid">
-            {list.map((f) => {
+            {groups.flatMap(([group, list]) => list.map((f) => ({ f, group }))).map(({ f, group }) => {
               const lvl = f.levels.find((l) => l.key === (f.level ?? f.requested?.level)) ?? f.levels[0]!;
               return (
                 <article key={f.key} id={`feature-${f.key}`} className={`card feature-card ${f.on ? 'is-on' : ''} ${focus === f.key ? 'is-focus' : ''}`}>
+                  <span className="feature-area">{group}</span>
                   <div className="row between" style={{ alignItems: 'flex-start', gap: 8 }}>
                     <div style={{ minWidth: 0 }}><h4>{f.name}</h4>{trade?.features.includes(f.key) && <span className="small" style={{ color: 'var(--brand-700)', fontWeight: 600 }}>Recommended for {trade.name.toLowerCase()}</span>}</div>
                     {f.on ? <Badge tone={f.source === 'trial' ? 'amber' : 'green'}>{SOURCE[f.source ?? ''] ?? 'On'}{f.endsOn ? ` till ${fmtDate(f.endsOn)}` : ''}</Badge>
@@ -89,7 +90,7 @@ export default function Features() {
             })}
           </div>
         </section>
-      ))}
+      )}
 
       {!!q.data?.history.length && (
         <details className="card mt-16">

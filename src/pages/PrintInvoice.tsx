@@ -5,7 +5,7 @@ import { download } from '@/api/client';
 import type { Invoice } from '@/api/types';
 import { COPY_LABEL, TaxInvoice, type PrintBranch, type PrintOrg } from '@/components/TaxInvoice';
 import type { ItemField } from '../../shared/templates';
-import { ThermalReceipt, receiptFromInvoice } from '@/components/printing';
+import { ThermalReceipt, receiptFromInvoice, rollPageSize } from '@/components/printing';
 import { Segmented } from '@/components/ui';
 import { withPrintDefaults, type PaperSize, type PrintSettings } from '../../shared/printSettings';
 
@@ -20,7 +20,8 @@ const cssString = (s: string) => `"${s.replace(/["\\]/g, '\\$&').replace(/\n/g, 
 
 /** @page rules for the chosen paper, with "Page X of Y" in the bottom margin (Chrome, Edge; Firefox adds its own). */
 function pageCss(paper: Paper, label: string, thermalMm: number) {
-  if (paper === 'thermal') return `@page { size: ${thermalMm}mm auto; margin: 0; }`;
+  // Measured after render (see the effect below); "size: 80mm auto" is invalid CSS and printed on A4.
+  if (paper === 'thermal') return `@page { size: ${thermalMm}mm 200mm; margin: 0; }`;
   const margin = PAGE_MARGIN[paper];
   const box = 'font-family: Inter, sans-serif; font-size: 7.5pt; color: #555;';
   return `@page { size: ${paper.toUpperCase()} portrait; margin: ${margin};
@@ -94,7 +95,11 @@ export default function PrintInvoice() {
     style.dataset.print = 'page';
     style.textContent = pageCss(paper, label, thermalMm);
     document.head.appendChild(style);
-    return () => style.remove();
+    // A receipt's page is as long as the receipt: measure once drawn, and again just before printing.
+    const fit = () => { if (paper === 'thermal') style.textContent = `@page { ${rollPageSize(thermalMm, document.querySelector('.print-doc .receipt'))} }`; };
+    const t = window.setTimeout(fit, 50);
+    window.addEventListener('beforeprint', fit);
+    return () => { window.clearTimeout(t); window.removeEventListener('beforeprint', fit); style.remove(); };
   }, [inv?.id, paper, label, thermalMm]);
 
   const onDocReady = useCallback(() => setReadyFor(paper), [paper]);

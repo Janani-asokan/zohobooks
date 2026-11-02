@@ -4,7 +4,7 @@ import { api, fieldErrors } from '@/api/client';
 import { useMut, useOrg } from '@/api/hooks';
 import { LENDING_KEYS, newRequestId, type Loan, type LoanPayment, useLendingSettings } from '@/api/lending';
 import { Field, Modal, Segmented } from '@/components/ui';
-import { printWithPage } from '@/components/printing';
+import { printRoll } from '@/components/printing';
 import { waLink } from '@/pages/app/InvoiceView';
 import { fmtDate, money } from '@/lib/format';
 
@@ -84,7 +84,7 @@ export function ReceiptModal({ payment, loan, onClose }: { payment: LoanPayment;
   return (
     <Modal open onClose={onClose} title="Receipt" subtitle={payment.receiptNo} footer={<>
       {loan.mobile && <a className="btn btn-secondary" target="_blank" rel="noreferrer" href={waLink(loan.mobile, text)}><MessageCircle size={15} /> WhatsApp</a>}
-      <button className="btn btn-secondary" onClick={() => printWithPage('size: 80mm auto; margin: 0;', 'print-receipt')}><Printer size={15} /> Print</button>
+      <button className="btn btn-secondary" onClick={() => printRoll(80, '.print-area .loan-receipt, .print-area')}><Printer size={15} /> Print</button>
       <button className="btn btn-primary" onClick={onClose} autoFocus>Done</button>
     </>}>
       <div className="print-area">

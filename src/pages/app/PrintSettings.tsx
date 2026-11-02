@@ -107,7 +107,8 @@ export default function PrintSettings() {
           ) : tab === 'thermal' ? (
             <>
               <div className="ps-paper-tag">{th.paper === '2in' ? '2 inch (58 mm) roll' : '3 inch (80 mm) roll'} · {THEMES.find((x) => x.id === th.theme)!.label} theme · sample bill</div>
-              <ThermalReceipt data={SAMPLE_RECEIPT} org={org} s={th} />
+              {/* Marked printable so “Print a test receipt” prints this sample (in-app printing hides everything else). */}
+              <div className="print-area ps-receipt-preview"><ThermalReceipt data={SAMPLE_RECEIPT} org={org} s={th} /></div>
               <div className="ps-help">Print from <strong>POS</strong> after a sale, or from any invoice with <strong>Print / PDF → Thermal receipt</strong>.</div>
               <details className="ps-help ps-setup">
                 <summary>Setting up the counter printer and scanner</summary>

@@ -120,7 +120,7 @@
 .receipt.rc-advanced .rc-saved { border: 1px dashed #333; padding: 3px; }
 @media print {
   body.print-receipt .print-area { width: auto; }
-  body.print-receipt .receipt { border: none !important; border-radius: 0 !important; }
+  body.print-receipt .receipt { border: none !important; border-radius: 0 !important; margin: 0 !important; box-shadow: none !important; }
 }
 
 /* ---------- Barcode labels ---------- */
@@ -141,3 +141,15 @@
 @media print { body.print-labels .print-area { gap: 0 !important; align-items: flex-start !important; } body.print-labels .label-row { gap: 2mm; } }
 .blabel > * { flex-shrink: 0; }
 .blabel .bl-code { flex: 1 1 0; min-height: 3mm; height: auto; }
+/* In-app printing (receipts, labels, statements): only the copy in #print-root is laid out, so nothing behind it adds
+   pages. #print-root is hidden on screen. */
+#print-root { display: none; }
+@media print {
+  body.printing > *:not(#print-root) { display: none !important; }
+  body.printing #print-root { display: block; }
+  body.printing #print-root, body.printing #print-root * { visibility: visible !important; }
+  body.printing #print-root .print-area { position: static !important; }
+}
+/* The frame around a receipt on screen; never printed. */
+.receipt-frame { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; width: fit-content; margin: 0 auto; }
+@media print { .receipt-frame { border: 0 !important; border-radius: 0 !important; } #print-root .no-print { display: none !important; } }

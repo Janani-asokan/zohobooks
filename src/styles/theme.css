@@ -659,7 +659,23 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .feature-total { display: grid; justify-items: end; padding: 10px 14px; border-radius: 12px; background: var(--brand-50); }
 .feature-total strong { font-size: 22px; color: var(--brand-700); }
 .feature-group { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-500); }
-.feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+/* 1, 2 or 3 columns by the space available; a last card left alone in its row widens to fill it, so there is no gap. */
+.feature-grid-wrap { container-type: inline-size; }
+.feature-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@container (min-width: 620px) {
+  .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .feature-grid > .feature-card:last-child:nth-child(2n + 1) { grid-column: 1 / -1; }
+  .feature-grid > .feature-card:last-child:nth-child(2n + 1) .feature-includes { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
+}
+@container (min-width: 980px) {
+  .feature-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .feature-grid > .feature-card:last-child:nth-child(2n + 1) { grid-column: auto; }
+  .feature-grid > .feature-card:last-child:nth-child(2n + 1) .feature-includes { grid-template-columns: 1fr; }
+  .feature-grid > .feature-card:last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
+  .feature-grid > .feature-card:last-child:nth-child(3n + 1) .feature-includes { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 24px; }
+  .feature-grid > .feature-card:last-child:nth-child(3n + 2) { grid-column: span 2; }
+  .feature-grid > .feature-card:last-child:nth-child(3n + 2) .feature-includes { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
+}
 .feature-card { padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; border: 1px solid var(--border); transition: box-shadow .2s, border-color .2s; }
 .feature-card h4 { margin: 0; font-size: 16px; color: var(--ink-900); }
 .feature-card p { margin: 0; }
@@ -707,3 +723,8 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .modal { display: flex; flex-direction: column; max-height: calc(100vh - 2 * min(8vh, 56px)); }
 .modal-header, .modal-footer { flex-shrink: 0; }
 .modal-body { overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+/* Add-on cards: lists stay tight at the top (no stretched gaps when a neighbour is taller), price and button sit at
+   the bottom, and the area (Sales, Inventory …) is a small label on each card. */
+.feature-card .feature-includes { flex: 0 0 auto; align-content: start; }
+.feature-card .feature-price { margin-top: auto; padding-top: 4px; }
+.feature-area { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500); margin-bottom: -4px; }

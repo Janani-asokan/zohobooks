@@ -103,7 +103,7 @@ const doneText = await p.locator('[role=dialog]').innerText();
 ok(/INV-|POS-/.test(doneText), 'sale completes with an invoice number');
 await p.locator('[role=dialog]').screenshot({ path: `${out}/toy-receipt.png` });
 printed = []; await p.getByRole('button', { name: /Print receipt/ }).click(); await p.waitForTimeout(400);
-ok(printed.length === 1 && /size: 80mm auto/.test(printed[0]), `receipt page size sent to the printer: ${printed[0]}`);
+ok(printed.length === 1 && /size: 80mm \d+mm/.test(printed[0]), `receipt page size sent to the printer: ${printed[0]}`);
 
 // 7. The bill is right: quantities, GST by toy type, stock went down
 const inv = (await api('GET', '/shop/invoices')).body; const list = Array.isArray(inv) ? inv : inv.rows ?? inv.items;

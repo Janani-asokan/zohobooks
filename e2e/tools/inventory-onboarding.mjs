@@ -90,7 +90,7 @@ try {
   ok(await o.locator('.blabel svg.bl-code rect, .blabel svg.bl-code path').count() > labelsNow * 5, 'each label has a drawn barcode');
   printed.length = 0; await o.getByRole('button', { name: 'Print labels' }).click(); await o.waitForTimeout(300);
   ok(printed.length === 1 && /size: 102mm 25mm/.test(printed[0]), `labels sent to the 50×25 mm 2-up label printer: ${printed[0]}`);
-  await o.locator('.print-area').screenshot({ path: `${out}/03-labels-roll.png` });
+  await o.locator('.print-area').first().screenshot({ path: `${out}/03-labels-roll.png` });
   // Same labels on A4 sheets (shops without a label printer)
   const ps = (await oa('GET', '/shop/print-settings')).body;
   await oa('PUT', '/shop/print-settings', { ...ps, barcode: { ...ps.barcode, printer: 'a4', labelSize: 'a4-65' } });
