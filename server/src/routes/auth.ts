@@ -126,7 +126,8 @@ authRouter.post(
 authRouter.get(
   '/demo',
   h(async (_req, res) => {
-    if (!config.demoSimplePasswords) return res.json({ enabled: false, accounts: [] });
+    // Hidden unless DEMO_SHOW_LOGINS=1: a public login page should not hand out passwords.
+    if (!config.demoSimplePasswords || !config.demoShowLogins) return res.json({ enabled: false, accounts: [] });
     const { DEMO_ACCOUNTS } = await import('../seed');
     res.json({ enabled: true, accounts: DEMO_ACCOUNTS.filter((a) => a.kind !== 'super' || config.demoSuperAdmin).map(({ label, email, password }) => ({ label, email, password })) });
   }),

@@ -197,11 +197,15 @@ export default function Landing() {
 
       <section className="lp-section" id="faq">
         <h2 className="reveal">Questions? <span>Answers</span></h2>
-        <div className="lp-faq">
+        {/* The scroll-in animation sits on the list, not the rows: React rewrites a row's class when it opens, which
+            would drop the animation's "in" class and hide the row. */}
+        <div className="lp-faq reveal">
           {FAQ.map(([q, a], i) => (
-            <div key={q} className={`lp-faq-item reveal ${open === i ? 'open' : ''}`}>
-              <button aria-expanded={open === i} onClick={() => setOpen(open === i ? -1 : i)}>{q}<ChevronDown size={18} /></button>
-              <div className="lp-faq-a"><p>{a}</p></div>
+            <div key={q} className={`lp-faq-item ${open === i ? 'open' : ''}`}>
+              <button id={`faq-q-${i}`} aria-expanded={open === i} aria-controls={`faq-a-${i}`} onClick={() => setOpen(open === i ? -1 : i)}>{q}<ChevronDown size={18} /></button>
+              <div className="lp-faq-a" id={`faq-a-${i}`} role="region" aria-labelledby={`faq-q-${i}`} aria-hidden={open !== i}>
+                <div className="lp-faq-inner"><p>{a}</p></div>
+              </div>
             </div>
           ))}
         </div>

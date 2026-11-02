@@ -1,3 +1,4 @@
+import { config } from '../src/config';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app, freshDb, login } from './helpers';
@@ -68,6 +69,22 @@ describe('demo mode', () => {
     const r = await request(app).get('/api/auth/demo');
     expect(r.status).toBe(200);
     expect(r.body).toEqual({ enabled: false, accounts: [] });
+  });
+
+  it('keeps demo logins off the login page even in demo mode, unless the list is switched on', async () => {
+    const was = { simple: config.demoSimplePasswords, show: config.demoShowLogins };
+    try {
+      (config as { demoSimplePasswords: boolean }).demoSimplePasswords = true;
+      (config as { demoShowLogins: boolean }).demoShowLogins = false;
+      expect((await request(app).get('/api/auth/demo')).body).toEqual({ enabled: false, accounts: [] });
+      (config as { demoShowLogins: boolean }).demoShowLogins = true;
+      const shown = (await request(app).get('/api/auth/demo')).body;
+      expect(shown.enabled).toBe(true);
+      expect(shown.accounts.some((a: { email: string }) => a.email === 'admin@ledgerly.in')).toBe(false);
+    } finally {
+      (config as { demoSimplePasswords: boolean }).demoSimplePasswords = was.simple;
+      (config as { demoShowLogins: boolean }).demoShowLogins = was.show;
+    }
   });
 });
 

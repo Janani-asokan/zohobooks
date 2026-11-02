@@ -49,6 +49,8 @@ export const config = {
    * reset to the demo one, and if it still has the demo password it must set a new one on next sign-in.
    */
   demoSuperAdmin: bool(env.DEMO_SUPER_ADMIN, false),
+  /** List the demo logins on the login page. Off by default: the demo passwords still work, but are not shown. */
+  demoShowLogins: bool(env.DEMO_SHOW_LOGINS, false),
   /** Reads uploaded PDFs and photos into form fields. Without a key, an offline text reader and OCR are used. */
   ai: { apiKey: env.ANTHROPIC_API_KEY ?? '', model: env.AI_MODEL ?? 'claude-opus-5-5' },
   pdf: {
