@@ -305,3 +305,12 @@
 .serials-box label { display: flex; gap: 8px; align-items: baseline; }
 .serials-box label .ok { color: var(--success-600, #2f7d4f); }
 .serials-box .textarea.mono { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-13); letter-spacing: .02em; }
+/* Dashboard: one tile per add-on the business has */
+.addon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-3); padding: 0 var(--sp-4) var(--sp-4); }
+.addon-tile { display: grid; gap: 8px; align-content: start; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius, 12px); background: var(--surface-raised, #fff); color: inherit; text-decoration: none; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.addon-tile:hover { border-color: var(--brand-300, #e3a3ad); box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,.06)); transform: translateY(-1px); }
+.addon-tile strong { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--ink-900); font-size: var(--fs-14); }
+.addon-tile dl { display: grid; gap: 4px; margin: 0; }
+.addon-tile dl div { display: flex; justify-content: space-between; gap: 10px; font-size: var(--fs-13); }
+.addon-tile dt { color: var(--ink-600); }
+.addon-tile dd { margin: 0; font-weight: 600; color: var(--ink-900); font-variant-numeric: tabular-nums; }

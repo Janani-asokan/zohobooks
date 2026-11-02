@@ -7,6 +7,8 @@ import { platformConfig } from '../../services/common';
 import { buildGstr1, buildGstr3b, hsnSummary } from '../../services/gstReturns';
 import { fyLabel } from '../../../../shared/fy';
 import { allowed, T } from './ctx';
+import { loadEntitlements, priceList } from '../../services/features';
+import { featureByKey, hasFeature } from '../../../../shared/features';
 
 export const reportsRouter = Router();
 
@@ -274,5 +276,101 @@ reportsRouter.get(
     const rows = (await many(db, `${PROFIT_SQL} AND i.date BETWEEN $2 AND $3 GROUP BY i.id ORDER BY i.date DESC, i.number DESC`, [c.shopId, from, to])).map(profitRow);
     const sales = rows.reduce((s, r) => s + r.sales, 0); const cost = rows.reduce((s, r) => s + r.cost, 0);
     return { from, to, rows, totals: { bills: rows.length, sales: Math.round(sales * 100) / 100, cost: Math.round(cost * 100) / 100, profit: Math.round((sales - cost) * 100) / 100, margin: sales > 0 ? Math.round(((sales - cost) / sales) * 1000) / 10 : 0 }, lossMaking: rows.filter((r) => r.profit < 0).length };
+  }),
+);
+
+/**
+ * One live tile per add-on the shop has bought, so a business that runs two or more (POS and microfinance, say) sees
+ * each of them on the dashboard. Only add-ons the shop has, and only figures this login may see. Each figure reads
+ * that add-on's own records.
+ */
+type Fig = { label: string; value: number; kind: 'money' | 'count' };
+interface AddonTile { key: string; name: string; link: string; figures: Fig[]; note?: string }
+reportsRouter.get(
+  '/dashboard/addons',
+  T(async (db, _req, c) => {
+    const ent = await loadEntitlements(c.shopId, db);
+    const can = (p: Parameters<typeof allowed>[1]) => allowed(c, p);
+    const sell = can('sales.write') || can('reports.read');
+    const n = (v: unknown) => Math.round(Number(v ?? 0) * 100) / 100;
+    const tiles: AddonTile[] = [];
+    const add = (key: string, link: string, figures: Fig[], note?: string) => tiles.push({ key, name: featureByKey(key)!.name, link, figures, ...(note ? { note } : {}) });
+    // One add-on's figures failing must not hide the others: each runs in its own savepoint and is skipped on error.
+    const tile = async (key: string, fn: () => Promise<void>) => {
+      await db.query('SAVEPOINT addon_tile');
+      try { await fn(); await db.query('RELEASE SAVEPOINT addon_tile'); }
+      catch (e) { await db.query('ROLLBACK TO SAVEPOINT addon_tile'); console.error(`[dashboard] ${key} tile failed:`, (e as Error).message); }
+    };
+    const has = (k: string) => hasFeature(ent, k);
+
+    if (has('pos') && sell) await tile('pos', async () => {
+      const r = await one(db, `SELECT count(*) AS bills, coalesce(sum(total), 0) AS amount FROM invoices WHERE shop_id = $1 AND source = 'pos' AND status = 'Issued' AND date = $2`, [c.shopId, todayISO()]);
+      add('pos', '/app/pos', [{ label: 'Counter sales today', value: n(r.amount), kind: 'money' }, { label: 'Bills today', value: Number(r.bills), kind: 'count' }]);
+    });
+    if (has('quotes_orders') && sell) await tile('quotes_orders', async () => {
+      const r = await one(db, `SELECT
+          count(*) FILTER (WHERE kind = 'quote' AND status IN ('Draft', 'Sent')) AS quotes,
+          coalesce(sum(total) FILTER (WHERE kind = 'quote' AND status IN ('Draft', 'Sent')), 0) AS quote_value,
+          count(*) FILTER (WHERE kind = 'order' AND status IN ('Draft', 'Sent', 'Accepted')) AS orders,
+          (SELECT count(*) FROM delivery_challans d WHERE d.shop_id = $1 AND d.status IN ('Packed', 'Dispatched')) AS challans
+        FROM sales_orders WHERE shop_id = $1`, [c.shopId]);
+      add('quotes_orders', '/app/sales/quotes', [{ label: 'Open quotes', value: n(r.quote_value), kind: 'money' }, { label: 'Open orders', value: Number(r.orders), kind: 'count' }, { label: 'Challans not delivered', value: Number(r.challans), kind: 'count' }],
+        Number(r.quotes) ? `${r.quotes} quote${Number(r.quotes) === 1 ? '' : 's'} waiting for the customer` : undefined);
+    });
+    if (has('recurring') && sell) await tile('recurring', async () => {
+      const r = await one(db, `SELECT count(*) FILTER (WHERE active) AS active, count(*) FILTER (WHERE active AND next_date <= current_date + 7) AS week, min(next_date) FILTER (WHERE active) AS next FROM recurring_profiles WHERE shop_id = $1`, [c.shopId]);
+      add('recurring', '/app/sales/recurring', [{ label: 'Active profiles', value: Number(r.active), kind: 'count' }, { label: 'Due in 7 days', value: Number(r.week), kind: 'count' }], r.next ? `Next invoice on ${new Date(`${r.next}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : undefined);
+    });
+    if (has('offers_loyalty') && sell) await tile('offers_loyalty', async () => {
+      const r = await one(db, `SELECT
+          (SELECT count(*) FROM offers o WHERE o.shop_id = $1 AND o.active AND NOT o.archived AND current_date BETWEEN o.starts_on AND o.ends_on) AS running,
+          (SELECT coalesce(sum(points), 0) FROM loyalty_ledger l WHERE l.shop_id = $1) AS points,
+          (SELECT coalesce(sum(loyalty_points_earned), 0) FROM invoices i WHERE i.shop_id = $1 AND i.status = 'Issued' AND i.date >= date_trunc('month', current_date)) AS earned`, [c.shopId]);
+      add('offers_loyalty', '/app/sales/offers', [{ label: 'Offers running', value: Number(r.running), kind: 'count' }, { label: 'Points customers hold', value: n(r.points), kind: 'count' }, { label: 'Points given this month', value: n(r.earned), kind: 'count' }]);
+    });
+    if (has('purchases') && can('purchases.read')) await tile('purchases', async () => {
+      const r = await one(db, `SELECT
+          coalesce(sum(amount - amount_paid) FILTER (WHERE status <> 'Paid' AND due_date <= current_date + 7), 0) AS due_week,
+          count(*) FILTER (WHERE status <> 'Paid' AND due_date <= current_date + 7) AS bills_week,
+          (SELECT count(*) FROM purchase_orders p WHERE p.shop_id = $1 AND p.status IN ('Issued', 'Partially Received')) AS pos
+        FROM bills WHERE shop_id = $1`, [c.shopId]);
+      add('purchases', '/app/purchases/bills', [{ label: 'Bills to pay in 7 days', value: n(r.due_week), kind: 'money' }, { label: 'Bills due', value: Number(r.bills_week), kind: 'count' }, { label: 'Orders still to arrive', value: Number(r.pos), kind: 'count' }]);
+    });
+    if (has('inventory_plus') && (can('items.write') || can('reports.read'))) await tile('inventory_plus', async () => {
+      const r = await one(db, `SELECT
+          (SELECT count(*) FROM stock_transfers t WHERE t.shop_id = $1 AND t.status = 'In transit') AS transit,
+          (SELECT count(*) FROM items i WHERE i.shop_id = $1 AND NOT i.archived AND NOT i.is_group AND i.type = 'Goods' AND coalesce((SELECT sum(qty) FROM item_stock s WHERE s.item_id = i.id), 0) <= i.reorder_level) AS low,
+          (SELECT count(*) FROM item_serials s WHERE s.shop_id = $1 AND s.status = 'In stock') AS serials,
+          (SELECT count(*) FROM branches b WHERE b.shop_id = $1) AS branches`, [c.shopId]);
+      add('inventory_plus', '/app/inventory/stock-summary', [{ label: 'Items to reorder', value: Number(r.low), kind: 'count' }, { label: 'Transfers in transit', value: Number(r.transit), kind: 'count' }, { label: 'IMEI / serial units in stock', value: Number(r.serials), kind: 'count' }], `${r.branches} warehouse${Number(r.branches) === 1 ? '' : 's'}`);
+    });
+    if (has('accounting') && can('accounting.read')) await tile('accounting', async () => {
+      const r = await one(db, `SELECT
+          (SELECT coalesce(sum(opening_balance), 0) + coalesce((SELECT sum(amount) FROM bank_transactions t WHERE t.shop_id = $1), 0) FROM bank_accounts a WHERE a.shop_id = $1) AS cash,
+          (SELECT coalesce(sum(amount), 0) FROM expenses e WHERE e.shop_id = $1 AND e.date >= date_trunc('month', current_date)) AS expenses,
+          (SELECT count(*) FROM journals j WHERE j.shop_id = $1 AND j.date >= date_trunc('month', current_date)) AS journals`, [c.shopId]);
+      add('accounting', '/app/accounting/ledger', [{ label: 'Cash and bank', value: n(r.cash), kind: 'money' }, { label: 'Expenses this month', value: n(r.expenses), kind: 'money' }, { label: 'Journal entries this month', value: Number(r.journals), kind: 'count' }]);
+    });
+    if (has('tally') && (can('accounting.read') || can('reports.read'))) await tile('tally', async () => {
+      const r = await one(db, `SELECT max(at) AS last_import FROM audit_log WHERE shop_id = $1 AND action = 'import'`, [c.shopId]);
+      add('tally', '/app/accounting/tally', [], r.last_import ? `Last import ${new Date(r.last_import).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}` : 'Export to Tally, or import from Tally and Excel');
+    });
+    if (has('field') && (can('field.view') || can('reports.read'))) await tile('field', async () => {
+      const r = await one(db, `SELECT
+          (SELECT count(DISTINCT user_id) FROM field_days d WHERE d.shop_id = $1 AND d.date = $2 AND d.ended_at IS NULL) AS out_now,
+          count(*) AS visits, coalesce(sum(order_value), 0) AS orders, coalesce(sum(collected), 0) AS collected
+        FROM field_visits WHERE shop_id = $1 AND (checked_in_at AT TIME ZONE 'Asia/Kolkata')::date = $2`, [c.shopId, todayISO()]);
+      add('field', '/app/field', [{ label: 'Visits today', value: Number(r.visits), kind: 'count' }, { label: 'Orders taken today', value: n(r.orders), kind: 'money' }, { label: 'Collected today', value: n(r.collected), kind: 'money' }], `${r.out_now} on the road now`);
+    });
+    if (has('ai') && (can('reports.read') || can('admin'))) await tile('ai', async () => {
+      const used = Number((await one(db, `SELECT coalesce(sum(credits), 0) AS used FROM ai_usage WHERE shop_id = $1 AND created_at >= date_trunc('month', current_date)`, [c.shopId])).used);
+      const included = (await priceList()).find((p) => p.feature === 'ai' && p.level === ent.ai)?.includedCredits ?? 0;
+      const topups = Number((await one(db, `SELECT coalesce(sum(credits), 0) AS t FROM ai_topups WHERE shop_id = $1 AND status = 'granted' AND month = date_trunc('month', current_date)::date`, [c.shopId])).t);
+      add('ai', '/app/features?f=ai', [{ label: 'AI credits left this month', value: Math.max(0, Math.round(included + topups - used)), kind: 'count' }, { label: 'Used', value: Math.round(used), kind: 'count' }]);
+    });
+    // Microfinance has its own section on the dashboard when it is switched on; until then, a tile says how.
+    if (has('microfinance') && (can('lending.read') || can('lending.write')) && !(await one(db, 'SELECT lending_enabled FROM organizations WHERE shop_id = $1', [c.shopId]))?.lending_enabled)
+      add('microfinance', '/app/microfinance/settings', [], 'Bought, not switched on yet: open Microfinance settings to start');
+    return tiles;
   }),
 );

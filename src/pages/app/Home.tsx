@@ -1,10 +1,12 @@
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { usePageOk } from '@/components/FeatureOff';
 import { useMemo, useState } from 'react';
-import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays, Receipt, Landmark, Sparkles, HandCoins } from 'lucide-react';
+import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays, Receipt, Landmark, Sparkles, HandCoins, Puzzle } from 'lucide-react';
 import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
 import { useLocalFlag } from '@/components/kit';
 import { useLendingDashboard } from '@/api/lending';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/api/client';
 import { useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { EmptyState, StatCard } from '@/components/ui';
@@ -127,6 +129,7 @@ function ShopHome() {
       </div>
 
       <LendingSummary />
+      <AddonTiles />
 
       <div className="dash-row mt-16">
         <div className="card">
@@ -299,6 +302,44 @@ function LendingSummary() {
           <StatCard label="Given this month" value={t ? money(t.monthDisbursed) : '—'} icon={Landmark} tone="blue" foot={t && (t.defaulters ? `${t.defaulters} defaulter${t.defaulters === 1 ? '' : 's'}` : t.pendingVerification ? `${t.pendingVerification} borrower${t.pendingVerification === 1 ? '' : 's'} to verify` : 'No defaulters')} />
         </div>
       )}
+    </section>
+  );
+}
+
+interface AddonTile { key: string; name: string; link: string; figures: Array<{ label: string; value: number; kind: 'money' | 'count' }>; note?: string }
+
+/**
+ * Every add-on the business has bought gets a tile with today's figures, so a shop that runs two or more (POS and
+ * loyalty, purchases and field sales, retail and microfinance…) sees all of them here with the same login.
+ */
+function AddonTiles() {
+  const me = useShopUser();
+  const org = useOrg().data;
+  const q = useQuery({ queryKey: ['dashboard', 'addons'], queryFn: () => api.get<AddonTile[]>('/shop/dashboard/addons'), refetchInterval: 120_000 });
+  const tiles = q.data ?? [];
+  // Microfinance, once switched on, has its own section above; it still counts as one of the business's add-ons.
+  const lendingAbove = !!org?.lendingEnabled && me.has('microfinance') && (me.can('lending.read') || me.can('lending.collect'));
+  const total = tiles.length + (lendingAbove ? 1 : 0);
+  if (!tiles.length) return null;
+  return (
+    <section className="card mt-16 addon-tiles" aria-label="Your add-ons">
+      <div className="card-header">
+        <div><h3 className="row" style={{ gap: 8 }}><Puzzle size={17} /> Your add-ons</h3><p className="small muted">{total} add-on{total === 1 ? '' : 's'} on this business, today’s figures from each{lendingAbove ? ' (microfinance is in its own section above)' : ''}</p></div>
+        <Link to="/app/features" className="btn btn-ghost btn-sm">Manage add-ons</Link>
+      </div>
+      <div className="addon-grid">
+        {tiles.map((t) => (
+          <Link key={t.key} to={t.link} className="addon-tile" data-addon={t.key}>
+            <strong>{t.name} <ArrowRight size={13} /></strong>
+            {t.figures.length > 0 && (
+              <dl>
+                {t.figures.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{f.kind === 'money' ? money(f.value) : f.value.toLocaleString('en-IN')}</dd></div>)}
+              </dl>
+            )}
+            {t.note && <span className="small muted">{t.note}</span>}
+          </Link>
+        ))}
+      </div>
     </section>
   );
 }
