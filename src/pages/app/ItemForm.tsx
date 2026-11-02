@@ -16,7 +16,7 @@ import { Attachments, attachFile } from '@/components/Attachments';
 import { SerialsCard, VariantsSection } from '@/components/ItemExtras';
 import type { ExtractResult } from '../../../shared/extract';
 import { useAiEnabled } from '@/components/Assistant';
-import { sameBarcode } from '../../../shared/barcode';
+import { barcodeKey, newShopBarcode, sameBarcode } from '../../../shared/barcode';
 
 type ItemType = Item['type'];
 interface Draft {
@@ -35,11 +35,9 @@ const TIERS = [
   { k: 'sp3', label: 'SP3 · New', hint: 'First-time / promotional', color: '#c98a3c' },
 ] as const;
 
-/** Internal EAN-13 (prefix 2 = in-store use) with a valid check digit. */
-export function generateEan13() {
-  const body = '2' + Array.from({ length: 11 }, () => Math.floor(Math.random() * 10)).join('');
-  const sum = [...body].reduce((s, d, i) => s + Number(d) * (i % 2 ? 3 : 1), 0);
-  return body + ((10 - (sum % 10)) % 10);
+/** Internal EAN-13 (prefix 2 = in-store use) with a valid check digit, not used by another item here. */
+export function generateEan13(existing: Array<{ barcode: string }> = []) {
+  return newShopBarcode(new Set(existing.map((i) => barcodeKey(i.barcode)).filter(Boolean)));
 }
 const skuFrom = (name: string, brand: string) => {
   const part = (s: string, n: number) => s.replace(/[^a-z0-9 ]/gi, '').trim().split(/\s+/).filter(Boolean).map((w) => w.slice(0, n)).join('').toUpperCase();
@@ -414,7 +412,7 @@ export default function ItemForm() {
                 <select className="select" value={draft.unit} onChange={(ev) => set('unit', ev.target.value)}>{units.map((u) => <option key={u}>{u}</option>)}</select>
               </Field>
               {draft.type === 'Goods' && (
-                <Field label="Barcode" error={e('barcode')} className="span-all" hint={<>Scan with a USB scanner or camera — or <button type="button" className="link-btn" onClick={() => set('barcode', generateEan13())}><ScanBarcode size={12} /> generate one</button> and print labels later.</>}>
+                <Field label="Barcode" error={e('barcode')} className="span-all" hint={<>Scan with a USB scanner or camera — or <button type="button" className="link-btn" onClick={() => set('barcode', generateEan13(items))}><ScanBarcode size={12} /> generate one</button> and print labels later.</>}>
                   <BarcodeInput value={draft.barcode} invalid={!!e('barcode')} onChange={(v) => set('barcode', v)}
                     onScan={(code) => { const ex = items.find((i) => sameBarcode(i.barcode, code) && i.id !== id); if (ex) toast('error', 'Barcode already in use', ex.name); }} />
                 </Field>

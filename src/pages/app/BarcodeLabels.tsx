@@ -17,7 +17,19 @@ export default function BarcodeLabels() {
   const size = labelSize(s.labelSize);
   const chosen = items.filter((i) => ids.includes(i.id));
   const [copies, setCopies] = useState<Record<string, number>>({});
-  const labels = chosen.flatMap((it) => Array.from({ length: copies[it.id] ?? size.perRow }, () => it));
+  // How many labels each item starts with: ?qty=20,5 (from a stock bill: one per piece received), ?per=stock (one per
+  // piece on the shelf), otherwise one row of labels.
+  const qtyParam = (params.get('qty') ?? '').split(',').map((n) => Math.max(0, Math.min(500, Math.round(Number(n) || 0))));
+  const perStock = params.get('per') === 'stock';
+  const startCopies = (it: (typeof chosen)[number]) => {
+    const i = ids.indexOf(it.id);
+    if (qtyParam[i]) return qtyParam[i]!;
+    if (perStock) return Math.max(1, Math.min(500, Math.round(it.stock)));
+    return size.perRow;
+  };
+  const count = (it: (typeof chosen)[number]) => copies[it.id] ?? startCopies(it);
+  const labels = chosen.flatMap((it) => Array.from({ length: count(it) }, () => it));
+  const onePerPiece = () => setCopies(Object.fromEntries(chosen.map((it) => [it.id, Math.max(1, Math.min(500, Math.round(it.stock)))])));
   const shop = org.data?.companyName ?? '';
 
   // Label printers feed one row at a time; A4 sheets hold a fixed grid.
@@ -52,10 +64,11 @@ export default function BarcodeLabels() {
           {chosen.map((it) => (
             <label key={it.id} className="chip-btn" style={{ cursor: 'default' }}>
               {it.name.slice(0, 28)}
-              <input type="number" min={0} max={500} value={copies[it.id] ?? size.perRow} onChange={(e) => setCopies({ ...copies, [it.id]: Math.max(0, Math.min(500, Number(e.target.value))) })} style={{ width: 56, border: '1px solid var(--border-strong)', borderRadius: 6, padding: '2px 4px', background: 'var(--surface)', color: 'var(--ink-900)' }} aria-label={`Copies of ${it.name}`} />
+              <input type="number" min={0} max={500} value={count(it)} onChange={(e) => setCopies({ ...copies, [it.id]: Math.max(0, Math.min(500, Number(e.target.value))) })} style={{ width: 56, border: '1px solid var(--border-strong)', borderRadius: 6, padding: '2px 4px', background: 'var(--surface)', color: 'var(--ink-900)' }} aria-label={`Copies of ${it.name}`} />
             </label>
           ))}
           {chosen.length === 0 && <span className="small muted">No items selected. Go back and tick the items you want labels for.</span>}
+          {chosen.some((it) => it.type === 'Goods') && <button type="button" className="btn btn-soft btn-sm" onClick={onePerPiece}>One label per piece in stock</button>}
         </div>
       </div>
       <div className="print-area" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: s.printer === 'label' ? 8 : 16 }}>

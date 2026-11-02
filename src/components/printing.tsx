@@ -6,6 +6,7 @@ import {
   labelFontMm, labelSize, paperWidthMm, type BarcodeFieldKey, type BarcodeSettings, type ThermalSettings,
 } from '../../shared/printSettings';
 import { upiLink, useQr } from './qr';
+import { isValidEan13 } from '../../shared/barcode';
 
 /** Print just the `.print-area`, with a page size that matches the paper (receipt roll or label stock). */
 export function printWithPage(pageCss: string, bodyClass: string) {
@@ -180,7 +181,7 @@ export const SAMPLE_RECEIPT: ReceiptData = {
 
 /* ---------------- Barcode label ---------------- */
 
-const isEan13 = (c: string) => /^\d{13}$/.test(c);
+const isEan13 = isValidEan13;
 
 export interface LabelItem { name: string; barcode: string; sku: string; mrp: number | null; sp1: number; category?: string; brand?: string; unit?: string }
 

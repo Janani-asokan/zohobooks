@@ -8,6 +8,7 @@ import { getOrg, primaryBranchId } from '../../services/common';
 import { moveStock } from '../../services/stock';
 import { parseTallyXml, tallyMasters, tallyVouchers } from '../../services/tally';
 import { aiEnabled } from '../../services/extract';
+import { templateByKey } from '../../../../shared/templates';
 import { aiError, mapColumns } from '../../services/assistant';
 import { GSTIN_RE, INDIAN_STATES, stateFromCode } from '../../../../shared/gst';
 import { IMPORT_FIELDS, cleanNumber, guessKind, guessMapping, type ImportKind } from '../../../../shared/columnMap';
@@ -96,24 +97,32 @@ async function importRows(db: Db, req: Request, c: UserCtx, kind: ImportKind, ro
   const existing = await many(db, 'SELECT lower(name) AS n, lower(sku) AS s, barcode FROM items WHERE shop_id = $1 AND NOT archived', [c.shopId]);
   const seen = { n: new Set(existing.map((e) => e.n)), s: new Set(existing.map((e) => e.s).filter(Boolean)), b: new Set(existing.map((e) => e.barcode).filter(Boolean)) };
   let noRate = 0; let noPrice = 0;
+  // A file without a GST column gets the shop's usual rate for its trade (5% for most toys), not a blanket 18%.
+  const orgRow = await one(db, 'SELECT business_type FROM organizations WHERE shop_id = $1', [c.shopId]);
+  const usual = templateByKey(orgRow?.business_type ?? '')?.defaultGst;
+  const fallbackSlab = slabs.find((s) => Number(s.rate) === (usual ?? 18)) ?? slabs.find((s) => Number(s.rate) === 18) ?? slabs.at(-1)!;
   for (const [i, r] of rows.entries()) {
     const name = (r.name ?? '').trim().slice(0, 200);
     if (!name) { out.errors.push({ row: i + 2, error: 'No item name' }); continue; }
     const sku = (r.sku ?? '').trim().toUpperCase().slice(0, 60); const barcode = (r.barcode ?? '').replace(/\s/g, '').slice(0, 40);
     if (seen.n.has(name.toLowerCase()) || (sku && seen.s.has(sku.toLowerCase())) || (barcode && seen.b.has(barcode))) { out.skipped++; continue; }
     const cost = Math.max(0, cleanNumber(r.cost) || 0);
+    const mrp = cleanNumber(r.mrp);
     let price = cleanNumber(r.sp1);
+    // Retail lists often carry only MRP: sell at MRP until the owner sets a price.
+    if (!(price > 0) && mrp > 0) price = mrp;
     if (!(price > 0)) { price = cost > 0 ? cost : 1; noPrice++; }
     const rate = cleanNumber(r.tax_rate);
-    const slab = Number.isFinite(rate) ? slabs.reduce((a, b) => (Math.abs(Number(b.rate) - rate) < Math.abs(Number(a.rate) - rate) ? b : a)) : slabs.find((s) => Number(s.rate) === 18) ?? slabs.at(-1)!;
+    const slab = Number.isFinite(rate) ? slabs.reduce((a, b) => (Math.abs(Number(b.rate) - rate) < Math.abs(Number(a.rate) - rate) ? b : a)) : fallbackSlab;
     if (!Number.isFinite(rate)) noRate++;
     const hsn = (r.hsn ?? '').replace(/\D/g, '').slice(0, 8);
     const type = hsn.startsWith('99') ? 'Services' : 'Goods';
     await db.query('SAVEPOINT row');
     try {
-      const it = await one(db, `INSERT INTO items (shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$9,$10,$11) RETURNING id`,
-        [c.shopId, type, name, sku, barcode, ((r.unit ?? '').trim().toLowerCase() || (type === 'Goods' ? 'pcs' : 'job')).slice(0, 12), hsn, cost, Math.round(price * 100) / 100, slab.id, Math.max(0, cleanNumber(r.reorder_level) || 10)]);
+      const it = await one(db, `INSERT INTO items (shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, mrp, category, brand)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9,$9,$10,$11,$12,$13,$14) RETURNING id`,
+        [c.shopId, type, name, sku, barcode, ((r.unit ?? '').trim().toLowerCase() || (type === 'Goods' ? 'pcs' : 'job')).slice(0, 12), hsn, cost, Math.round(price * 100) / 100, slab.id, Math.max(0, cleanNumber(r.reorder_level) || 10),
+          mrp > 0 ? Math.round(mrp * 100) / 100 : null, (r.category ?? '').trim().slice(0, 60), (r.brand ?? '').trim().slice(0, 60)]);
       const qty = cleanNumber(r.stock);
       if (type === 'Goods' && qty > 0) await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId, qty, reason: 'opening', userId: c.id, note: 'Imported' });
       await db.query('RELEASE SAVEPOINT row');
@@ -125,7 +134,7 @@ async function importRows(db: Db, req: Request, c: UserCtx, kind: ImportKind, ro
     }
   }
   if (noPrice) out.warnings.push(`${noPrice} item${noPrice === 1 ? ' had' : 's had'} no selling price; set to cost (or ₹1). Update them before billing`);
-  if (noRate) out.warnings.push(`${noRate} item${noRate === 1 ? ' had' : 's had'} no GST rate; set to 18%. Check them`);
+  if (noRate) out.warnings.push(`${noRate} item${noRate === 1 ? ' had' : 's had'} no GST rate; set to ${Number(fallbackSlab.rate)}%${usual !== undefined ? ', the usual rate for your business type' : ''}. Check them`);
   return out;
 }
 

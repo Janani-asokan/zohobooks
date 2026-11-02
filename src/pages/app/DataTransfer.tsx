@@ -98,7 +98,9 @@ export default function DataTransfer() {
     } finally { setBusy(null); }
   };
   const mapped = sheet ? applyMapping(sheet.rows, sheet.mapping) : [];
-  const missing = sheet ? IMPORT_FIELDS[sheet.kind].filter((f) => f.required && !sheet.mapping[f.key]) : [];
+  // An item list needs a price: the selling price, or MRP when that is all the file has.
+  const isRequired = (f: (typeof IMPORT_FIELDS)['items'][number]) => !!f.required || (sheet?.kind === 'items' && f.key === 'sp1' && !sheet.mapping.mrp);
+  const missing = sheet ? IMPORT_FIELDS[sheet.kind].filter((f) => isRequired(f) && !sheet.mapping[f.key]) : [];
   const runSheet = async () => {
     if (!sheet) return;
     setBusy('sheet');
@@ -179,8 +181,8 @@ export default function DataTransfer() {
               {sheet.note && <div className="small" style={{ color: 'var(--amber-700)' }}><AlertTriangle size={12} /> {sheet.note}</div>}
               <div className="dt-map">
                 {IMPORT_FIELDS[sheet.kind].map((f) => (
-                  <label key={f.key} className={`dt-field ${f.required && !sheet.mapping[f.key] ? 'need' : ''}`}>
-                    <span>{f.label}{f.required && ' *'}</span>
+                  <label key={f.key} className={`dt-field ${isRequired(f) && !sheet.mapping[f.key] ? 'need' : ''}`}>
+                    <span>{f.label}{isRequired(f) && ' *'}</span>
                     <select className="select" value={sheet.mapping[f.key] ?? ''} aria-label={`Column for ${f.label}`} onChange={(e) => setSheet({ ...sheet, mapping: { ...sheet.mapping, [f.key]: e.target.value || null } })}>
                       <option value="">— not in file —</option>{sheet.headers.map((h) => <option key={h} value={h}>{h}</option>)}
                     </select>

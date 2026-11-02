@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { cleanExtra } from '../../../../shared/templates';
+import { cleanExtra, templateByKey } from '../../../../shared/templates';
 import { z } from 'zod';
 import { perm } from '../../auth';
 import { audit } from '../../audit';
@@ -8,6 +8,7 @@ import { badRequest, parse } from '../../http';
 import { primaryBranchId, requireRow } from '../../services/common';
 import { moveStock } from '../../services/stock';
 import { parseCsv, toCsv } from '../../../../shared/csv';
+import { barcodeKey, newShopBarcode } from '../../../../shared/barcode';
 import { allowed, T } from './ctx';
 
 export const catalogRouter = Router();
@@ -206,6 +207,30 @@ catalogRouter.post(
   }),
 );
 
+/**
+ * Gives every goods item without a barcode its own shop barcode (EAN-13 starting with 2), so loose items can be
+ * labelled and scanned. Pass ids to limit it to those items. Items that already have a barcode are never changed.
+ */
+catalogRouter.post(
+  '/items/generate-barcodes',
+  perm('items.write'),
+  T(async (db, req, c) => {
+    const b = parse(z.object({ ids: z.array(z.string().uuid()).max(5000).optional() }), req.body ?? {});
+    // Lock the shop's items so two people generating at once cannot hand out the same code.
+    const all = await many(db, 'SELECT id, barcode, type, is_group, archived FROM items WHERE shop_id = $1 FOR UPDATE', [c.shopId]);
+    const taken = new Set(all.map((i) => barcodeKey(i.barcode)).filter(Boolean));
+    const want = all.filter((i) => !i.barcode && i.type === 'Goods' && !i.is_group && !i.archived && (!b.ids || b.ids.includes(i.id)));
+    const done: Array<{ id: string; barcode: string }> = [];
+    for (const it of want) {
+      const code = newShopBarcode(taken);
+      await db.query("UPDATE items SET barcode = $3 WHERE shop_id = $1 AND id = $2 AND barcode = ''", [c.shopId, it.id, code]);
+      done.push({ id: it.id, barcode: code });
+    }
+    if (done.length) await audit(db, req, c.shopId, 'generate_barcodes', 'item', '', { count: done.length });
+    return { generated: done.length, items: done };
+  }),
+);
+
 /* ---------------- Stock ---------------- */
 catalogRouter.post(
   '/items/:id/adjust',
@@ -315,34 +340,44 @@ catalogRouter.post(
     if (rows.length > 5000) throw badRequest('Import up to 5,000 rows at a time');
     const slabs = await many(db, 'SELECT id, rate FROM tax_slabs WHERE active');
     const branchId = await primaryBranchId(db, c.shopId);
+    // Rows without a GST rate get the shop's usual rate for its trade (5% for most toys); 18% when none is set.
+    const usualGst = templateByKey((await one(db, 'SELECT business_type FROM organizations WHERE shop_id = $1', [c.shopId]))?.business_type ?? '')?.defaultGst ?? 18;
+    const num = (v: string | undefined) => { const m = (v ?? '').replace(/,/g, '').match(/-?\d+(?:\.\d+)?/); return m ? Number(m[0]) : NaN; };
     const errors: Array<{ row: number; error: string }> = [];
     let created = 0;
     let updated = 0;
     for (const [i, r] of rows.entries()) {
       const rowNo = i + 2;
-      const slab = slabs.find((s) => Number(s.rate) === Number(r.tax_rate ?? r.tax ?? 18));
+      const rateText = (r.tax_rate ?? r.tax ?? r.gst ?? '').trim();
+      const slab = slabs.find((s) => Number(s.rate) === (rateText ? num(rateText) : usualGst));
+      const mrp = num(r.mrp);
+      // A retail list may carry only MRP: sell at MRP until the owner sets a price.
+      const sp1 = num(r.sp1 ?? r.price) > 0 ? num(r.sp1 ?? r.price) : mrp > 0 ? mrp : NaN;
       const parsed = itemBody.safeParse({
         type: /serv/i.test(r.type ?? '') ? 'Services' : 'Goods',
-        name: r.name, sku: r.sku ?? '', barcode: r.barcode ?? '', unit: r.unit || 'pcs', hsn: r.hsn ?? '',
-        cost: Number(r.cost || 0), sp1: Number(r.sp1), sp2: Number(r.sp2 || r.sp1), sp3: Number(r.sp3 || r.sp1),
-        taxSlabId: slab?.id ?? '', reorderLevel: Number(r.reorder_level || 10),
+        name: r.name, sku: r.sku ?? '', barcode: (r.barcode ?? '').replace(/\s/g, ''), unit: r.unit || 'pcs', hsn: r.hsn ?? '',
+        cost: num(r.cost) > 0 ? num(r.cost) : 0, sp1, sp2: num(r.sp2) > 0 ? num(r.sp2) : sp1, sp3: num(r.sp3) > 0 ? num(r.sp3) : sp1,
+        taxSlabId: slab?.id ?? '', reorderLevel: num(r.reorder_level) >= 0 ? num(r.reorder_level) : 10,
+        mrp: mrp > 0 ? mrp : null, category: (r.category ?? '').trim(), brand: (r.brand ?? '').trim(),
       });
       if (!parsed.success) { errors.push({ row: rowNo, error: parsed.error.issues[0]!.message }); continue; }
-      if (!slab) { errors.push({ row: rowNo, error: `No active tax slab for rate ${r.tax_rate}` }); continue; }
+      if (!slab) { errors.push({ row: rowNo, error: `No active tax slab for rate ${rateText || usualGst}` }); continue; }
       const b = parsed.data;
       await db.query('SAVEPOINT row');
       try {
         const existing = b.sku
           ? await one(db, 'SELECT id FROM items WHERE shop_id = $1 AND lower(sku) = lower($2) AND NOT archived', [c.shopId, b.sku])
-          : b.barcode ? await one(db, 'SELECT id FROM items WHERE shop_id = $1 AND barcode = $2 AND NOT archived', [c.shopId, b.barcode]) : null;
+          // The same box can be listed as a 12-digit UPC or a 13-digit EAN with a leading 0.
+          : b.barcode ? await one(db, "SELECT id FROM items WHERE shop_id = $1 AND barcode <> '' AND ltrim(barcode, '0') = ltrim($2, '0') AND NOT archived", [c.shopId, b.barcode]) : null;
         if (existing) {
-          await db.query('UPDATE items SET type=$3,name=$4,barcode=$5,unit=$6,hsn=$7,cost=$8,sp1=$9,sp2=$10,sp3=$11,tax_slab_id=$12,reorder_level=$13 WHERE shop_id=$1 AND id=$2', [
-            c.shopId, existing.id, b.type, b.name, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel,
+          await db.query(`UPDATE items SET type=$3,name=$4,barcode=$5,unit=$6,hsn=$7,cost=$8,sp1=$9,sp2=$10,sp3=$11,tax_slab_id=$12,reorder_level=$13,
+              mrp=coalesce($14, mrp), category=coalesce(nullif($15, ''), category), brand=coalesce(nullif($16, ''), brand) WHERE shop_id=$1 AND id=$2`, [
+            c.shopId, existing.id, b.type, b.name, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.mrp ?? null, b.category, b.brand,
           ]);
           updated++;
         } else {
-          const it = await one(db, 'INSERT INTO items (shop_id,type,name,sku,barcode,unit,hsn,cost,sp1,sp2,sp3,tax_slab_id,reorder_level) VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id', [
-            c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel,
+          const it = await one(db, 'INSERT INTO items (shop_id,type,name,sku,barcode,unit,hsn,cost,sp1,sp2,sp3,tax_slab_id,reorder_level,mrp,category,brand) VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id', [
+            c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.mrp ?? null, b.category, b.brand,
           ]);
           const stock = Number(r.stock || r.opening_stock || 0);
           if (b.type === 'Goods' && stock > 0) await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId, qty: stock, reason: 'opening', userId: c.id, note: 'CSV import' });

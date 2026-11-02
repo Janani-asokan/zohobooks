@@ -293,3 +293,5 @@
   .pos-jump strong { font-size: 17px; }
 }
 #pos-bill { scroll-margin-top: calc(var(--topbar-h, 64px) + 8px); }
+.notice-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 14px; border-radius: var(--radius); background: var(--sage-soft, #eef1ec); color: var(--ink-800); font-size: var(--fs-13); }
+.notice-bar > span { flex: 1; min-width: 220px; }

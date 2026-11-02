@@ -157,6 +157,9 @@ How it is built:
 - **Price tags:** generate a barcode for loose items, then print labels on a 50 × 25 mm (or other) label printer or A4 sheets. *Print settings* explains the driver and calibration steps.
 - **Receipts:** 58 or 80 mm thermal receipts. *Print settings → Thermal receipt* explains one-click printing with Chrome's `--kiosk-printing`.
 - **One price is enough:** on a new item, SP2 and SP3 can be left empty and use the standard price.
+- **Barcodes for everything in one go:** *Items* shows how many goods have no barcode and gives each its own shop barcode (a valid EAN-13 starting with 2, never a maker's code). The labels page then opens with one label per piece in stock.
+- **Receiving stock by scanning:** on a purchase bill (and a purchase order), scan each box as it arrives. A new item adds a line, a repeat adds one more, and an unknown code offers *Add it as a new item* in a new tab so the bill isn't lost. From a saved bill, *Print labels for these items* prints one label per piece received.
+- **Importing a supplier's list:** the *Items → Import* file (and *Tally & Import*) reads MRP, category and brand. A list with only MRP is priced at MRP. Rows without a GST rate get the shop's usual rate for its trade (5% for toys) instead of 18%. A box listed as a 12-digit UPC updates the item with the 13-digit code.
 
 **Festival offers, promo line and loyalty points** (add-on *Offers & loyalty*, *Sales → Offers & loyalty*).
 

@@ -19,7 +19,7 @@ import { findByCode } from '../../../shared/barcode';
 type ItemType = Item['type'];
 type EditableKey = 'name' | 'sku' | 'cost' | 'sp1' | 'sp2' | 'sp3';
 const NUMERIC: EditableKey[] = ['cost', 'sp1', 'sp2', 'sp3'];
-const ITEM_TEMPLATE = 'Type,Name,SKU,Barcode,Unit,HSN,Cost,SP1,SP2,SP3,Tax Rate,Stock,Reorder Level\r\nGoods,Sample Mouse,MOU-01,8901234567890,pcs,8471,250,399,379,389,18,25,5\r\nServices,Installation,SRV-INS,,job,9987,0,499,449,479,18,,\r\n';
+const ITEM_TEMPLATE = 'Type,Name,SKU,Barcode,Unit,HSN,Category,Brand,Cost,MRP,SP1,SP2,SP3,Tax Rate,Stock,Reorder Level\r\nGoods,Sample teddy bear 30 cm,TED-30,8901234567890,pcs,9503,Soft toys,Sample brand,320,599,499,,,5,25,5\r\nGoods,Loose bouncy ball (no barcode yet),BALL-01,,pcs,9503,Outdoor,,15,,40,,,5,100,20\r\nServices,Gift wrapping,SRV-GIFT,,job,9985,,,0,,30,,,18,,\r\n';
 
 const REASON_LABEL: Record<string, string> = { opening: 'Opening stock', sale: 'Sale', sale_cancel: 'Invoice cancelled', credit_note: 'Credit note return', adjustment: 'Adjustment', transfer_in: 'Transfer in', transfer_out: 'Transfer out', purchase: 'Purchase' };
 
@@ -57,6 +57,9 @@ export default function Items() {
   const keys = [['items'], ['stockAlerts'], ['notifications'], ['dashboard'], ['movements']];
   const updateItem = useMut((v: { id: string; body: Record<string, unknown> }) => api.patch<Item>(`/shop/items/${v.id}`, v.body), keys, { silentError: true });
   const archive = useMut((id: string) => api.del(`/shop/items/${id}`), keys, { success: 'Item archived' });
+  // Goods that still need a barcode (loose toys, unbranded goods). Variant groups are never billed, so they are skipped.
+  const noCode = items.filter((i) => i.type === 'Goods' && !i.isGroup && !i.barcode);
+  const genCodes = useMut(() => api.post<{ generated: number; items: Array<{ id: string; barcode: string }> }>('/shop/items/generate-barcodes', {}), keys, { success: (r) => `${r.generated} barcode${r.generated === 1 ? '' : 's'} created` });
   const bulk = useMut((b: { ids: string[]; action: 'archive' | 'setTax'; taxSlabId?: string }) => api.post<{ updated: number }>('/shop/items/bulk', b), keys, { success: (r, v) => (v.action === 'archive' ? `${r.updated} items archived` : `Tax slab updated on ${r.updated} items`) });
 
   const openNew = (type: ItemType = tab === 'Services' ? 'Services' : 'Goods', barcode = '') =>
@@ -167,6 +170,15 @@ export default function Items() {
           </>
         }
       />
+      {canWrite && noCode.length > 0 && (
+        <div className="notice-bar" role="status">
+          <ScanBarcode size={16} />
+          <span><strong>{noCode.length}</strong> item{noCode.length === 1 ? ' has' : 's have'} no barcode yet. Give {noCode.length === 1 ? 'it' : 'them'} the shop’s own barcodes to print price tags and scan at the counter.</span>
+          <button className="btn btn-primary btn-sm" disabled={genCodes.isPending} onClick={() => genCodes.mutate(undefined, { onSuccess: (r) => { if (r.items.length) navigate(`/app/items/labels?ids=${r.items.map((x) => x.id).join(',')}&per=stock`); } })}>
+            <ScanBarcode size={14} /> Generate barcodes & print labels
+          </button>
+        </div>
+      )}
 
       <Hint id="items" title="Your product & service catalogue">
         <p>Add everything you sell once — it then appears on invoices, POS and purchase orders. Each item has <strong>three price levels</strong> (SP1 Standard, SP2 Loyal, SP3 New) that are picked automatically from the customer’s tier. Click any price or name in the list to edit it in place, or click the picture to see stock, batches and history.</p>

@@ -1,4 +1,6 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, ScanBarcode, Trash2 } from 'lucide-react';
+import { findByCode } from '../../shared/barcode';
 import type { Item } from '@/api/types';
 import { money, uid } from '@/lib/format';
 import { Thumb } from './kit';
@@ -19,8 +21,38 @@ export const toPurchaseInput = (lines: PLine[]) => lines.filter((l) => l.itemId 
 export function PurchaseLinesEditor({ lines, onChange, items, error }: { lines: PLine[]; onChange: (l: PLine[]) => void; items: Item[]; error?: string }) {
   const upd = (key: string, patch: Partial<PLine>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const t = pTotals(lines);
+  // Receiving stock box by box: each scan adds the item, or one more of it if it is already on the bill.
+  const [scan, setScan] = useState('');
+  const [scanMsg, setScanMsg] = useState('');
+  const [unknown, setUnknown] = useState('');
+  const onScan = () => {
+    const code = scan.trim();
+    if (!code) return;
+    const it = findByCode(items.filter((i) => !i.isGroup), code);
+    setScan('');
+    if (!it) { setUnknown(code); setScanMsg(`No item has barcode ${code}.`); return; }
+    setUnknown('');
+    setScanMsg(`Added ${it.name}`);
+    const have = lines.find((l) => l.itemId === it.id);
+    if (have) onChange(lines.map((l) => (l.key === have.key ? { ...l, qty: String(Number(l.qty || 0) + 1) } : l)));
+    else onChange([...lines.filter((l) => l.itemId), pLineFor(it)]);
+  };
   return (
     <div>
+      <div className="row" style={{ gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+        <div className="input-group" style={{ flex: 1, minWidth: 240 }}>
+          <span className="lead" style={{ color: 'var(--brand-600)' }}><ScanBarcode size={16} /></span>
+          <input className="input" style={{ height: 38 }} placeholder="Scan each box as it arrives (or type a barcode / SKU and press Enter)" aria-label="Scan to add to the bill"
+            value={scan} onChange={(e) => setScan(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onScan(); } }} />
+        </div>
+        {scanMsg && (
+          <span className={`small ${unknown ? 'field-error' : 'muted'}`} role="status">
+            {scanMsg}
+            {/* A new tab keeps this bill as it is; scan the box again after saving the item. */}
+            {unknown && <> <a className="link-btn" href={`/app/items/new?type=Goods&barcode=${encodeURIComponent(unknown)}`} target="_blank" rel="noopener">Add it as a new item</a> (opens a new tab), then scan it again.</>}
+          </span>
+        )}
+      </div>
       <div className="table-wrap pl-table">
         <table className="table">
           <thead>

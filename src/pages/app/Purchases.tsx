@@ -3,7 +3,7 @@ import { ExportMenu } from '@/components/ExportMenu';
 import { billTable } from '@/lib/docPdf';
 import { PdfButton } from '@/components/PdfButton';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, ShoppingBag, CheckCircle2, Loader2, Package, Receipt, AlertTriangle, X } from 'lucide-react';
+import { Plus, ShoppingBag, CheckCircle2, Loader2, Package, Receipt, AlertTriangle, X, Tag } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
 import { useBankAccounts, useBills, useItems, useMut, useTaxSlabs, useVendors } from '@/api/hooks';
 import { useQueryClient } from '@tanstack/react-query';
@@ -289,6 +289,10 @@ export default function Purchases() {
               {view.stockAdded && <p className="small muted mt-16"><Package size={13} style={{ verticalAlign: -2 }} /> {view.purchaseOrderId ? 'Goods were received on the purchase order.' : 'These goods were added to stock when the bill was saved.'}</p>}
               <div className="mt-16"><Attachments entity="bill" entityId={view.id} canWrite={canWrite} /></div>
               {view.balance > 0 && canWrite && <button className="btn btn-primary mt-16" onClick={() => { startPay(view); setView(null); }}><CheckCircle2 size={15} /> Record payment</button>}
+              {view.lines.some((l) => l.type === 'Goods') && (() => {
+                const goods = view.lines.filter((l) => l.type === 'Goods');
+                return <button className="btn btn-secondary mt-16" style={{ marginLeft: 8 }} onClick={() => navigate(`/app/items/labels?ids=${goods.map((l) => l.itemId).join(',')}&qty=${goods.map((l) => Math.round(l.received || l.qty)).join(',')}`)}><Tag size={15} /> Print labels for these items</button>;
+              })()}
             </div>
           </aside>
         </>
