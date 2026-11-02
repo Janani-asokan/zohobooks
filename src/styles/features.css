@@ -276,3 +276,20 @@
 .promo-row .icon-btn.sm { width: 22px; height: 22px; }
 .ok { color: var(--green-700, #3f7a4f); }
 .pos-line .offer-tag { margin-top: 2px; }
+/* The cart always keeps room for a few lines; when offers, points and payment fields need more height than the screen
+   has, the payment area scrolls and the Charge button stays in view. */
+.pos-cart { flex: 1 1 auto; min-height: 150px; }
+.pos-pay { overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.pos-pay > * { flex-shrink: 0; }
+.pos-pay .pos-charge { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -8px 12px -6px var(--ink-50); }
+@media (max-width: 1000px) { .pos-pay { overflow: visible; } .pos-pay .pos-charge { position: relative; } }
+/* Phones and tablets: the bill sits below the tiles, so a bar shows the running total and jumps to it. */
+.pos-phone-find { width: 210px; }
+.pos-jump { display: none; }
+@media (max-width: 1000px) {
+  .pos-phone-find { width: 100%; flex-basis: 100%; }
+  .pos-jump { display: flex; justify-content: space-between; align-items: center; gap: 12px; position: sticky; bottom: calc(var(--mobile-nav-h, 64px) + 8px); z-index: 20;
+    margin: 0 4px; padding: 12px 16px; border: 0; border-radius: 14px; background: var(--accent-grad, var(--brand-600)); color: #fff; font: inherit; font-weight: 600; box-shadow: var(--shadow-lg); cursor: pointer; }
+  .pos-jump strong { font-size: 17px; }
+}
+#pos-bill { scroll-margin-top: calc(var(--topbar-h, 64px) + 8px); }

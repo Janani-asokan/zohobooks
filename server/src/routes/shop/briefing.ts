@@ -30,7 +30,11 @@ briefingRouter.post('/ai/briefing', rateLimit('ai-brief', 12, 60_000), h(async (
   const b = parse(z.object({ lang: z.enum(['en', 'hi', 'ta']).default('en'), refresh: z.boolean().default(false) }), req.body ?? {});
   const today = todayISO();
   const ctx = await withTenant(c.shopId, async (db) => {
-    const cached = b.refresh ? null : await one(db, 'SELECT content FROM ai_briefings WHERE shop_id = $1 AND date = $2 AND lang = $3', [c.shopId, today, b.lang]);
+    // Only an AI-written plan is reused (it costs credits), and only for two hours so stock and sales stay current.
+    // The plain-words plan is free, so it is always worked out from the books as they are now.
+    const cached = b.refresh ? null : await one(db,
+      `SELECT content FROM ai_briefings WHERE shop_id = $1 AND date = $2 AND lang = $3 AND content->>'method' = 'ai' AND created_at > now() - interval '2 hours'`,
+      [c.shopId, today, b.lang]);
     const health = await businessHealth(db, c.shopId, allowed(c, 'items.cost'));
     if (cached) return { cached: cached.content, health };
     const org = await getOrg(db, c.shopId);

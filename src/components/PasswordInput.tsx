@@ -40,3 +40,6 @@ export function PasswordInput({ value, onChange, invalid, autoComplete = 'curren
     </div>
   );
 }
+
+/** Field links its label to this input by passing an id. */
+(PasswordInput as { acceptsId?: boolean }).acceptsId = true;

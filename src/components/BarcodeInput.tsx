@@ -21,12 +21,14 @@ export function BarcodeInput({
   onScan,
   autoFocus,
   invalid,
+  id,
 }: {
   value: string;
   onChange: (v: string) => void;
   onScan?: (code: string) => void;
   autoFocus?: boolean;
   invalid?: boolean;
+  id?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [camera, setCamera] = useState(false);
@@ -87,6 +89,7 @@ export function BarcodeInput({
           <ScanBarcode size={17} />
         </span>
         <input
+          id={id}
           ref={ref}
           className={`input ${invalid ? 'invalid' : ''}`}
           value={value}
@@ -121,3 +124,5 @@ export function BarcodeInput({
     </div>
   );
 }
+
+(BarcodeInput as { acceptsId?: boolean }).acceptsId = true;

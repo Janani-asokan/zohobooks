@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useEffect, useId, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { pageIcon } from './pageIcons';
@@ -72,14 +72,25 @@ export function Field({
   const autoId = useId();
   let control = children;
   let htmlFor: string | undefined;
-  if (isValidElement(children) && typeof children.type === 'string' && ['input', 'select', 'textarea'].includes(children.type)) {
+  // Native controls, and input components that forward an id to their own <input> (marked acceptsId).
+  if (isValidElement(children) && ((typeof children.type === 'string' && ['input', 'select', 'textarea'].includes(children.type)) || (typeof children.type === 'function' && (children.type as { acceptsId?: boolean }).acceptsId))) {
     const el = children as ReactElement<{ id?: string }>;
     htmlFor = el.props.id ?? autoId;
     if (!el.props.id) control = cloneElement(el, { id: htmlFor });
   }
+  // Inputs wrapped in an add-on box (₹ prefix, a generate button…) are linked after render.
+  const box = useRef<HTMLDivElement>(null);
+  const [found, setFound] = useState<string | undefined>(undefined);
+  useLayoutEffect(() => {
+    if (htmlFor) return;
+    const el = box.current?.querySelector<HTMLElement>('input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea');
+    if (!el) return;
+    if (!el.id) el.id = autoId;
+    if (el.id !== found) setFound(el.id);
+  });
   return (
-    <div className={`field ${className ?? ''}`}>
-      <label htmlFor={htmlFor}>
+    <div className={`field ${className ?? ''}`} ref={box}>
+      <label htmlFor={htmlFor ?? found}>
         {label}
         {required && <span className="req">*</span>}
       </label>

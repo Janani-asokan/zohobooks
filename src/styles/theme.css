@@ -701,3 +701,9 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .ps-setup summary { cursor: pointer; font-weight: 600; color: var(--ink-900); }
 .ps-setup ol { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
 .ps-setup code { font-size: 12px; background: var(--brand-50, #fbeff1); padding: 0 4px; border-radius: 4px; }
+/* A dialog always fits the screen: the title and buttons stay in view and only the middle scrolls (a receipt, a long
+   form), so “Print receipt” and “New sale” never sit below the fold on a 768-pixel laptop. */
+.overlay { padding-top: min(8vh, 56px); padding-bottom: min(8vh, 56px); }
+.modal { display: flex; flex-direction: column; max-height: calc(100vh - 2 * min(8vh, 56px)); }
+.modal-header, .modal-footer { flex-shrink: 0; }
+.modal-body { overflow-y: auto; min-height: 0; flex: 1 1 auto; }

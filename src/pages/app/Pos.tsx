@@ -195,7 +195,12 @@ export default function Pos() {
         </div>
       </section>
 
-      <section className="pos-panel card">
+      {lines.length > 0 && (
+        <button type="button" className="pos-jump" onClick={() => document.getElementById('pos-bill')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+          <span>{lines.reduce((n, l) => n + l.qty, 0)} item{lines.reduce((n, l) => n + l.qty, 0) === 1 ? '' : 's'} · View bill</span><strong>{money(totals.total)}</strong>
+        </button>
+      )}
+      <section className="pos-panel card" id="pos-bill">
         <div style={{ padding: 14, borderBottom: '1px solid var(--border)' }} className="stack">
           <div className="row" style={{ gap: 8 }}>
             <UserRound size={16} className="muted" />
@@ -203,7 +208,7 @@ export default function Pos() {
               <option value="">Walk-in customer</option>
               {pickable(customers, customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.phone}</option>)}
             </select>
-            {promo.loyaltyOn && !customerId && <div style={{ width: 210 }}><CustomerByPhone customers={customers} onPick={setCustomerId} /></div>}
+            {promo.loyaltyOn && !customerId && <div className="pos-phone-find"><CustomerByPhone customers={customers} onPick={setCustomerId} /></div>}
             {branches.length > 1 && <select className="select" style={{ width: 160 }} value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Branch">{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
           </div>
           <div className="row between small muted">
@@ -245,7 +250,7 @@ export default function Pos() {
             );
           })}
         </div>
-        <div style={{ padding: 14, borderTop: '1px solid var(--border)', background: 'var(--ink-50)' }} className="stack">
+        <div style={{ padding: 14, borderTop: '1px solid var(--border)', background: 'var(--ink-50)' }} className="stack pos-pay">
           <div className="row between small" style={{ gap: 8 }}>
             <span className="muted row" style={{ gap: 6 }}><Tag size={13} /> Bill discount</span>
             <span className="row" style={{ gap: 4 }}>
@@ -288,7 +293,7 @@ export default function Pos() {
             </div>
           )}
           {mode === 'Card' && <Field label="Card slip / approval no. (optional)"><input className="input" value={reference} onChange={(e) => setReference(e.target.value)} /></Field>}
-          <button className="btn btn-primary btn-lg btn-block" disabled={!lines.length || sale.isPending} onClick={charge} title="Ctrl Enter">
+          <button className="btn btn-primary btn-lg btn-block pos-charge" disabled={!lines.length || sale.isPending} onClick={charge} title="Ctrl Enter">
             {sale.isPending ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />} Charge {money(totals.total)}
           </button>
         </div>
