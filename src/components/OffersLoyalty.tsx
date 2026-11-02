@@ -8,6 +8,7 @@ import { useShopUser } from '@/context/AuthContext';
 import { Field, Modal, Toggle } from '@/components/ui';
 import { money, todayISO } from '@/lib/format';
 import { redeemablePoints, runningOn, withLoyaltyDefaults, type AppliedOffer, type LoyaltySettings, type Offer } from '../../shared/offers';
+import { mobileDigits, normalizeMobile } from '../../shared/phone';
 
 /** Offers running on the bill date, the loyalty rules and the customer's points, for shops with the add-on. */
 export function usePromo(customerId: string, date = todayISO()) {
@@ -77,7 +78,6 @@ export function PointsBox({ settings, balance, payable, use, points, onChange, e
   );
 }
 
-const digits = (s: string) => s.replace(/\D/g, '').slice(-10);
 
 /**
  * Find a customer by mobile number at the counter, or add them in two fields, so points can be earned on a
@@ -88,24 +88,25 @@ export function CustomerByPhone({ customers, onPick }: { customers: Customer[]; 
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [adding, setAdding] = useState(false);
-  const d = digits(phone);
-  const match = d.length === 10 ? customers.find((c) => digits(c.phone) === d) : undefined;
+  // Saved numbers look like "+91 98765 43210"; typed ones may be "98765 43210" or "098765…": compare the 10 digits.
+  const d = mobileDigits(phone) ?? '';
+  const match = d ? customers.find((c) => mobileDigits(c.phone) === d) : undefined;
   const add = useMut((b: Record<string, unknown>) => api.post<Customer>('/shop/customers', b), [['customers']], { success: 'Customer added' });
   const look = (v: string) => {
     setPhone(v);
-    const dd = digits(v);
-    const m = dd.length === 10 ? customers.find((c) => digits(c.phone) === dd) : undefined;
+    const dd = mobileDigits(v) ?? '';
+    const m = dd ? customers.find((c) => mobileDigits(c.phone) === dd) : undefined;
     if (m) { onPick(m.id); setPhone(''); }
   };
   return (
     <>
       <div className="row" style={{ gap: 6 }}>
         <input className="input" style={{ height: 34 }} inputMode="tel" placeholder="Customer mobile no." aria-label="Customer mobile number" value={phone} onChange={(e) => look(e.target.value)} />
-        {d.length === 10 && !match && me.can('customers.write') && <button type="button" className="btn btn-soft btn-sm" onClick={() => setAdding(true)}><UserPlus size={14} /> Add</button>}
+        {!!d && !match && me.can('customers.write') && <button type="button" className="btn btn-soft btn-sm" onClick={() => setAdding(true)}><UserPlus size={14} /> Add</button>}
       </div>
-      <Modal open={adding} onClose={() => setAdding(false)} title="New customer" subtitle={`Mobile ${d}`}
+      <Modal open={adding} onClose={() => setAdding(false)} title="New customer" subtitle={`Mobile ${normalizeMobile(d) ?? d}`}
         footer={<><button className="btn btn-secondary" onClick={() => setAdding(false)}>Cancel</button><button className="btn btn-primary" disabled={!name.trim() || add.isPending}
-          onClick={() => add.mutate({ type: 'Individual', name: name.trim(), phone: d }, { onSuccess: (c) => { onPick(c.id); setAdding(false); setPhone(''); setName(''); } })}>{add.isPending && <Loader2 size={14} className="spin" />} Add customer</button></>}>
+          onClick={() => add.mutate({ type: 'Individual', name: name.trim(), phone: normalizeMobile(d) ?? '' }, { onSuccess: (c) => { onPick(c.id); setAdding(false); setPhone(''); setName(''); } })}>{add.isPending && <Loader2 size={14} className="spin" />} Add customer</button></>}>
         <Field label="Name" required><input id="quick-customer-name" className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="e.g. Priya" /></Field>
       </Modal>
     </>

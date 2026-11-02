@@ -16,6 +16,7 @@ import { CustomerPanel } from '@/components/CustomerPanel';
 import { SmartUpload, type PendingFile } from '@/components/SmartUpload';
 import { attachFile } from '@/components/Attachments';
 import { applyParty, partyRows } from '@/lib/partyFill';
+import { MOBILE_RULE, isValidMobileOrEmpty, normalizeMobile } from '../../../shared/phone';
 
 type Draft = Pick<Customer, 'type' | 'name' | 'companyName' | 'gstin' | 'email' | 'phone' | 'state' | 'address' | 'tier' | 'creditLimit'>;
 const blank = (state: string): Draft => ({ type: 'Individual', name: '', companyName: '', gstin: '', email: '', phone: '', state, address: '', tier: 'SP1', creditLimit: 0 });
@@ -84,7 +85,7 @@ export default function Customers() {
     companyName: draft.type === 'Business' && !draft.companyName.trim() ? 'Company name is required' : '',
     gstin: draft.type === 'Business' ? (!draft.gstin ? 'GST number is required for business customers' : !GSTIN_RE.test(draft.gstin) ? 'Invalid GSTIN (e.g. 33AABCA1234F1Z5)' : !gstinMatchesState(draft.gstin, draft.state) ? 'GSTIN state code doesn’t match the selected state' : '') : '',
     email: draft.email && !EMAIL_RE.test(draft.email) ? 'Enter a valid email' : '',
-    phone: !draft.phone ? 'Phone is required' : draft.phone.replace(/\D/g, '').length < 10 ? 'Enter a valid phone number' : '',
+    phone: isValidMobileOrEmpty(draft.phone) ? '' : MOBILE_RULE,
   };
   const e = (k: keyof typeof errs) => (touched ? errs[k] : '') || serverErr[k] || '';
 
@@ -270,8 +271,10 @@ export default function Customers() {
           <Field label={draft.type === 'Business' ? 'Contact person' : 'Full name'} required error={e('name')}>
             <input className={`input ${e('name') ? 'invalid' : ''}`} value={draft.name} onChange={(ev) => setDraft({ ...draft, name: ev.target.value })} autoFocus />
           </Field>
-          <Field label="Phone" required error={e('phone')}>
-            <input className={`input ${e('phone') ? 'invalid' : ''}`} value={draft.phone} onChange={(ev) => setDraft({ ...draft, phone: ev.target.value })} placeholder="+91 98xxx xxxxx" />
+          <Field label="Mobile number" error={e('phone')} hint="Optional · 10 digits, for WhatsApp bills and reminders">
+            <input className={`input ${e('phone') ? 'invalid' : ''}`} value={draft.phone} inputMode="tel" maxLength={18} autoComplete="tel"
+              onChange={(ev) => setDraft({ ...draft, phone: ev.target.value.replace(/[^\d+ ()-]/g, '') })}
+              onBlur={() => { const m = normalizeMobile(draft.phone); if (m !== null) setDraft((d) => ({ ...d, phone: m })); }} placeholder="98765 43210" />
           </Field>
           <Field label="Email" error={e('email')}>
             <input className={`input ${e('email') ? 'invalid' : ''}`} value={draft.email} onChange={(ev) => setDraft({ ...draft, email: ev.target.value })} placeholder="name@example.com" />

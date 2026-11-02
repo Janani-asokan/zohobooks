@@ -15,6 +15,8 @@ import { IMPORT_FIELDS, cleanNumber, guessKind, guessMapping, type ImportKind } 
 import { insertCustomer } from './sales';
 import { T, allowed } from './ctx';
 import type { Request } from 'express';
+import { normalizeMobile } from '../../../../shared/phone';
+import { SerialImport, looksLikeRowNumbers, splitSerialCell } from '../../services/importSerials';
 
 /* Moving data in and out: Tally XML both ways, and lists from any other software with AI column mapping. */
 export const dataRouter = Router();
@@ -50,7 +52,7 @@ dataRouter.get(
 
 /* ---------- Import: shared row writer ---------- */
 type Row = Record<string, string>;
-interface ImportResult { created: number; skipped: number; errors: Array<{ row: number; error: string }>; warnings: string[] }
+interface ImportResult { created: number; skipped: number; errors: Array<{ row: number; error: string }>; warnings: string[]; serials?: number }
 
 const PERM: Record<ImportKind, Parameters<typeof allowed>[1]> = { customers: 'customers.write', vendors: 'purchases.write', items: 'items.write' };
 
@@ -71,7 +73,12 @@ async function importRows(db: Db, req: Request, c: UserCtx, kind: ImportKind, ro
       let gstin = (r.gstin ?? '').replace(/\s/g, '').toUpperCase();
       if (gstin && !GSTIN_RE.test(gstin)) { out.warnings.push(`${name}: “${gstin}” isn’t a valid GSTIN, imported without it`); gstin = ''; }
       if ((gstin && gstins.has(gstin)) || names.has(name.toLowerCase()) || (r.company && names.has(r.company.trim().toLowerCase()))) { out.skipped++; continue; }
-      const phone = (r.phone ?? '').replace(/[^\d+]/g, '').slice(0, 20);
+      // Customers: a 10-digit mobile or none (a wrong one is dropped with a warning). Vendors keep any phone (landlines).
+      let phone = (r.phone ?? '').trim();
+      if (kind === 'customers') {
+        const m = normalizeMobile(phone);
+        if (m === null) { out.warnings.push(`${name}: “${phone}” isn’t a 10-digit mobile number, imported without it`); phone = ''; } else phone = m;
+      } else phone = phone.replace(/[^\d+ ]/g, '').slice(0, 20);
       const state = stateOf(r.state ?? '', gstin) || org.state;
       if (kind === 'customers') {
         const company = (r.company ?? '').trim();
@@ -94,8 +101,15 @@ async function importRows(db: Db, req: Request, c: UserCtx, kind: ImportKind, ro
   // Items
   const slabs = await many(db, 'SELECT id, rate FROM tax_slabs WHERE active ORDER BY rate');
   const branchId = await primaryBranchId(db, c.shopId);
-  const existing = await many(db, 'SELECT lower(name) AS n, lower(sku) AS s, barcode FROM items WHERE shop_id = $1 AND NOT archived', [c.shopId]);
+  const existing = await many(db, 'SELECT id, lower(name) AS n, lower(sku) AS s, barcode FROM items WHERE shop_id = $1 AND NOT archived AND NOT is_group ORDER BY created_at', [c.shopId]);
   const seen = { n: new Set(existing.map((e) => e.n)), s: new Set(existing.map((e) => e.s).filter(Boolean)), b: new Set(existing.map((e) => e.barcode).filter(Boolean)) };
+  // Which item a repeated row means (one row per phone, each with its IMEI): by SKU, then barcode, then name.
+  const idBy = { n: new Map<string, string>(), s: new Map<string, string>(), b: new Map<string, string>() };
+  for (const e of existing) { if (!idBy.n.has(e.n)) idBy.n.set(e.n, e.id); if (e.s) idBy.s.set(e.s, e.id); if (e.barcode) idBy.b.set(e.barcode, e.id); }
+  const serialImp = new SerialImport(db, c.shopId, branchId, c.id);
+  const ignoreSerials = looksLikeRowNumbers(rows.map((r) => r.serials ?? ''));
+  if (ignoreSerials) out.warnings.push('The column picked for IMEI / serial numbers counts rows (1, 2, 3…), so it was not imported');
+  let stockFromSerials = false;
   let noRate = 0; let noPrice = 0;
   // A file without a GST column gets the shop's usual rate for its trade (5% for most toys), not a blanket 18%.
   const orgRow = await one(db, 'SELECT business_type FROM organizations WHERE shop_id = $1', [c.shopId]);
@@ -105,7 +119,17 @@ async function importRows(db: Db, req: Request, c: UserCtx, kind: ImportKind, ro
     const name = (r.name ?? '').trim().slice(0, 200);
     if (!name) { out.errors.push({ row: i + 2, error: 'No item name' }); continue; }
     const sku = (r.sku ?? '').trim().toUpperCase().slice(0, 60); const barcode = (r.barcode ?? '').replace(/\s/g, '').slice(0, 40);
-    if (seen.n.has(name.toLowerCase()) || (sku && seen.s.has(sku.toLowerCase())) || (barcode && seen.b.has(barcode))) { out.skipped++; continue; }
+    const serials = ignoreSerials ? [] : splitSerialCell(r.serials);
+    const imei2 = splitSerialCell(r.imei2);
+    if (seen.n.has(name.toLowerCase()) || (sku && seen.s.has(sku.toLowerCase())) || (barcode && seen.b.has(barcode))) {
+      const id = (sku && idBy.s.get(sku.toLowerCase())) || (barcode && idBy.b.get(barcode)) || idBy.n.get(name.toLowerCase());
+      if (serials.length && id) {
+        await db.query('SAVEPOINT row');
+        try { await serialImp.add({ id, name }, serials, imei2, i + 2); await db.query('RELEASE SAVEPOINT row'); }
+        catch { await db.query('ROLLBACK TO SAVEPOINT row'); out.errors.push({ row: i + 2, error: 'Could not save the IMEI / serial numbers' }); }
+      } else out.skipped++;
+      continue;
+    }
     const cost = Math.max(0, cleanNumber(r.cost) || 0);
     const mrp = cleanNumber(r.mrp);
     let price = cleanNumber(r.sp1);
@@ -124,15 +148,23 @@ async function importRows(db: Db, req: Request, c: UserCtx, kind: ImportKind, ro
         [c.shopId, type, name, sku, barcode, ((r.unit ?? '').trim().toLowerCase() || (type === 'Goods' ? 'pcs' : 'job')).slice(0, 12), hsn, cost, Math.round(price * 100) / 100, slab.id, Math.max(0, cleanNumber(r.reorder_level) || 10),
           mrp > 0 ? Math.round(mrp * 100) / 100 : null, (r.category ?? '').trim().slice(0, 60), (r.brand ?? '').trim().slice(0, 60)]);
       const qty = cleanNumber(r.stock);
-      if (type === 'Goods' && qty > 0) await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId, qty, reason: 'opening', userId: c.id, note: 'Imported' });
+      if (serials.length) {
+        // Stock is the number of IMEI / serial numbers: each is one unit.
+        if (qty > 0 && qty !== serials.length) stockFromSerials = true;
+        await serialImp.add({ id: it.id, name }, serials, imei2, i + 2);
+      } else if (type === 'Goods' && qty > 0) await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId, qty, reason: 'opening', userId: c.id, note: 'Imported' });
       await db.query('RELEASE SAVEPOINT row');
       seen.n.add(name.toLowerCase()); if (sku) seen.s.add(sku.toLowerCase()); if (barcode) seen.b.add(barcode);
+      if (!idBy.n.has(name.toLowerCase())) idBy.n.set(name.toLowerCase(), it.id); if (sku) idBy.s.set(sku.toLowerCase(), it.id); if (barcode) idBy.b.set(barcode, it.id);
       out.created++;
     } catch (e) {
       await db.query('ROLLBACK TO SAVEPOINT row');
       out.errors.push({ row: i + 2, error: (e as { code?: string }).code === '23505' ? 'Duplicate barcode or SKU' : 'Could not save this item' });
     }
   }
+  if (stockFromSerials) out.warnings.push('For items with IMEI / serial numbers, stock was counted from the numbers (one unit each), not the stock column');
+  out.warnings.push(...serialImp.warnings.slice(0, 50));
+  if (serialImp.added) out.serials = serialImp.added;
   if (noPrice) out.warnings.push(`${noPrice} item${noPrice === 1 ? ' had' : 's had'} no selling price; set to cost (or ₹1). Update them before billing`);
   if (noRate) out.warnings.push(`${noRate} item${noRate === 1 ? ' had' : 's had'} no GST rate; set to ${Number(fallbackSlab.rate)}%${usual !== undefined ? ', the usual rate for your business type' : ''}. Check them`);
   return out;

@@ -6,7 +6,7 @@ import { audit } from '../../audit';
 import { many, one, type Db } from '../../db';
 import { badRequest, conflict, notFound, parse } from '../../http';
 import { nextSeq, primaryBranchId, requireRow } from '../../services/common';
-import { moveStock } from '../../services/stock';
+import { checkSerialList, moveStock, receiveSerials } from '../../services/stock';
 import { buildPurchaseLines, purchaseLineInput, purchaseTotals } from './purchasing';
 import { GSTIN_RE } from '../../../../shared/gst';
 import { T } from './ctx';
@@ -72,13 +72,24 @@ moneyRouter.post(
     );
     await requireRow(db, 'vendors', c.shopId, b.vendorId, 'Vendor');
     if (b.dueDate < b.date) throw badRequest('Due date can’t be before bill date', { dueDate: 'Due date can’t be before bill date' });
-    const lines = b.lines.length ? await buildPurchaseLines(db, c.shopId, b.lines) : [];
+    const lines = b.lines.length ? await buildPurchaseLines(db, c.shopId, b.lines, { withSerials: b.addStock }) : [];
     const t = lines.length ? purchaseTotals(lines) : { sub: b.taxableAmount, tax: b.taxAmount, total: b.taxableAmount + b.taxAmount };
     if (!(t.sub > 0)) throw badRequest('Enter the bill amount or add items', { taxableAmount: 'Enter the bill amount' });
     const branchId = await primaryBranchId(db, c.shopId, b.branchId);
     const n = await nextSeq(db, c.shopId, 'bill');
     const number = `BILL-${String(n).padStart(4, '0')}`;
     const stock = lines.length > 0 && b.addStock;
+    // Serial / IMEI numbers typed or scanned on the bill travel with their line (and are registered once stock is added).
+    if (stock) {
+      const seen = new Set<string>();
+      for (const l of lines) {
+        if (!l.serials?.length) continue;
+        l.serials = checkSerialList(l.name, l.serials);
+        const again = l.serials.find((x) => seen.has(x));
+        if (again) throw badRequest(`${again} is entered on two lines of this bill`, { lines: `${again} is entered twice` });
+        l.serials.forEach((x) => seen.add(x));
+      }
+    } else for (const l of lines) delete l.serials;
     const row = await one(
       db,
       `INSERT INTO bills (shop_id, number, vendor_id, vendor_bill_no, date, due_date, taxable_amount, tax_amount, amount, status, description, lines, branch_id, stock_added)
@@ -87,7 +98,10 @@ moneyRouter.post(
     );
     if (stock)
       for (const l of lines) {
-        if (l.type === 'Goods') await moveStock(db, { shopId: c.shopId, itemId: l.itemId, branchId, qty: l.qty, reason: 'purchase', refType: 'bill', refId: row.id, userId: c.id, note: number });
+        if (l.type === 'Goods') {
+          await moveStock(db, { shopId: c.shopId, itemId: l.itemId, branchId, qty: l.qty, reason: 'purchase', refType: 'bill', refId: row.id, userId: c.id, note: number });
+          await receiveSerials(db, { shopId: c.shopId, itemId: l.itemId, name: l.name, qty: l.qty, serials: l.serials, branchId, billId: row.id, vendorId: b.vendorId, date: b.date, note: `Bill ${number}` });
+        }
         await db.query('UPDATE items SET cost = $3 WHERE shop_id = $1 AND id = $2', [c.shopId, l.itemId, l.rate]);
       }
     await audit(db, req, c.shopId, 'create', 'bill', row.id, { number, amount: Number(row.amount), stock });

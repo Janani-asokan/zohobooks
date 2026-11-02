@@ -5,7 +5,8 @@ import { PdfButton } from '@/components/PdfButton';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ShoppingBag, CheckCircle2, Loader2, Package, Receipt, AlertTriangle, X, Tag } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
-import { useBankAccounts, useBills, useItems, useMut, useTaxSlabs, useVendors } from '@/api/hooks';
+import { useBankAccounts, useBills, useItems, useMut, useOrg, useTaxSlabs, useVendors } from '@/api/hooks';
+import { QuickVendorModal, type VendorLite } from '@/components/QuickAdd';
 import { useQueryClient } from '@tanstack/react-query';
 import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
 import { Attachments, attachFile } from '@/components/Attachments';
@@ -17,7 +18,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { useShopUser } from '@/context/AuthContext';
 import { Badge, EmptyState, Field, Modal, PageHeader, SearchInput, StatCard, Toggle } from '@/components/ui';
 import { Hint } from '@/components/kit';
-import { PurchaseLinesEditor, emptyPLine, pLineFor, pTotals, toPurchaseInput, type PLine } from '@/components/PurchaseLines';
+import { PurchaseLinesEditor, emptyPLine, pLineFor, pTotals, serialProblem, toPurchaseInput, type PLine } from '@/components/PurchaseLines';
 import { uid } from '@/lib/format';
 import { addDays, fmtDate, money, todayISO } from '@/lib/format';
 import { daysUntil } from '@/lib/fy';
@@ -42,6 +43,8 @@ export default function Purchases() {
   const [filter, setFilter] = useState<'All' | Bill['status']>('All');
   const [q, setQ] = useState('');
   const [billOpen, setBillOpen] = useState(false);
+  const [newVendor, setNewVendor] = useState(false);
+  const org = useOrg().data;
   const [mode, setMode] = useState<Mode>('items');
   const [bill, setBill] = useState(blankBill);
   const [payBill, setPayBill] = useState<Bill | null>(null);
@@ -142,10 +145,21 @@ export default function Purchases() {
   }, [bills, filter, q]);
 
   const t = pTotals(bill.lines);
+  // Items that keep IMEI / serial numbers need one per unit when the bill adds them to stock.
+  const serialIssue = (() => {
+    if (mode !== 'items' || !bill.addStock) return '';
+    for (const l of bill.lines) {
+      const it = items.find((i) => i.id === l.itemId);
+      if (!it?.trackSerials || !(Number(l.qty) > 0)) continue;
+      const p = serialProblem(l, bill.lines);
+      if (p) return `${it.name}: ${p}`;
+    }
+    return '';
+  })();
   const errs = {
     vendorId: !bill.vendorId ? 'Select a vendor' : '',
     taxableAmount: mode === 'amount' && !(Number(bill.taxableAmount) > 0) ? 'Enter amount' : '',
-    lines: mode === 'items' && t.count === 0 ? 'Add at least one item' : '',
+    lines: mode === 'items' && t.count === 0 ? 'Add at least one item' : serialIssue,
     dueDate: bill.dueDate < bill.date ? 'Due date can’t be before bill date' : '',
   };
   const err = (k: keyof typeof errs) => (touched ? errs[k] : '') || serverErr[k] || '';
@@ -153,7 +167,7 @@ export default function Purchases() {
     setTouched(true); setServerErr({});
     if (Object.values(errs).some(Boolean)) return;
     const base = { vendorId: bill.vendorId, vendorBillNo: bill.vendorBillNo, date: bill.date, dueDate: bill.dueDate, description: bill.description };
-    const body = mode === 'items' ? { ...base, lines: toPurchaseInput(bill.lines), addStock: bill.addStock } : { ...base, taxableAmount: Number(bill.taxableAmount), taxAmount: Number(bill.taxAmount || 0) };
+    const body = mode === 'items' ? { ...base, lines: toPurchaseInput(bill.lines, { serials: bill.addStock }), addStock: bill.addStock } : { ...base, taxableAmount: Number(bill.taxableAmount), taxAmount: Number(bill.taxAmount || 0) };
     createBill.mutate(body, {
       onSuccess: (b) => {
         setBillOpen(false);
@@ -227,8 +241,11 @@ export default function Purchases() {
         </div>
         <div className="form-grid cols-3">
           <Field label="Vendor" required error={err('vendorId')}>
-            <select className={`select ${err('vendorId') ? 'invalid' : ''}`} value={bill.vendorId} onChange={(e) => setBill({ ...bill, vendorId: e.target.value })}><option value="">Select vendor…</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}{v.gstin ? '' : ' (unregistered)'}</option>)}</select>
-            {vendors.length === 0 && <span className="field-hint"><button className="link-btn" onClick={() => navigate('/app/purchases/vendors?new=1')}>Add a vendor first</button></span>}
+            <div className="row" style={{ gap: 8 }}>
+              <select className={`select ${err('vendorId') ? 'invalid' : ''}`} aria-label="Vendor" value={bill.vendorId} onChange={(e) => setBill({ ...bill, vendorId: e.target.value })}><option value="">Select vendor…</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}{v.gstin ? '' : ' (unregistered)'}</option>)}</select>
+              <button type="button" className="btn btn-secondary" title="New vendor" aria-label="New vendor" onClick={() => setNewVendor(true)}><Plus size={15} /></button>
+            </div>
+            {vendors.length === 0 && <span className="field-hint">No vendors yet. Press + to add one here.</span>}
           </Field>
           <Field label="Vendor’s bill number"><input className="input" value={bill.vendorBillNo} onChange={(e) => setBill({ ...bill, vendorBillNo: e.target.value })} /></Field>
           <Field label="Description"><input className="input" value={bill.description} onChange={(e) => setBill({ ...bill, description: e.target.value })} placeholder={mode === 'items' ? 'Optional' : 'e.g. Freight charges'} /></Field>
@@ -241,7 +258,7 @@ export default function Purchases() {
         {mode === 'items' ? (
           <>
             <div className="section-title mt-24">Items</div>
-            <PurchaseLinesEditor lines={bill.lines} onChange={(lines) => setBill({ ...bill, lines })} items={items} error={err('lines')} />
+            <PurchaseLinesEditor lines={bill.lines} onChange={(lines) => setBill({ ...bill, lines })} items={items} error={err('lines')} withSerials={bill.addStock} showSerialErrors={touched} />
             <div className="toggle-row"><div><div className="strong">Add these items to stock</div><div className="small muted">Turn off if the goods were already received on a purchase order.</div></div><Toggle checked={bill.addStock} onChange={(v) => setBill({ ...bill, addStock: v })} /></div>
           </>
         ) : (
@@ -255,6 +272,8 @@ export default function Purchases() {
           </div>
         )}
       </Modal>
+      <QuickVendorModal open={newVendor} onClose={() => setNewVendor(false)} defaultState={org?.state ?? ''}
+        onCreated={(v) => { qc.setQueryData<VendorLite[]>(['vendors'], (list) => (list ? [...list.filter((x) => x.id !== v.id), v] : [v])); setBill((b) => ({ ...b, vendorId: v.id })); setServerErr((e) => ({ ...e, vendorId: '' })); }} />
 
       <Modal open={!!payBill} onClose={() => setPayBill(null)} title={`Pay ${payBill?.number}`} subtitle={payBill ? `${payBill.vendorName} · ${money(payBill.balance)} of ${money(payBill.amount)} still due` : ''}
         footer={<><button className="btn btn-secondary" onClick={() => setPayBill(null)}>Cancel</button><button className="btn btn-primary" disabled={!payAccount || pay.isPending} onClick={savePay}>Record payment</button></>}>

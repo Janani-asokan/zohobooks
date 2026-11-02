@@ -1,12 +1,12 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
-import { perm } from '../../auth';
+import { perm, todayISO } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, type Db } from '../../db';
 import { badRequest, conflict, notFound, parse } from '../../http';
 import { nextSeq, primaryBranchId, requireRow } from '../../services/common';
-import { moveStock } from '../../services/stock';
+import { checkSerialList, moveStock, receiveSerials } from '../../services/stock';
 import { lineAmount, r2 } from '../../../../shared/calc';
 import { T } from './ctx';
 
@@ -18,23 +18,29 @@ export const purchaseLineInput = z.object({
   qty: z.number().positive('Quantity must be greater than 0'),
   rate: z.number().min(0).optional(), // omitted → item cost
   taxRate: z.number().min(0).max(100).optional(), // omitted → item's slab
+  /** Serial / IMEI numbers, one per unit, for items that track them (used when the bill adds stock). */
+  serials: z.array(z.string().max(80)).max(5000).optional(),
 });
 
 export interface PurchaseLine {
   id: string; itemId: string; name: string; type: 'Goods' | 'Services'; unit: string; hsn: string;
   qty: number; rate: number; taxRate: number; amount: number; received: number;
+  /** Serial / IMEI numbers of the units received on this line (bills). */
+  serials?: string[];
 }
 
 /** Resolves item names/units/tax and the default purchase rate (item cost) on the server. */
-export async function buildPurchaseLines(db: Db, shopId: string, input: z.infer<typeof purchaseLineInput>[]): Promise<PurchaseLine[]> {
+export async function buildPurchaseLines(db: Db, shopId: string, input: z.infer<typeof purchaseLineInput>[], opts: { withSerials?: boolean } = {}): Promise<PurchaseLine[]> {
   if (!input.length) throw badRequest('Add at least one item');
   const items = await many(db, 'SELECT i.*, t.rate AS tax_rate FROM items i JOIN tax_slabs t ON t.id = i.tax_slab_id WHERE i.shop_id = $1 AND i.id = ANY($2::uuid[])', [shopId, [...new Set(input.map((l) => l.itemId))]]);
   const byId = new Map(items.map((i) => [i.id, i]));
   return input.map((l) => {
     const it = byId.get(l.itemId);
     if (!it) throw badRequest('One of the selected items no longer exists');
+    if (opts.withSerials && l.serials?.some((x) => x.trim()) && !it.track_serials)
+      throw badRequest(`${it.name} doesn’t keep serial / IMEI numbers. Turn on “Track serial numbers” on the item first, or clear the numbers on this line.`, { lines: `${it.name} doesn’t keep serial numbers` });
     const rate = r2(l.rate ?? Number(it.cost));
-    return { id: crypto.randomUUID(), itemId: it.id, name: it.name, type: it.type, unit: it.unit, hsn: it.hsn, qty: l.qty, rate, taxRate: l.taxRate ?? Number(it.tax_rate), amount: lineAmount({ qty: l.qty, rate, taxRate: 0 }), received: 0 };
+    return { id: crypto.randomUUID(), itemId: it.id, name: it.name, type: it.type, unit: it.unit, hsn: it.hsn, qty: l.qty, rate, taxRate: l.taxRate ?? Number(it.tax_rate), amount: lineAmount({ qty: l.qty, rate, taxRate: 0 }), received: 0, ...(opts.withSerials && l.serials?.length ? { serials: l.serials } : {}) };
   });
 }
 
@@ -109,7 +115,7 @@ purchasingRouter.post(
   '/purchase-orders/:id/receive',
   perm('purchases.write'),
   T(async (db, req, c) => {
-    const b = parse(z.object({ lines: z.array(z.object({ lineId: z.string(), qty: z.number().min(0), batchNo: z.string().max(60).optional(), expiryDate: iso.optional() })).min(1), updateCost: z.boolean().default(true) }), req.body);
+    const b = parse(z.object({ lines: z.array(z.object({ lineId: z.string(), qty: z.number().min(0), batchNo: z.string().max(60).optional(), expiryDate: iso.optional(), serials: z.array(z.string().max(80)).max(5000).optional() })).min(1), updateCost: z.boolean().default(true) }), req.body);
     const po = await one(db, 'SELECT * FROM purchase_orders WHERE shop_id = $1 AND id = $2 FOR UPDATE', [c.shopId, req.params.id]);
     if (!po) throw notFound('Purchase order');
     if (po.status === 'Cancelled' || po.status === 'Draft') throw conflict(po.status === 'Draft' ? 'Issue the purchase order before receiving goods' : 'This purchase order is cancelled');
@@ -121,7 +127,12 @@ purchasingRouter.post(
       if (!l) throw badRequest('Line not found');
       const left = r2(l.qty - l.received);
       if (r.qty > left + 1e-9) throw badRequest(`Only ${left} ${l.unit} of “${l.name}” are still to be received`);
-      if (l.type === 'Goods') await moveStock(db, { shopId: c.shopId, itemId: l.itemId, branchId: po.branch_id, qty: r.qty, reason: 'purchase', refType: 'purchase_order', refId: po.id, userId: c.id, batchNo: r.batchNo, expiryDate: r.expiryDate ?? null, note: po.number });
+      if (l.type === 'Goods') {
+        await moveStock(db, { shopId: c.shopId, itemId: l.itemId, branchId: po.branch_id, qty: r.qty, reason: 'purchase', refType: 'purchase_order', refId: po.id, userId: c.id, batchNo: r.batchNo, expiryDate: r.expiryDate ?? null, note: po.number });
+        // Serial / IMEI numbers of the units in this delivery (one each, new to the shop).
+        if (await receiveSerials(db, { shopId: c.shopId, itemId: l.itemId, name: l.name, qty: r.qty, serials: r.serials, branchId: po.branch_id, purchaseOrderId: po.id, vendorId: po.vendor_id, date: todayISO(), note: `PO ${po.number}` }))
+          l.serials = [...(l.serials ?? []), ...checkSerialList(l.name, r.serials ?? [])];
+      }
       if (b.updateCost) await db.query('UPDATE items SET cost = $3 WHERE shop_id = $1 AND id = $2', [c.shopId, l.itemId, l.rate]);
       l.received = r2(l.received + r.qty);
       any = true;

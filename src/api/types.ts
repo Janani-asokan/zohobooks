@@ -46,7 +46,9 @@ export interface StockTransfer {
   notes: string; receivedAt: string | null; createdBy: string; createdAt: string;
   lines: Array<{ itemId: string; name: string; unit: string; qty: number; serials: string[] }>;
 }
-export interface ItemSerial { id: string; itemId: string; itemName: string; serial: string; status: 'In stock' | 'Sold' | 'In transit' | 'Written off'; branchId: string | null; branchName: string | null; invoiceId: string | null; invoiceNumber: string | null; note: string; updatedAt: string }
+export interface ItemSerial { id: string; itemId: string; itemName: string; serial: string; status: 'In stock' | 'Sold' | 'In transit' | 'Written off'; branchId: string | null; branchName: string | null; invoiceId: string | null; invoiceNumber: string | null; note: string; updatedAt: string;
+  /** Where the unit came from (warranty with the vendor) and who bought it. */
+  billId?: string | null; billNumber?: string | null; purchaseOrderId?: string | null; poNumber?: string | null; vendorName?: string | null; receivedOn?: string | null; soldOn?: string | null; customerName?: string | null }
 export interface StockSummary {
   from: string; to: string; branchId: string | null; inTransit: number;
   items: Array<{ itemId: string; name: string; sku: string; unit: string; category: string; opening: number; in: number; out: number; closing: number; sold: number; reorderLevel: number; cost: number | null; value: number | null }>;

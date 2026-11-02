@@ -5,12 +5,13 @@ import { PdfButton } from '@/components/PdfButton';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, ClipboardList, PackageCheck, FileText, Ban, X, Loader2, Truck, Send, Pencil, CalendarClock } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
-import { useBranches, useItems, useMut, usePurchaseOrders, useVendors } from '@/api/hooks';
+import { useBranches, useItems, useMut, useOrg, usePurchaseOrders, useVendors } from '@/api/hooks';
+import { QuickVendorModal, type VendorLite } from '@/components/QuickAdd';
 import type { PurchaseOrder } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { Badge, EmptyState, Field, Modal, PageHeader, SearchInput, StatCard } from '@/components/ui';
 import { Hint, Thumb } from '@/components/kit';
-import { PurchaseLinesEditor, emptyPLine, pLineFor, pTotals, toPurchaseInput, type PLine } from '@/components/PurchaseLines';
+import { PurchaseLinesEditor, emptyPLine, pLineFor, pTotals, serialList, serialProblem, toPurchaseInput, type PLine } from '@/components/PurchaseLines';
 import { addDays, fmtDate, money, todayISO, uid } from '@/lib/format';
 import { useQueryClient } from '@tanstack/react-query';
 import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
@@ -27,7 +28,6 @@ const tone = (s: PurchaseOrder['status']) => ({ Draft: 'gray', Issued: 'blue', '
 export default function PurchaseOrders() {
   const me = useShopUser();
   const canWrite = me.can('purchases.write');
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { data: orders = [], isLoading } = usePurchaseOrders();
   const vendors = useVendors().data ?? [];
@@ -42,6 +42,8 @@ export default function PurchaseOrders() {
   const [poFile, setPoFile] = useState<PendingFile | null>(null);
   const docLines = useDocLines(true);
   const qc = useQueryClient();
+  const [newVendor, setNewVendor] = useState(false);
+  const org = useOrg().data;
   const poRows = (r: ExtractResult): FillRow[] => {
     const v = matchParty(vendors, r.data.party);
     const who = r.data.party.companyName || r.data.party.name;
@@ -190,10 +192,13 @@ export default function PurchaseOrders() {
             )}
             <div className="form-grid cols-3">
               <Field label="Vendor" required error={err('vendorId')}>
-                <select className={`select ${err('vendorId') ? 'invalid' : ''}`} value={form.vendorId} onChange={(e) => setForm({ ...form, vendorId: e.target.value })}>
-                  <option value="">Select vendor…</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                </select>
-                {vendors.length === 0 && <span className="field-hint"><button className="link-btn" onClick={() => navigate('/app/purchases/vendors?new=1')}>Add your first vendor</button></span>}
+                <div className="row" style={{ gap: 8 }}>
+                  <select className={`select ${err('vendorId') ? 'invalid' : ''}`} aria-label="Vendor" value={form.vendorId} onChange={(e) => setForm({ ...form, vendorId: e.target.value })}>
+                    <option value="">Select vendor…</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  <button type="button" className="btn btn-secondary" title="New vendor" aria-label="New vendor" onClick={() => setNewVendor(true)}><Plus size={15} /></button>
+                </div>
+                {vendors.length === 0 && <span className="field-hint">No vendors yet. Press + to add one here.</span>}
               </Field>
               <Field label="Order date"><input className="input" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></Field>
               <Field label="Expected delivery"><input className="input" type="date" value={form.expectedDate} onChange={(e) => setForm({ ...form, expectedDate: e.target.value })} /></Field>
@@ -205,6 +210,8 @@ export default function PurchaseOrders() {
           </>
         )}
       </Modal>
+      <QuickVendorModal open={newVendor} onClose={() => setNewVendor(false)} defaultState={org?.state ?? ''}
+        onCreated={(v) => { qc.setQueryData<VendorLite[]>(['vendors'], (list) => (list ? [...list.filter((x) => x.id !== v.id), v] : [v])); setForm((f) => (f ? { ...f, vendorId: v.id } : f)); }} />
 
       {current && <PODrawer po={current} canWrite={canWrite} onClose={() => setOpenId(null)} onEdit={() => {
         setForm({ id: current.id, vendorId: current.vendorId, branchId: current.branchId ?? '', date: current.date, expectedDate: current.expectedDate ?? '', notes: current.notes, lines: current.lines.map((l) => ({ key: uid('pl_'), itemId: l.itemId, qty: String(l.qty), rate: String(l.rate), taxRate: l.taxRate })) });
@@ -217,7 +224,8 @@ export default function PurchaseOrders() {
 function PODrawer({ po, canWrite, onClose, onEdit }: { po: PurchaseOrder; canWrite: boolean; onClose: () => void; onEdit: () => void }) {
   const items = useItems().data ?? [];
   const navigate = useNavigate();
-  const [receiving, setReceiving] = useState<Record<string, { qty: string; batchNo: string; expiryDate: string }> | null>(null);
+  const [receiving, setReceiving] = useState<Record<string, { qty: string; batchNo: string; expiryDate: string; serials: string }> | null>(null);
+  const [recvTouched, setRecvTouched] = useState(false);
   const [billing, setBilling] = useState<{ vendorBillNo: string; date: string; dueDate: string } | null>(null);
   const receive = useMut((b: Record<string, unknown>) => api.post<PurchaseOrder>(`/shop/purchase-orders/${po.id}/receive`, b), KEYS, { success: (r) => (r.status === 'Received' ? 'All goods received — stock updated' : 'Goods received — stock updated') });
   const toBill = useMut((b: Record<string, unknown>) => api.post<{ billId: string; number: string }>(`/shop/purchase-orders/${po.id}/bill`, b), KEYS, { success: (r) => `${r.number} created` });
@@ -226,7 +234,9 @@ function PODrawer({ po, canWrite, onClose, onEdit }: { po: PurchaseOrder; canWri
 
   const canReceive = po.status === 'Issued' || po.status === 'Partially Received';
   const anyReceived = po.lines.some((l) => l.received > 0);
-  const startReceive = () => setReceiving(Object.fromEntries(po.lines.map((l) => [l.id, { qty: String(Math.max(0, l.qty - l.received)), batchNo: '', expiryDate: '' }])));
+  const startReceive = () => setReceiving(Object.fromEntries(po.lines.map((l) => [l.id, { qty: String(Math.max(0, l.qty - l.received)), batchNo: '', expiryDate: '', serials: '' }])));
+  // Items that keep IMEI / serial numbers need one per unit received.
+  const recvIssue = receiving ? po.lines.map((l) => { const it = items.find((i) => i.id === l.itemId); const r = receiving[l.id]; if (!it?.trackSerials || !r || !(Number(r.qty) > 0)) return ''; const p = serialProblem({ key: l.id, itemId: l.itemId, qty: r.qty, rate: '', taxRate: 0, serials: r.serials }); return p ? `${l.name}: ${p}` : ''; }).find(Boolean) ?? '' : '';
 
   return (
     <>
@@ -268,6 +278,13 @@ function PODrawer({ po, canWrite, onClose, onEdit }: { po: PurchaseOrder; canWri
                       <div style={{ minWidth: 0 }}><div className="strong">{l.name}</div><div className="small muted">{left} of {l.qty} {l.unit} pending</div></div>
                     </div>
                     <input className="input num" style={{ width: 90 }} type="number" min={0} max={left} value={r.qty} aria-label={`Quantity for ${l.name}`} onChange={(e) => setReceiving({ ...receiving, [l.id]: { ...r, qty: e.target.value } })} />
+                    {it?.trackSerials && Number(r.qty) > 0 && (
+                      <div className="serials-box" style={{ flexBasis: '100%' }}>
+                        <label htmlFor={`rsn-${l.id}`} className="small strong">IMEI / serial numbers <span className="muted">{serialList(r.serials).length} of {Number(r.qty || 0)}</span></label>
+                        <textarea id={`rsn-${l.id}`} className="textarea mono" rows={Math.min(6, Math.max(2, serialList(r.serials).length + 1))} value={r.serials} placeholder="One per unit: scan or type each, press Enter for the next"
+                          aria-label={`IMEI / serial numbers for ${l.name}`} onChange={(e) => setReceiving({ ...receiving, [l.id]: { ...r, serials: e.target.value } })} />
+                      </div>
+                    )}
                     {it?.trackBatches && (
                       <>
                         <input className="input" style={{ width: 110 }} placeholder="Batch #" value={r.batchNo} onChange={(e) => setReceiving({ ...receiving, [l.id]: { ...r, batchNo: e.target.value } })} />
@@ -278,11 +295,12 @@ function PODrawer({ po, canWrite, onClose, onEdit }: { po: PurchaseOrder; canWri
                 );
               })}
               <div className="row" style={{ justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => setReceiving(null)}>Cancel</button>
-                <button className="btn btn-primary btn-sm" disabled={receive.isPending} onClick={() => receive.mutate(
-                  { lines: Object.entries(receiving).map(([lineId, r]) => ({ lineId, qty: Number(r.qty || 0), batchNo: r.batchNo || undefined, expiryDate: r.expiryDate || undefined })).filter((x) => x.qty > 0) },
-                  { onSuccess: () => setReceiving(null) },
-                )}>{receive.isPending && <Loader2 size={14} className="spin" />} Add to stock</button>
+                {recvTouched && recvIssue && <span className="field-error" style={{ marginRight: 'auto' }}>{recvIssue}</span>}
+                <button className="btn btn-ghost btn-sm" onClick={() => { setReceiving(null); setRecvTouched(false); }}>Cancel</button>
+                <button className="btn btn-primary btn-sm" disabled={receive.isPending} onClick={() => { setRecvTouched(true); if (recvIssue) return; receive.mutate(
+                  { lines: Object.entries(receiving).map(([lineId, r]) => { const sn = serialList(r.serials); return { lineId, qty: Number(r.qty || 0), batchNo: r.batchNo || undefined, expiryDate: r.expiryDate || undefined, ...(sn.length ? { serials: sn } : {}) }; }).filter((x) => x.qty > 0) },
+                  { onSuccess: () => { setReceiving(null); setRecvTouched(false); } },
+                ); }}>{receive.isPending && <Loader2 size={14} className="spin" />} Add to stock</button>
               </div>
             </div>
           ) : billing ? (

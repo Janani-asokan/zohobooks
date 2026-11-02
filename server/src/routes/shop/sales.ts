@@ -20,6 +20,7 @@ import { formatInvoiceNumber, fyLabel, invoiceCounterKey } from '../../../../sha
 import { EMAIL_RE, GSTIN_RE, gstinMatchesState, isInterState } from '../../../../shared/gst';
 import { parseCsv, toCsv } from '../../../../shared/csv';
 import { T } from './ctx';
+import { MOBILE_RULE, isValidMobileOrEmpty, normalizeMobile } from '../../../../shared/phone';
 
 export const salesRouter = Router();
 
@@ -31,7 +32,8 @@ const customerBody = z
     companyName: z.string().trim().max(150).default(''),
     gstin: z.string().trim().toUpperCase().default(''),
     email: z.string().trim().default(''),
-    phone: z.string().trim().refine((v) => v.replace(/\D/g, '').length >= 10, 'Enter a valid phone number'),
+    // Optional; when given, a real 10-digit mobile, saved as "+91 98765 43210" (shared/phone.ts).
+    phone: z.string().trim().max(30, MOBILE_RULE).default('').refine(isValidMobileOrEmpty, MOBILE_RULE).transform((v) => normalizeMobile(v) ?? ''),
     state: z.string().trim().max(60).default(''),
     address: z.string().max(500).default(''),
     tier: z.enum(['SP1', 'SP2', 'SP3']).default('SP1'),
@@ -262,12 +264,16 @@ salesRouter.post(
     if (rows.length > 5000) throw badRequest('Import up to 5,000 rows at a time');
     const org = await getOrg(db, c.shopId);
     const errors: Array<{ row: number; error: string }> = [];
+    const warnings: string[] = [];
     let created = 0;
     for (const [i, r] of rows.entries()) {
       const gstin = (r.gstin ?? '').toUpperCase();
+      // A wrong mobile number does not lose the customer: they are added without it, and the row is named.
+      let phone = r.phone ?? r.mobile ?? r.mobile_no ?? r.phone_no ?? '';
+      if (!isValidMobileOrEmpty(phone)) { warnings.push(`Row ${i + 2}${r.name || r.company_name ? ` (${r.company_name || r.name})` : ''}: “${phone}” isn’t a 10-digit mobile number, saved without it`); phone = ''; }
       const p = customerBody.safeParse({
         type: gstin || /bus/i.test(r.type ?? '') ? 'Business' : 'Individual',
-        name: r.name || r.contact || r.company, companyName: r.company ?? r.company_name ?? '', gstin, email: r.email ?? '', phone: r.phone ?? r.mobile ?? '',
+        name: r.name || r.contact || r.company, companyName: r.company ?? r.company_name ?? '', gstin, email: r.email ?? '', phone,
         state: r.state || org.state, address: r.address ?? '', tier: /^SP[123]$/.test(r.tier ?? '') ? r.tier : 'SP1',
       });
       if (!p.success) { errors.push({ row: i + 2, error: p.error.issues[0]!.message }); continue; }
@@ -275,7 +281,7 @@ salesRouter.post(
       created++;
     }
     await audit(db, req, c.shopId, 'import', 'customer', '', { created, errors: errors.length });
-    return { created, updated: 0, errors };
+    return { created, updated: 0, errors, warnings };
   }),
 );
 

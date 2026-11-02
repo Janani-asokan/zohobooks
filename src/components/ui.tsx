@@ -4,6 +4,8 @@ import { useLocation } from 'react-router-dom';
 import { pageIcon } from './pageIcons';
 import { ChevronLeft, ChevronRight, X, AlertCircle, type LucideIcon } from 'lucide-react';
 
+const modalStack: object[] = [];
+
 export function Modal({
   open,
   onClose,
@@ -23,12 +25,18 @@ export function Modal({
 }) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    // Dialogs can open over dialogs (a new vendor from inside a bill): Escape closes only the top one, and the page
+    // stays locked until the last one closes.
+    const token = {};
+    modalStack.push(token);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && modalStack[modalStack.length - 1] === token && onClose();
     window.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
       window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      const i = modalStack.indexOf(token);
+      if (i >= 0) modalStack.splice(i, 1);
+      if (!modalStack.length) document.body.style.overflow = '';
     };
   }, [open, onClose]);
   if (!open) return null;

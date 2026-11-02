@@ -3,8 +3,9 @@ import { FileUp, Loader2, CheckCircle2, AlertTriangle, Download } from 'lucide-r
 import { useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/api/client';
 import { Modal } from './ui';
+import { isXlsName, isXlsxName, xlsxToCsv } from '../../shared/xlsxRead';
 
-interface Result { created: number; updated: number; errors: Array<{ row: number; error: string }> }
+interface Result { created: number; updated: number; errors: Array<{ row: number; error: string }>; warnings?: string[]; serials?: number }
 
 /** CSV import dialog (Excel → "Save as CSV"). Shows per-row errors without losing the good rows. */
 export function CsvImport({ open, onClose, endpoint, title, template, invalidate }: { open: boolean; onClose: () => void; endpoint: string; title: string; template: string; invalidate: string[] }) {
@@ -21,7 +22,9 @@ export function CsvImport({ open, onClose, endpoint, title, template, invalidate
     setBusy(true);
     setError('');
     try {
-      const csv = await file.text();
+      if (isXlsName(file.name)) throw new ApiError(400, 'This is an old Excel 97–2003 (.xls) file. In Excel use File → Save As → Excel Workbook (.xlsx) or CSV, then upload that.');
+      // An Excel workbook is read here as it is (IMEIs keep every digit); a CSV is sent as text.
+      const csv = isXlsxName(file.name) ? await xlsxToCsv(await file.arrayBuffer()) : await file.text();
       const r = await api.post<Result>(endpoint, { csv });
       setResult(r);
       for (const k of invalidate) qc.invalidateQueries({ queryKey: [k] });
@@ -34,13 +37,18 @@ export function CsvImport({ open, onClose, endpoint, title, template, invalidate
   const templateHref = `data:text/csv;charset=utf-8,${encodeURIComponent(template)}`;
 
   return (
-    <Modal open={open} onClose={() => { reset(); onClose(); }} title={title} subtitle="Upload a CSV file. From Excel or Google Sheets use File → Save as / Download → CSV."
+    <Modal open={open} onClose={() => { reset(); onClose(); }} title={title} subtitle="Upload the Excel file (.xlsx) as it is, or a CSV file."
       footer={result ? <button className="btn btn-primary" onClick={() => { reset(); onClose(); }}>Done</button> : (
         <><button className="btn btn-secondary" onClick={() => { reset(); onClose(); }}>Cancel</button><button className="btn btn-primary" disabled={!file || busy} onClick={run}>{busy && <Loader2 size={15} className="spin" />} Import</button></>
       )}>
       {result ? (
         <div className="stack" style={{ gap: 12 }}>
-          <div className="row" style={{ gap: 10, color: 'var(--green-700)', fontWeight: 600 }}><CheckCircle2 size={18} /> {result.created} created{result.updated ? `, ${result.updated} updated` : ''}</div>
+          <div className="row" style={{ gap: 10, color: 'var(--green-700)', fontWeight: 600 }}><CheckCircle2 size={18} /> {result.created} created{result.updated ? `, ${result.updated} updated` : ''}{result.serials ? ` · ${result.serials} IMEI / serial number${result.serials === 1 ? '' : 's'} saved` : ''}</div>
+          {(result.warnings ?? []).length > 0 && (
+            <div style={{ maxHeight: 160, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+              {result.warnings!.map((w) => <div key={w} className="small" style={{ padding: '6px 10px', borderBottom: '1px solid var(--ink-150)', color: 'var(--amber-700)' }}>{w}</div>)}
+            </div>
+          )}
           {result.errors.length > 0 && (
             <div>
               <div className="row small" style={{ gap: 6, color: 'var(--amber-700)', fontWeight: 600, marginBottom: 6 }}><AlertTriangle size={15} /> {result.errors.length} row{result.errors.length > 1 ? 's' : ''} skipped</div>
@@ -55,10 +63,10 @@ export function CsvImport({ open, onClose, endpoint, title, template, invalidate
           <button type="button" onClick={() => fileRef.current?.click()} style={{ border: '2px dashed var(--border-strong)', borderRadius: 8, padding: 28, background: 'var(--ink-50)', cursor: 'pointer', color: 'var(--ink-700)' }}
             onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); setFile(e.dataTransfer.files[0] ?? null); }}>
             <FileUp size={26} style={{ color: 'var(--brand-600)' }} />
-            <div style={{ fontWeight: 600, marginTop: 8 }}>{file ? file.name : 'Choose a CSV file or drop it here'}</div>
+            <div style={{ fontWeight: 600, marginTop: 8 }}>{file ? file.name : 'Choose an Excel (.xlsx) or CSV file, or drop it here'}</div>
             {file && <div className="small muted">{Math.round(file.size / 1024)} KB</div>}
           </button>
-          <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <a href={templateHref} download="template.csv" className="row small" style={{ gap: 6 }}><Download size={14} /> Download a sample template</a>
           {error && <div className="field-error">{error}</div>}
         </div>

@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle } from 'lucide-react';
 import { api, ApiError, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useInvoice, useItems, useMut, useNextInvoiceNumber, useOrg, useSalesOrders, pickable } from '@/api/hooks';
-import { TIER_LABEL, type Invoice } from '@/api/types';
+import { TIER_LABEL, type Customer, type Invoice } from '@/api/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { ConfirmModal, Field, PageHeader, Toggle } from '@/components/ui';
@@ -24,6 +25,7 @@ import { INDIAN_STATES, isInterState } from '../../../shared/gst';
 import { OffersSummary, PointsBox, usePromo } from '@/components/OffersLoyalty';
 import { payable, pointsEarned, priceBill } from '../../../shared/offers';
 import { computeTotals } from '../../../shared/calc';
+import { QuickCustomerModal } from '@/components/QuickAdd';
 
 const TERMS = [
   { label: 'Due on receipt', days: 0 }, { label: 'Net 7', days: 7 }, { label: 'Net 15', days: 15 }, { label: 'Net 30', days: 30 }, { label: 'Net 45', days: 45 },
@@ -49,6 +51,7 @@ function Form({ existing }: { existing?: Invoice }) {
   const quotes = useSalesOrders('quote', me.has('quotes_orders'));
   const fromSO = params.get('fromSO') ? [...(orders.data ?? []), ...(quotes.data ?? [])].find((s) => s.id === params.get('fromSO')) : undefined;
 
+  const qc = useQueryClient();
   const [customerId, setCustomerId] = useState(existing?.customerId ?? params.get('customer') ?? '');
   const customer = customers.find((c) => c.id === customerId);
   const [date, setDate] = useState(existing?.date ?? todayISO());
@@ -100,9 +103,9 @@ function Form({ existing }: { existing?: Invoice }) {
   const interState = !!org && !!customer && isInterState(org.state, customer.state || org.state);
   const gstBlocked = org?.compositionScheme ? 'Composition dealers issue a Bill of Supply without GST' : org && !org.gstin ? 'Add your GSTIN in Organization profile to charge GST' : undefined;
 
-  const selectCustomer = (cid: string) => {
+  const selectCustomer = (cid: string, fresh?: Customer) => {
     setCustomerId(cid);
-    const c = customers.find((x) => x.id === cid);
+    const c = fresh ?? customers.find((x) => x.id === cid);
     if (!c) return;
     // Re-price lines to the customer's default tier.
     setLines((ls) => ls.map((l) => {
@@ -165,6 +168,7 @@ function Form({ existing }: { existing?: Invoice }) {
     if (b.billDiscount || b.pricesIncludeTax !== null) setBillOpts((o) => ({ pricesIncludeTax: b.pricesIncludeTax ?? o.pricesIncludeTax, billDiscount: b.billDiscount ?? o.billDiscount }));
     if (b.notes) setNotes((n) => [n, b.notes].filter(Boolean).join('\n'));
   };
+  const [newCust, setNewCust] = useState(false);
   const [creditPrompt, setCreditPrompt] = useState<{ mode: 'issue' | 'issue-pay'; message: string } | null>(null);
   const save = (mode: 'draft' | 'issue' | 'issue-pay', overrideCreditLimit = false) => {
     setTouched(true);
@@ -223,7 +227,7 @@ function Form({ existing }: { existing?: Invoice }) {
                   <optgroup label="Business (B2B)">{pickable(customers, customerId).filter((c) => c.type === 'Business').map((c) => <option key={c.id} value={c.id}>{c.companyName} · {c.customId}</option>)}</optgroup>
                   <optgroup label="Individuals">{pickable(customers, customerId).filter((c) => c.type === 'Individual').map((c) => <option key={c.id} value={c.id}>{c.name} · {c.customId}</option>)}</optgroup>
                 </select>
-                {me.can('customers.write') && <Link to="/app/sales/customers?new=1" className="btn btn-secondary" title="New customer"><Plus size={15} /></Link>}
+                {me.can('customers.write') && <button type="button" className="btn btn-secondary" title="New customer" aria-label="New customer" onClick={() => setNewCust(true)}><Plus size={15} /></button>}
               </div>
             </Field>
             <div>
@@ -338,6 +342,8 @@ function Form({ existing }: { existing?: Invoice }) {
       <ConfirmModal open={!!creditPrompt} onClose={() => setCreditPrompt(null)} title="Over the credit limit" confirmLabel="Issue anyway"
         text={<>{creditPrompt?.message} Issue the invoice anyway? This is recorded in the audit log.</>}
         onConfirm={() => { const m = creditPrompt!.mode; setCreditPrompt(null); save(m, true); }} />
+      <QuickCustomerModal open={newCust} onClose={() => setNewCust(false)} defaultState={org?.state ?? ''}
+        onCreated={(c) => { qc.setQueryData<Customer[]>(['customers'], (list) => (list ? [...list.filter((x) => x.id !== c.id), c] : [c])); selectCustomer(c.id, c); }} />
     </div>
   );
 }

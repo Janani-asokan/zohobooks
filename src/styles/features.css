@@ -213,7 +213,10 @@
 .variant-attr { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr auto; gap: var(--sp-3); align-items: end; }
 @media (max-width: 640px) { .variant-attr { grid-template-columns: 1fr; } }
 .serial-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow: auto; border-top: 1px solid var(--border); }
-.serial-list li { display: grid; grid-template-columns: 1fr auto auto; gap: var(--sp-2); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.serial-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "sn badge" "info info"; gap: 2px var(--sp-2); align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.serial-list li > .mono { grid-area: sn; overflow-wrap: anywhere; font-weight: 600; }
+.serial-list li > .badge, .serial-list li > [class*=status] { grid-area: badge; }
+.serial-list li > .small { grid-area: info; line-height: 1.45; }
 .variant-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); margin-left: 6px; vertical-align: 1px; }
 
 /* Roles matrix */
@@ -295,3 +298,10 @@
 #pos-bill { scroll-margin-top: calc(var(--topbar-h, 64px) + 8px); }
 .notice-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 14px; border-radius: var(--radius); background: var(--sage-soft, #eef1ec); color: var(--ink-800); font-size: var(--fs-13); }
 .notice-bar > span { flex: 1; min-width: 220px; }
+/* IMEI / serial numbers under a purchase line */
+.pl-table tr.has-serials td { border-bottom: 0; }
+.pl-table .serials-row td { padding-top: 0; padding-bottom: 10px; }
+.serials-box { display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--radius-sm, 8px); background: var(--sage-soft, rgba(0,0,0,.03)); }
+.serials-box label { display: flex; gap: 8px; align-items: baseline; }
+.serials-box label .ok { color: var(--success-600, #2f7d4f); }
+.serials-box .textarea.mono { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-13); letter-spacing: .02em; }

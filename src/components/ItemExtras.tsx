@@ -7,6 +7,7 @@ import type { Item } from '@/api/types';
 import { Field } from '@/components/ui';
 import { StatusBadge } from '@/components/StatusBadge';
 import { splitSerials } from '@/components/StockLines';
+import { fmtDate } from '@/lib/format';
 import { money } from '@/lib/format';
 
 interface Attr { name: string; values: string }
@@ -152,7 +153,11 @@ export function SerialsCard({ item, canWrite }: { item: Item; canWrite: boolean 
           {list.slice(0, 50).map((s) => (
             <li key={s.id}>
               <span className="mono">{s.serial}</span>
-              <span className="small muted">{s.invoiceNumber ? <Link to={`/app/sales/invoices/${s.invoiceId}`}>{s.invoiceNumber}</Link> : s.branchName}</span>
+              <span className="small muted">
+                {s.invoiceNumber ? <><Link to={`/app/sales/invoices/${s.invoiceId}`}>{s.invoiceNumber}</Link>{s.customerName ? ` · ${s.customerName}` : ''}{s.soldOn ? ` · sold ${fmtDate(s.soldOn)}` : ''}</> : s.branchName}
+                {(s.billNumber || s.poNumber || s.vendorName) && <div>From {[s.vendorName, s.billNumber ?? s.poNumber, s.receivedOn && fmtDate(s.receivedOn)].filter(Boolean).join(' · ')}</div>}
+                {s.note.includes('IMEI 2:') && <div className="mono">{s.note.split(' · ').find((x) => x.startsWith('IMEI 2:'))}</div>}
+              </span>
               <StatusBadge status={s.status} />
             </li>
           ))}

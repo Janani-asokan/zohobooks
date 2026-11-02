@@ -6,7 +6,7 @@ import { many, one, type Db } from '../../db';
 import { badRequest, conflict, HttpError, notFound, parse } from '../../http';
 import { stockInsights } from '../../services/stockInsights';
 import { nextSeq, requireRow } from '../../services/common';
-import { moveStock } from '../../services/stock';
+import { checkSerialList, moveStock, serialsTaken } from '../../services/stock';
 import { T, allowed } from './ctx';
 
 export const inventoryRouter = Router();
@@ -166,9 +166,14 @@ inventoryRouter.post(
 );
 
 /* ======================= Serial numbers ======================= */
-const serializeSerial = (s: any) => ({ id: s.id, itemId: s.item_id, itemName: s.item_name, serial: s.serial, status: s.status, branchId: s.branch_id, branchName: s.branch_name, invoiceId: s.invoice_id, invoiceNumber: s.invoice_number, note: s.note, updatedAt: s.updated_at });
-const SERIAL_SQL = `SELECT s.*, i.name AS item_name, b.name AS branch_name, inv.number AS invoice_number FROM item_serials s JOIN items i ON i.id = s.item_id
-  LEFT JOIN branches b ON b.id = s.branch_id LEFT JOIN invoices inv ON inv.id = s.invoice_id WHERE s.shop_id = $1`;
+const serializeSerial = (s: any) => ({ id: s.id, itemId: s.item_id, itemName: s.item_name, serial: s.serial, status: s.status, branchId: s.branch_id, branchName: s.branch_name, invoiceId: s.invoice_id, invoiceNumber: s.invoice_number, note: s.note, updatedAt: s.updated_at,
+  billId: s.bill_id ?? null, billNumber: s.bill_number ?? null, purchaseOrderId: s.purchase_order_id ?? null, poNumber: s.po_number ?? null, vendorName: s.vendor_name ?? null, receivedOn: s.received_on ?? null, soldOn: s.sold_on ?? null, customerName: s.customer_name ?? null });
+const SERIAL_SQL = `SELECT s.*, i.name AS item_name, b.name AS branch_name, inv.number AS invoice_number, inv.date AS sold_on,
+    COALESCE(NULLIF(cu.company_name, ''), cu.name) AS customer_name, bl.number AS bill_number, po.number AS po_number, v.name AS vendor_name
+  FROM item_serials s JOIN items i ON i.id = s.item_id
+  LEFT JOIN branches b ON b.id = s.branch_id LEFT JOIN invoices inv ON inv.id = s.invoice_id LEFT JOIN customers cu ON cu.id = inv.customer_id
+  LEFT JOIN bills bl ON bl.id = s.bill_id LEFT JOIN purchase_orders po ON po.id = s.purchase_order_id LEFT JOIN vendors v ON v.id = s.vendor_id
+  WHERE s.shop_id = $1`;
 
 inventoryRouter.get('/items/:id/serials', T(async (db, req, c) => (await many(db, `${SERIAL_SQL} AND s.item_id = $2 ORDER BY s.status, s.serial`, [c.shopId, req.params.id])).map(serializeSerial)));
 
@@ -176,7 +181,7 @@ inventoryRouter.get('/items/:id/serials', T(async (db, req, c) => (await many(db
 inventoryRouter.get('/serials/lookup', T(async (db, req, c) => {
   const q = String(req.query.q ?? '').trim();
   if (q.length < 3) return [];
-  return (await many(db, `${SERIAL_SQL} AND s.serial ILIKE $2 ORDER BY s.updated_at DESC LIMIT 20`, [c.shopId, `%${q.replace(/[%_]/g, '\\$&')}%`])).map(serializeSerial);
+  return (await many(db, `${SERIAL_SQL} AND (s.serial ILIKE $2 OR s.note ILIKE $2) ORDER BY s.updated_at DESC LIMIT 20`, [c.shopId, `%${q.replace(/[%_]/g, '\\$&')}%`])).map(serializeSerial);
 }));
 
 /** Register serial numbers for units already in stock (received on a bill or PO, or opening stock). */
@@ -188,9 +193,10 @@ inventoryRouter.post(
     if (!it.track_serials) throw badRequest('Turn on serial numbers for this item first');
     const b = parse(z.object({ branchId: z.string().uuid('Choose a warehouse'), serials: z.array(z.string().trim().min(1).max(60)).min(1, 'Enter at least one serial number').max(1000), note: z.string().max(200).default('') }), req.body);
     await requireRow(db, 'branches', c.shopId, b.branchId, 'Warehouse');
-    const serials = [...new Set(b.serials)];
-    const taken = await many(db, 'SELECT serial FROM item_serials WHERE shop_id = $1 AND item_id = $2 AND serial = ANY($3::text[])', [c.shopId, it.id, serials]);
-    if (taken.length) throw badRequest(`Already registered: ${taken.slice(0, 5).map((t) => t.serial).join(', ')}${taken.length > 5 ? '…' : ''}`);
+    const serials = checkSerialList(it.name, b.serials);
+    if (!serials.length) throw badRequest('Enter at least one serial number');
+    const taken = await serialsTaken(db, c.shopId, serials);
+    if (taken.length) throw badRequest(`Already registered: ${taken.slice(0, 5).join(', ')}${taken.length > 5 ? '…' : ''}`);
     const inStock = Number((await one(db, "SELECT count(*)::int AS n FROM item_serials WHERE shop_id = $1 AND item_id = $2 AND branch_id = $3 AND status = 'In stock'", [c.shopId, it.id, b.branchId])).n);
     const qty = await qtyAt(db, it.id, b.branchId);
     if (inStock + serials.length > qty + 0.0005) throw badRequest(`Only ${qty} ${it.unit} in stock at this warehouse and ${inStock} already have serial numbers. Receive the stock first.`);

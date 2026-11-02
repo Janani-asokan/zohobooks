@@ -169,6 +169,8 @@ How it is built:
 - **On the bill:** the discount is spread into the lines, so GST is charged on the reduced price and returns stay exact. The bill shows what each offer saved and prints the offer's message.
 - **Promo line:** a message printed on every receipt and invoice (*Print settings*), for example "Diwali sale till 5 Nov".
 - **Loyalty points:** the owner sets the rules: points per ₹100, what a point is worth, the minimum before points can be used, and the share of a bill points may pay.
+  - Customer mobile numbers are optional; when given they must be a real 10-digit Indian mobile (with or without +91 / 0), and are saved as "+91 98765 43210". A customer list import keeps the customer and drops a wrong number with a warning.
+  - On a new invoice, bill or purchase order the **+** next to the customer or vendor adds one in a pop-up, picks it, and stays on the document.
   - Points are earned on bills for a saved customer. At the counter, typing the customer's mobile number finds them, or adds them in one step.
   - Points can pay part of a later bill. Cancelling a bill undoes its points, and a return takes back the points earned on what came back.
   - Every change is kept in a points history, with owner adjustments and their reasons. Two counters can't spend the same points at once.
@@ -230,6 +232,7 @@ Without `ANTHROPIC_API_KEY`, reading runs entirely on the server: PDF text extra
 - **Collector** role: sees and collects only the loans assigned to them, with a phone-first home screen.
 - **Reports:** daily collection, monthly cash flow, loan book, defaulters, areas, collectors, interest and recovery; every one exports.
 - **Books:** loans, receipts and late charges post to the ledger (Loans given, Interest income, Late charges), so P&L and the Balance Sheet include microfinance.
+- **One login, both businesses:** a shop that runs retail and microfinance sees both on the main dashboard (sales, receivables and stock, plus active loans, outstanding, today's collection and defaulters), for staff who can see loans. Each module keeps its own tables (borrowers, lending_loans, lending_payments… beside invoices, items, bills…) in the same database, every one isolated per shop by row-level security, so loan records never mix with sales records; they meet only in the ledger, where both must post for the P&L and Balance Sheet to be right.
 - Not yet carried over from the original: SMS OTP (mobile verification, borrower acknowledgement), Aadhaar OTP via a provider, restructuring and write-off, daily cash close and collector deposits.
 
 **Weighing scale:** POS reads USB/serial scales (Chrome or Edge on a computer) and bills weighed items by the reading.
@@ -285,11 +288,14 @@ Without the key these buttons are hidden and everything else works as before. Se
 - **Transfers between warehouses** that stay *in transit* until the other side receives them, and can be cancelled back to the source.
 - **Variants**: turn an item into a group (Size × Colour …) with one sellable item per combination, each with its own SKU, price and stock.
 - **Serial / IMEI numbers**: register serials for stock on hand, pick them on the invoice (sale is blocked without them), print them on the invoice, and they return to stock if the invoice is cancelled or edited.
+  - **On purchases**: an itemised bill (or receiving a purchase order) has a box under each serial-tracked line for one IMEI / serial per unit, typed, pasted or scanned (scan the box, then its IMEI). The bill can't be saved until the count matches the quantity. Each number remembers its vendor, bill or order and date received, for warranty; the item page and the serial lookup show where each unit came from and who bought it.
+  - **Unique in the whole shop**: a number already in the stock records (under any item) is refused, and so is the same number twice on one bill.
+  - **In imports**: an item sheet with an IMEI column (IMEI, IMEI No., Serial Number, IMEI 1…; an IMEI 2 column is kept too) saves every number. Either one row per phone (the item repeated) or several numbers in one cell; stock is the count of numbers. A "Serial No." column that only counts rows (1, 2, 3…) is ignored, and IMEIs that Excel shortened to 3.57E+14 in a CSV are flagged.
 - **Stock summary & valuation**: opening, in, out and closing for any period and warehouse, valued at cost, by item or by category, with CSV and print.
 - Full movement history per item.
 - **Batches & expiry** with first-expiry-first-out on sale, reorder-level alerts, and expiring-batch alerts.
 - **Barcode label sheets** (A4, 24 per page).
-- **CSV import/export** for items and customers (Excel → Save as CSV).
+- **Excel (.xlsx) and CSV import**, CSV export, for items and customers. An Excel workbook is uploaded as it is (read in the browser, every digit of long numbers kept); old .xls files are asked to be saved as .xlsx or CSV first.
 
 **Shop: accounting & reports**
 - **Double-entry ledger built from your documents**: invoices, payments, credit notes, bills, payments made, expenses, banking and every stock movement post automatically, so the books can't drift from the source records.

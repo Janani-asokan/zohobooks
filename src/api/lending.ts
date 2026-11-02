@@ -50,7 +50,7 @@ export const useLendingSettings = () => useQuery({ queryKey: ['lending', 'settin
 export const useBorrowers = (enabled = true) => useQuery({ queryKey: ['lending', 'borrowers'], queryFn: () => api.get<Borrower[]>('/shop/lending/borrowers'), enabled });
 export const useLoans = () => useQuery({ queryKey: ['lending', 'loans'], queryFn: () => api.get<Loan[]>('/shop/lending/loans') });
 export const useLoan = (id?: string) => useQuery({ queryKey: ['lending', 'loan', id], queryFn: () => api.get<LoanDetail>(`/shop/lending/loans/${id}`), enabled: !!id });
-export const useLendingDashboard = () => useQuery({ queryKey: ['lending', 'dashboard'], queryFn: () => api.get<LendingDashboard>('/shop/lending/dashboard'), refetchInterval: 60_000 });
+export const useLendingDashboard = (enabled = true) => useQuery({ queryKey: ['lending', 'dashboard'], queryFn: () => api.get<LendingDashboard>('/shop/lending/dashboard'), refetchInterval: 60_000, enabled });
 export const useDues = (date: string) => useQuery({ queryKey: ['lending', 'dues', date], queryFn: () => api.get<{ date: string; today: string; rows: DueRow[] }>(`/shop/lending/dues?date=${date}`) });
 export const useDayReceipts = (date: string) => useQuery({ queryKey: ['lending', 'payments', date], queryFn: () => api.get<{ date: string; payments: LoanPayment[]; total: number; byMode: Record<string, number> }>(`/shop/lending/payments?date=${date}`) });
 

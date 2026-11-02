@@ -10,6 +10,7 @@ import { moveStock } from '../../services/stock';
 import { parseCsv, toCsv } from '../../../../shared/csv';
 import { barcodeKey, newShopBarcode } from '../../../../shared/barcode';
 import { allowed, T } from './ctx';
+import { SerialImport, imei2Cell, looksLikeRowNumbers, serialCell, splitSerialCell } from '../../services/importSerials';
 
 export const catalogRouter = Router();
 
@@ -346,8 +347,16 @@ catalogRouter.post(
     const errors: Array<{ row: number; error: string }> = [];
     let created = 0;
     let updated = 0;
+    // IMEI / serial numbers: one unit of stock each (one row per unit, or several in one cell).
+    const serialImp = new SerialImport(db, c.shopId, branchId, c.id);
+    const ignoreSerials = looksLikeRowNumbers(rows.map(serialCell));
+    if (ignoreSerials) serialImp.warnings.push('The “Serial No.” column counts rows (1, 2, 3…), so it was not read as device serial numbers');
+    const madeHere = new Set<string>();
+    let stockFromSerials = false;
     for (const [i, r] of rows.entries()) {
       const rowNo = i + 2;
+      const serials = ignoreSerials ? [] : splitSerialCell(serialCell(r));
+      const imei2 = splitSerialCell(imei2Cell(r));
       const rateText = (r.tax_rate ?? r.tax ?? r.gst ?? '').trim();
       const slab = slabs.find((s) => Number(s.rate) === (rateText ? num(rateText) : usualGst));
       const mrp = num(r.mrp);
@@ -368,19 +377,27 @@ catalogRouter.post(
         const existing = b.sku
           ? await one(db, 'SELECT id FROM items WHERE shop_id = $1 AND lower(sku) = lower($2) AND NOT archived', [c.shopId, b.sku])
           // The same box can be listed as a 12-digit UPC or a 13-digit EAN with a leading 0.
-          : b.barcode ? await one(db, "SELECT id FROM items WHERE shop_id = $1 AND barcode <> '' AND ltrim(barcode, '0') = ltrim($2, '0') AND NOT archived", [c.shopId, b.barcode]) : null;
+          : b.barcode ? await one(db, "SELECT id FROM items WHERE shop_id = $1 AND barcode <> '' AND ltrim(barcode, '0') = ltrim($2, '0') AND NOT archived", [c.shopId, b.barcode])
+          // One row per phone with only a name: the rows after the first add their IMEI to the same item.
+          : serials.length ? await one(db, 'SELECT id FROM items WHERE shop_id = $1 AND lower(name) = lower($2) AND NOT archived AND NOT is_group ORDER BY created_at LIMIT 1', [c.shopId, b.name]) : null;
         if (existing) {
           await db.query(`UPDATE items SET type=$3,name=$4,barcode=$5,unit=$6,hsn=$7,cost=$8,sp1=$9,sp2=$10,sp3=$11,tax_slab_id=$12,reorder_level=$13,
               mrp=coalesce($14, mrp), category=coalesce(nullif($15, ''), category), brand=coalesce(nullif($16, ''), brand) WHERE shop_id=$1 AND id=$2`, [
             c.shopId, existing.id, b.type, b.name, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.mrp ?? null, b.category, b.brand,
           ]);
-          updated++;
+          if (!madeHere.has(existing.id)) updated++;
+          if (serials.length) await serialImp.add({ id: existing.id, name: b.name }, serials, imei2, rowNo);
         } else {
           const it = await one(db, 'INSERT INTO items (shop_id,type,name,sku,barcode,unit,hsn,cost,sp1,sp2,sp3,tax_slab_id,reorder_level,mrp,category,brand) VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id', [
             c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.mrp ?? null, b.category, b.brand,
           ]);
           const stock = Number(r.stock || r.opening_stock || 0);
-          if (b.type === 'Goods' && stock > 0) await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId, qty: stock, reason: 'opening', userId: c.id, note: 'CSV import' });
+          if (serials.length) {
+            // Stock is the number of IMEI / serial numbers: each is one unit.
+            if (stock > 0 && stock !== serials.length) stockFromSerials = true;
+            await serialImp.add({ id: it.id, name: b.name }, serials, imei2, rowNo);
+          } else if (b.type === 'Goods' && stock > 0) await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId, qty: stock, reason: 'opening', userId: c.id, note: 'CSV import' });
+          madeHere.add(it.id);
           created++;
         }
         await db.query('RELEASE SAVEPOINT row');
@@ -389,8 +406,9 @@ catalogRouter.post(
         errors.push({ row: rowNo, error: (e as { code?: string }).code === '23505' ? 'Duplicate barcode or SKU' : 'Could not save row' });
       }
     }
-    await audit(db, req, c.shopId, 'import', 'item', '', { created, updated, errors: errors.length });
-    return { created, updated, errors };
+    if (stockFromSerials) serialImp.warnings.push('For items with IMEI / serial numbers, stock was counted from the numbers (one unit each), not the Stock column');
+    await audit(db, req, c.shopId, 'import', 'item', '', { created, updated, errors: errors.length, serials: serialImp.added });
+    return { created, updated, errors, serials: serialImp.added, warnings: serialImp.warnings.slice(0, 50) };
   }),
 );
 

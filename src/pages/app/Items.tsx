@@ -19,7 +19,7 @@ import { findByCode } from '../../../shared/barcode';
 type ItemType = Item['type'];
 type EditableKey = 'name' | 'sku' | 'cost' | 'sp1' | 'sp2' | 'sp3';
 const NUMERIC: EditableKey[] = ['cost', 'sp1', 'sp2', 'sp3'];
-const ITEM_TEMPLATE = 'Type,Name,SKU,Barcode,Unit,HSN,Category,Brand,Cost,MRP,SP1,SP2,SP3,Tax Rate,Stock,Reorder Level\r\nGoods,Sample teddy bear 30 cm,TED-30,8901234567890,pcs,9503,Soft toys,Sample brand,320,599,499,,,5,25,5\r\nGoods,Loose bouncy ball (no barcode yet),BALL-01,,pcs,9503,Outdoor,,15,,40,,,5,100,20\r\nServices,Gift wrapping,SRV-GIFT,,job,9985,,,0,,30,,,18,,\r\n';
+const ITEM_TEMPLATE = 'Type,Name,SKU,Barcode,Unit,HSN,Category,Brand,Cost,MRP,SP1,SP2,SP3,Tax Rate,Stock,Reorder Level,IMEI / Serial No\r\nGoods,Sample teddy bear 30 cm,TED-30,8901234567890,pcs,9503,Soft toys,Sample brand,320,599,499,,,5,25,5,\r\nGoods,Loose bouncy ball (no barcode yet),BALL-01,,pcs,9503,Outdoor,,15,,40,,,5,100,20,\r\nGoods,Sample phone (one row per unit with its IMEI),PH-01,,pcs,8517,Mobiles,Sample brand,9000,12999,11999,,,18,,2,356789104512345\r\nGoods,Sample phone (one row per unit with its IMEI),PH-01,,pcs,8517,Mobiles,Sample brand,9000,12999,11999,,,18,,2,356789104512352\r\nServices,Gift wrapping,SRV-GIFT,,job,9985,,,0,,30,,,18,,,\r\n';
 
 const REASON_LABEL: Record<string, string> = { opening: 'Opening stock', sale: 'Sale', sale_cancel: 'Invoice cancelled', credit_note: 'Credit note return', adjustment: 'Adjustment', transfer_in: 'Transfer in', transfer_out: 'Transfer out', purchase: 'Purchase' };
 

@@ -86,3 +86,49 @@ export async function sellSerials(db: Db, shopId: string, line: { itemId: string
 export async function releaseSerials(db: Db, shopId: string, invoiceId: string) {
   await db.query("UPDATE item_serials SET status = 'In stock', invoice_id = NULL, updated_at = now() WHERE shop_id = $1 AND invoice_id = $2 AND status = 'Sold'", [shopId, invoiceId]);
 }
+
+/** A serial / IMEI as it is stored: spaces dropped (typed in groups or pasted), at most 60 characters. */
+export const cleanSerial = (s: string) => String(s ?? '').replace(/\s+/g, '');
+
+/**
+ * Serials / IMEIs that are already taken anywhere in the shop (any item, any status), so one number is never two units.
+ * Returns "IMEI (item name)" strings for the error message.
+ */
+export async function serialsTaken(db: Db, shopId: string, serials: string[]): Promise<string[]> {
+  if (!serials.length) return [];
+  const rows = await many(db, 'SELECT s.serial, i.name FROM item_serials s JOIN items i ON i.id = s.item_id WHERE s.shop_id = $1 AND s.serial = ANY($2::text[]) ORDER BY s.serial', [shopId, serials]);
+  return rows.map((r) => `${r.serial} (${r.name})`);
+}
+
+/** Checks a list of serials for one line: none blank, no repeats, each at most 60 characters. Returns them cleaned. */
+export function checkSerialList(name: string, raw: string[]): string[] {
+  const serials = raw.map(cleanSerial).filter(Boolean);
+  const long = serials.find((s) => s.length > 60);
+  if (long) throw new HttpError(400, `${name}: “${long.slice(0, 20)}…” is too long for a serial / IMEI number`, 'serials_invalid');
+  const seen = new Set<string>();
+  const dup = serials.filter((s) => (seen.has(s) ? true : (seen.add(s), false)));
+  if (dup.length) throw new HttpError(400, `${name}: ${[...new Set(dup)].slice(0, 5).join(', ')} entered twice`, 'serials_duplicate');
+  return serials;
+}
+
+/**
+ * Registers the serials / IMEIs of units just received (a purchase bill or a purchase order delivery). Serial-tracked
+ * items need exactly one per unit received; every number must be new to the shop. Each remembers its bill or order,
+ * vendor and the day it came in, for warranty.
+ */
+export async function receiveSerials(db: Db, p: { shopId: string; itemId: string; name: string; qty: number; serials?: string[]; branchId: string; billId?: string | null; purchaseOrderId?: string | null; vendorId: string; date: string; note: string }) {
+  const item = await one(db, 'SELECT track_serials FROM items WHERE shop_id = $1 AND id = $2', [p.shopId, p.itemId]);
+  if (!item?.track_serials) return 0;
+  const serials = checkSerialList(p.name, p.serials ?? []);
+  if (!Number.isInteger(p.qty)) throw new HttpError(400, `${p.name} has serial / IMEI numbers, so its quantity must be a whole number`, 'serials_required');
+  if (serials.length !== p.qty)
+    throw new HttpError(400, `${p.name} needs ${p.qty} serial / IMEI number${p.qty === 1 ? '' : 's'}, one per unit (${serials.length} entered)`, 'serials_required');
+  const taken = await serialsTaken(db, p.shopId, serials);
+  if (taken.length) throw new HttpError(400, `Already in your stock records: ${taken.slice(0, 5).join(', ')}${taken.length > 5 ? '…' : ''}`, 'serials_taken');
+  await db.query(
+    `INSERT INTO item_serials (shop_id, item_id, branch_id, serial, status, note, bill_id, purchase_order_id, vendor_id, received_on)
+     SELECT $1, $2, $3, unnest($4::text[]), 'In stock', $5, $6, $7, $8, $9`,
+    [p.shopId, p.itemId, p.branchId, serials, p.note, p.billId ?? null, p.purchaseOrderId ?? null, p.vendorId, p.date],
+  );
+  return serials.length;
+}

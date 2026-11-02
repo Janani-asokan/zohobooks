@@ -35,6 +35,9 @@ export const IMPORT_FIELDS: Record<ImportKind, FieldDef[]> = {
     { key: 'tax_rate', label: 'GST %', synonyms: ['gst', 'gst %', 'gst rate', 'tax', 'tax %', 'tax rate', 'igst', 'igst %', 'gst percent'] },
     { key: 'stock', label: 'Opening stock', synonyms: ['stock', 'opening stock', 'quantity', 'qty', 'opening qty', 'closing stock', 'current stock', 'balance qty', 'in stock'] },
     { key: 'reorder_level', label: 'Reorder level', synonyms: ['reorder level', 'min stock', 'minimum stock', 'reorder', 'min qty'] },
+    // Not "S.No" / "Sl No": in most sheets those count rows. ("Serial No" is checked on import: 1, 2, 3… is ignored.)
+    { key: 'serials', label: 'IMEI / serial no.', synonyms: ['imei', 'imei no', 'imei number', 'imei numbers', 'imei 1', 'imei1', 'imei no 1', 'imei/serial', 'imei / serial', 'imei/serial no', 'imei serial no', 'serial no', 'serial number', 'serial numbers', 'serial nos', 'device serial', 'serial no imei'] },
+    { key: 'imei2', label: 'IMEI 2 (dual SIM)', synonyms: ['imei 2', 'imei2', 'imei no 2', 'second imei'] },
   ],
 };
 

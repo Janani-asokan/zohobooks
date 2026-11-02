@@ -8,8 +8,9 @@ import { PageHeader } from '@/components/ui';
 import { DateRange, periodPresets, type Range } from '@/components/DateRange';
 import { parseCsvRaw } from '../../../shared/csv';
 import { IMPORT_FIELDS, applyMapping, type ImportKind } from '../../../shared/columnMap';
+import { isXlsName, isXlsxName, xlsxToCsv } from '../../../shared/xlsxRead';
 
-interface ImportResult { created: number; skipped: number; errors: Array<{ row: number; error: string }>; warnings: string[] }
+interface ImportResult { created: number; skipped: number; errors: Array<{ row: number; error: string }>; warnings: string[]; serials?: number }
 interface TallyPreview { company: string | null; counts: { customers: number; vendors: number; items: number; otherLedgers: number }; sample: { customers: Array<{ name: string; gstin: string; state: string }>; vendors: Array<{ name: string; gstin: string }>; items: Array<{ name: string; hsn: string; taxRate: number | null; price: number | null }> } }
 const KIND_LABEL: Record<ImportKind, string> = { customers: 'Customers', vendors: 'Vendors', items: 'Items' };
 const KIND_ICON = { customers: Users, vendors: Truck, items: Package };
@@ -25,7 +26,7 @@ async function readText(file: File): Promise<string> {
 function Results({ r, title }: { r: ImportResult; title: string }) {
   return (
     <div className="import-result">
-      <div className="row" style={{ gap: 8, fontWeight: 700, color: 'var(--green-700)' }}><CheckCircle2 size={16} /> {title}: {r.created} added{r.skipped ? `, ${r.skipped} already here (skipped)` : ''}</div>
+      <div className="row" style={{ gap: 8, fontWeight: 700, color: 'var(--green-700)' }}><CheckCircle2 size={16} /> {title}: {r.created} added{r.skipped ? `, ${r.skipped} already here (skipped)` : ''}{r.serials ? ` · ${r.serials} IMEI / serial number${r.serials === 1 ? '' : 's'} saved` : ''}</div>
       {r.warnings.map((w) => <div key={w} className="small" style={{ color: 'var(--amber-700)' }}><AlertTriangle size={12} /> {w}</div>)}
       {r.errors.length > 0 && <details className="small"><summary>{r.errors.length} row{r.errors.length === 1 ? '' : 's'} not imported</summary>{r.errors.slice(0, 50).map((e) => <div key={e.row}>Row {e.row}: {e.error}</div>)}</details>}
     </div>
@@ -80,10 +81,10 @@ export default function DataTransfer() {
   const pickCsv = async (f?: File | null) => {
     if (!f) return;
     setSheetRes(null);
-    if (/\.xlsx?$/i.test(f.name)) return toast('info', 'Save the sheet as CSV first', 'In Excel: File → Save As → CSV (Comma delimited). In Google Sheets: File → Download → CSV.');
+    if (isXlsName(f.name)) return toast('info', 'Save it as .xlsx or CSV first', 'This is an old Excel 97–2003 file. In Excel: File → Save As → Excel Workbook (.xlsx) or CSV.');
     setBusy('map');
     try {
-      const { headers, rows } = parseCsvRaw(await readText(f));
+      const { headers, rows } = parseCsvRaw(isXlsxName(f.name) ? await xlsxToCsv(await f.arrayBuffer()) : await readText(f));
       if (!rows.length) throw new Error('The file has no data rows under the header row');
       const m = await api.post<{ kind: ImportKind; mapping: Record<string, string | null>; note: string | null; method: 'ai' | 'names' }>('/shop/data-import/map', { headers, sample: rows.slice(0, 5) });
       setSheet({ file: f.name, headers, rows, kind: m.kind, mapping: { ...Object.fromEntries(IMPORT_FIELDS[m.kind].map((x) => [x.key, null])), ...m.mapping }, method: m.method, note: m.note });
@@ -162,12 +163,12 @@ export default function DataTransfer() {
       </section>
 
       <section className="card dt-card mt-16">
-        <div className="dt-head"><span className="dt-icon gold"><FileSpreadsheet size={18} /></span><div><h3>Import from any software</h3><p className="small muted">Vyapar, Busy, Marg, Zoho, Tally reports or your own Excel sheet saved as CSV. AI works out which column is which; check it before importing.</p></div></div>
+        <div className="dt-head"><span className="dt-icon gold"><FileSpreadsheet size={18} /></span><div><h3>Import from any software</h3><p className="small muted">Vyapar, Busy, Marg, Zoho, Tally reports or your own Excel sheet (.xlsx or CSV). AI works out which column is which; check it before importing.</p></div></div>
         <div className="dt-body">
           <input ref={csvRef} type="file" accept=".csv,.txt,.tsv,.xlsx,.xls,text/csv" hidden onChange={(e) => { void pickCsv(e.target.files?.[0]); e.target.value = ''; }} />
           {!sheet ? (
             <button className="dt-drop" onClick={() => csvRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void pickCsv(e.dataTransfer.files[0]); }}>
-              {busy === 'map' ? <Loader2 size={26} className="spin" /> : <FileUp size={26} />}<strong>Choose a CSV file</strong><span className="small muted">customers, vendors or items</span>
+              {busy === 'map' ? <Loader2 size={26} className="spin" /> : <FileUp size={26} />}<strong>Choose an Excel or CSV file</strong><span className="small muted">customers, vendors or items</span>
             </button>
           ) : (
             <div className="stack" style={{ gap: 12 }}>
