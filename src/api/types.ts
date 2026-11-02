@@ -82,7 +82,7 @@ export interface Invoice {
   lines: Line[]; withGst: boolean; docType: 'TAX INVOICE' | 'INVOICE' | 'BILL OF SUPPLY'; placeOfSupply: string; interState: boolean; reverseCharge: boolean;
   tcsRate: number; status: 'Draft' | 'Issued' | 'Cancelled'; paymentStatus: InvoiceStatus; subTotal: number; discount: number; taxTotal: number;
   cgst: number; sgst: number; igst: number; tcs: number; roundOff: number; total: number; amountPaid: number; amountCredited: number; balance: number;
-  notes: string; source: 'app' | 'pos' | 'recurring'; salesOrderId: string | null; recurringId: string | null; publicToken: string | null;
+  notes: string; source: 'app' | 'pos' | 'recurring'; madeOfflineAt?: string | null; salesOrderId: string | null; recurringId: string | null; publicToken: string | null;
   lastReminderAt: string | null; cancelReason: string; cancelledAt: string | null; issuedAt: string | null; createdAt: string;
   shipTo?: ShipTo | null; terms?: string;
   /** Invoice-level trade details (patient and doctor, vehicle number …). */

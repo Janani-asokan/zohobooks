@@ -411,7 +411,7 @@ export function serializeInvoice(r: any) {
     amountCredited: Number(r.amount_credited),
     balance: balanceDue(base),
     notes: r.notes,
-    source: r.source,
+    source: r.source, madeOfflineAt: r.made_offline_at ?? null,
     salesOrderId: r.sales_order_id,
     recurringId: r.recurring_id,
     publicToken: r.status === 'Issued' ? r.public_token : null,

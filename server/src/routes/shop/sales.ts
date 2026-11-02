@@ -690,19 +690,41 @@ salesRouter.post(
         billDiscount: z.object({ kind: z.enum(['percent', 'amount']), value: z.number().min(0).max(1e9) }).nullable().optional(),
         skipOffers: z.array(z.string().uuid()).max(50).optional(),
         redeemPoints: z.number().int().min(0).max(1e8).optional(),
+        /** Offline counter billing: the bill's own ID from the device, so a retried send never saves it twice. */
+        clientRef: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, 'Invalid bill ID').optional(),
+        /** When the bill was made at the counter (offline bills reach us later). */
+        madeAt: z.string().datetime().optional(),
       }),
       req.body,
     );
-    const today = todayISO();
+    // A bill already received under this ID (the device sent it again after a dropped reply): return it as it is.
+    if (b.clientRef) {
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`pos:${c.shopId}:${b.clientRef}`]);
+      const dup = await one(db, 'SELECT id FROM invoices WHERE shop_id = $1 AND client_ref = $2', [c.shopId, b.clientRef]);
+      if (dup) return { invoice: await getInvoice(db, c.shopId, dup.id), change: 0, duplicate: true };
+    }
+    // An offline bill is dated the day it was made at the counter (in India time), not the day it reached the server.
+    let today = todayISO();
+    const offline = !!(b.clientRef && b.madeAt);
+    if (offline) {
+      const made = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(b.madeAt!));
+      const oldest = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+      if (made > today) throw badRequest('This bill is dated in the future. Check the date and time on this device.');
+      if (made < oldest) throw badRequest('This offline bill is more than 30 days old, so it can’t be added automatically. Enter it as an invoice.');
+      today = made;
+      // Points can't be redeemed without checking the customer's balance online.
+      if (b.redeemPoints) throw badRequest('Loyalty points can’t be redeemed on a bill made offline');
+    }
     const inv = await createInvoice(
       db, req, c.shopId,
       { customerId: b.customerId, date: today, dueDate: today, branchId: b.branchId ?? c.branchId, lines: b.lines, withGst: b.withGst, reverseCharge: false, tcsRate: 0, notes: '',
         pricesIncludeTax: b.pricesIncludeTax, billDiscount: b.billDiscount, skipOffers: b.skipOffers, redeemPoints: b.redeemPoints },
       { issue: true, source: 'pos' },
     );
+    if (b.clientRef) await db.query('UPDATE invoices SET client_ref = $3, made_offline_at = $4 WHERE shop_id = $1 AND id = $2', [c.shopId, inv.id, b.clientRef, offline ? b.madeAt : null]);
     if (b.split) {
       const paid = Math.round(b.split.reduce((s2, p) => s2 + p.amount, 0) * 100) / 100;
-      if (Math.abs(paid - inv.total) > 0.5) throw badRequest(`The split payments add up to ₹${paid}, but the bill is ₹${inv.total}`);
+      if (!offline && Math.abs(paid - inv.total) > 0.5) throw badRequest(`The split payments add up to ₹${paid}, but the bill is ₹${inv.total}`);
       // The last part absorbs any paise left over from rounding, so the bill is exactly settled.
       let left = inv.total;
       for (const [i, p] of b.split.entries()) {
@@ -712,7 +734,8 @@ salesRouter.post(
       }
       return { invoice: await getInvoice(db, c.shopId, inv.id), change: 0 };
     }
-    if (b.mode === 'Cash' && b.tendered !== undefined && b.tendered < inv.total) throw badRequest('Cash tendered is less than the bill total');
+    // Offline: the cash was already taken at the counter, so the bill is settled as it was.
+    if (!offline && b.mode === 'Cash' && b.tendered !== undefined && b.tendered < inv.total) throw badRequest('Cash tendered is less than the bill total');
     await recordPayment(db, req, c.shopId, inv.id, { date: today, amount: inv.total, tdsAmount: 0, mode: b.mode, reference: b.reference, notes: 'POS' });
     return { invoice: await getInvoice(db, c.shopId, inv.id), change: b.mode === 'Cash' && b.tendered ? Math.max(0, b.tendered - inv.total) : 0 };
   }),

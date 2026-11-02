@@ -59,6 +59,8 @@ export interface ReceiptData {
   amountPaid: number; paymentMode?: string; partyBalance?: number;
   offers?: Array<{ name: string; message: string; amount: number }>;
   loyalty?: { pointsUsed: number; discount: number; pointsEarned: number; balanceAfter: number | null };
+  /** Printed under the bill number, e.g. for a bill made offline. */
+  note?: string;
 }
 type ReceiptOrg = Pick<Organization, 'companyName' | 'address' | 'gstin' | 'phone' | 'logo' | 'invoiceFooter' | 'upiId'>;
 
@@ -109,6 +111,7 @@ export function ThermalReceipt({ data, org, s }: { data: ReceiptData; org: Recei
   const meta = (
     <div className="rc-meta">
       <div className="rr"><span>Bill No: <b>{data.number}</b></span><span>{fmtDate(data.date)}{s.showTime && data.time ? ` ${data.time}` : ''}</span></div>
+      {data.note && <div className="receipt-offline-note">{data.note}</div>}
       <div>To: <b>{data.customer.name}</b>{data.customer.phone && t !== 'simple' ? ` · ${data.customer.phone}` : ''}</div>
       {s.showGstin && data.customer.gstin && <div>GSTIN: {data.customer.gstin}</div>}
     </div>

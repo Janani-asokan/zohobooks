@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle } from 'lucide-react';
+import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle, CloudOff } from 'lucide-react';
 import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
-import { ThermalReceipt, printReceipt, receiptFromInvoice } from '@/components/printing';
+import { ThermalReceipt, printReceipt, receiptFromInvoice, type ReceiptData } from '@/components/printing';
+import { isNetworkError, newClientRef, offlineRef, saveBill } from '@/lib/offlineQueue';
+import { useOnline } from '@/components/useOnline';
+import { OfflineBillsModal, useOfflineBills } from '@/components/OfflineBills';
 import { withPrintDefaults, type PaperSize } from '../../../shared/printSettings';
 import type { Invoice, Item, PriceTier } from '@/api/types';
 import { TIER_LABEL } from '@/api/types';
@@ -55,6 +58,11 @@ export default function Pos() {
   const [tendered, setTendered] = useState('');
   const [reference, setReference] = useState('');
   const [done, setDone] = useState<{ invoice: Invoice; change: number } | null>(null);
+  // A bill saved on this device because the internet was down: its receipt is printed from what the counter worked out.
+  const [offDone, setOffDone] = useState<{ ref: string; receipt: ReceiptData; change: number; phone?: string } | null>(null);
+  const online = useOnline();
+  const offBills = useOfflineBills();
+  const [showOff, setShowOff] = useState(false);
   const [skip, setSkip] = useState<string[]>([]);
   const [usePoints, setUsePoints] = useState<{ on: boolean; points: number }>({ on: false, points: 0 });
   const scanRef = useRef<HTMLInputElement>(null);
@@ -127,27 +135,54 @@ export default function Pos() {
     else toast('error', 'No item has this barcode', me.can('items.write') ? 'Use “Add as a new item” below, or check the code.' : code);
   };
 
-  const sale = useMut((b: Record<string, unknown>) => api.post<{ invoice: Invoice; change: number }>('/shop/pos/sale', b), SALES_KEYS, {});
+  const sale = useMut((b: Record<string, unknown>) => api.post<{ invoice: Invoice; change: number }>('/shop/pos/sale', b), SALES_KEYS, { silentError: true });
   const charge = () => {
     if (!lines.length || sale.isPending) return;
     if (mode === 'Cash' && tendered && Number(tendered) < totals.total) return toast('error', 'Cash tendered is less than the bill total');
     const parts = (['Cash', 'UPI', 'Card'] as const).filter((m) => Number(split[m]) > 0).map((m) => ({ mode: m, amount: Number(split[m]), reference: m === 'Cash' ? '' : reference }));
     if (mode === 'Split' && (parts.length < 2 || Math.abs(splitLeft) > 0.5)) return toast('error', parts.length < 2 ? 'Enter at least two payment parts' : splitLeft > 0 ? `₹${splitLeft} still to collect` : `Parts are ₹${-splitLeft} more than the bill`);
-    sale.mutate(
-      { customerId: customerId || null, branchId: branchId || null, withGst, mode: mode === 'Split' ? 'Cash' : mode, reference, tendered: mode === 'Cash' && tendered ? Number(tendered) : undefined,
-        ...(mode === 'Split' ? { split: parts } : {}), pricesIncludeTax: inclusive, billDiscount,
-        ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
-        lines: lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier, discount: 0, rate: unit(l.it) })) },
-      { onSuccess: (r) => setDone(r) },
-    );
+    const body = { customerId: customerId || null, branchId: branchId || null, withGst, mode: mode === 'Split' ? 'Cash' : mode, reference, tendered: mode === 'Cash' && tendered ? Number(tendered) : undefined,
+      ...(mode === 'Split' ? { split: parts } : {}), pricesIncludeTax: inclusive, billDiscount,
+      ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
+      lines: lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier, discount: 0, rate: unit(l.it) })) };
+    // Every bill has its own ID, sent with it: a retry after a dropped reply can never save it twice.
+    const clientRef = newClientRef();
+    if (!navigator.onLine) return void saveOffline(clientRef, body);
+    sale.mutate({ ...body, clientRef }, {
+      onSuccess: (r) => setDone(r),
+      // The internet dropped while charging: keep the bill on this device and carry on.
+      onError: (e) => { if (isNetworkError(e)) void saveOffline(clientRef, body); else toast('error', (e as Error).message); },
+    });
   };
-  const reset = () => { setCart([]); setTendered(''); setReference(''); setCustomerId(''); setDone(null); setSplit({ Cash: '', UPI: '', Card: '' }); setDisc({ kind: 'percent', value: 0 }); setSkip([]); setUsePoints({ on: false, points: 0 }); setTimeout(() => scanRef.current?.focus(), 50); };
+  /** Keeps the bill on this device, prints its receipt, and lets the counter carry on. Sent automatically later. */
+  const saveOffline = async (clientRef: string, body: Record<string, unknown>) => {
+    if (redeem) return toast('error', 'Points can’t be used offline', 'Loyalty points need the internet to check the balance. Turn points off to bill offline.');
+    if (lines.some((l) => l.it.trackSerials)) return toast('error', 'This bill needs the internet', 'Items with IMEI / serial numbers are checked online. Bill them when the connection is back.');
+    const madeAt = new Date().toISOString();
+    const fl = promo.on ? priced.lines : applyBillAdjustments(calc, { withGst, pricesIncludeTax: inclusive, billDiscount });
+    const receipt: ReceiptData = {
+      number: offlineRef(clientRef), date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      customer: { name: customer ? customer.companyName || customer.name : 'Walk-in customer', phone: customer?.phone, gstin: customer?.gstin },
+      lines: lines.map((l, i) => ({ name: l.it.name, description: l.it.description, hsn: l.it.hsn, qty: l.qty, unit: l.it.unit, rate: unit(l.it), mrp: l.it.mrp ?? null, taxRate: l.it.taxRate, amount: lineAmount(fl[i] ?? calc[i]!) })),
+      withGst, interState: inter, subTotal: totals.subTotal, discount: totals.discount, cgst: totals.cgst, sgst: totals.sgst, igst: totals.igst, roundOff: totals.roundOff,
+      total: totals.total, amountPaid: totals.total, paymentMode: mode, offers: promo.on ? priced.applied : [],
+      note: 'Saved offline. The GST invoice number is given when this bill is sent.',
+    };
+    try {
+      await saveBill({ clientRef, shopId: me.shop.id, userId: me.user.id, madeAt, body, expectedTotal: totals.total, status: 'waiting', attempts: 0,
+        summary: { customer: receipt.customer.name, items: lines.length, mode } });
+    } catch {
+      return toast('error', 'Could not save the bill on this device', 'This browser is blocking storage (private window?). Use a normal window to bill offline.');
+    }
+    setOffDone({ ref: receipt.number, receipt, change: mode === 'Cash' && tendered ? Math.max(0, Number(tendered) - totals.total) : 0, phone: customer?.phone });
+  };
+  const reset = () => { setCart([]); setTendered(''); setReference(''); setCustomerId(''); setDone(null); setOffDone(null); setSplit({ Cash: '', UPI: '', Card: '' }); setDisc({ kind: 'percent', value: 0 }); setSkip([]); setUsePoints({ on: false, points: 0 }); setTimeout(() => scanRef.current?.focus(), 50); };
   useShortcuts({ 'mod+enter': charge, f2: () => scanRef.current?.focus() });
   // A USB scanner types into whatever has focus. After the cashier taps a tile or a button nothing is focused, so
   // send stray keys to the scan box instead of losing the scan. Fields, menus and the sale dialog are left alone.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1 || done) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1 || done || offDone) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]'))) return;
       e.preventDefault();
@@ -156,11 +191,23 @@ export default function Pos() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [done]);
+  }, [done, offDone]);
 
   return (
     <div className="pos">
       <section className="pos-panel card" style={{ padding: 14 }}>
+        {(!online || offBills.waiting.length > 0 || offBills.failed.length > 0) && (
+          <div className="pos-offline" role="status">
+            <CloudOff size={16} />
+            <span style={{ flex: 1 }}>
+              {!online ? 'No internet. Keep billing: bills are saved on this device and sent when the connection is back.' : 'Internet is back. Sending bills made offline…'}
+              {offBills.waiting.length > 0 && <strong> {offBills.waiting.length} waiting.</strong>}
+              {offBills.failed.length > 0 && <strong style={{ color: 'var(--red-700)' }}> {offBills.failed.length} need{offBills.failed.length === 1 ? 's' : ''} attention.</strong>}
+            </span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowOff(true)}>Offline bills</button>
+          </div>
+        )}
+        <OfflineBillsModal open={showOff} onClose={() => setShowOff(false)} />
         <div className="row" style={{ gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
           <div className="input-group" style={{ flex: 1, minWidth: 240 }}>
             <span className="lead" style={{ color: 'var(--brand-600)' }}>{q ? <Search size={17} /> : <ScanBarcode size={17} />}</span>
@@ -316,6 +363,23 @@ export default function Pos() {
             <div className="receipt-frame">
               <ThermalReceipt data={receiptFromInvoice(done.invoice, items, customers.find((c) => c.id === done.invoice.customerId)?.due, mode === 'Split' ? 'Split' : mode)} org={org} s={receiptCfg} />
             </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!offDone} onClose={reset} title="Sale saved offline" subtitle={offDone ? `${offDone.ref} · kept on this device, sent when the internet is back` : ''}
+        footer={
+          <>
+            <Segmented value={receiptCfg.paper} onChange={setRoll} options={[{ value: '2in', label: '58mm' }, { value: '3in', label: '80mm' }]} />
+            <button className="btn btn-secondary" onClick={() => printReceipt(receiptCfg)}><Printer size={15} /> Print receipt</button>
+            <button className="btn btn-primary" onClick={reset} autoFocus><Plus size={15} /> New sale</button>
+          </>
+        }>
+        {offDone && org && (
+          <div className="print-area">
+            <div className="pos-offline no-print"><CloudOff size={16} /> No internet. This bill is safe on this device and will be saved with its GST invoice number automatically.</div>
+            {offDone.change > 0 && <div className="row no-print" style={{ justifyContent: 'center', gap: 8, marginBottom: 12, fontSize: 16 }}>Give change: <strong style={{ color: 'var(--green-700)', fontSize: 20 }}>{money(offDone.change)}</strong></div>}
+            <div className="receipt-frame"><ThermalReceipt data={offDone.receipt} org={org} s={receiptCfg} /></div>
           </div>
         )}
       </Modal>

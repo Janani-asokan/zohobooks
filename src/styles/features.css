@@ -314,3 +314,9 @@
 .addon-tile dl div { display: flex; justify-content: space-between; gap: 10px; font-size: var(--fs-13); }
 .addon-tile dt { color: var(--ink-600); }
 .addon-tile dd { margin: 0; font-weight: 600; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+/* Offline counter billing */
+.offline-pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--sage-soft, #eef2ec); color: var(--ink-800, #3a2f27); font-size: var(--fs-13); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.offline-pill.bad { background: #fdecec; border-color: #f2b8b8; color: var(--red-700, #9b2c2c); }
+@media (max-width: 720px) { .offline-pill span { display: none; } .offline-pill { padding: 0 9px; } }
+.pos-offline { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 10px; border-radius: 10px; background: #fff7e6; border: 1px solid #f3d9a4; color: #7a5310; font-size: var(--fs-13); }
+.receipt-offline-note { text-align: center; font-size: 11px; border: 1px dashed currentColor; padding: 4px; margin: 6px 0; }

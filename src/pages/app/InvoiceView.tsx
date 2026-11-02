@@ -165,6 +165,7 @@ export default function InvoiceView() {
               <h1 style={{ fontSize: 20, fontWeight: 600 }}>{inv.number ?? 'Draft invoice'}</h1>
               <StatusBadge status={inv.paymentStatus} />
               {inv.source !== 'app' && <span className="chip">{inv.source === 'pos' ? 'POS' : 'Recurring'}</span>}
+              {inv.madeOfflineAt && <span className="chip" title="Billed at the counter without internet; saved when the connection came back">Made offline · {new Date(inv.madeOfflineAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
             </div>
             <div className="small muted">{inv.customer.companyName || inv.customer.name} · {money(inv.total)}{inv.balance > 0 && inv.status === 'Issued' ? ` · ${money(inv.balance)} due` : ''}</div>
           </div>

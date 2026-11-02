@@ -21,6 +21,7 @@ import { GSTIN_RE, INDIAN_STATES } from '../../shared/gst';
 import { useClickOutside } from '@/components/useClickOutside';
 import { useShortcuts } from '@/components/useShortcuts';
 import { useOnline } from '@/components/useOnline';
+import { OfflineBillsBadge, OfflineSync } from '@/components/OfflineBills';
 import { initials } from '@/lib/format';
 import { AssistantButton } from '@/components/Assistant';
 import { useFieldTracker } from '@/lib/geo';
@@ -243,6 +244,7 @@ export default function AppLayout() {
       />
       {sb.mobileOpen && <div className="scrim" onClick={() => sb.setMobileOpen(false)} />}
       <div className="shell-main">
+        <OfflineSync />
         {!online && (
           <div className="offline-bar no-print" role="status">
             <WifiOff size={15} /> {t('shell.offline')}
@@ -255,6 +257,7 @@ export default function AppLayout() {
           <OrgSwitcher name={name} logo={org.data?.logo} gstin={org.data?.gstin} isAdmin={me.can('admin')} isOwner={me.user.role === 'Owner'} />
           <SearchTrigger onOpen={() => setPalette(true)} />
           <div className="topbar-actions">
+            <OfflineBillsBadge />
             <button className="icon-btn mobile-only" onClick={() => setPalette(true)} aria-label="Search"><Search size={18} /></button>
             <AssistantButton />
             <QuickCreate me={me} />

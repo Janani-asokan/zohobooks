@@ -24,6 +24,11 @@ const AuthContext = createContext<AuthValue | null>(null);
  */
 const dropDataCache = (qc: QueryClient) => qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' });
 
+/** The last signed-in user on this device, for opening the app without internet. Cleared on sign-out and on 401. */
+const ME_KEY = 'c360.me';
+function rememberMe(me: Me | null) { try { if (me) localStorage.setItem(ME_KEY, JSON.stringify(me)); else localStorage.removeItem(ME_KEY); } catch { /* private mode */ } }
+function lastMe(): Me | null { try { const v = localStorage.getItem(ME_KEY); return v ? (JSON.parse(v) as Me) : null; } catch { return null; } }
+
 export const homeFor = (me: Me) => (me.kind === 'super' ? '/super-admin' : '/app');
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -32,9 +37,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: ['me'],
     queryFn: async () => {
       try {
-        return await api.get<Me>('/auth/me');
+        const me = await api.get<Me>('/auth/me');
+        rememberMe(me);
+        return me;
       } catch (e) {
-        if (e instanceof ApiError && e.status === 401) return null;
+        if (e instanceof ApiError && e.status === 401) { rememberMe(null); return null; }
+        // No internet: the session cookie is still on this device, so open the app as the same person (the counter can
+        // keep billing offline). Every request still goes to the server, which checks the session when it is back.
+        if (e instanceof ApiError && e.code === 'network') { const last = lastMe(); if (last) return last; }
         throw e;
       }
     },
@@ -57,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, remember: boolean) => {
       const me = await api.post<Me>('/auth/login', { email, password, remember });
       dropDataCache(qc);
+      rememberMe(me);
       qc.setQueryData(['me'], me);
       return me;
     },
@@ -67,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (shopId: string) => {
       const me = await api.post<Me>('/auth/switch', { shopId });
       dropDataCache(qc);
+      rememberMe(me);
       qc.setQueryData(['me'], me);
       return me;
     },
@@ -77,6 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api.post('/auth/logout').catch(() => {});
     navigator.serviceWorker?.controller?.postMessage('clear-data');
     dropDataCache(qc);
+    rememberMe(null);
     qc.setQueryData(['me'], null);
   }, [qc]);
 

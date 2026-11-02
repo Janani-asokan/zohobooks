@@ -45,7 +45,7 @@ const dict = {
   'shell.signOut': { en: 'Sign out', hi: 'साइन आउट', ta: 'வெளியேறு' },
   'shell.notifications': { en: 'Notifications', hi: 'सूचनाएं', ta: 'அறிவிப்புகள்' },
   'shell.noNotifications': { en: 'You’re all caught up', hi: 'कोई नई सूचना नहीं', ta: 'புதிய அறிவிப்புகள் இல்லை' },
-  'shell.offline': { en: 'You’re offline — showing saved data. Changes are disabled until you reconnect.', hi: 'आप ऑफ़लाइन हैं — सहेजा गया डेटा दिख रहा है। दोबारा जुड़ने तक बदलाव बंद हैं।', ta: 'இணைப்பு இல்லை — சேமித்த தரவு காட்டப்படுகிறது. மீண்டும் இணையும் வரை மாற்றங்கள் முடக்கப்பட்டுள்ளன.' },
+  'shell.offline': { en: 'You’re offline, showing saved data. Counter billing (POS) keeps working; other changes wait until you reconnect.', hi: 'आप ऑफ़लाइन हैं, सहेजा गया डेटा दिख रहा है। काउंटर बिलिंग (POS) चलती रहेगी; बाकी बदलाव दोबारा जुड़ने पर होंगे।', ta: 'இணைப்பு இல்லை, சேமித்த தரவு காட்டப்படுகிறது. கவுண்டர் பில்லிங் (POS) தொடரும்; மற்ற மாற்றங்கள் மீண்டும் இணைந்ததும் செய்யலாம்.' },
   'shell.theme': { en: 'Theme', hi: 'थीम', ta: 'தீம்' },
   'shell.language': { en: 'Language', hi: 'भाषा', ta: 'மொழி' },
   'shell.shortcuts': { en: 'Keyboard shortcuts', hi: 'कीबोर्ड शॉर्टकट', ta: 'விசைப்பலகை குறுக்குவழிகள்' },
