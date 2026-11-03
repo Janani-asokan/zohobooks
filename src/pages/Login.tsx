@@ -6,7 +6,7 @@ import { homeFor, useAuth } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { useToast } from '@/context/ToastContext';
 import { api, ApiError } from '@/api/client';
-import { EMAIL_RE } from '@/lib/format';
+import { LOGIN_EMAIL_RE as EMAIL_RE } from '@/lib/format';
 import { Field, Modal } from '@/components/ui';
 import { PasswordInput } from '@/components/PasswordInput';
 import { FullPageSpinner } from '@/components/ProtectedRoute';

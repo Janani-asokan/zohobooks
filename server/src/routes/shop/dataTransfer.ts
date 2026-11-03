@@ -16,6 +16,7 @@ import { insertCustomer } from './sales';
 import { T, allowed } from './ctx';
 import type { Request } from 'express';
 import { normalizeMobile } from '../../../../shared/phone';
+import { normalizeEmail, normalizeVendorPhone } from '../../../../shared/contact';
 import { SerialImport, looksLikeRowNumbers, splitSerialCell } from '../../services/importSerials';
 
 /* Moving data in and out: Tally XML both ways, and lists from any other software with AI column mapping. */
@@ -78,16 +79,22 @@ async function importRows(db: Db, req: Request, c: UserCtx, kind: ImportKind, ro
       if (kind === 'customers') {
         const m = normalizeMobile(phone);
         if (m === null) { out.warnings.push(`${name}: “${phone}” isn’t a 10-digit mobile number, imported without it`); phone = ''; } else phone = m;
-      } else phone = phone.replace(/[^\d+ ]/g, '').slice(0, 20);
+      } else {
+        const v = normalizeVendorPhone(phone);
+        if (v === null) { out.warnings.push(`${name}: “${phone}” isn’t a valid mobile or landline number, imported without it`); phone = ''; } else phone = v;
+      }
+      let email = (r.email ?? '').trim();
+      const em = normalizeEmail(email);
+      if (em === null) { out.warnings.push(`${name}: “${email.slice(0, 60)}” isn’t a valid email address, imported without it`); email = ''; } else email = em;
       const state = stateOf(r.state ?? '', gstin) || org.state;
       if (kind === 'customers') {
         const company = (r.company ?? '').trim();
         await insertCustomer(db, c.shopId, {
-          type: gstin ? 'Business' : 'Individual', name: gstin && !company ? name : name, companyName: gstin ? company || name : '', gstin, email: (r.email ?? '').trim().slice(0, 120),
+          type: gstin ? 'Business' : 'Individual', name: gstin && !company ? name : name, companyName: gstin ? company || name : '', gstin, email,
           phone, state, address: (r.address ?? '').trim().slice(0, 500), tier: 'SP1',
         }, org.state);
       } else {
-        await db.query('INSERT INTO vendors (shop_id, name, gstin, phone, email, state) VALUES ($1,$2,$3,$4,$5,$6)', [c.shopId, name, gstin, phone, (r.email ?? '').trim().slice(0, 120), state]);
+        await db.query('INSERT INTO vendors (shop_id, name, gstin, phone, email, state) VALUES ($1,$2,$3,$4,$5,$6)', [c.shopId, name, gstin, phone, email, state]);
       }
       names.add(name.toLowerCase());
       if (gstin) gstins.add(gstin);

@@ -10,6 +10,7 @@ import { checkSerialList, moveStock, receiveSerials } from '../../services/stock
 import { buildPurchaseLines, purchaseLineInput, purchaseTotals } from './purchasing';
 import { GSTIN_RE } from '../../../../shared/gst';
 import { T } from './ctx';
+import { EMAIL_RULE, VENDOR_PHONE_RULE, isValidEmailOrEmpty, isValidVendorPhoneOrEmpty, normalizeEmail, normalizeVendorPhone } from '../../../../shared/contact';
 
 export const moneyRouter = Router();
 const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -18,8 +19,9 @@ const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const vendorBody = z.object({
   name: z.string().trim().min(1, 'Vendor name is required').max(150),
   gstin: z.string().trim().toUpperCase().refine((v) => !v || GSTIN_RE.test(v), 'Invalid GSTIN').default(''),
-  phone: z.string().trim().max(30).default(''),
-  email: z.string().trim().max(120).default(''),
+  // Strict: a real mobile / landline and a real email, or nothing (shared/contact.ts).
+  phone: z.string().trim().max(30, VENDOR_PHONE_RULE).default('').refine(isValidVendorPhoneOrEmpty, VENDOR_PHONE_RULE).transform((v) => normalizeVendorPhone(v) ?? ''),
+  email: z.string().trim().max(120, EMAIL_RULE).default('').refine(isValidEmailOrEmpty, EMAIL_RULE).transform((v) => normalizeEmail(v) ?? ''),
   state: z.string().trim().max(60).default(''),
 });
 const serializeVendor = (v: any) => ({ id: v.id, name: v.name, gstin: v.gstin, phone: v.phone, email: v.email, state: v.state, payable: Number(v.payable ?? 0) });

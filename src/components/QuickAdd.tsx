@@ -6,6 +6,23 @@ import type { Customer } from '@/api/types';
 import { Field, Modal, Segmented } from '@/components/ui';
 import { GSTIN_RE, INDIAN_STATES, gstinMatchesState, stateFromCode } from '../../shared/gst';
 import { MOBILE_RULE, isValidMobileOrEmpty, normalizeMobile } from '../../shared/phone';
+import { EMAIL_RULE, VENDOR_PHONE_RULE, isValidEmailOrEmpty, isValidVendorPhoneOrEmpty, normalizeEmail, normalizeVendorPhone } from '../../shared/contact';
+
+/** Vendor phone: a mobile or a landline with STD code; tidied when the user moves on. */
+export function VendorPhoneInput({ id, value, onChange, invalid }: { id?: string; value: string; onChange: (v: string) => void; invalid?: boolean }) {
+  return (
+    <input id={id} className={`input ${invalid ? 'invalid' : ''}`} inputMode="tel" autoComplete="tel" maxLength={20} value={value} placeholder="98765 43210 or 0422 2345678"
+      onChange={(e) => onChange(e.target.value.replace(/[^\d+ ()-]/g, ''))} onBlur={() => { const m = normalizeVendorPhone(value); if (m) onChange(m); }} />
+  );
+}
+
+/** Email input: spaces dropped, lower-cased when the user moves on. */
+export function EmailInput({ id, value, onChange, invalid }: { id?: string; value: string; onChange: (v: string) => void; invalid?: boolean }) {
+  return (
+    <input id={id} className={`input ${invalid ? 'invalid' : ''}`} type="email" inputMode="email" autoComplete="email" maxLength={120} value={value} placeholder="accounts@supplier.in"
+      onChange={(e) => onChange(e.target.value.replace(/\s/g, ''))} onBlur={() => { const m = normalizeEmail(value); if (m) onChange(m); }} />
+  );
+}
 
 /** Mobile number input: digits, spaces and +91 only; tidied to "+91 98765 43210" when the cashier moves on. */
 export function MobileInput({ id, value, onChange, invalid, autoFocus }: { id?: string; value: string; onChange: (v: string) => void; invalid?: boolean; autoFocus?: boolean }) {
@@ -78,7 +95,8 @@ export function QuickVendorModal({ open, onClose, onCreated, defaultState }: { o
   const errs = {
     name: !f.name.trim() ? 'Vendor name is required' : '',
     gstin: f.gstin && !GSTIN_RE.test(f.gstin) ? 'Invalid GSTIN (e.g. 33AABCA1234F1Z5)' : '',
-    phone: f.phone && f.phone.replace(/\D/g, '').length < 6 ? 'Enter a phone number, or leave it empty' : '',
+    phone: isValidVendorPhoneOrEmpty(f.phone) ? '' : VENDOR_PHONE_RULE,
+    email: isValidEmailOrEmpty(f.email) ? '' : EMAIL_RULE,
   };
   const e = (k: keyof typeof errs) => (touched ? errs[k] : '') || server[k] || '';
   const close = () => { setF(blank); setTouched(false); setServer({}); onClose(); };
@@ -99,7 +117,8 @@ export function QuickVendorModal({ open, onClose, onCreated, defaultState }: { o
           <input id="qv-gstin" className={`input ${e('gstin') ? 'invalid' : ''}`} maxLength={15} value={f.gstin}
             onChange={(ev) => { const g = ev.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''); const st = g.length >= 2 ? stateFromCode(g.slice(0, 2)) : ''; setF({ ...f, gstin: g, state: st || f.state }); }} />
         </Field>
-        <Field label="Phone" error={e('phone')} hint="Optional"><input id="qv-phone" className={`input ${e('phone') ? 'invalid' : ''}`} inputMode="tel" maxLength={20} value={f.phone} onChange={(ev) => setF({ ...f, phone: ev.target.value.replace(/[^\d+ ()-]/g, '') })} /></Field>
+        <Field label="Phone" error={e('phone')} hint="Optional · mobile or landline"><VendorPhoneInput id="qv-phone" value={f.phone} invalid={!!e('phone')} onChange={(v) => setF({ ...f, phone: v })} /></Field>
+        <Field label="Email" error={e('email')} hint="Optional"><EmailInput id="qv-email" value={f.email} invalid={!!e('email')} onChange={(v) => setF({ ...f, email: v })} /></Field>
         <Field label="State" className="span-all"><select id="qv-state" className="select" value={f.state} onChange={(ev) => setF({ ...f, state: ev.target.value })}>{INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}</select></Field>
       </div>
     </Modal>

@@ -170,6 +170,8 @@ How it is built:
 - **Promo line:** a message printed on every receipt and invoice (*Print settings*), for example "Diwali sale till 5 Nov".
 - **Loyalty points:** the owner sets the rules: points per ₹100, what a point is worth, the minimum before points can be used, and the share of a bill points may pay.
   - Customer mobile numbers are optional; when given they must be a real 10-digit Indian mobile (with or without +91 / 0), and are saved as "+91 98765 43210". A customer list import keeps the customer and drops a wrong number with a warning.
+  - Vendor phone and email are checked as strictly: a 10-digit mobile, a landline with STD code (0422 2345678) or a 1800 number, and a real email address (name@domain.tld); random text is refused on every form and by the server, and an import keeps the vendor but drops a bad phone or email with a warning. Emails are saved lower-case. Customer emails use the same check.
+  - Totals on invoices, quotes and orders read top to bottom: **Sub total** before any discount, each discount taken off (item discounts and offers, then the bill discount), **Taxable value**, then CGST / SGST (split so they add up to the tax exactly), round off and total. Thermal receipts and the POS screen follow the same order.
   - On a new invoice, bill or purchase order the **+** next to the customer or vendor adds one in a pop-up, picks it, and stays on the document.
   - Points are earned on bills for a saved customer. At the counter, typing the customer's mobile number finds them, or adds them in one step.
   - Points can pay part of a later bill. Cancelling a bill undoes its points, and a return takes back the points earned on what came back.

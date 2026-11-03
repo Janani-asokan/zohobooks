@@ -15,6 +15,8 @@ import { SmartUpload, type PendingFile } from '@/components/SmartUpload';
 import { applyParty, partyRows } from '@/lib/partyFill';
 import { useShopUser as useMe } from '@/context/AuthContext';
 import type { Bill, Vendor } from '@/api/types';
+import { EMAIL_RULE, VENDOR_PHONE_RULE, isValidEmailOrEmpty, isValidVendorPhoneOrEmpty } from '../../../shared/contact';
+import { EmailInput, VendorPhoneInput } from '@/components/QuickAdd';
 
 function VendorFiles({ id }: { id: string }) {
   const me = useMe();
@@ -78,7 +80,8 @@ export default function Vendors() {
     const s = q.trim().toLowerCase();
     return vendors.filter((v) => !s || [v.name, v.gstin, v.phone, v.email].some((x) => x.toLowerCase().includes(s)));
   }, [vendors, q]);
-  const errs = { name: !vendor.name.trim() ? 'Vendor name is required' : '', gstin: vendor.gstin && !GSTIN_RE.test(vendor.gstin) ? 'Invalid GSTIN (15 characters, e.g. 33ABCDE1234F1Z5)' : '' };
+  const errs = { name: !vendor.name.trim() ? 'Vendor name is required' : '', gstin: vendor.gstin && !GSTIN_RE.test(vendor.gstin) ? 'Invalid GSTIN (15 characters, e.g. 33ABCDE1234F1Z5)' : '',
+    phone: isValidVendorPhoneOrEmpty(vendor.phone) ? '' : VENDOR_PHONE_RULE, email: isValidEmailOrEmpty(vendor.email) ? '' : EMAIL_RULE };
   const err = (k: keyof typeof errs) => (touched ? errs[k] : '') || serverErr[k] || '';
   const fyStart = (() => { const d = new Date(); const y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1; return `${y}-04-01`; })();
 
@@ -143,8 +146,8 @@ export default function Vendors() {
           <Field label="Vendor name" required error={err('name')} className="span-all"><input className={`input ${err('name') ? 'invalid' : ''}`} value={vendor.name} onChange={(e) => setVendor({ ...vendor, name: e.target.value })} autoFocus placeholder="e.g. Sri Balaji Distributors" /></Field>
           <Field label="GSTIN" error={err('gstin')} hint="Needed to claim input tax credit"><input className={`input mono ${err('gstin') ? 'invalid' : ''}`} value={vendor.gstin} maxLength={15} onChange={(e) => setVendor({ ...vendor, gstin: e.target.value.toUpperCase() })} /></Field>
           <Field label="State"><select className="select" value={vendor.state} onChange={(e) => setVendor({ ...vendor, state: e.target.value })}>{INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}</select></Field>
-          <Field label="Phone"><input className="input" value={vendor.phone} onChange={(e) => setVendor({ ...vendor, phone: e.target.value })} /></Field>
-          <Field label="Email"><input className="input" value={vendor.email} onChange={(e) => setVendor({ ...vendor, email: e.target.value })} /></Field>
+          <Field label="Phone" error={err('phone')} hint="Optional · mobile or landline with STD code"><VendorPhoneInput value={vendor.phone} invalid={!!err('phone')} onChange={(v) => setVendor({ ...vendor, phone: v })} /></Field>
+          <Field label="Email" error={err('email')} hint="Optional"><EmailInput value={vendor.email} invalid={!!err('email')} onChange={(v) => setVendor({ ...vendor, email: v })} /></Field>
         </div>
       </Modal>
     </div>

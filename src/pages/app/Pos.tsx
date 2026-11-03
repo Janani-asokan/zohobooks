@@ -308,7 +308,13 @@ export default function Pos() {
           </div>
           {promo.on && <OffersSummary applied={priced.applied} offers={promo.offers} skipped={skip} onSkip={(id) => setSkip((x) => [...x, id])} onUndo={(id) => setSkip((x) => x.filter((y) => y !== id))} />}
           {promo.loyaltyOn && customer && <PointsBox settings={promo.settings} balance={promo.balance} payable={payable(pricedBase.lines, withGst)} use={usePoints.on} points={usePoints.points} onChange={(on, points) => setUsePoints({ on, points })} earn={willEarn} />}
-          <div className="row between small"><span className="muted">{inclusive ? 'Taxable value' : 'Sub total'}{totals.discount > 0 ? ' (after discount)' : ''}</span><span>{money(totals.subTotal)}</span></div>
+          {totals.discount > 0.004 && (
+            <>
+              <div className="row between small"><span className="muted">Sub total</span><span>{money(Math.round((totals.subTotal + totals.discount) * 100) / 100)}</span></div>
+              <div className="row between small"><span className="muted">Discount</span><span>− {money(totals.discount)}</span></div>
+            </>
+          )}
+          <div className="row between small"><span className="muted">{withGst && (inclusive || totals.discount > 0.004) ? 'Taxable value' : 'Sub total'}</span><span>{money(totals.subTotal)}</span></div>
           {withGst && <div className="row between small"><span className="muted">GST{inter ? ' (IGST)' : ' (CGST + SGST)'}</span><span>{money(totals.taxTotal)}</span></div>}
           <div className="row between"><strong style={{ fontSize: 14 }}>Total</strong><strong style={{ fontSize: 24, color: 'var(--brand-700)' }}>{money(totals.total)}</strong></div>
           <div className="pay-modes">

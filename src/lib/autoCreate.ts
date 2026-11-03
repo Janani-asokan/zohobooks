@@ -2,6 +2,7 @@ import { api } from '@/api/client';
 import type { Item, TaxSlab, Vendor } from '@/api/types';
 import type { ExtractedLine, ExtractedParty } from '../../shared/extract';
 import { GSTIN_RE, INDIAN_STATES } from '../../shared/gst';
+import { normalizeEmail, normalizeVendorPhone } from '../../shared/contact';
 
 const clean = (s: string | null | undefined, max: number) => (s ?? '').trim().slice(0, max);
 
@@ -9,7 +10,7 @@ const clean = (s: string | null | undefined, max: number) => (s ?? '').trim().sl
 export function createVendorFrom(p: ExtractedParty) {
   const gstin = clean(p.gstin, 15).toUpperCase();
   return api.post<Vendor>('/shop/vendors', {
-    name: clean(p.companyName || p.name, 150), gstin: GSTIN_RE.test(gstin) ? gstin : '', phone: clean(p.phone, 30), email: clean(p.email, 120),
+    name: clean(p.companyName || p.name, 150), gstin: GSTIN_RE.test(gstin) ? gstin : '', phone: normalizeVendorPhone(clean(p.phone, 30)) ?? '', email: normalizeEmail(clean(p.email, 120)) ?? '', // a misread number or email is left out, not saved
     state: INDIAN_STATES.includes(p.state ?? '') ? p.state : '',
   });
 }

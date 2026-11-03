@@ -45,7 +45,10 @@ export const initials = (name: string) =>
     .join('');
 
 export const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+/** Same rule as shared/contact.ts: a real name@domain.tld (no random text, no double dots, 2–24 letter ending). */
+/** Signing in only checks the shape, so an older account with an unusual address can always log in. */
+export const LOGIN_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+export const EMAIL_RE = /^[A-Za-z0-9%+_-]+(?:\.[A-Za-z0-9%+_-]+)*@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,24}$/;
 
 /** Rupees in words (Indian numbering) for the printed invoice. */
 export function amountInWords(amount: number): string {

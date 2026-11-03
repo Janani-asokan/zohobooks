@@ -149,8 +149,10 @@ export function ThermalReceipt({ data, org, s }: { data: ReceiptData; org: Recei
 
   const totals = (
     <div className="rc-totals">
-      <div className="rr"><span>Sub total ({data.lines.reduce((q, l) => q + l.qty, 0)} items)</span><span>{n2(data.subTotal)}</span></div>
+      {/* Sub total before discount, the discount, then what GST is charged on: the lines add up to the total. */}
+      <div className="rr"><span>Sub total ({data.lines.reduce((q, l) => q + l.qty, 0)} items)</span><span>{n2(data.subTotal + data.discount)}</span></div>
       {data.discount > 0 && <div className="rr"><span>Discount</span><span>-{n2(data.discount)}</span></div>}
+      {data.discount > 0 && <div className="rr"><span>{data.withGst ? 'Taxable value' : 'After discount'}</span><span>{n2(data.subTotal)}</span></div>}
 
       {data.withGst && (data.interState
         ? <div className="rr"><span>IGST</span><span>{n2(data.igst)}</span></div>

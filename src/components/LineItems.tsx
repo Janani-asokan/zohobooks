@@ -199,6 +199,8 @@ export function BillOptionsCard({ value, onChange, withGst }: { value: BillOptio
  * priced: lines with festival offers and points already applied (shared/offers.ts priceBill), and what to show for
  * them. Without it the panel works out the bill discount and MRP billing itself, as before.
  */
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
 export function TotalsPanel({ lines, withGst, interState, tcsRate = 0, options, priced }: {
   lines: Array<{ qty: number; rate: number; taxRate: number; discount?: number }>; withGst: boolean; interState: boolean; tcsRate?: number; options?: BillOptions;
   priced?: { lines: Array<{ qty: number; rate: number; taxRate: number; discount?: number }>; summary: ReactNode; billOff?: number };
@@ -214,17 +216,20 @@ export function TotalsPanel({ lines, withGst, interState, tcsRate = 0, options, 
   );
   return (
     <div className="card" style={{ padding: 18, background: 'var(--ink-50)', boxShadow: 'none' }}>
-      <Row l="Sub total" v={money(t.subTotal)} strong />
-      {billOff > 0.004 && <Row l={`Bill discount${options?.billDiscount?.kind === 'percent' ? ` ${options.billDiscount.value}%` : ''} (incl. above)`} v={`− ${money(billOff)}`} />}
-      {t.discount - billOff > 0.004 && <Row l={priced ? 'Discounts and offers (incl. above)' : 'Item discounts (incl. above)'} v={`− ${money(t.discount - billOff)}`} />}
+      {/* Reads top to bottom: sub total before any discount, each discount taken off, the taxable value they leave, then GST. */}
+      <Row l="Sub total" v={money(r2(t.subTotal + t.discount))} strong />
+      {t.discount - billOff > 0.004 && <Row l={priced ? 'Item discounts and offers' : 'Item discounts'} v={`− ${money(r2(t.discount - billOff))}`} />}
+      {billOff > 0.004 && <Row l={`Bill discount${options?.billDiscount?.kind === 'percent' ? ` ${options.billDiscount.value}%` : ''}`} v={`− ${money(billOff)}`} />}
+      {t.discount > 0.004 && <Row l={withGst ? 'Taxable value' : 'Amount after discount'} v={money(t.subTotal)} strong />}
       {priced?.summary}
       {options?.pricesIncludeTax && withGst && <div className="small muted" style={{ padding: '2px 0 6px' }}>Prices include GST · taxable value shown</div>}
       {withGst ? (
         t.breakup.map((b) =>
           interState ? <Row key={b.rate} l={`IGST ${b.rate}% on ${money(b.taxable)}`} v={money(b.tax)} /> : (
+            // Split so the two halves add up to the tax exactly (₹133.75 → 66.87 + 66.88), as on the saved invoice.
             <div key={b.rate}>
-              <Row l={`CGST ${b.rate / 2}%`} v={money(b.tax / 2)} />
-              <Row l={`SGST ${b.rate / 2}%`} v={money(b.tax / 2)} />
+              <Row l={`CGST ${b.rate / 2}%`} v={money(t.breakup.length === 1 ? t.cgst : r2(b.tax / 2))} />
+              <Row l={`SGST ${b.rate / 2}%`} v={money(t.breakup.length === 1 ? t.sgst : r2(b.tax - r2(b.tax / 2)))} />
             </div>
           ),
         )
