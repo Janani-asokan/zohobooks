@@ -11,6 +11,9 @@ import { useQr, upiLink } from '@/components/qr';
 import { EMAIL_RE, initials } from '@/lib/format';
 import { readLogo } from '@/lib/image';
 import { GSTIN_RE, INDIAN_STATES, gstinMatchesState } from '../../../shared/gst';
+import { bankErrors, bankFromIfsc, cleanAccountNo, composeBankDetails } from '../../../shared/bank';
+import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty } from '../../../shared/contact';
+import { VendorPhoneInput } from '@/components/QuickAdd';
 
 
 export default function Organization() {
@@ -24,6 +27,10 @@ function OrgForm({ initial }: { initial: Org }) {
   const [org, setOrg] = useState<Org>(initial);
   useEffect(() => setOrg(initial), [initial]);
   const [touched, setTouched] = useState(false);
+  // The account number is typed twice when it changes, so a typo never reaches customers' payments.
+  const [confirmNo, setConfirmNo] = useState('');
+  const accountChanged = cleanAccountNo(org.bankAccountNo) !== cleanAccountNo(initial.bankAccountNo) && !!cleanAccountNo(org.bankAccountNo);
+  const payTo = composeBankDetails({ ...org, bankName: org.bankName || bankFromIfsc(org.bankIfsc) });
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   // Trade details are saved by the Business type card; they are left out here so this form never overwrites them.
@@ -35,6 +42,9 @@ function OrgForm({ initial }: { initial: Org }) {
     gstin: org.gstin && !GSTIN_RE.test(org.gstin) ? 'Invalid GSTIN' : org.gstin && !gstinMatchesState(org.gstin, org.state) ? 'GSTIN state code doesn’t match your state' : '',
     email: org.email && !EMAIL_RE.test(org.email) ? 'Invalid email' : '',
     upiId: org.upiId && !/^[\w.-]{2,}@[a-zA-Z]{2,}$/.test(org.upiId) ? 'Enter a valid UPI ID (e.g. shop@okhdfcbank)' : '',
+    phone: isValidVendorPhoneOrEmpty(org.phone) ? '' : VENDOR_PHONE_RULE,
+    ...{ bankAccountName: '', bankAccountNo: '', bankIfsc: '', bankAccountNoConfirm: '' },
+    ...bankErrors(org, cleanAccountNo(org.bankAccountNo) !== cleanAccountNo(initial.bankAccountNo) ? confirmNo : undefined, { requireName: cleanAccountNo(org.bankAccountNo) !== cleanAccountNo(initial.bankAccountNo) }),
   };
   const e = (k: keyof typeof errs) => (touched ? errs[k] : '') || serverErr[k] || '';
   const dirty = JSON.stringify(org) !== JSON.stringify(initial);
@@ -51,7 +61,7 @@ function OrgForm({ initial }: { initial: Org }) {
     setServerErr({});
     if (Object.values(errs).some(Boolean)) return;
     save.mutate({ ...org, companyName: org.companyName.trim() }, {
-      onSuccess: () => toast('success', 'Organization profile saved'),
+      onSuccess: () => { setConfirmNo(''); toast('success', 'Organization profile saved'); },
       onError: (err) => { setServerErr(fieldErrors(err)); toast('error', err.message); },
     });
   };
@@ -89,7 +99,7 @@ function OrgForm({ initial }: { initial: Org }) {
                 <Field label="GSTIN" error={e('gstin')} hint="Required to charge GST and file returns"><input className={`input ${e('gstin') ? 'invalid' : ''}`} maxLength={15} value={org.gstin} onChange={(ev) => setOrg({ ...org, gstin: ev.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '') })} style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} /></Field>
                 <Field label="State" hint="Determines CGST+SGST vs IGST"><select className="select" value={org.state} onChange={(ev) => setOrg({ ...org, state: ev.target.value })}>{INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}</select></Field>
                 <Field label="Email" error={e('email')}><input className={`input ${e('email') ? 'invalid' : ''}`} value={org.email} onChange={(ev) => setOrg({ ...org, email: ev.target.value })} /></Field>
-                <Field label="Phone"><input className="input" value={org.phone} onChange={(ev) => setOrg({ ...org, phone: ev.target.value })} /></Field>
+                <Field label="Phone" error={e('phone')} hint="10-digit mobile or landline with STD code"><VendorPhoneInput value={org.phone} invalid={!!e('phone')} onChange={(v) => setOrg({ ...org, phone: v })} /></Field>
                 <Field label="Address (include PIN code)" className="span-all" hint="The 6-digit PIN is used in e-invoice and e-way bill files"><textarea className="textarea" value={org.address} onChange={(ev) => setOrg({ ...org, address: ev.target.value })} /></Field>
               </div>
 
@@ -109,7 +119,39 @@ function OrgForm({ initial }: { initial: Org }) {
                 <div className="row" style={{ gap: 12 }}>
                   {qr ? <img src={qr} alt="UPI QR preview" style={{ width: 84, height: 84, borderRadius: 8, background: '#fff', padding: 4, border: '1px solid var(--border)' }} /> : <div className="small muted">QR preview appears here.</div>}
                 </div>
-                <Field label="Bank details" className="span-all" hint="Printed in the “Pay to” box"><textarea className="textarea" value={org.bankDetails} onChange={(ev) => setOrg({ ...org, bankDetails: ev.target.value })} placeholder={'HDFC Bank · A/c 50200012345678\nIFSC HDFC0001234'} /></Field>
+                <div className="section-title span-all" style={{ marginTop: 6 }}>Bank account</div>
+                <Field label="Account holder name" error={e('bankAccountName')} hint="As on the bank account" className="span-all">
+                  <input className={`input ${e('bankAccountName') ? 'invalid' : ''}`} value={org.bankAccountName} maxLength={120} onChange={(ev) => setOrg({ ...org, bankAccountName: ev.target.value })} placeholder={org.legalName || org.companyName} autoComplete="off" />
+                </Field>
+                <Field label="Account number" error={e('bankAccountNo')} hint="9 to 18 digits">
+                  <input className={`input mono ${e('bankAccountNo') ? 'invalid' : ''}`} inputMode="numeric" maxLength={24} value={org.bankAccountNo} autoComplete="off" placeholder="50200012345678"
+                    onChange={(ev) => setOrg({ ...org, bankAccountNo: ev.target.value.replace(/[^\d\s-]/g, '') })} onBlur={() => setOrg((o) => ({ ...o, bankAccountNo: cleanAccountNo(o.bankAccountNo) }))} />
+                </Field>
+                {accountChanged ? (
+                  <Field label="Re-enter account number" error={e('bankAccountNoConfirm')} hint="Typed twice so a wrong digit is caught">
+                    <input className={`input mono ${e('bankAccountNoConfirm') ? 'invalid' : ''}`} inputMode="numeric" maxLength={24} value={confirmNo} autoComplete="off" onPaste={(ev) => ev.preventDefault()}
+                      onChange={(ev) => setConfirmNo(ev.target.value.replace(/[^\d\s-]/g, ''))} />
+                  </Field>
+                ) : <div />}
+                <Field label="IFSC code" error={e('bankIfsc')} hint="11 characters, e.g. HDFC0001234">
+                  <input className={`input mono ${e('bankIfsc') ? 'invalid' : ''}`} maxLength={11} value={org.bankIfsc} autoComplete="off" placeholder="HDFC0001234"
+                    onChange={(ev) => { const v = ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); const bank = bankFromIfsc(v); setOrg({ ...org, bankIfsc: v, bankName: v.length >= 4 && bank && (!org.bankName || org.bankName === bankFromIfsc(org.bankIfsc)) ? bank : org.bankName }); }} />
+                </Field>
+                <Field label="Bank name" hint="Filled from the IFSC for most banks">
+                  <input className="input" value={org.bankName} maxLength={80} onChange={(ev) => setOrg({ ...org, bankName: ev.target.value })} placeholder="HDFC Bank" />
+                </Field>
+                <Field label="Branch" hint="Optional">
+                  <input className="input" value={org.bankBranch} maxLength={80} onChange={(ev) => setOrg({ ...org, bankBranch: ev.target.value })} placeholder="Teynampet" />
+                </Field>
+                <Field label="Other payment note" hint="Optional, printed below the account" className="span-all">
+                  <input className="input" value={org.bankNote} maxLength={300} onChange={(ev) => setOrg({ ...org, bankNote: ev.target.value })} placeholder="e.g. Cheques in favour of Aravind Computer Store" />
+                </Field>
+                {payTo && (
+                  <div className="span-all pay-to-preview">
+                    <div className="small muted">Printed on invoices as “Pay to”:</div>
+                    <div className="ti-pre mono small">{payTo}</div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

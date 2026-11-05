@@ -754,3 +754,5 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 /* Phones and tablets have no F-keys: keep the payment buttons compact there */
 @media (max-width: 900px) { .pay-modes .pm-key { display: none; } }
 .pay-modes button { min-width: 0; }
+.pay-to-preview { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 10px 12px; background: var(--ink-50); }
+.pay-to-preview .ti-pre { white-space: pre-line; margin-top: 4px; color: var(--ink-800); }

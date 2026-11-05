@@ -78,10 +78,15 @@ try {
   await o.getByLabel('Phone').fill('+91 98250 11223');
   await o.getByLabel('Address (include PIN code)').fill('12, Alkapuri Main Road, Vadodara, Gujarat 390007');
   await o.getByLabel('UPI ID').fill('happykids@okaxis');
-  await o.getByLabel('Bank details').fill('Axis Bank · A/c 917020012345678\nIFSC UTIB0000123');
+  // Bank account as separate fields (the IFSC fills the bank name; a new account number is typed twice)
+  await o.getByLabel('Account holder name', { exact: true }).fill('Happy Kids Toy World');
+  await o.getByLabel('Account number', { exact: true }).fill('917020012345678');
+  await o.getByLabel('Re-enter account number', { exact: true }).fill('917020012345678');
+  await o.getByLabel('IFSC code', { exact: true }).fill('UTIB0000123');
   await o.getByRole('button', { name: /Save Changes/ }).click(); await o.waitForTimeout(1200);
   const org = (await oa('GET', '/shop/organization')).body;
   ok(org.gstin === '24ABCPS1234K1Z5' && org.state === 'Gujarat' && org.upiId === 'happykids@okaxis', 'business profile saved from the form (GSTIN, Gujarat, UPI)', JSON.stringify({ g: org.gstin, s: org.state }));
+  ok(org.phone === '+91 98250 11223' && org.bankName === 'Axis Bank' && org.bankAccountNo === '917020012345678' && /IFSC UTIB0000123/.test(org.bankDetails), 'phone and bank account (Axis Bank from the IFSC) saved', JSON.stringify({ ph: org.phone, bank: org.bankName, no: org.bankAccountNo }));
   await shot(o, '03-business-profile', true);
 
   // Cashier login through Team

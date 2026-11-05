@@ -20,7 +20,9 @@ export type Me =
 
 export interface Organization {
   companyName: string; legalName: string; gstin: string; email: string; phone: string; address: string; state: string; logo: string;
-  invoiceFooter: string; upiId: string; bankDetails: string; invoiceTemplate: 'classic' | 'modern' | 'compact'; compositionScheme: boolean;
+  invoiceFooter: string; upiId: string; bankDetails: string;
+  /** The bank account as separate fields; bankDetails is the printed text built from them. */
+  bankAccountName: string; bankName: string; bankAccountNo: string; bankIfsc: string; bankBranch: string; bankNote: string; invoiceTemplate: 'classic' | 'modern' | 'compact'; compositionScheme: boolean;
   autoReminders: boolean; reminderDays: number; lendingEnabled: boolean;
   /** Business template key (shared/templates.ts), '' when not chosen. */
   businessType: string; itemFields: ItemField[]; invoiceFields: ItemField[]; units: string[]; tradeDetails: Record<string, string>;

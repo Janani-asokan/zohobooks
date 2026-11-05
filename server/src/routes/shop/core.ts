@@ -15,6 +15,8 @@ import { EMAIL_RE, GSTIN_RE, gstinMatchesState } from '../../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE, STAFF_ROLES } from '../../../../shared/permissions';
 import { BARCODE_FIELDS, INVOICE_FIELDS, LABEL_SIZES, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
 import { T, allowed } from './ctx';
+import { bankErrors, bankFromIfsc, cleanAccountNo, cleanIfsc, composeBankDetails, parseBankDetails, type BankFields } from '../../../../shared/bank';
+import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty, normalizeVendorPhone } from '../../../../shared/contact';
 
 export const coreRouter = Router();
 
@@ -24,7 +26,13 @@ const serializeOrg = (o: any) => ({
   logo: o.logo, invoiceFooter: o.invoice_footer, upiId: o.upi_id, bankDetails: o.bank_details, invoiceTemplate: o.invoice_template,
   compositionScheme: o.composition_scheme, autoReminders: o.auto_reminders, reminderDays: o.reminder_days, lendingEnabled: !!o.lending_enabled,
   businessType: o.business_type ?? '', itemFields: o.item_fields ?? [], invoiceFields: o.invoice_fields ?? [], units: o.units ?? [], tradeDetails: o.trade_details ?? {},
+  ...bankOf(o),
 });
+/** The bank fields; a shop that only has the old free-text box gets it split into them (saved on its next save). */
+function bankOf(o: any): BankFields {
+  const f: BankFields = { bankAccountName: o.bank_account_name ?? '', bankName: o.bank_name ?? '', bankAccountNo: o.bank_account_no ?? '', bankIfsc: o.bank_ifsc ?? '', bankBranch: o.bank_branch ?? '', bankNote: o.bank_note ?? '' };
+  return Object.values(f).some(Boolean) || !o.bank_details ? f : parseBankDetails(o.bank_details);
+}
 
 coreRouter.get('/organization', T(async (db, _req, c) => serializeOrg(await getOrg(db, c.shopId))));
 
@@ -38,15 +46,22 @@ coreRouter.put(
           companyName: z.string().trim().min(1, 'Company name is required').max(150),
           legalName: z.string().trim().max(150).default(''),
           gstin: z.string().trim().toUpperCase().default(''),
-          email: z.string().trim().refine((v) => !v || EMAIL_RE.test(v), 'Invalid email').default(''),
-          phone: z.string().trim().max(30).default(''),
+          // Phone and email are checked below when they change, so an older saved value never blocks saving the logo.
+          email: z.string().trim().max(120).default(''),
+          phone: z.string().trim().max(30, VENDOR_PHONE_RULE).default(''),
           address: z.string().max(500).default(''),
           state: z.string().trim().min(1),
           // ~300 KB cap on the data-URL logo
           logo: z.string().max(400_000).refine((v) => !v || v.startsWith('data:image/'), 'Logo must be an image').default(''),
           invoiceFooter: z.string().max(300).default(''),
           upiId: z.string().trim().refine((v) => !v || /^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(v), 'Enter a valid UPI ID (e.g. shop@okhdfcbank)').default(''),
-          bankDetails: z.string().max(500).default(''),
+          bankDetails: z.string().max(500).optional(), // the old single box; only used when no bank fields are sent
+          bankAccountName: z.string().trim().max(120).default(''),
+          bankName: z.string().trim().max(80).default(''),
+          bankAccountNo: z.string().max(30).default('').transform(cleanAccountNo),
+          bankIfsc: z.string().max(20).default('').transform(cleanIfsc),
+          bankBranch: z.string().trim().max(80).default(''),
+          bankNote: z.string().trim().max(300).default(''),
           invoiceTemplate: z.enum(['classic', 'modern', 'compact']).default('classic'),
           compositionScheme: z.boolean().default(false),
           autoReminders: z.boolean().default(false),
@@ -57,13 +72,36 @@ coreRouter.put(
         .superRefine((v, ctx) => {
           if (v.gstin && !GSTIN_RE.test(v.gstin)) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'Invalid GSTIN' });
           else if (v.gstin && !gstinMatchesState(v.gstin, v.state)) ctx.addIssue({ code: 'custom', path: ['gstin'], message: 'GSTIN state code doesn’t match your state' });
+          // The holder's name is required when an account number is entered or changed (checked below).
+          for (const [path, message] of Object.entries(bankErrors(v, undefined, { requireName: false }))) ctx.addIssue({ code: 'custom', path: [path], message });
         }),
       req.body,
     );
+    const cur = await getOrg(db, c.shopId);
+    if (b.phone !== (cur.phone ?? '')) {
+      // A 10-digit mobile or a landline with STD code (shared/contact.ts), saved tidied; nothing longer or shorter.
+      const ph = normalizeVendorPhone(b.phone);
+      if (ph === null) throw badRequest(VENDOR_PHONE_RULE, { phone: VENDOR_PHONE_RULE });
+      b.phone = ph;
+    }
+    if (b.email !== (cur.email ?? '') && b.email && !EMAIL_RE.test(b.email)) throw badRequest('Enter a valid email address', { email: 'Enter a valid email address' });
+    const curBank = bankOf(cur);
+    if (b.bankAccountNo && b.bankAccountNo !== curBank.bankAccountNo && !b.bankAccountName) {
+      const m = 'Enter the name on the account (customers check it before paying)';
+      throw badRequest(m, { bankAccountName: m });
+    }
+    // The printed "Pay to" text is built from the fields; a caller that still sends only the old box keeps it.
+    const bankFields: BankFields = { bankAccountName: b.bankAccountName, bankName: b.bankName || bankFromIfsc(b.bankIfsc), bankAccountNo: b.bankAccountNo, bankIfsc: b.bankIfsc, bankBranch: b.bankBranch, bankNote: b.bankNote };
+    // Callers that send the bank fields (the profile screen) get the text built from them, even when all are cleared;
+    // an older caller that sends only the single box keeps it.
+    const sentFields = ['bankAccountNo', 'bankIfsc', 'bankAccountName', 'bankName', 'bankBranch', 'bankNote'].some((k) => k in (req.body ?? {}));
+    const bankText = sentFields ? composeBankDetails(bankFields) : b.bankDetails ?? '';
     await db.query(
       `UPDATE organizations SET company_name=$2, legal_name=$3, gstin=$4, email=$5, phone=$6, address=$7, state=$8, logo=$9, invoice_footer=$10,
-         upi_id=$11, bank_details=$12, invoice_template=$13, composition_scheme=$14, auto_reminders=$15, reminder_days=$16 WHERE shop_id=$1`,
-      [c.shopId, b.companyName, b.legalName, b.gstin, b.email, b.phone, b.address, b.state, b.logo, b.invoiceFooter, b.upiId, b.bankDetails, b.invoiceTemplate, b.compositionScheme, b.autoReminders, b.reminderDays],
+         upi_id=$11, bank_details=$12, invoice_template=$13, composition_scheme=$14, auto_reminders=$15, reminder_days=$16,
+         bank_account_name=$17, bank_name=$18, bank_account_no=$19, bank_ifsc=$20, bank_branch=$21, bank_note=$22 WHERE shop_id=$1`,
+      [c.shopId, b.companyName, b.legalName, b.gstin, b.email, b.phone, b.address, b.state, b.logo, b.invoiceFooter, b.upiId, bankText, b.invoiceTemplate, b.compositionScheme, b.autoReminders, b.reminderDays,
+        bankFields.bankAccountName, bankFields.bankName, bankFields.bankAccountNo, bankFields.bankIfsc, bankFields.bankBranch, bankFields.bankNote],
     );
     if (b.tradeDetails) await db.query('UPDATE organizations SET trade_details = $2 WHERE shop_id = $1', [c.shopId, JSON.stringify(Object.fromEntries(Object.entries(b.tradeDetails).filter(([, v]) => v)))]);
     await audit(db, req, c.shopId, 'update', 'organization', c.shopId, { gstin: b.gstin, composition: b.compositionScheme, template: b.invoiceTemplate });
@@ -149,7 +187,7 @@ coreRouter.get('/tax-slabs', T(async (db) => (await many(db, 'SELECT * FROM tax_
 
 /* ---------- Branches ---------- */
 const serializeBranch = (b: any) => ({ id: b.id, name: b.name, address: b.address, phone: b.phone, isPrimary: b.is_primary });
-const branchBody = z.object({ name: z.string().trim().min(1, 'Branch name is required').max(100), address: z.string().max(300).default(''), phone: z.string().max(30).default('') });
+const branchBody = z.object({ name: z.string().trim().min(1, 'Branch name is required').max(100), address: z.string().max(300).default(''), phone: z.string().trim().max(30, VENDOR_PHONE_RULE).default('').refine(isValidVendorPhoneOrEmpty, VENDOR_PHONE_RULE).transform((v) => normalizeVendorPhone(v) ?? '') });
 
 coreRouter.get('/branches', T(async (db, _req, c) => (await many(db, 'SELECT * FROM branches WHERE shop_id = $1 ORDER BY is_primary DESC, created_at', [c.shopId])).map(serializeBranch)));
 coreRouter.post(

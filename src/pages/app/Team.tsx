@@ -10,6 +10,8 @@ import { useToast } from '@/context/ToastContext';
 import { Badge, Field, Modal, PageHeader, Toggle } from '@/components/ui';
 import { EMAIL_RE, initials } from '@/lib/format';
 import { PERMISSIONS, ROLE_PERMISSIONS, STAFF_ROLES, isStrongPassword, PASSWORD_RULE, type StaffRole } from '../../../shared/permissions';
+import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty } from '../../../shared/contact';
+import { VendorPhoneInput } from '@/components/QuickAdd';
 
 const genPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -164,13 +166,13 @@ export default function Team() {
       <Modal open={!!branchModal} onClose={() => setBranchModal(null)} title={branchModal?.id ? 'Edit branch' : 'New branch'}
         footer={<><button className="btn btn-secondary" onClick={() => setBranchModal(null)}>Cancel</button><button className="btn btn-primary" onClick={() => {
           setTouched(true);
-          if (!branch.name.trim()) return;
+          if (!branch.name.trim() || !isValidVendorPhoneOrEmpty(branch.phone)) return;
           if (branchModal?.id) updateBranch.mutate({ id: branchModal.id, b: branch }, { onSuccess: () => setBranchModal(null) });
           else createBranch.mutate(branch, { onSuccess: () => setBranchModal(null) });
         }}>Save branch</button></>}>
         <div className="form-grid">
           <Field label="Branch name" required error={touched && !branch.name.trim() ? 'Required' : ''}><input className={`input ${touched && !branch.name.trim() ? 'invalid' : ''}`} value={branch.name} onChange={(e) => setBranch({ ...branch, name: e.target.value })} autoFocus /></Field>
-          <Field label="Phone"><input className="input" value={branch.phone} onChange={(e) => setBranch({ ...branch, phone: e.target.value })} /></Field>
+          <Field label="Phone" error={touched && !isValidVendorPhoneOrEmpty(branch.phone) ? VENDOR_PHONE_RULE : ''} hint="Optional · mobile or landline with STD code"><VendorPhoneInput value={branch.phone} invalid={touched && !isValidVendorPhoneOrEmpty(branch.phone)} onChange={(v) => setBranch({ ...branch, phone: v })} /></Field>
           <Field label="Address" className="span-all"><textarea className="textarea" value={branch.address} onChange={(e) => setBranch({ ...branch, address: e.target.value })} /></Field>
         </div>
       </Modal>

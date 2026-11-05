@@ -8,6 +8,8 @@ import type { Branch, StockSummary } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { Badge, EmptyState, Field, Modal, PageHeader, Toggle } from '@/components/ui';
 import { money } from '@/lib/format';
+import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty } from '../../../shared/contact';
+import { VendorPhoneInput } from '@/components/QuickAdd';
 
 const blank = { name: '', address: '', phone: '', isPrimary: false };
 
@@ -60,13 +62,14 @@ export default function Warehouses() {
       <Modal open={!!form} onClose={() => setForm(null)} title={form?.id ? 'Edit warehouse' : 'New warehouse'}
         footer={<><button className="btn btn-secondary" onClick={() => setForm(null)}>Cancel</button><button className="btn btn-primary" disabled={save.isPending} onClick={() => {
           if (!form?.name.trim()) return setErr({ name: 'Give it a name' });
-          save.mutate(form, { onSuccess: () => setForm(null), onError: (e) => setErr({ ...fieldErrors(e), name: fieldErrors(e).name ?? e.message }) });
+          if (!isValidVendorPhoneOrEmpty(form.phone)) return setErr({ phone: VENDOR_PHONE_RULE });
+          save.mutate(form, { onSuccess: () => setForm(null), onError: (e) => setErr({ ...fieldErrors(e), name: fieldErrors(e).name ?? (fieldErrors(e).phone ? '' : e.message) }) });
         }}>{save.isPending && <Loader2 size={15} className="spin" />} Save</button></>}>
         {form && (
           <div className="form-grid">
             <Field label="Name" required error={err.name} className="span-all"><input className={`input ${err.name ? 'invalid' : ''}`} value={form.name} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Ambattur godown" autoFocus /></Field>
             <Field label="Address" className="span-all"><textarea className="textarea" rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
-            <Field label="Phone"><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+            <Field label="Phone" error={err.phone} hint="Optional · mobile or landline with STD code"><VendorPhoneInput value={form.phone} invalid={!!err.phone} onChange={(v) => { setForm({ ...form, phone: v }); setErr((x) => ({ ...x, phone: '' })); }} /></Field>
             <div className="toggle-row span-all"><div><div className="strong">Main warehouse</div><div className="small muted">Used by default on new invoices, bills and opening stock.</div></div><Toggle checked={form.isPrimary} onChange={(v) => setForm({ ...form, isPrimary: v })} /></div>
           </div>
         )}
