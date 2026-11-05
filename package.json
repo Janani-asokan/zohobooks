@@ -23,6 +23,8 @@
     "@napi-rs/canvas": "^0.1.100",
     "@tanstack/react-query": "^5.62.11",
     "@tesseract.js-data/eng": "^1.0.0",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.5",
     "cookie": "^1.0.2",

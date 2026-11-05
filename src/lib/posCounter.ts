@@ -86,3 +86,12 @@ export function cashSuggestions(total: number): number[] {
   for (const step of [10, 50, 100, 500, 2000]) { const v = Math.ceil(total / step) * step; if (v > total) out.add(v); }
   return [...out].sort((a, b) => a - b).slice(0, 5);
 }
+
+/* ---------- What this counter sells most (device only), to put those items first ---------- */
+const freqKey = (shopId: string) => `c360.pos.freq.${shopId}`;
+export const readFreq = (shopId: string) => read<Record<string, number>>(freqKey(shopId), {});
+export const writeFreq = (shopId: string, f: Record<string, number>) => {
+  // Keep the 300 most sold, so the record stays small.
+  const top = Object.entries(f).sort((a, b) => b[1] - a[1]).slice(0, 300);
+  write(freqKey(shopId), Object.fromEntries(top));
+};

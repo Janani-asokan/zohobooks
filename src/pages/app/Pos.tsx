@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle, CloudOff } from 'lucide-react';
+import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle, CloudOff, Camera, Mic } from 'lucide-react';
 import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice, type ReceiptData } from '@/components/printing';
@@ -26,11 +26,14 @@ import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
 import { waLink } from './InvoiceView';
 import { findByCode } from '../../../shared/barcode';
-import { beep, beepOn, cashSuggestions, heldBills, holdBill, loadDraft, parseScan, saveDraft, setBeepOn, takeHeld, type CounterLine, type HeldBill } from '@/lib/posCounter';
+import { beep, beepOn, cashSuggestions, heldBills, holdBill, loadDraft, parseScan, readFreq, saveDraft, setBeepOn, takeHeld, writeFreq, type CounterLine, type HeldBill } from '@/lib/posCounter';
+import { CameraScanner } from '@/components/CameraScanner';
+import { NumPad, isTouchCounter, setTouchCounter } from '@/components/NumPad';
 import { CustomerByPhone, OffersSummary, PointsBox, usePromo } from '@/components/OffersLoyalty';
 import { payable, pointsEarned, priceBill } from '../../../shared/offers';
 
 type CartLine = CounterLine;
+interface SpeechLike { lang: string; interimResults: boolean; maxAlternatives: number; start: () => void; onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null }
 
 /** Fast counter billing: scan → cart → charge. Each sale is an issued invoice with its payment. */
 export default function Pos() {
@@ -80,6 +83,13 @@ export default function Pos() {
   const [sound, setSound] = useState(beepOn);
   const [restored, setRestored] = useState(false);
   const [unknown, setUnknown] = useState('');
+  // Other ways to add items: camera, voice, tapping tiles by category; and an on-screen pad for touch counters.
+  const [camOn, setCamOn] = useState(false);
+  const [cat, setCat] = useState('');
+  const [freq, setFreq] = useState<Record<string, number>>(() => readFreq(me.shop.id));
+  const [touch, setTouch] = useState(isTouchCounter);
+  const [pad, setPad] = useState<null | { kind: 'qty'; itemId: string } | { kind: 'cash' } | { kind: 'disc' }>(null);
+  const [listening, setListening] = useState(false);
 
   useEffect(() => { if (!branchId && branches.length) setBranchId(branches.find((b) => b.isPrimary)?.id ?? branches[0]!.id); }, [branches, branchId]);
   useEffect(() => { if (org && (org.compositionScheme || !org.gstin)) setWithGst(false); }, [org]);
@@ -178,17 +188,33 @@ export default function Pos() {
   const searchText = parsed.kind === 'code' ? parsed.code : '';
   const shown = useMemo(() => {
     const s = searchText.toLowerCase();
-    return items.filter((i) => (kind === 'all' || i.type === kind) && (!s || [i.name, i.sku, i.barcode, String(i.extra?.localName ?? '')].some((v) => v.toLowerCase().includes(s)))).slice(0, 60);
-  }, [items, searchText, kind]);
+    const list = items.filter((i) => (kind === 'all' || i.type === kind) && (!cat || (cat === '★' ? (freq[i.id] ?? 0) > 0 : (i.category || 'Other') === cat))
+      && (!s || [i.name, i.sku, i.barcode, String(i.extra?.localName ?? '')].some((v) => v.toLowerCase().includes(s))));
+    // Without a search, the items this counter sells most come first, so a tap is all it takes.
+    if (!s) list.sort((a, b) => (freq[b.id] ?? 0) - (freq[a.id] ?? 0));
+    return list.slice(0, 60);
+  }, [items, searchText, kind, cat, freq]);
+  const categories = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const i of items) n.set(i.category || 'Other', (n.get(i.category || 'Other') ?? 0) + 1);
+    return [...n.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14).map(([c]) => c);
+  }, [items]);
 
   useEffect(() => { setHl(0); }, [searchText, kind]);
-  const onScanEnter = async () => {
-    const p = parseScan(q);
+  const onScanEnter = () => processInput(q, true);
+  /**
+   * One path for everything that adds to the bill: the scan box (scanner or typing), the camera, and voice. typed:
+   * text from the box (a name can pick the highlighted match); camera reads are exact codes only.
+   */
+  const processInput = async (text: string, typed: boolean) => {
+    const p = parseScan(text);
+    // Only the scan box is cleared; a camera or voice read leaves whatever the cashier is typing alone.
+    const clear = () => { if (typed) setQ(''); };
     // Enter on an empty box: the bill is done, go to payment.
-    if (p.kind === 'empty') { if (lines.length) goPay(); return; }
+    if (p.kind === 'empty') { if (typed && lines.length) goPay(); return; }
     if (p.kind === 'setQty') {
       const l = lastLine();
-      setQ('');
+      clear();
       if (!l) return void beep(false);
       if (byId.get(l.itemId)?.trackSerials) { beep(false); return toast('error', 'Scan each phone’s IMEI', 'Items with IMEI / serial numbers are added one scan at a time.'); }
       setQty(l.itemId, p.qty); beep(true);
@@ -196,13 +222,13 @@ export default function Pos() {
     }
     const exact = findByCode(items, p.code);
     // Typed a name: Enter takes the highlighted match (arrow keys move it), or the only one.
-    const target = exact ?? (shown.length && searchText.length >= 2 ? shown[Math.min(hl, shown.length - 1)] : undefined);
+    const target = exact ?? (typed && shown.length && searchText.length >= 2 ? shown[Math.min(hl, shown.length - 1)] : undefined);
     if (target) {
-      if (target.trackSerials && p.qty !== 1) { setQ(''); beep(false); return toast('error', 'Scan each phone’s IMEI', 'Items with IMEI / serial numbers are added one scan at a time.'); }
-      add(target, p.qty); setQ(''); return;
+      if (target.trackSerials && p.qty !== 1) { clear(); beep(false); return toast('error', 'Scan each phone’s IMEI', 'Items with IMEI / serial numbers are added one scan at a time.'); }
+      add(target, p.qty); clear(); return;
     }
     // Not an item code: maybe the IMEI / serial number of a phone in stock. Scanning it puts that exact phone on the bill.
-    setQ('');
+    clear();
     if (/^[A-Za-z0-9/-]{6,60}$/.test(p.code) && navigator.onLine && (await addByImei(p.code)) !== 'none') return;
     beep(false);
     // The box is cleared anyway, so the next scan never runs into this one; the code stays visible in the banner.
@@ -258,6 +284,36 @@ export default function Pos() {
       checking.current.delete(key);
     }
   };
+  /** Remembers what this counter sells most (on this device), to put those items first. */
+  const countSold = () => { const f = { ...freq }; for (const l of cart) f[l.itemId] = (f[l.itemId] ?? 0) + 1; setFreq(f); writeFreq(me.shop.id, f); };
+  /** A camera read: the IMEI of the phone whose box was just scanned, or any code (same as the scanner). */
+  const onCamera = (code: string) => {
+    if (imeiFor) { const it = imeiFor; setImeiFor(null); void addByImei(code, it); return; }
+    void processInput(code, false);
+  };
+  /** Voice: say the item ("two dal pack", "5 rice"); one clear match goes on the bill, otherwise the matches show. */
+  const listen = () => {
+    const SR = (window as unknown as { SpeechRecognition?: new () => SpeechLike; webkitSpeechRecognition?: new () => SpeechLike }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechLike }).webkitSpeechRecognition;
+    if (!SR) return toast('info', 'Voice needs Chrome, Edge or Safari', 'Scan, type or tap the item instead.');
+    if (!navigator.onLine) return toast('info', 'Voice needs the internet', 'Scan, type or tap the item instead.');
+    const r = new SR();
+    r.lang = 'en-IN'; r.interimResults = false; r.maxAlternatives = 1;
+    r.onresult = (ev) => {
+      const said = String(ev.results?.[0]?.[0]?.transcript ?? '').trim();
+      const words: Record<string, string> = { one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10', a: '1', an: '1' };
+      const m = /^(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\s+(.+)$/i.exec(said);
+      const qty = m ? Number(words[m[1]!.toLowerCase()] ?? m[1]) : 1;
+      const name = (m ? m[2]! : said).replace(/[.?!]$/, '');
+      const s = name.toLowerCase();
+      const hits = items.filter((i) => [i.name, String(i.extra?.localName ?? '')].some((v) => v.toLowerCase().includes(s)));
+      if (hits.length === 1) { add(hits[0]!, qty); toast('success', `Added ${qty} × ${hits[0]!.name}`); }
+      else { setQ(name); focusScan(); if (!hits.length) { beep(false); toast('error', `Nothing matches “${name}”`); } }
+    };
+    r.onerror = () => toast('error', 'Didn’t catch that', 'Try again, or scan / type / tap the item.');
+    r.onend = () => setListening(false);
+    setListening(true);
+    r.start();
+  };
   /** After the last scan: Cash goes to the amount given, other modes straight to Charge. */
   const goPay = () => {
     if (mode === 'Cash') { tenderRef.current?.focus(); tenderRef.current?.select(); }
@@ -285,7 +341,7 @@ export default function Pos() {
     charging.current = true;
     if (!navigator.onLine) return void saveOffline(clientRef, body).then((saved) => { if (!saved) charging.current = false; });
     sale.mutate({ ...body, clientRef }, {
-      onSuccess: (r) => setDone(r),
+      onSuccess: (r) => { setDone(r); countSold(); },
       onSettled: (_r, e) => { if (e && !isNetworkError(e)) charging.current = false; },
       // The internet dropped while charging: keep the bill on this device and carry on.
       onError: (e) => { if (isNetworkError(e)) void saveOffline(clientRef, body).then((saved) => { if (!saved) charging.current = false; }); else toast('error', (e as Error).message); },
@@ -312,6 +368,7 @@ export default function Pos() {
       toast('error', 'Could not save the bill on this device', 'This browser is blocking storage (private window?). Use a normal window to bill offline.');
       return false;
     }
+    countSold();
     setOffDone({ ref: receipt.number, receipt, change: mode === 'Cash' && tendered ? Math.max(0, Number(tendered) - totals.total) : 0, phone: customer?.phone });
     return true;
   };
@@ -344,7 +401,7 @@ export default function Pos() {
     const go = () => (m === 'Cash' ? (tenderRef.current?.focus(), tenderRef.current?.select()) : chargeRef.current?.focus());
     if (m !== 'Cash' || tenderRef.current) go(); else setTimeout(go, 0);
   };
-  const busyDialog = !!(done || offDone || imeiFor || help || heldOpen || voidAsk || showOff);
+  const busyDialog = !!(done || offDone || imeiFor || help || heldOpen || voidAsk || showOff || pad);
   useShortcuts({
     'mod+enter': charge,
     end: () => { if (!busyDialog) charge(); },
@@ -395,8 +452,10 @@ export default function Pos() {
         <div className="row" style={{ gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
           <div className="input-group" style={{ flex: 1, minWidth: 240 }}>
             <span className="lead" style={{ color: 'var(--brand-600)' }}>{q ? <Search size={17} /> : <ScanBarcode size={17} />}</span>
-            <input ref={scanRef} className="input" style={{ height: 46, fontSize: 14 }} placeholder="Scan barcode or type to search (F2)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onScanKey} aria-label="Scan or search items" autoComplete="off" spellCheck={false} />
+            <input ref={scanRef} className="input" style={{ height: 46, fontSize: 14 }} placeholder="Scan, type a name or code (F2)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onScanKey} aria-label="Scan or search items" autoComplete="off" spellCheck={false} />
+            <button type="button" className={`input-side ${listening ? 'on' : ''}`} onClick={listen} title="Say the item (e.g. “two rice”)" aria-label="Voice: say the item"><Mic size={17} /></button>
           </div>
+          <button type="button" className={`btn ${camOn ? 'btn-soft active' : 'btn-secondary'} cam-btn`} onClick={() => { setCamOn(!camOn); focusScan(); }} title="Scan with this device’s camera" aria-pressed={camOn}><Camera size={16} /> {camOn ? 'Camera on' : 'Camera'}</button>
           <Segmented value={kind} onChange={setKind} options={[{ value: 'all', label: 'All' }, { value: 'Goods', label: 'Goods', icon: Package }, { value: 'Services', label: 'Services', icon: Wrench }]} />
           {scale.supported && (
             <button type="button" className={`btn ${scale.connected ? 'btn-soft' : 'btn-secondary'} scale-btn`} onClick={() => (scale.connected ? void scale.disconnect() : void scale.connect())} title={scale.connected ? 'Disconnect scale' : 'Connect a USB / serial weighing scale'}>
@@ -411,11 +470,20 @@ export default function Pos() {
             <button type="button" className="icon-btn sm" aria-label="Dismiss" onClick={() => { setUnknown(''); focusScan(); }}>×</button>
           </div>
         )}
+        <CameraScanner open={camOn} onCode={onCamera} onClose={() => { setCamOn(false); focusScan(); }} />
+        {categories.length > 1 && (
+          <div className="pos-cats" role="toolbar" aria-label="Categories">
+            <button type="button" className={!cat ? 'on' : ''} onClick={() => { setCat(''); focusScan(); }}>All</button>
+            {Object.keys(freq).length > 0 && <button type="button" className={cat === '★' ? 'on' : ''} onClick={() => { setCat(cat === '★' ? '' : '★'); focusScan(); }}>★ Frequent</button>}
+            {categories.map((c) => <button key={c} type="button" className={cat === c ? 'on' : ''} onClick={() => { setCat(cat === c ? '' : c); focusScan(); }}>{c}</button>)}
+          </div>
+        )}
         <div className="pos-keys no-print" aria-label="Keyboard shortcuts">
           <span><kbd>5*</kbd> qty</span><span><kbd>+</kbd><kbd>−</kbd> last item</span><span><kbd>Del</kbd> remove</span><span><kbd>↵</kbd> pay</span>
           <span><kbd>F4</kbd> customer</span><span><kbd>F6</kbd> hold{held.length ? ` (${held.length})` : ''}</span><span><kbd>F7</kbd> discount</span><span><kbd>F8</kbd> cash <kbd>F9</kbd> UPI <kbd>F10</kbd> card</span>
           <button type="button" className="link-btn small" onClick={() => setHelp(true)}><kbd>F1</kbd> all keys</button>
           <button type="button" className="link-btn small" onClick={() => { setSound(!sound); setBeepOn(!sound); }} title="Beep on every scan">{sound ? 'Beep on' : 'Beep off'}</button>
+          <button type="button" className="link-btn small" onClick={() => { setTouch(!touch); setTouchCounter(!touch); }} title="On-screen number pad for quantity, cash and discount">{touch ? 'Touch pad on' : 'Touch pad off'}</button>
         </div>
         {aiOn && <div style={{ marginBottom: 12 }}><QuickBill context="pos" onApply={applyQuick} compact /></div>}
         <div className="pos-grid">
@@ -485,7 +553,8 @@ export default function Pos() {
               <div className="row" style={{ gap: 6 }}>
                 <button className="qty-btn" tabIndex={-1} onClick={() => { setQty(l.itemId, l.qty - 1); focusScan(); }} aria-label="Decrease">−</button>
                 {/* Typed quantity is applied on Enter or when leaving the box, so clearing it to retype never removes the item. */}
-                <input key={`${l.itemId}-${l.qty}`} className="input" style={{ width: 56, height: 30, textAlign: 'center', padding: 0 }} type="number" min={0} step="any" defaultValue={l.qty} aria-label="Quantity" readOnly={!!l.serials}
+                <input key={`${l.itemId}-${l.qty}`} className="input" style={{ width: 56, height: 30, textAlign: 'center', padding: 0 }} type="number" min={0} step="any" defaultValue={l.qty} aria-label="Quantity" readOnly={!!l.serials || touch}
+                  onClick={() => { if (touch && !l.serials) setPad({ kind: 'qty', itemId: l.itemId }); }} inputMode={touch ? 'none' : 'decimal'}
                   title={l.serials ? 'One per IMEI / serial number: scan another to add one' : 'Type the quantity, Enter'}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else { (e.target as HTMLInputElement).value = String(l.qty); focusScan(); } } }}
                   onBlur={(e) => { const n = Number(e.target.value); if (!l.serials && n > 0 && n !== l.qty) setQty(l.itemId, Math.round(n * 1000) / 1000); else e.target.value = String(l.qty); if (e.relatedTarget === null) focusScan(); }} />
@@ -507,7 +576,8 @@ export default function Pos() {
           <div className="row between small" style={{ gap: 8 }}>
             <span className="muted row" style={{ gap: 6 }}><Tag size={13} /> Bill discount</span>
             <span className="row" style={{ gap: 4 }}>
-              <input ref={discRef} className="input" type="number" min={0} step="any" style={{ width: 80, height: 30 }} aria-label="Bill discount" value={disc.value || ''} placeholder="0" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); goPay(); } }}
+              <input ref={discRef} className="input" type="number" min={0} step="any" style={{ width: 80, height: 30 }} aria-label="Bill discount" value={disc.value || ''} placeholder="0"
+                readOnly={touch} inputMode={touch ? 'none' : 'decimal'} onClick={() => { if (touch) setPad({ kind: 'disc' }); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); goPay(); } }}
                 onChange={(e) => { const v = Math.max(0, Number(e.target.value) || 0); setDisc({ ...disc, value: disc.kind === 'percent' ? Math.min(100, v) : v }); }} />
               <select className="select" style={{ width: 58, height: 30 }} aria-label="Bill discount type" value={disc.kind} onChange={(e) => setDisc({ ...disc, kind: e.target.value as BillDiscount['kind'] })}><option value="percent">%</option><option value="amount">₹</option></select>
             </span>
@@ -547,6 +617,7 @@ export default function Pos() {
           {mode === 'Cash' && (
             <div className="row" style={{ gap: 10 }}>
               <Field label="Cash tendered (F8)" className=""><div className="input-addon"><span>₹</span><input ref={tenderRef} className="input" type="number" min={0} value={tendered} aria-label="Cash tendered" onChange={(e) => setTendered(e.target.value)} placeholder={String(totals.total)}
+                readOnly={touch} inputMode={touch ? 'none' : 'decimal'} onClick={() => { if (touch) setPad({ kind: 'cash' }); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); charge(); } else if (e.key === 'Escape') { e.preventDefault(); focusScan(); } }} /></div></Field>
               <div style={{ marginLeft: 'auto', textAlign: 'right' }}><div className="small muted">Change</div><div style={{ fontWeight: 600, fontSize: 16, color: change < 0 ? 'var(--red-600)' : 'var(--green-700)' }}>{tendered ? money(change) : '—'}</div></div>
             </div>
@@ -585,6 +656,21 @@ export default function Pos() {
         )}
       </Modal>
 
+      <NumPad open={!!pad} decimals={!(pad?.kind === 'qty' && byId.get(pad.itemId)?.trackSerials)}
+        title={pad?.kind === 'cash' ? `Cash given · bill ${money(totals.total)}` : pad?.kind === 'disc' ? `Bill discount (${disc.kind === 'percent' ? '%' : '₹'})` : `Quantity · ${pad?.kind === 'qty' ? byId.get(pad.itemId)?.name ?? '' : ''}`}
+        initial={pad?.kind === 'cash' ? tendered : pad?.kind === 'disc' ? String(disc.value || '') : pad?.kind === 'qty' ? String(cart.find((l) => l.itemId === pad.itemId)?.qty ?? '') : ''}
+        quick={pad?.kind === 'cash' ? cashSuggestions(totals.total) : undefined}
+        onClose={() => { setPad(null); focusScan(); }}
+        onDone={(v) => {
+          const n = Number(v);
+          if (pad?.kind === 'qty') { if (n > 0) setQty(pad.itemId, Math.round(n * 1000) / 1000); }
+          else if (pad?.kind === 'cash') setTendered(v);
+          else if (pad?.kind === 'disc') setDisc({ ...disc, value: disc.kind === 'percent' ? Math.min(100, Math.max(0, n || 0)) : Math.max(0, n || 0) });
+          const wasCash = pad?.kind === 'cash';
+          setPad(null);
+          if (wasCash) setTimeout(() => chargeRef.current?.focus(), 0); else focusScan();
+        }} />
+
       <ImeiPrompt item={imeiFor} onClose={() => { setImeiFor(null); focusScan(); }}
         onSubmit={(it, sn) => { setImeiFor(null); scanRef.current?.focus(); void addByImei(sn, it); }} />
 
@@ -597,7 +683,7 @@ export default function Pos() {
         <p className="muted">{lines.length} item{lines.length === 1 ? '' : 's'} · {money(totals.total)}</p>
       </Modal>
 
-      <Modal open={help} onClose={() => { setHelp(false); focusScan(); }} size="lg" title="Counter keys" subtitle="Billing works with the scanner and keyboard alone, online or offline.">
+      <Modal open={help} onClose={() => { setHelp(false); focusScan(); }} size="lg" title="Counter keys" subtitle="Bill with a scanner, the keyboard, the camera, your voice or by tapping, online or offline.">
         <div className="keys-help">
           {[
             ['Scan / type a code, Enter', 'Adds the item (barcode, SKU or a phone’s IMEI)'],
@@ -619,6 +705,10 @@ export default function Pos() {
             ['F8  F9  F10', 'Cash · UPI · Card'],
             ['Ctrl+Delete', 'Clear the whole bill'],
             ['F1', 'This list'],
+            ['Camera button', 'Scan barcodes or IMEI labels with this device’s camera, one after another'],
+            ['Mic in the scan box', 'Say the item: “two rice”, “cartridge”'],
+            ['Tap a tile', 'Adds it; the category chips and ★ Frequent narrow the tiles'],
+            ['Touch pad on', 'On-screen number pad for quantity, cash and discount (tablets)'],
           ].map(([k, v]) => <div key={k} className="keys-row"><kbd>{k}</kbd><span>{v}</span></div>)}
         </div>
       </Modal>

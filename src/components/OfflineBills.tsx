@@ -52,6 +52,8 @@ export function OfflineSync() {
     if (!online || !me.can('sales.write') || !me.has('pos')) return;
     const t = window.setTimeout(() => {
       void import('@/pages/app/Pos').catch(() => undefined);
+      // The camera barcode reader too, so camera billing works offline on browsers without a built-in reader.
+      void import('@zxing/browser').catch(() => undefined);
       const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
       for (const u of ['/shop/items', '/shop/customers', '/shop/organization', '/shop/branches', '/shop/print-settings', ...(me.has('offers_loyalty') ? [`/shop/offers/running?date=${date}`, '/shop/loyalty/settings'] : [])])
         void api.get(u).catch(() => undefined);

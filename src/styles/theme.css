@@ -756,3 +756,28 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .pay-modes button { min-width: 0; }
 .pay-to-preview { border: 1px dashed var(--border-strong); border-radius: 10px; padding: 10px 12px; background: var(--ink-50); }
 .pay-to-preview .ti-pre { white-space: pre-line; margin-top: 4px; color: var(--ink-800); }
+/* POS: more ways to bill (camera, voice, categories, touch pad) */
+.pos .input-group .input-side { flex: 0 0 auto; border: 0; background: none; padding: 0 12px; cursor: pointer; color: var(--ink-500); display: flex; align-items: center; }
+.pos .input-group .input-side.on { color: var(--brand-600); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+.cam-btn.active { border-color: var(--brand-500, #c24d64); color: var(--brand-700, #9b2f47); }
+.cam-scan { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin: -2px 0 12px; background: #111; }
+.cam-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface); flex-wrap: wrap; }
+.cam-view { position: relative; aspect-ratio: 16 / 7; max-height: 240px; display: grid; place-items: center; overflow: hidden; }
+.cam-view video { width: 100%; height: 100%; object-fit: cover; }
+.cam-aim { position: absolute; inset: 22% 18%; border: 2px solid rgba(255, 255, 255, .85); border-radius: 10px; box-shadow: 0 0 0 999px rgba(0, 0, 0, .25); }
+.cam-error { display: flex; gap: 8px; align-items: center; padding: 14px; color: #fde2e2; font-size: 13px; }
+.cam-foot { padding: 6px 10px; background: var(--surface); }
+.pos-cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: -2px 0 10px; scrollbar-width: thin; }
+.pos-cats button { flex: 0 0 auto; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; color: var(--ink-700); }
+.pos-cats button.on { background: var(--brand-600, #b03a55); border-color: var(--brand-600, #b03a55); color: #fff; }
+.numpad { display: grid; gap: 12px; }
+.numpad-show { font-size: 34px; font-weight: 700; text-align: right; padding: 10px 14px; border-radius: 12px; background: var(--ink-50); font-variant-numeric: tabular-nums; border: 1px solid var(--border); }
+.numpad-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.numpad-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.numpad-key { height: 62px; font-size: 24px; font-weight: 600; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: grid; place-items: center; color: var(--ink-900); touch-action: manipulation; }
+.numpad-key:active { background: var(--brand-50, #fbeef1); }
+.numpad-key.fn { color: var(--ink-600); font-size: 18px; }
+/* The category row scrolls inside itself instead of widening the page */
+.pos > .pos-panel { min-width: 0; }
+.pos-cats { max-width: 100%; min-width: 0; }

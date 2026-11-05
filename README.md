@@ -276,6 +276,12 @@ Without the key these buttons are hidden and everything else works as before. Se
 - Customers have a **credit limit** (issuing past it needs a confirmation that is audited), a **statement of account** for any date range with ageing buckets (print or CSV), and a **contact history** of calls, notes, invoices, payments and reminders.
 - Customers and Invoices open a **split-view panel** beside the list; Esc closes it.
 - **POS counter billing:** scan, then cart, then Cash/UPI/Card, with change calculation, an 80 mm thermal receipt and WhatsApp bills.
+- **Many ways to bill at the counter (POS):** use whatever the shop has.
+  - **USB / Bluetooth scanner or keyboard** (below).
+  - **Camera:** the *Camera* button scans barcodes and IMEI labels with the phone, tablet or laptop camera, one item after another; the same code held in view is added once. Uses the browser's own reader where there is one (Chrome on Android, Mac, ChromeOS) and a built-in reader everywhere else (iPhone, Windows, Linux), which is kept on the device for offline use.
+  - **Voice:** the mic in the scan box: say the item ("two USB cable", "cartridge"); one clear match is added, otherwise the matches show (needs the internet).
+  - **Tap:** item tiles with category chips and a ★ Frequent chip; the items this counter sells most come first.
+  - **Touch pad:** on tablets an on-screen number pad opens for quantity, cash given (with note buttons) and discount; turn it on or off in the key strip.
 - **Keyboard-first counter (POS):** built for cashiers who bill fast with a USB scanner and keyboard and never touch the mouse. The cursor is always in the scan box. Back-to-back scans are never lost or mixed up (an unknown code shows a *Not found* banner with a beep and the box is cleared for the next scan), and the last scanned item is highlighted and kept in view. Keys:
   - **5\*code** (or 5x, 2.5\* for loose items) five of it · **\*5** make the last item five · **+ / −** one more / less of the last item · **Delete** remove it · **F3** type its quantity, Enter.
   - Type part of a name, pick with the **arrow keys**, Enter. **Esc** clears the box.
