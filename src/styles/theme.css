@@ -781,3 +781,12 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 /* The category row scrolls inside itself instead of widening the page */
 .pos > .pos-panel { min-width: 0; }
 .pos-cats { max-width: 100%; min-width: 0; }
+.cam-mode { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.cam-mode button { border: 0; background: none; padding: 3px 10px; font-size: 12px; cursor: pointer; color: var(--ink-600); }
+.cam-mode button.on { background: var(--brand-600, #b03a55); color: #fff; }
+.imei-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; margin: -4px 0 12px; border-radius: 10px; background: #fff7e6; border: 1px solid #f3d9a4; }
+.imei-inline .input { flex: 1; min-width: 180px; height: 34px; }
+/* The camera, the IMEI question, categories and the key strip keep their size; the tiles below scroll instead */
+.pos-panel > .cam-scan, .pos-panel > .imei-inline, .pos-panel > .pos-cats, .pos-panel > .pos-keys, .pos-panel > .pos-unknown, .pos-panel > .pos-offline, .pos-panel > .row { flex-shrink: 0; }
+.cam-view { min-height: 180px; }
+.cam-head .cam-mode { flex-shrink: 0; }

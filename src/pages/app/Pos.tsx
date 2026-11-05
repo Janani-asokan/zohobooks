@@ -26,6 +26,7 @@ import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
 import { waLink } from './InvoiceView';
 import { findByCode } from '../../../shared/barcode';
+import { extractImeis } from '../../../shared/imei';
 import { beep, beepOn, cashSuggestions, heldBills, holdBill, loadDraft, parseScan, readFreq, saveDraft, setBeepOn, takeHeld, writeFreq, type CounterLine, type HeldBill } from '@/lib/posCounter';
 import { CameraScanner } from '@/components/CameraScanner';
 import { NumPad, isTouchCounter, setTouchCounter } from '@/components/NumPad';
@@ -85,6 +86,9 @@ export default function Pos() {
   const [unknown, setUnknown] = useState('');
   // Other ways to add items: camera, voice, tapping tiles by category; and an on-screen pad for touch counters.
   const [camOn, setCamOn] = useState(false);
+  // Camera mode: every barcode (items and IMEIs), or IMEI labels only (billing a stack of phone boxes).
+  const [camMode, setCamMode] = useState<'all' | 'imei'>('all');
+  const lastImei = useRef<{ itemId: string; at: number } | null>(null);
   const [cat, setCat] = useState('');
   const [freq, setFreq] = useState<Record<string, number>>(() => readFreq(me.shop.id));
   const [touch, setTouch] = useState(isTouchCounter);
@@ -229,6 +233,8 @@ export default function Pos() {
     }
     // Not an item code: maybe the IMEI / serial number of a phone in stock. Scanning it puts that exact phone on the bill.
     clear();
+    // A 2D scanner reading a phone box's QR code types its whole text ("IMEI1:… IMEI2:…"): take the IMEIs from it.
+    if (extractImeis(p.code).length && p.code.replace(/\D/g, '') !== p.code) { await onCamera(p.code); return; }
     if (/^[A-Za-z0-9/-]{6,60}$/.test(p.code) && navigator.onLine && (await addByImei(p.code)) !== 'none') return;
     beep(false);
     // The box is cleared anyway, so the next scan never runs into this one; the code stays visible in the banner.
@@ -262,17 +268,20 @@ export default function Pos() {
    * Puts the phone with this IMEI / serial on the bill after checking it online (in stock, this branch, not on the bill).
    * expect: the item whose box was just scanned. Returns 'none' when no unit has this number.
    */
-  const addByImei = async (raw: string, expect?: Item): Promise<'added' | 'refused' | 'none'> => {
+  const addByImei = async (raw: string, expect?: Item, opts: { quiet?: boolean } = {}): Promise<'added' | 'refused' | 'none' | 'same'> => {
     const code = raw.replace(/\s+/g, '');
     const key = code.toLowerCase();
-    const no = (title: string, msg?: string) => { beep(false); toast('error', title, msg); return 'refused' as const; };
+    const no = (title: string, msg?: string) => { if (!opts.quiet) { beep(false); toast('error', title, msg); } return 'refused' as const; };
     // The same IMEI read twice in a row (scanners do that): the second read is refused at once, not checked again.
     if (checking.current.has(key) || onBill.current.has(key)) return no(`${code} is already on this bill`);
     if (!navigator.onLine) return no('No internet: IMEI numbers are checked online', 'Bill this phone when the connection is back.');
     checking.current.add(key);
     try {
       const hits = await api.get<Array<{ itemId: string; serial: string; status: string; branchId: string | null; invoiceNumber: string | null }>>(`/shop/serials/lookup?q=${encodeURIComponent(code)}`);
-      const hit = hits.find((h) => h.serial.toLowerCase() === key);
+      // The phone's own IMEI, or its second IMEI (dual SIM), saved with the unit when it was bought.
+      const hit = hits.find((h) => h.serial.toLowerCase() === key) ?? hits.find((h) => (h as { note?: string }).note?.toLowerCase().includes(`imei 2: ${key}`));
+      // IMEI 2 of a phone already on the bill: the same phone, nothing to do.
+      if (hit && onBill.current.has(hit.serial.toLowerCase())) return 'same';
       const it = hit && byId.get(hit.itemId);
       if (!hit || !it) return expect ? no(`${code} isn’t in your stock records`, `Not an IMEI of ${expect.name}.`) : 'none';
       if (expect && hit.itemId !== expect.id) return no(`${code} belongs to ${it.name}`, `Not ${expect.name}.`);
@@ -280,6 +289,7 @@ export default function Pos() {
       if (branchId && hit.branchId && hit.branchId !== branchId) return no(`${hit.serial} is at another branch`, 'Transfer it to this branch first.');
       if (onBill.current.has(key)) return no(`${hit.serial} is already on this bill`);
       addSerial(it, hit.serial);
+      lastImei.current = { itemId: it.id, at: Date.now() };
       return 'added';
     } catch {
       return expect ? no('Could not check this IMEI', 'Scan it again.') : 'none';
@@ -290,8 +300,27 @@ export default function Pos() {
   /** Remembers what this counter sells most (on this device), to put those items first. */
   const countSold = () => { const f = { ...freq }; for (const l of cart) f[l.itemId] = (f[l.itemId] ?? 0) + 1; setFreq(f); writeFreq(me.shop.id, f); };
   /** A camera read: the IMEI of the phone whose box was just scanned, or any code (same as the scanner). */
-  const onCamera = (code: string) => {
-    if (imeiFor) { const it = imeiFor; setImeiFor(null); void addByImei(code, it); return; }
+  const onCamera = async (code: string) => {
+    const known = findByCode(items, code);
+    // A phone box shows its model barcode next to the IMEIs. Waiting for an IMEI, or in IMEI-only mode, the model
+    // barcode is passed over; so is the model barcode of a phone just added by its IMEI (same box, still in view).
+    if (known && (imeiFor || camMode === 'imei')) return;
+    if (known?.trackSerials && lastImei.current?.itemId === known.id && Date.now() - lastImei.current.at < 5000) return;
+    // A box QR code or label can hold both IMEIs (and more): the first one that is a unit in stock is the phone.
+    const imeis = extractImeis(code);
+    const candidates = imeis.length ? imeis : [code];
+    if (imeiFor || camMode === 'imei' || imeis.length) {
+      const expect = imeiFor ?? undefined;
+      if (imeiFor) setImeiFor(null);
+      for (const [n, c] of candidates.entries()) {
+        const last = n === candidates.length - 1;
+        const r = await addByImei(c, expect, { quiet: !last });
+        if (r !== 'none' && r !== 'refused') return; // added, or the same phone (its IMEI 2)
+        if (r === 'refused' && last) return;
+      }
+      if (!expect) { beep(false); toast('error', `${imeis[0] ?? code} isn’t in your stock records`, camMode === 'imei' ? 'IMEI-only mode: item barcodes are ignored. Switch to “Items & IMEI” to add other items.' : undefined); }
+      return;
+    }
     void processInput(code, false);
   };
   /** Voice: say the item ("two dal pack", "5 rice"); one clear match goes on the bill, otherwise the matches show. */
@@ -477,7 +506,12 @@ export default function Pos() {
             <button type="button" className="icon-btn sm" aria-label="Dismiss" onClick={() => { setUnknown(''); focusScan(); }}>×</button>
           </div>
         )}
-        <CameraScanner open={camOn} onCode={onCamera} onClose={() => { setCamOn(false); focusScan(); }} />
+        <CameraScanner open={camOn} onCode={(c) => void onCamera(c)} onClose={() => { setCamOn(false); focusScan(); }}
+          mode={camMode} onMode={(m) => { setCamMode(m); focusScan(); }} waitingFor={imeiFor?.name} />
+        {camOn && imeiFor && (
+          <ImeiPrompt inline item={imeiFor} onClose={() => { setImeiFor(null); focusScan(); }}
+            onSubmit={(it, sn) => { setImeiFor(null); scanRef.current?.focus(); void addByImei(extractImeis(sn)[0] ?? sn, it); }} />
+        )}
         {categories.length > 1 && (
           <div className="pos-cats" role="toolbar" aria-label="Categories">
             <button type="button" className={!cat ? 'on' : ''} onClick={() => { setCat(''); focusScan(); }}>All</button>
@@ -678,8 +712,8 @@ export default function Pos() {
           if (wasCash) setTimeout(() => chargeRef.current?.focus(), 0); else focusScan();
         }} />
 
-      <ImeiPrompt item={imeiFor} onClose={() => { setImeiFor(null); focusScan(); }}
-        onSubmit={(it, sn) => { setImeiFor(null); scanRef.current?.focus(); void addByImei(sn, it); }} />
+      <ImeiPrompt item={camOn ? null : imeiFor} onClose={() => { setImeiFor(null); focusScan(); }}
+        onSubmit={(it, sn) => { setImeiFor(null); scanRef.current?.focus(); void addByImei(extractImeis(sn)[0] ?? sn, it); }} />
 
       <Modal open={heldOpen} onClose={() => { setHeldOpen(false); focusScan(); }} title="Held bills" subtitle="On this counter. Press a number or Enter to bring one back.">
         <HeldList bills={held} onPick={recall} onDrop={(id) => { takeHeld(me.shop.id, id); setHeld(heldBills(me.shop.id)); }} />
@@ -744,9 +778,18 @@ export default function Pos() {
  * Scan (or type) the IMEI / serial number of the phone whose box was just scanned. Enter closes it at once and the
  * number is checked in the background, so the next scan from the scanner is never lost while the check runs.
  */
-function ImeiPrompt({ item, onClose, onSubmit }: { item: Item | null; onClose: () => void; onSubmit: (it: Item, serial: string) => void }) {
+function ImeiPrompt({ item, onClose, onSubmit, inline }: { item: Item | null; onClose: () => void; onSubmit: (it: Item, serial: string) => void; inline?: boolean }) {
   const [v, setV] = useState('');
   useEffect(() => { setV(''); }, [item?.id]);
+  // With the camera on, the question sits under the camera view (not over it), so the IMEI label can be aimed at.
+  if (inline) return item ? (
+    <div className="imei-inline" role="status">
+      <span className="small"><strong>{item.name}</strong>: point the camera at its IMEI label, or type it</span>
+      <input className="input mono" autoFocus value={v} onChange={(e) => setV(e.target.value)} aria-label="IMEI or serial number" autoComplete="off" spellCheck={false} placeholder="IMEI / serial number"
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const sn = v.replace(/\s+/g, ''); if (sn) onSubmit(item, sn); } else if (e.key === 'Escape') { e.preventDefault(); onClose(); } }} />
+      <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+    </div>
+  ) : null;
   return (
     <Modal open={!!item} onClose={onClose} title="Scan the IMEI / serial number" subtitle={item ? `${item.name} · each unit is billed by its number` : ''}>
       <Field label="IMEI / serial number" hint="Scan the box or the phone, or type it and press Enter. Esc to cancel.">

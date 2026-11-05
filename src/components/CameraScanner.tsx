@@ -12,7 +12,7 @@ const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'co
  * everywhere else (iPhone, Windows, Linux). The same code held in view is read once; move it away (or wait a moment)
  * to add another.
  */
-export function CameraScanner({ open, onCode, onClose }: { open: boolean; onCode: (code: string) => void; onClose: () => void }) {
+export function CameraScanner({ open, onCode, onClose, mode, onMode, waitingFor }: { open: boolean; onCode: (code: string) => void; onClose: () => void; mode?: 'all' | 'imei'; onMode?: (m: 'all' | 'imei') => void; waitingFor?: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState('');
   const [last, setLast] = useState('');
@@ -104,7 +104,16 @@ export function CameraScanner({ open, onCode, onClose }: { open: boolean; onCode
     <div className="cam-scan" role="region" aria-label="Camera scanner">
       <div className="cam-head">
         <strong className="row" style={{ gap: 6 }}><Camera size={15} /> Camera scanner</strong>
-        <span className="small muted">{error ? '' : last ? <>Read <span className="mono">{last}</span></> : 'Point the camera at a barcode or IMEI label'}</span>
+        {onMode && (
+          <span className="cam-mode" role="radiogroup" aria-label="What the camera reads">
+            <button type="button" role="radio" aria-checked={mode !== 'imei'} className={mode !== 'imei' ? 'on' : ''} onClick={() => onMode('all')}>Items &amp; IMEI</button>
+            <button type="button" role="radio" aria-checked={mode === 'imei'} className={mode === 'imei' ? 'on' : ''} onClick={() => onMode('imei')}>IMEI only</button>
+          </span>
+        )}
+        <span className="small muted">{error ? '' : waitingFor ? <>Now the IMEI of <strong>{waitingFor}</strong></> : <>
+          {mode === 'imei' ? 'IMEI labels only, model barcodes ignored' : last ? '' : 'Point the camera at a barcode or IMEI label'}
+          {last && <>{mode === 'imei' ? ' · ' : ''}Read <span className="mono">{last.length > 40 ? `${last.slice(0, 40)}…` : last}</span></>}
+        </>}</span>
         <span className="row" style={{ gap: 4, marginLeft: 'auto' }}>
           <button type="button" className="icon-btn sm" title="Switch camera" aria-label="Switch camera" onClick={() => setFacing((f) => (f === 'environment' ? 'user' : 'environment'))}><RefreshCw size={14} /></button>
           <button type="button" className="icon-btn sm" title="Close camera" aria-label="Close camera" onClick={onClose}><X size={15} /></button>
