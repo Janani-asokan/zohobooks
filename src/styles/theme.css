@@ -728,3 +728,29 @@ a.glance:hover { background: var(--brand-50); transform: translateX(3px); }
 .feature-card .feature-includes { flex: 0 0 auto; align-content: start; }
 .feature-card .feature-price { margin-top: auto; padding-top: 4px; }
 .feature-area { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500); margin-bottom: -4px; }
+/* POS: keyboard counter */
+.pos kbd, .keys-help kbd, .held-list kbd { display: inline-block; min-width: 18px; text-align: center; font-family: var(--font); font-size: 11px; font-weight: 600; color: var(--ink-700); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; line-height: 17px; background: var(--surface); }
+.pos-keys { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin: -4px 0 12px; font-size: 12px; color: var(--ink-500); }
+.pos-keys span { white-space: nowrap; }
+.pos-keys kbd + kbd { margin-left: 2px; }
+.pos-unknown { display: flex; align-items: center; gap: 8px; margin: -4px 0 10px; padding: 7px 10px; border-radius: 10px; background: #fdecec; border: 1px solid #f2b8b8; color: var(--red-700, #9b2c2c); font-size: 13px; }
+.pos-unknown .icon-btn { margin-left: auto; }
+.pos-tile.hl { border-color: var(--brand-500, #c24d64); box-shadow: 0 0 0 3px rgba(194, 77, 100, .22); }
+.pos-line.last { background: linear-gradient(90deg, rgba(194, 77, 100, .08), transparent 70%); box-shadow: inset 3px 0 0 var(--brand-500, #c24d64); }
+.serial-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0 2px; }
+.serial-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; padding: 1px 2px 1px 6px; border-radius: 6px; background: var(--sage-soft, #eef2ec); border: 1px solid var(--border); }
+.serial-chip button { border: 0; background: none; cursor: pointer; color: var(--ink-500); padding: 0 3px; font-size: 13px; line-height: 1; }
+.cash-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.cash-quick .btn.active { outline: 2px solid var(--brand-500, #c24d64); }
+.pay-modes .pm-key { margin-left: 6px; font-size: 10px; line-height: 15px; opacity: .75; }
+.keys-help { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; }
+@media (max-width: 720px) { .keys-help { grid-template-columns: 1fr; } .pos-keys { display: none; } }
+.keys-row { display: grid; grid-template-columns: minmax(150px, auto) 1fr; gap: 10px; align-items: baseline; font-size: 13px; padding: 5px 0; border-bottom: 1px dashed var(--border); }
+.keys-row kbd { justify-self: start; }
+.held-list { display: grid; gap: 6px; }
+.held-row { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 10px; padding: 4px 6px; }
+.held-row.hl { border-color: var(--brand-500, #c24d64); box-shadow: 0 0 0 3px rgba(194, 77, 100, .18); }
+.held-pick { flex: 1; display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; border: 0; background: none; text-align: left; cursor: pointer; padding: 6px; color: inherit; }
+/* Phones and tablets have no F-keys: keep the payment buttons compact there */
+@media (max-width: 900px) { .pay-modes .pm-key { display: none; } }
+.pay-modes button { min-width: 0; }

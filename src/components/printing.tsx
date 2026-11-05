@@ -71,7 +71,7 @@ export function receiptFromInvoice(inv: Invoice, items: Item[] = [], partyBalanc
     customer: { name: inv.customer.companyName || inv.customer.name, phone: inv.customer.phone, gstin: inv.customer.gstin },
     lines: inv.lines.map((l) => {
       const it = items.find((i) => i.id === l.itemId);
-      return { name: l.name, description: it?.description, hsn: l.hsn, qty: l.qty, unit: l.unit, rate: l.rate, mrp: it?.mrp ?? null, taxRate: l.taxRate, amount: l.amount };
+      return { name: l.name, description: [it?.description, l.serials?.length ? `IMEI/SN: ${l.serials.join(', ')}` : ''].filter(Boolean).join(' · ') || undefined, hsn: l.hsn, qty: l.qty, unit: l.unit, rate: l.rate, mrp: it?.mrp ?? null, taxRate: l.taxRate, amount: l.amount };
     }),
     withGst: inv.withGst, interState: inv.interState, subTotal: inv.subTotal, discount: inv.discount, cgst: inv.cgst, sgst: inv.sgst, igst: inv.igst, roundOff: inv.roundOff,
     total: inv.total, amountPaid: inv.amountPaid, paymentMode, partyBalance,

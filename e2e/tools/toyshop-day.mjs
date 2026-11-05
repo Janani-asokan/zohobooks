@@ -233,7 +233,8 @@ try {
   // Unknown barcode at the counter (cashier cannot add items)
   await scan('8909999999990');
   const unk = await c.locator('.pos-panel').first().innerText();
-  ok(/No items match/.test(unk) && await c.getByRole('link', { name: /Add as a new item/ }).count() === 0, 'unknown barcode: clear message; cashier is not offered “Add item”');
+  // The scan box is cleared (so the next scan is never spoiled) and a “Not found” banner shows the code.
+  ok(/Not found: 8909999999990/.test(unk) && await c.getByRole('link', { name: /Add as a new item/ }).count() === 0, 'unknown barcode: clear message; cashier is not offered “Add item”');
   await c.locator('input[aria-label="Scan or search items"]').fill('');
 
   /* ============ Owner: Priya's old loyalty card, a return ============ */
