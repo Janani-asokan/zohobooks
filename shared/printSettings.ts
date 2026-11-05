@@ -1,4 +1,5 @@
 /* Print settings for thermal receipts and barcode labels — shared by the API (validation, defaults) and the UI. */
+import type { LabelLayout } from './labelLayout';
 
 export type ThermalTheme = 'compact' | 'advanced' | 'simple' | 'classic';
 export type PaperSize = '2in' | '3in';
@@ -18,6 +19,12 @@ export interface ThermalSettings {
   footer: string;
   /** A promotional line printed on every receipt, e.g. "Diwali sale: 10% off all toys till 5 Nov". */
   promo: string;
+  /**
+   * Page width sent to the printer. 'roll' (default): the full roll, 58 / 80 mm. 'printable': only the printed width,
+   * 48 / 72 mm, for printers whose driver paper is that narrow (POS-58 drivers often are). If the page sent is wider
+   * than the driver's paper, the printer shrinks the whole receipt to fit.
+   */
+  pageWidth?: 'roll' | 'printable';
 }
 
 export const BARCODE_FIELDS = ['businessName', 'itemCode', 'itemName', 'mrp', 'sellingPrice', 'category', 'brand', 'unit'] as const;
@@ -47,7 +54,11 @@ export const LABEL_SIZES: LabelSize[] = [
 ];
 export const labelSize = (id: string) => LABEL_SIZES.find((l) => l.id === id) ?? LABEL_SIZES[0]!;
 
-export interface BarcodeSettings { printer: PrinterType; labelSize: string; fields: BarcodeField[]; barcodeHeight: number }
+export interface BarcodeSettings {
+  printer: PrinterType; labelSize: string; fields: BarcodeField[]; barcodeHeight: number;
+  /** Label stock, size, labels across, gaps and turn (Label studio). Older settings have only labelSize. */
+  layout?: LabelLayout;
+}
 
 /* ---------------- A4 / A5 tax invoice ---------------- */
 export type InvoiceTemplate = 'standard' | 'modern' | 'compact';
@@ -88,7 +99,7 @@ export interface PrintSettings { thermal: ThermalSettings; barcode: BarcodeSetti
 export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   thermal: {
     theme: 'compact', paper: '3in', showLogo: true, showPartyBalance: false, showItemDescription: true, showTime: false,
-    showGstin: true, showHsn: false, showTaxBreakup: true, showSavings: true, showUpiQr: false, footer: '', promo: '',
+    showGstin: true, showHsn: false, showTaxBreakup: true, showSavings: true, showUpiQr: false, footer: '', promo: '', pageWidth: 'roll',
   },
   barcode: {
     printer: 'label',
@@ -133,6 +144,8 @@ export function withPrintDefaults(saved: unknown): PrintSettings {
 
 /** Printable width of the paper roll in mm (2″ = 58mm roll, 3″ = 80mm roll). */
 export const paperWidthMm = (p: PaperSize) => (p === '2in' ? 48 : 72);
+/** Page width sent to the printer for a receipt (see ThermalSettings.pageWidth). */
+export const rollPageMm = (p: PaperSize, pageWidth?: 'roll' | 'printable') => (pageWidth === 'printable' ? paperWidthMm(p) : p === '2in' ? 58 : 80);
 
 /** Font size setting → millimetres on the label (22 ≈ 2.9mm ≈ 8pt). */
 export const labelFontMm = (size: number) => Math.round(size * 0.13 * 100) / 100;

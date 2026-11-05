@@ -17,13 +17,17 @@ export async function invoicePrintBundle(db: Db, shopId: string, invoiceId: stri
   const snap: PrintSnapshot = inv.status !== 'Draft' && row?.print_snapshot
     ? row.print_snapshot
     : await takePrintSnapshot(db, shopId, { id: invoiceId, branch_id: row?.branch_id ?? null, customer_id: row?.customer_id ?? null });
+  // How the counter's printer takes the page is a printer setting, not part of the bill: always today's.
+  const now = withPrintDefaults((await one(db, 'SELECT print_settings FROM organizations WHERE shop_id = $1', [shopId]))?.print_settings);
+  const settings = withPrintDefaults(snap.settings);
+  settings.thermal = { ...settings.thermal, pageWidth: now.thermal.pageWidth };
   const tradeLabels = Object.fromEntries((templateByKey(String(snap.org.businessType ?? ''))?.tradeDetails ?? []).map((d) => [d.key, d.label]));
   const tradeDetails = Object.entries((snap.org.tradeDetails ?? {}) as Record<string, string>).filter(([, v]) => v).map(([k, v]) => ({ label: tradeLabels[k] ?? k, value: v }));
   return {
     invoice: { ...inv, createdBy: undefined, recurringId: undefined, salesOrderId: undefined },
     branch: snap.branch,
     org: { ...snap.org, tradeDetails },
-    settings: withPrintDefaults(snap.settings),
+    settings,
     itemFields: snap.itemFields ?? [],
     invoiceFields: snap.invoiceFields ?? [],
     /** Shown on the bill only when the snapshot recorded it (not for invoices issued before this was kept). */

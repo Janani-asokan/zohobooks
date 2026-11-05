@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift } from 'lucide-react';
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift, Tag } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import { featureForPage } from '../../shared/features';
 import type { PaletteAction } from './CommandPalette';
@@ -11,7 +11,7 @@ type Can = (p: Permission) => boolean;
 const CHILD_ICONS: Record<string, LucideIcon> = {
   Customers: UserRound, Quotes: FileSignature, 'Sales Orders': ClipboardList, Invoices: FileText, 'Delivery Challans': Truck, 'Payments Received': IndianRupee,
   'Credit Notes': FileMinus, 'Offers & loyalty': Gift, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, 'My Day (field)': MapPin, 'Field Team': MapPinned, Vendors: Truck, 'Purchase Orders': ClipboardList,
-  Bills: Receipt, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Stock Adjustments': SlidersHorizontal,
+  Bills: Receipt, 'Barcode labels': Tag, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Stock Adjustments': SlidersHorizontal,
   Transfers: ArrowLeftRight, 'Smart Reorder': BrainCircuit, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank, 'Tally & Import': RefreshCw,
   'Today’s rates': TrendingUp, 'Microfinance overview': LayoutDashboard, Borrowers: Users, 'Loan book': HandCoins, Collections: ReceiptIndianRupee, 'EMI planner': Calculator, 'Microfinance reports': FileBarChart2, 'Microfinance settings': Settings2,
 };
@@ -61,6 +61,7 @@ export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavIte
     label: 'Inventory', icon: Boxes,
     children: [
       { label: 'Items', to: '/app/items' },
+      { label: 'Barcode labels', to: '/app/items/labels' },
       ...(flags.dailyRates && can('items.write') ? [{ label: 'Today’s rates', to: '/app/items/rates' }] : []),
       ...(can('items.write') || can('purchases.read') || can('reports.read') ? [{ label: 'Smart Reorder', to: '/app/inventory/reorder' }] : []),
       { label: 'Warehouses', to: '/app/inventory/warehouses' },
@@ -160,6 +161,7 @@ export function buildActions(can: Can, flags: NavFlags = { lending: false }): Pa
   add(can('purchases.read'), 'Go to', 'Payments made', IndianRupee, '/app/purchases/payments', 'vendor payments payables ageing');
   add(can('purchases.read'), 'Go to', 'Expenses', Wallet, '/app/purchases/expenses');
   add(true, 'Go to', 'Items', Package, '/app/items', 'inventory products catalogue stock');
+  add(true, 'Go to', 'Barcode labels', Tag, '/app/items/labels', 'print barcode label sticker roll a4 price tag');
   add(can('items.write'), 'Go to', 'Today’s rates', TrendingUp, '/app/items/rates', 'daily price rate board update prices vegetable gold silver steel');
   add(true, 'Go to', 'Warehouses', Warehouse, '/app/inventory/warehouses', 'branches godown store locations');
   add(true, 'Go to', 'Stock adjustments', SlidersHorizontal, '/app/inventory/adjustments', 'stock count damaged expired write off');

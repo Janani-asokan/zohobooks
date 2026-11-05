@@ -104,13 +104,13 @@ export default function App() {
         </Route>
 
         <Route element={<ProtectedRoute kind="user" />}>
-          <Route path="/app/items/labels" element={<BarcodeLabels />} />
           <Route path="/app" element={<AppLayout />}>
             <Route index element={<Home />} />
             <Route path="pos" element={<Pos />} />
             <Route path="items" element={<Items />} />
             <Route path="items/new" element={<ItemForm />} />
             <Route path="items/rates" element={<TodayRates />} />
+            <Route path="items/labels" element={<BarcodeLabels />} />
             <Route path="items/:id/edit" element={<ItemForm />} />
             <Route path="sales/customers" element={<Customers />} />
             <Route path="sales/quotes" element={<SalesOrders key="quote" kind="quote" />} />

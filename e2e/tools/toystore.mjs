@@ -95,7 +95,8 @@ ok(/Soft teddy/.test(cart) && /Musical keyboard/.test(cart), 'scans with nothing
 await p.keyboard.type('0' + EAN, { delay: 8 }); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
 await p.keyboard.type('9999999999999', { delay: 8 }); await p.keyboard.press('Enter'); await p.waitForTimeout(300);
 ok(await p.getByRole('link', { name: /Add as a new item/ }).count() === 1, 'an unknown barcode offers “Add as a new item”');
-await p.locator('input[aria-label="Scan or search items"]').fill('');
+// (The box clears itself after a scan. Don't fill('') it: Playwright presses Delete for that, and Delete in an empty
+// scan box is the counter shortcut for removing the last item.)
 await p.screenshot({ path: `${out}/toy-pos.png` });
 await p.getByRole('button', { name: /^Charge/ }).first().click();
 await p.waitForSelector('text=Sale complete', { timeout: 15000 });

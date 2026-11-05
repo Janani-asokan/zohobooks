@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronDown, Minus, Plus, Loader2, Printer, Tag, Upload, Trash2 } from 'lucide-react';
 import { api } from '@/api/client';
 import { useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
@@ -11,9 +11,10 @@ import { readLogo } from '@/lib/image';
 import { SALES_KEYS } from '@/api/hooks';
 import { BarcodeLabel, SAMPLE_LABEL_ITEM, SAMPLE_RECEIPT, ThermalReceipt, printReceipt } from '@/components/printing';
 import {
-  BARCODE_FIELD_LABEL, INVOICE_FIELDS, INVOICE_FIELD_LABEL, LABEL_SIZES, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, labelSize, withPrintDefaults,
+  BARCODE_FIELD_LABEL, INVOICE_FIELDS, INVOICE_FIELD_LABEL, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, withPrintDefaults,
   type BarcodeSettings, type InvoicePrintSettings, type InvoiceTemplate, type PrintSettings as PS, type ThermalSettings, type ThermalTheme,
 } from '../../../shared/printSettings';
+import { resolveLayout, rowWidth } from '../../../shared/labelLayout';
 
 const INVOICE_TEMPLATES: Array<{ id: InvoiceTemplate; label: string; tip: string }> = [
   { id: 'standard', label: 'Standard', tip: 'Ruled header, light table head.' },
@@ -53,7 +54,8 @@ export default function PrintSettings() {
   const org = useOrg().data;
   const items = useItems().data ?? [];
   const q = usePrintSettings();
-  const [tab, setTab] = useState<'invoice' | 'thermal' | 'barcode'>('invoice');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<'invoice' | 'thermal' | 'barcode'>(() => (['thermal', 'barcode'].includes(params.get('tab') ?? '') ? params.get('tab') as 'thermal' | 'barcode' : 'invoice'));
   const logoRef = useRef<HTMLInputElement>(null);
   const signRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<PS | null>(null);
@@ -74,8 +76,7 @@ export default function PrintSettings() {
   const setT = (p: Partial<ThermalSettings>) => setDraft({ ...draft, thermal: { ...th, ...p } });
   const setB = (p: Partial<BarcodeSettings>) => setDraft({ ...draft, barcode: { ...bc, ...p } });
   const enabledCount = bc.fields.filter((f) => f.enabled).length;
-  const size = labelSize(bc.labelSize);
-  const sizes = LABEL_SIZES.filter((l) => l.printer === bc.printer);
+  const lay = resolveLayout(bc);
   const sampleItem = items.find((i) => i.barcode && i.mrp) ?? null;
   const previewItem = sampleItem ? { ...sampleItem, category: sampleItem.category, brand: sampleItem.brand } : SAMPLE_LABEL_ITEM;
 
@@ -113,7 +114,8 @@ export default function PrintSettings() {
               <details className="ps-help ps-setup">
                 <summary>Setting up the counter printer and scanner</summary>
                 <ol>
-                  <li><strong>Printer:</strong> install the printer’s Windows driver, then in the print box choose it once, set paper to {th.paper === '2in' ? '58' : '80'} mm, margins to <em>None</em>, and untick <em>Headers and footers</em>. Chrome remembers this.</li>
+                  <li><strong>Printer:</strong> install the printer’s Windows driver, then in the print box choose it once, set paper to {th.paper === '2in' ? '58' : '80'} mm, margins to <em>None</em>, scale to <em>Default</em> (not “Fit to page”), and untick <em>Headers and footers</em>. Chrome remembers this.</li>
+                  <li><strong>Receipt prints tiny, like an A4 page shrunk down (common with POS-58 printers):</strong> the driver’s paper size is still A4 or Letter. Open Windows Settings → Printers → your POS printer → <em>Printing preferences</em> → <em>Paper size</em> and choose the roll ({th.paper === '2in' ? '58 mm / 48 mm, e.g. “58(48) x 3276 mm”' : '80 mm / 72 mm, e.g. “80(72) x 3276 mm”'}). Then pick the same paper in Chrome’s print box under <em>More settings</em>. If the driver only lists a {th.paper === '2in' ? '48' : '72'} mm paper, choose <em>Printed width only</em> above.</li>
                   <li><strong>One-click printing:</strong> to skip the print box on every sale, start Chrome from a shortcut with <code>--kiosk-printing</code> added after <code>chrome.exe</code>. The receipt then goes straight to the default printer.</li>
                   <li><strong>Barcode scanner:</strong> any USB or Bluetooth scanner works. Plug it in, open <strong>POS</strong> and scan; no software is needed. If scans do not add items, set the scanner to send <em>Enter</em> after each code (see its manual).</li>
                 </ol>
@@ -122,22 +124,22 @@ export default function PrintSettings() {
           ) : (
             <>
               <div className="ps-dim" style={{ marginTop: 30 }}>
-                <div className="w"><span>{size.w}mm</span></div>
+                <div className="w"><span>{lay.w}mm</span></div>
                 {/* Shown enlarged for readability; prints at the real label size. */}
-                <div style={{ zoom: Math.min(3, 320 / (size.w * 3.78)) } as React.CSSProperties}>
-                  <BarcodeLabel item={previewItem} shop={org.companyName} s={bc} preview />
+                <div style={{ zoom: Math.min(3, 320 / (lay.w * 3.78)) } as React.CSSProperties}>
+                  <BarcodeLabel item={previewItem} shop={org.companyName} s={bc} w={lay.w} h={lay.h} preview />
                 </div>
-                <div className="h"><span>{size.h}mm</span></div>
+                <div className="h"><span>{lay.h}mm</span></div>
               </div>
-              <div className="ps-paper-tag" style={{ marginTop: 10 }}>{bc.printer === 'a4' ? `${size.perRow * (size.rowsPerPage ?? 1)} labels per A4 sheet` : `${size.perRow} Label(s) / Row`}</div>
+              <div className="ps-paper-tag" style={{ marginTop: 10 }}>{lay.stock === 'a4' ? `${lay.across * lay.rows} labels per A4 sheet` : `${lay.across} label${lay.across === 1 ? '' : 's'} across a ${lay.rollMm} mm roll`}</div>
               <div className="ps-help" style={{ marginTop: 40, textAlign: 'center' }}>
-                <Tag size={14} style={{ verticalAlign: -2, marginRight: 6 }} />To print, select items on the <Link to="/app/items">Items</Link> page and choose <strong>Print barcode labels</strong>.
+                <Tag size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Print from <Link to="/app/items/labels">Barcode labels</Link>, or select items on the <Link to="/app/items">Items</Link> page and choose <strong>Print barcode labels</strong>.
               </div>
               {bc.printer === 'label' && (
                 <details className="ps-help ps-setup">
                   <summary>Setting up the label printer</summary>
                   <ol>
-                    <li>In the printer’s driver (Printing preferences), set the label stock to <strong>{size.w} × {size.h} mm</strong>{size.perRow > 1 ? `, ${size.perRow} across` : ''}, with the gap the roll has (usually 2–3 mm).</li>
+                    <li>In the printer’s driver (Printing preferences), set the label stock to <strong>{lay.stock === 'a4' ? 'A4' : `${lay.rotate ? lay.h : rowWidth(lay)} × ${lay.rotate ? rowWidth(lay) : lay.h} mm`}</strong>{lay.across > 1 && lay.stock === 'roll' ? ` (${lay.across} labels across)` : ''}, with the gap the roll has (usually 2–3 mm).</li>
                     <li>Run the printer’s <em>calibrate</em> or <em>auto-detect</em> once after loading a new roll, so labels do not drift.</li>
                     <li>In Chrome’s print box: margins <em>None</em>, scale <em>100</em>, and untick <em>Headers and footers</em>.</li>
                   </ol>
@@ -247,6 +249,13 @@ export default function PrintSettings() {
                   ))}
                 </div>
                 <p className="small muted" style={{ marginTop: 8 }}>Older and handheld printers use 58 mm rolls. You can still pick the other size each time you print.</p>
+                <div className="small muted" style={{ margin: '12px 0 6px' }}>Page width sent to the printer</div>
+                <div className="ps-radios">
+                  {(['roll', 'printable'] as const).map((w) => (
+                    <label key={w} className={`ps-radio ${(th.pageWidth ?? 'roll') === w ? 'active' : ''}`}>{w === 'roll' ? `Full roll (${th.paper === '2in' ? 58 : 80} mm)` : `Printed width only (${th.paper === '2in' ? 48 : 72} mm)`}<input type="radio" name="pageWidth" checked={(th.pageWidth ?? 'roll') === w} onChange={() => setT({ pageWidth: w })} /></label>
+                  ))}
+                </div>
+                <p className="small muted" style={{ marginTop: 8 }}>If receipts come out small or squeezed to one side, the printer driver’s paper is narrower than the page: choose <em>Printed width only</em>, or set the driver’s paper to the roll size (see “Setting up the counter printer”).</p>
               </div>
               <div className="ps-sec">
                 <button className={`ps-acc ${open.logo ? 'open' : ''}`} onClick={() => setOpen({ ...open, logo: !open.logo })}>Upload Logo <ChevronDown size={18} /></button>
@@ -296,21 +305,11 @@ export default function PrintSettings() {
           ) : (
             <div className="card ps-panel">
               <div className="ps-sec">
-                <h3>Print Settings</h3>
-                <div className="small muted" style={{ marginBottom: 6 }}>Select Printer Type</div>
-                <div className="ps-radios">
-                  {(['a4', 'label'] as const).map((p) => (
-                    <label key={p} className={`ps-radio ${bc.printer === p ? 'active' : ''}`}>{p === 'a4' ? 'A4' : 'Label'}
-                      <input type="radio" name="printer" checked={bc.printer === p} onChange={() => setB({ printer: p, labelSize: LABEL_SIZES.find((l) => l.printer === p)!.id })} />
-                    </label>
-                  ))}
-                </div>
-                <div className="field" style={{ marginTop: 14 }}>
-                  <label>Label Sizes</label>
-                  <select className="select" value={bc.labelSize} onChange={(e) => setB({ labelSize: e.target.value })}>
-                    {sizes.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-                  </select>
-                </div>
+                <h3>Label stock</h3>
+                <p className="small" style={{ margin: '2px 0 8px' }}>
+                  <strong>{lay.w} × {lay.h} mm</strong>, {lay.stock === 'a4' ? `${lay.across} × ${lay.rows} on an A4 sheet` : `${lay.across} across a ${lay.rollMm} mm roll${lay.rotate ? `, turned ${lay.rotate}°` : ''}`}
+                </p>
+                <Link to="/app/items/labels" className="btn btn-secondary btn-sm"><Tag size={14} /> Change roll, size and labels across</Link>
                 <div className="field" style={{ marginTop: 12 }}>
                   <label>Barcode height · {bc.barcodeHeight}% of the label</label>
                   <input type="range" min={20} max={70} value={bc.barcodeHeight} onChange={(e) => setB({ barcodeHeight: Number(e.target.value) })} style={{ accentColor: '#1c1917' }} />

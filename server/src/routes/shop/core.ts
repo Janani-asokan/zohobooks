@@ -14,6 +14,7 @@ import { extendLicense } from '../platform';
 import { EMAIL_RE, GSTIN_RE, gstinMatchesState } from '../../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE, STAFF_ROLES } from '../../../../shared/permissions';
 import { BARCODE_FIELDS, INVOICE_FIELDS, LABEL_SIZES, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
+import { layoutProblems } from '../../../../shared/labelLayout';
 import { T, allowed } from './ctx';
 import { bankErrors, bankFromIfsc, cleanAccountNo, cleanIfsc, composeBankDetails, parseBankDetails, type BankFields } from '../../../../shared/bank';
 import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty, normalizeVendorPhone } from '../../../../shared/contact';
@@ -135,6 +136,7 @@ const printSchema = z.object({
     footer: z.string().max(200),
     /** Left out by older clients: the saved line is kept. */
     promo: z.string().trim().max(140).optional(),
+    pageWidth: z.enum(['roll', 'printable']).optional(),
   }),
   barcode: z
     .object({
@@ -142,12 +144,22 @@ const printSchema = z.object({
       labelSize: z.string().refine((id) => LABEL_SIZES.some((l) => l.id === id), 'Unknown label size'),
       barcodeHeight: z.number().int().min(20).max(80),
       fields: z.array(fieldSchema).max(BARCODE_FIELDS.length),
+      /** Label studio layout. Left out by older clients: the saved one is kept; null goes back to the label size. */
+      layout: z.object({
+        stock: z.enum(['roll', 'a4']),
+        w: z.number().finite(), h: z.number().finite(),
+        across: z.number().int(), rows: z.number().int(),
+        gapX: z.number().finite(), gapY: z.number().finite(), marginX: z.number().finite(), marginY: z.number().finite(),
+        rollMm: z.number().finite().min(20).max(220),
+        rotate: z.union([z.literal(0), z.literal(90), z.literal(270)]),
+      }).nullable().optional(),
     })
     .superRefine((b, ctx) => {
       if (b.fields.filter((f) => f.enabled).length > MAX_BARCODE_FIELDS) ctx.addIssue({ code: 'custom', path: ['fields'], message: `Select up to ${MAX_BARCODE_FIELDS} columns` });
       if (new Set(b.fields.map((f) => f.key)).size !== b.fields.length) ctx.addIssue({ code: 'custom', path: ['fields'], message: 'Each column can appear once' });
       const size = LABEL_SIZES.find((l) => l.id === b.labelSize);
       if (size && size.printer !== b.printer) ctx.addIssue({ code: 'custom', path: ['labelSize'], message: 'This label size is for a different printer type' });
+      if (b.layout) for (const m of layoutProblems(b.layout)) ctx.addIssue({ code: 'custom', path: ['layout'], message: m });
     }),
   invoice: z
     .object({
@@ -176,7 +188,12 @@ coreRouter.put(
     const invoice = parsed.invoice
       ? { ...parsed.invoice, promo: parsed.invoice.promo ?? saved.promo, fields: { ...saved.fields, ...parsed.invoice.fields, ...Object.fromEntries(MANDATORY_INVOICE_FIELDS.map((k) => [k, true])) } }
       : saved;
-    const b = { ...parsed, thermal: { ...parsed.thermal, promo: parsed.thermal.promo ?? savedAll.thermal.promo }, invoice };
+    const b = {
+      ...parsed,
+      thermal: { ...parsed.thermal, promo: parsed.thermal.promo ?? savedAll.thermal.promo, pageWidth: parsed.thermal.pageWidth ?? savedAll.thermal.pageWidth },
+      barcode: { ...parsed.barcode, layout: parsed.barcode.layout === undefined ? savedAll.barcode.layout : parsed.barcode.layout ?? undefined },
+      invoice,
+    };
     await db.query('UPDATE organizations SET print_settings = $2 WHERE shop_id = $1', [c.shopId, JSON.stringify(b)]);
     await audit(db, req, c.shopId, 'update', 'print_settings', c.shopId, { theme: b.thermal.theme, paper: b.thermal.paper, label: b.barcode.labelSize, invoice: b.invoice.template });
     return withPrintDefaults(b);

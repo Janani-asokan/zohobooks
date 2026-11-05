@@ -83,7 +83,12 @@ export function Sidebar({
               {isOpen && (
                 <div className="nav-sub">
                   {it.children.map((c) => (
-                    <NavLink key={c.to} to={c.to} end={c.end} className={({ isActive }) => `nav-link ${isActive || (!c.end && pathname.startsWith(c.to + '/')) ? 'active' : ''}`} onClick={onNavigate}>
+                    <NavLink key={c.to} to={c.to} end={c.end} className={({ isActive }) => {
+                      // A sibling that matches more of the address wins (Items vs Items › Barcode labels).
+                      const under = (to: string) => pathname === to || pathname.startsWith(to + '/');
+                      const closer = it.children!.some((o) => o.to.length > c.to.length && under(o.to));
+                      return `nav-link ${!closer && (isActive || (!c.end && pathname.startsWith(c.to + '/'))) ? 'active' : ''}`;
+                    }} onClick={onNavigate}>
                       {c.icon && <c.icon size={15} />}
                       <span className="nav-text">{c.label}</span>
                     </NavLink>

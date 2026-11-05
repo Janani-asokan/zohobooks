@@ -1,12 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
 import type { Invoice, Item, Organization } from '@/api/types';
 import { fmtDate, money } from '@/lib/format';
 import {
-  labelFontMm, labelSize, paperWidthMm, type BarcodeFieldKey, type BarcodeSettings, type ThermalSettings,
+  labelFontMm, paperWidthMm, rollPageMm, type BarcodeFieldKey, type BarcodeSettings, type ThermalSettings,
 } from '../../shared/printSettings';
 import { upiLink, useQr } from './qr';
-import { isValidEan13 } from '../../shared/barcode';
+import { moduleMm, resolveLayout, symbologyFor } from '../../shared/labelLayout';
 
 /** Print just the `.print-area`, with a page size that matches the paper (receipt roll or label stock). */
 export function printWithPage(pageCss: string, bodyClass: string) {
@@ -46,7 +46,7 @@ export function rollPageSize(widthMm: number, el: Element | null) {
 export function printRoll(widthMm: number, selector = '.print-area .receipt') {
   printWithPage(rollPageSize(widthMm, document.querySelector(selector)), 'print-receipt');
 }
-export const printReceipt = (s: ThermalSettings) => printRoll(s.paper === '2in' ? 58 : 80);
+export const printReceipt = (s: ThermalSettings) => printRoll(rollPageMm(s.paper, s.pageWidth));
 
 /* ---------------- Thermal receipt ---------------- */
 
@@ -177,7 +177,7 @@ export function ThermalReceipt({ data, org, s }: { data: ReceiptData; org: Recei
   );
 
   return (
-    <div className={`receipt rc-${t} rc-${s.paper} light-scope`} style={{ width: `${paperWidthMm(s.paper)}mm` }}>
+    <div className={`receipt rc-${t} rc-${s.paper} ${s.pageWidth === 'printable' ? 'rc-page-printable' : ''} light-scope`} style={{ width: `${paperWidthMm(s.paper)}mm` }}>
       {header}
       <hr />
       {meta}
@@ -213,39 +213,60 @@ export const SAMPLE_RECEIPT: ReceiptData = {
 
 /* ---------------- Barcode label ---------------- */
 
-const isEan13 = isValidEan13;
-
 export interface LabelItem { name: string; barcode: string; sku: string; mrp: number | null; sp1: number; category?: string; brand?: string; unit?: string }
 
-export function BarcodeLabel({ item, shop, s, preview }: { item: LabelItem; shop: string; s: BarcodeSettings; preview?: boolean }) {
+/** Blank space a scanner needs on each side of the bars, in narrow-bar widths (GS1: 11 for EAN/UPC; 10 for Code 128). */
+const QUIET = 11;
+
+/**
+ * One barcode label. The bars are drawn at a whole number of printer dots per narrow bar, with blank margins on
+ * both sides, and never stretched sideways: a stretched or clipped barcode is the usual reason a label won't scan.
+ * Retail codes print as EAN-13 / EAN-8 / UPC-A, everything else as Code 128. A code no barcode can hold (Tamil,
+ * Hindi, ₹…) shows what is wrong on the label instead of failing. The item name itself can be in any language.
+ */
+export function BarcodeLabel({ item, shop, s, preview, w, h }: { item: LabelItem; shop: string; s: BarcodeSettings; preview?: boolean; w?: number; h?: number }) {
   const ref = useRef<SVGSVGElement>(null);
-  const size = labelSize(s.labelSize);
-  const code = item.barcode || item.sku;
+  const dims = w && h ? { w, h } : resolveLayout(s);
+  const sym = symbologyFor(item.barcode || item.sku);
+  const code = 'code' in sym ? sym.code : '';
+  const format = 'format' in sym ? sym.format : '';
+  const barMm = (dims.h * s.barcodeHeight) / 100;
+  const [err, setErr] = useState('');
   const on = (k: BarcodeFieldKey) => s.fields.find((f) => f.key === k && f.enabled);
   const style = (k: BarcodeFieldKey) => {
     const f = s.fields.find((x) => x.key === k)!;
     return { fontSize: `${labelFontMm(f.size)}mm`, fontWeight: f.bold ? 800 : 500, lineHeight: 1.12 };
   };
-  useEffect(() => {
-    if (!ref.current || !code) return;
-    const opts = { height: 60, width: 2, margin: 0, displayValue: false } as const;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !code || !format) return;
     try {
-      JsBarcode(ref.current, code, { ...opts, format: isEan13(code) ? 'EAN13' : 'CODE128' });
+      // width 1 → one SVG unit per narrow bar, so the SVG's width is the barcode's width in bars (quiet zones included).
+      JsBarcode(el, code, { format, width: 1, height: 50, margin: 0, marginLeft: QUIET, marginRight: QUIET, displayValue: false, flat: true });
+      const modules = Number(el.getAttribute('width')?.replace('px', '')) || 100;
+      const mm = moduleMm(modules, dims.w - 2);
+      el.removeAttribute('width'); el.removeAttribute('height');
+      el.setAttribute('preserveAspectRatio', 'none');
+      el.style.width = `${Math.round(modules * mm * 1000) / 1000}mm`;
+      el.style.height = `${Math.max(3, barMm)}mm`;
+      setErr(modules * 0.125 > dims.w - 2 + 0.01 ? 'Code too long for this label size' : '');
     } catch {
-      JsBarcode(ref.current, code, { ...opts, format: 'CODE128' });
+      setErr('This code can’t be drawn as a barcode');
     }
-  }, [code]);
+  }, [code, format, dims.w, barMm]);
   const order = s.fields.filter((f) => f.enabled).map((f) => f.key);
   const before = order.filter((k) => k === 'businessName');
   const priceRow = order.filter((k) => k === 'mrp' || k === 'sellingPrice');
   const after = order.filter((k) => !['businessName', 'itemCode', 'mrp', 'sellingPrice'].includes(k));
   const text = (k: BarcodeFieldKey) =>
     k === 'businessName' ? shop : k === 'itemName' ? item.name : k === 'category' ? item.category : k === 'brand' ? item.brand : k === 'unit' ? item.unit : '';
+  const problem = 'error' in sym ? sym.error : err;
   return (
-    <div className={`blabel ${preview ? 'preview' : ''}`} style={{ width: `${size.w}mm`, height: `${size.h}mm` }}>
+    <div className={`blabel ${preview ? 'preview' : ''}`} style={{ width: `${dims.w}mm`, height: `${dims.h}mm` }} data-format={format || undefined}>
       {before.map((k) => <div key={k} className="bl-t" style={style(k)}>{text(k)}</div>)}
-      {code ? <svg ref={ref} className="bl-code" style={{ maxHeight: `${(size.h * s.barcodeHeight) / 100}mm` }} preserveAspectRatio="none" /> : <div className="bl-t" style={{ fontSize: '2.4mm', color: '#a00' }}>No barcode / SKU</div>}
-      {on('itemCode') && code && <div className="bl-t" style={style('itemCode')}>{code}</div>}
+      {code && !('error' in sym) && <svg ref={ref} className="bl-code" role="img" aria-label={`Barcode ${code}`} style={{ height: `${Math.max(3, barMm)}mm` }} />}
+      {problem && <div className="bl-t bl-err" title={problem}>{problem}</div>}
+      {on('itemCode') && (item.barcode || item.sku) && <div className="bl-t" style={style('itemCode')}>{item.barcode || item.sku}</div>}
       {after.map((k) => text(k) ? <div key={k} className="bl-t" style={style(k)}>{text(k)}</div> : null)}
       {priceRow.length > 0 && (
         <div className="bl-prices">

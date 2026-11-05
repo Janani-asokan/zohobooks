@@ -7,7 +7,7 @@ import { COPY_LABEL, TaxInvoice, type PrintBranch, type PrintOrg } from '@/compo
 import type { ItemField } from '../../shared/templates';
 import { ThermalReceipt, receiptFromInvoice, rollPageSize } from '@/components/printing';
 import { Segmented } from '@/components/ui';
-import { withPrintDefaults, type PaperSize, type PrintSettings } from '../../shared/printSettings';
+import { rollPageMm, withPrintDefaults, type PaperSize, type PrintSettings } from '../../shared/printSettings';
 
 export type Paper = 'a4' | 'a5' | 'thermal';
 interface Bundle { invoice: Invoice; org: PrintOrg; branch: PrintBranch | null; settings: PrintSettings; itemFields?: ItemField[]; invoiceFields?: ItemField[]; previousBalance?: number | null }
@@ -86,7 +86,7 @@ export default function PrintInvoice() {
 
   const inv = data?.invoice;
   const label = inv ? `${inv.number ?? 'Draft'} · ${data!.org.companyName}` : '';
-  const thermalMm = roll === '2in' ? 58 : 80;
+  const thermalMm = rollPageMm(roll, data?.settings.thermal.pageWidth);
 
   useEffect(() => {
     if (!inv) return;

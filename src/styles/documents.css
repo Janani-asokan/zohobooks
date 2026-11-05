@@ -120,27 +120,43 @@
 .receipt.rc-advanced .rc-saved { border: 1px dashed #333; padding: 3px; }
 @media print {
   body.print-receipt .print-area { width: auto; }
-  body.print-receipt .receipt { border: none !important; border-radius: 0 !important; margin: 0 !important; box-shadow: none !important; }
+  /* Centred on the roll: thermal heads print the middle 48 / 72 mm of a 58 / 80 mm roll, so text pushed to the left
+     edge is cut off or looks shifted. */
+  body.print-receipt .receipt { border: none !important; border-radius: 0 !important; margin: 0 auto !important; box-shadow: none !important; }
+  /* Page sent at the printable width only (48 / 72 mm): no side padding, or the text would run past the page. */
+  .receipt.rc-page-printable { padding-left: 0 !important; padding-right: 0 !important; margin: 0 !important; }
 }
 
 /* ---------- Barcode labels ---------- */
-.blabel { box-sizing: border-box; background: #fff; color: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1mm 1.5mm; overflow: hidden; font-family: var(--font); }
+.blabel { box-sizing: border-box; background: #fff; color: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1mm 1mm; overflow: hidden;
+  /* Item names in any language: Windows (Nirmala UI covers Tamil, Hindi, Telugu, Kannada, Malayalam, Bengali…),
+     Android / Linux (Noto), Mac (system), then the older Windows fonts. */
+  font-family: var(--font), 'Nirmala UI', 'Noto Sans', 'Noto Sans Tamil', 'Noto Sans Devanagari', 'Noto Sans Telugu', 'Noto Sans Kannada', 'Noto Sans Malayalam', 'Noto Sans Bengali', 'Noto Sans Gujarati', 'Latha', 'Mangal', sans-serif; }
 .blabel .bl-t { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.blabel .bl-code { width: 92%; display: block; margin: .4mm 0; }
+.blabel .bl-code { display: block; margin: .3mm 0; flex: 0 0 auto; max-width: none; shape-rendering: crispEdges; }
+.blabel .bl-err { font-size: 2.2mm; color: #a00; white-space: normal; line-height: 1.15; }
 .blabel .bl-prices { display: flex; justify-content: space-between; width: 100%; gap: 2mm; white-space: nowrap; }
 .blabel.preview { box-shadow: 0 2px 10px rgba(0,0,0,.08); border-radius: 1mm; }
-.label-row { display: flex; gap: 2mm; page-break-after: always; break-after: page; }
-.label-row:last-child { page-break-after: auto; break-after: auto; }
-.label-a4 { width: 210mm; min-height: 297mm; padding: 8mm 6mm; background: #fff; display: grid; gap: 2mm; justify-content: center; align-content: start; }
+.label-row { display: flex; box-sizing: border-box; overflow: hidden; }
+.label-a4 { box-sizing: border-box; width: 210mm; height: 297mm; overflow: hidden; background: #fff; display: grid; justify-content: start; align-content: start; }
 .label-a4 .blabel { border: 1px dashed #ddd; }
+/* One printed page per roll row / A4 sheet. A turned row is laid out as read and turned onto a page that is
+   label-height wide and row-width tall (for drivers that feed the label the other way round). */
+@media print {
+  .label-page, .label-turn, .label-a4 { break-after: page; page-break-after: always; }
+  .label-page:last-child, .label-turn:last-child, .label-a4:last-child { break-after: auto; page-break-after: auto; }
+  .label-turn { position: relative; overflow: hidden; width: var(--rh); height: var(--rw); }
+  .label-turn > .label-row { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+  .label-turn.turn-90 > .label-row { transform: translateX(var(--rh)) rotate(90deg); }
+  .label-turn.turn-270 > .label-row { transform: translateY(var(--rw)) rotate(-90deg); }
+}
 @media print { .label-a4 .blabel { border-color: transparent; } body.print-labels .print-area { width: auto; } }
 
 
 .only-receipt { display: none; }
 @media print { body.print-receipt .only-receipt { display: block; } }
-@media print { body.print-labels .print-area { gap: 0 !important; align-items: flex-start !important; } body.print-labels .label-row { gap: 2mm; } }
+@media print { body.print-labels .print-area { gap: 0 !important; align-items: flex-start !important; padding: 0 !important; overflow: visible !important; } }
 .blabel > * { flex-shrink: 0; }
-.blabel .bl-code { flex: 1 1 0; min-height: 3mm; height: auto; }
 /* In-app printing (receipts, labels, statements): only the copy in #print-root is laid out, so nothing behind it adds
    pages. #print-root is hidden on screen. */
 #print-root { display: none; }
