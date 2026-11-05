@@ -236,6 +236,8 @@ export default function Pos() {
   };
   /** Keys in the scan box. With the box empty: + / − change the last item, Delete removes it. */
   const onScanKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // A dialog just opened over the bill (clear, hold list, IMEI…): its keys are its own, even before it takes focus.
+    if (document.querySelector('[role=dialog]')) return;
     if (e.key === 'Enter') { e.preventDefault(); void onScanEnter(); return; }
     if (e.key === 'Escape') { if (q) { e.preventDefault(); setQ(''); setUnknown(''); } return; }
     if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && searchText) {
@@ -250,7 +252,8 @@ export default function Pos() {
       setHl((h) => Math.max(0, Math.min(shown.length - 1, h + (e.key === 'ArrowRight' ? 1 : -1))));
       return;
     }
-    if (q) return;
+    // Ctrl / Alt / Cmd combinations (Ctrl+Delete clears the bill) are shortcuts, not edits of the last item.
+    if (q || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === '+' || e.key === '=') { e.preventDefault(); bumpLast(1); }
     else if (e.key === '-') { e.preventDefault(); bumpLast(-1); }
     else if (e.key === 'Delete') { e.preventDefault(); const l = lastLine(); if (l) setQty(l.itemId, 0); }
@@ -395,6 +398,8 @@ export default function Pos() {
     scanRef.current?.focus();
   };
   const [voidAsk, setVoidAsk] = useState(false);
+  const voidAskRef = useRef(false);
+  voidAskRef.current = voidAsk;
   // Focus moves at once (not after the redraw) so F8 followed instantly by Enter still charges.
   const pickMode = (m: 'Cash' | 'UPI' | 'Card') => {
     setMode(m);
@@ -420,6 +425,8 @@ export default function Pos() {
   // send stray keys to the scan box instead of losing the scan. Fields, menus and the sale dialog are left alone.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // "Clear this bill?" is open: Enter confirms it, wherever the cursor still is.
+      if (voidAskRef.current && e.key === 'Enter' && !(e.target as HTMLElement | null)?.closest('[role=dialog] button')) { e.preventDefault(); setVoidAsk(false); reset(); return; }
       // The sale's receipt is open: Enter (anywhere but its own buttons) starts the next customer.
       if ((done || offDone) && e.key === 'Enter' && !(e.target as HTMLElement | null)?.closest('button, a, select')) { e.preventDefault(); reset(); return; }
       if (e.ctrlKey || e.metaKey || e.altKey || (e.key.length !== 1 && e.key !== 'Delete') || done || offDone || document.querySelector('[role=dialog]')) return;

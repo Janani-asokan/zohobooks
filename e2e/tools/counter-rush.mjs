@@ -111,7 +111,10 @@ try {
   ok((await cart())[0]?.qty === 12 && await focused() === 'Scan or search items', 'F3, type 12, Enter: quantity 12 and back to scanning');
   await p.keyboard.press('F3'); await k('Backspace'); await k('Backspace'); await p.waitForTimeout(100);
   ok((await cart()).length === 1, 'clearing the quantity box to retype does not remove the item');
-  await k('Escape'); await k('Control+Delete'); await k('Enter');
+  await k('Escape'); await k('Control+Delete');
+  ok((await dialogTitle()).includes('Clear this bill?') || await p.locator('[role=dialog] h3', { hasText: 'Clear this bill?' }).waitFor({ timeout: 2000 }).then(() => true).catch(() => false), 'Ctrl+Delete asks to clear a one-item bill (not treated as plain Delete)');
+  await k('Enter'); await p.waitForTimeout(150);
+  ok((await cart()).length === 0, 'and Enter clears it');
 
   /* 4. Phone shop: IMEI at the counter */
   const slab = (await api('GET', '/shop/tax-slabs')).body.find((s) => s.rate === 18).id;
