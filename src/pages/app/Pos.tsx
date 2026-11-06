@@ -29,6 +29,7 @@ import { findByCode } from '../../../shared/barcode';
 import { extractImeis } from '../../../shared/imei';
 import { beep, beepOn, cashSuggestions, heldBills, holdBill, loadDraft, parseScan, readFreq, saveDraft, setBeepOn, takeHeld, writeFreq, type CounterLine, type HeldBill } from '@/lib/posCounter';
 import { CameraScanner } from '@/components/CameraScanner';
+import { ReceiptCheck } from '@/components/PrintCheck';
 import { NumPad, isTouchCounter, setTouchCounter } from '@/components/NumPad';
 import { CustomerByPhone, OffersSummary, PointsBox, usePromo } from '@/components/OffersLoyalty';
 import { payable, pointsEarned, priceBill } from '../../../shared/offers';
@@ -687,6 +688,7 @@ export default function Pos() {
             <button className="btn btn-primary" onClick={reset} autoFocus><Plus size={15} /> New sale</button>
           </>
         }>
+        {done && <ReceiptCheck inline />}
         {done && org && (
           <div className="print-area">
             {done.change > 0 && <div className="row no-print" style={{ justifyContent: 'center', gap: 8, marginBottom: 12, fontSize: 16 }}>Give change: <strong style={{ color: 'var(--green-700)', fontSize: 20 }}>{money(done.change)}</strong></div>}
@@ -762,6 +764,7 @@ export default function Pos() {
             <button className="btn btn-primary" onClick={reset} autoFocus><Plus size={15} /> New sale</button>
           </>
         }>
+        {offDone && <ReceiptCheck inline />}
         {offDone && org && (
           <div className="print-area">
             <div className="pos-offline no-print"><CloudOff size={16} /> No internet. This bill is safe on this device and will be saved with its GST invoice number automatically.</div>

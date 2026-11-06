@@ -3,7 +3,7 @@ import { ExportMenu } from '@/components/ExportMenu';
 import { purchaseOrderTable } from '@/lib/docPdf';
 import { PdfButton } from '@/components/PdfButton';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, ClipboardList, PackageCheck, FileText, Ban, X, Loader2, Truck, Send, Pencil, CalendarClock } from 'lucide-react';
+import { Plus, ClipboardList, PackageCheck, FileText, Ban, X, Loader2, Truck, Send, Pencil, CalendarClock, Tag } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
 import { useBranches, useItems, useMut, useOrg, usePurchaseOrders, useVendors } from '@/api/hooks';
 import { QuickVendorModal, type VendorLite } from '@/components/QuickAdd';
@@ -257,6 +257,7 @@ function PODrawer({ po, canWrite, onClose, onEdit }: { po: PurchaseOrder; canWri
               {canReceive && <button className="btn btn-primary btn-sm" onClick={startReceive}><PackageCheck size={14} /> Receive goods</button>}
               {(po.status === 'Received' || po.status === 'Partially Received' || po.status === 'Issued') && !po.billId && <button className="btn btn-secondary btn-sm" onClick={() => setBilling({ vendorBillNo: '', date: todayISO(), dueDate: addDays(todayISO(), 30) })}><FileText size={14} /> Convert to bill</button>}
               {po.billId && <button className="btn btn-soft btn-sm" onClick={() => navigate('/app/purchases/bills')}><FileText size={14} /> View bill</button>}
+              {po.lines.some((l) => l.itemId) && po.status !== 'Cancelled' && <button className="btn btn-soft btn-sm" onClick={() => navigate(`/app/items/labels?source=purchase_order&id=${po.id}`)} title="Labels for what is not labelled yet"><Tag size={14} /> Print labels</button>}
               {(po.status === 'Draft' || po.status === 'Issued') && !anyReceived && <button className="btn btn-secondary btn-sm" onClick={onEdit}><Pencil size={14} /> Edit</button>}
               {po.status !== 'Cancelled' && po.status !== 'Received' && !anyReceived && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red-600)' }} disabled={cancel.isPending} onClick={() => cancel.mutate(undefined)}><Ban size={14} /> Cancel</button>}
             </div>

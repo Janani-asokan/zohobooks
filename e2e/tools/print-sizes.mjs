@@ -63,8 +63,8 @@ ok(near(r.w, 80) && r.pages === 1 && /TOTAL/.test(r.text), `invoice receipt view
 // 4. Barcode labels on a 50 × 25 mm, 2-up roll
 const items = await (await p.request.get(B + '/api/shop/items', { headers: { 'x-requested-with': 'ledgerly' } })).json();
 const coded = items.filter((i) => i.barcode).slice(0, 2);
-await p.goto(`${B}/app/items/labels?ids=${coded.map((i) => i.id).join(',')}`); await p.waitForSelector('.blabel');
-await p.getByRole('button', { name: 'Print labels' }).click(); await p.waitForTimeout(200);
+await p.goto(`${B}/app/items/labels?ids=${coded.map((i) => i.id).join(',')}`); await p.waitForSelector('.ls-sheets .lv');
+await p.getByRole('button', { name: /^Print labels/ }).click(); await p.waitForTimeout(200);
 r = await asPrinted('labels');
 ok(Math.abs(r.w - 102) < 1 && Math.abs(r.h - 25) < 1, `labels: ${r.w} × ${r.h} mm pages (two 50 mm labels + 2 mm gap), ${r.pages} rows`);
 for (const f of ['pos-80mm', 'test-receipt', 'labels']) execFileSync('pdftoppm', ['-png', '-r', '110', '-f', '1', '-l', '1', `${out}/${f}.pdf`, `${out}/${f}`]);

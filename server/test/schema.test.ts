@@ -27,6 +27,7 @@ const POLYMORPHIC = new Set([
   'attachments.entity_id', 'audit_log.actor_id', 'bank_transactions.ref_id', 'stock_movements.ref_id',
   'stock_movements.user_id', // a shop user or a super admin
   'sessions.principal_id', 'password_resets.principal_id', // a shop user or a super admin
+  'print_jobs.source_id', // a purchase order, a bill or an earlier print job (source_type says which)
 ]);
 /** Tables with shop_id that are read before the shop is known (sign-in, public links), so they cannot use RLS. */
 const NO_RLS = new Set(['users', 'user_shops', 'public_links', 'role_permissions', 'subscription_payments',

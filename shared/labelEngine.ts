@@ -62,7 +62,7 @@ export const rowPitchMm = (s: StockGeometry) => r1(s.h + s.rowGap);
 export type PrinterLanguage = 'browser' | 'tspl' | 'zpl' | 'escpos';
 export interface PrinterSettings {
   language: PrinterLanguage;
-  dpi: 203 | 300;
+  dpi: 203 | 300 | 600;
   /** Printable width of the head, mm (48 / 72 / 104 mm on 2 / 3 / 4-inch printers; 210 on A4). */
   headMm: number;
   media: Media;
@@ -76,7 +76,7 @@ export const PRINTER_PRESETS: Array<{ id: string; name: string; settings: Printe
   { id: 'label-4in-300', name: '4-inch label printer, 300 dpi', settings: { language: 'tspl', dpi: 300, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 3 } },
   { id: 'receipt-3in', name: '3-inch receipt printer (80 mm) · ESC/POS', settings: { language: 'escpos', dpi: 203, headMm: 72, media: 'continuous', offsetX: 0, offsetY: 0, darkness: 8, speed: 6 } },
   { id: 'receipt-2in', name: '2-inch receipt printer (POS-58) · ESC/POS', settings: { language: 'escpos', dpi: 203, headMm: 48, media: 'continuous', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
-  { id: 'office-a4', name: 'Office A4 / Letter printer (laser or inkjet)', settings: { language: 'browser', dpi: 300, headMm: 216, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
+  { id: 'office-a4', name: 'Office A4 / Letter printer (laser or inkjet)', settings: { language: 'browser', dpi: 600, headMm: 216, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
 ];
 /** Printer dots per mm: 203 dpi heads are 8 dots/mm and 300 dpi heads 12 dots/mm (how label printers are built). */
 export const dotsPerMm = (dpi: number) => (dpi === 203 ? 8 : dpi === 300 ? 12 : dpi / 25.4);
@@ -139,12 +139,14 @@ export interface BarcodeFit { ok: boolean; moduleDots: number; moduleMm: number;
  * The largest whole-dot narrow bar at which the code fits the given width (never smaller than the minimum, never
  * stretched). Not ok when even the minimum is too wide: the label is refused, not shrunk (ML-11, QA-B05).
  */
-export function fitBarcode(value: string, sym: Symbology, widthMm: number, dpi: number, maxModuleDots = 4): BarcodeFit {
+export function fitBarcode(value: string, sym: Symbology, widthMm: number, dpi: number, maxModuleDots?: number): BarcodeFit {
   const modules = sym === 'QR' ? qrModules(value) : barcodeModules(value, sym);
   const dot = 1 / dotsPerMm(dpi);
   const min = minModuleDots(sym, dpi);
+  // Never wider than 0.5 mm a bar (4 dots at 203 dpi, 6 at 300, 11 at 600): bigger buys nothing and wastes label.
+  const cap = Math.max(min, maxModuleDots ?? Math.floor(0.5 * dotsPerMm(dpi) + 1e-9));
   const fits = Math.floor(widthMm / (modules * dot) + 1e-9);
-  const moduleDots = Math.min(maxModuleDots, fits);
+  const moduleDots = Math.min(cap, fits);
   if (moduleDots < min) {
     return { ok: false, moduleDots: min, moduleMm: min * dot, widthMm: modules * min * dot, modules, reason: `needs ${r1(modules * min * dot)} mm at the smallest scannable size; the space is ${r1(widthMm)} mm` };
   }
@@ -229,22 +231,54 @@ export function autoTemplate(w: number, h: number, show: Partial<Record<'company
   const els: LabelElement[] = [];
   let y = inset;
   const line = (field: LabelField, o: { size: number; bold: boolean }, prefix = '') => {
-    const size = Math.min(tmm(o.size), h / 6); els.push({ id: eid(), type: 'field', field, text: prefix, x: inset, y, w: iw, h: size * 1.2, size, bold: o.bold, align: 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 }); y += size * 1.2;
+    const size = Math.round(Math.min(tmm(o.size), h / 6) * 10) / 10; els.push({ id: eid(), type: 'field', field, text: prefix, x: inset, y: Math.round(y * 10) / 10, w: iw, h: Math.round(size * 12) / 10, size, bold: o.bold, align: 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 }); y += size * 1.2;
   };
   if (show.company) line('company', show.company);
-  const bh = Math.max(4, (h * barcodeShare) / 100);
+  const bh = Math.round(Math.max(4, (h * barcodeShare) / 100) * 10) / 10;
   const narrow = w < 30; // 4-up and narrower: QR (spec 5)
   if (narrow) { const q = Math.min(iw, h - y - inset - 3); els.push({ id: eid(), type: 'qr', field: 'barcode', x: (w - q) / 2, y, w: q, h: q }); y += q + 0.3; }
-  else { els.push({ id: eid(), type: 'barcode', field: 'barcode', x: inset, y, w: iw, h: bh, symbology: 'auto', showValue: !!show.sku }); y += bh + (show.sku ? 3 : 0.4); }
+  else { els.push({ id: eid(), type: 'barcode', field: 'barcode', x: inset, y: Math.round(y * 10) / 10, w: iw, h: bh, symbology: 'auto', showValue: !!show.sku }); y += bh + (show.sku ? 3 : 0.4); }
   if (show.name) line('name', show.name);
   for (const k of ['category', 'brand', 'unit'] as const) if (show[k]) line(k, show[k]!);
   if (show.mrp || show.price) {
-    const size = Math.min(tmm((show.mrp ?? show.price)!.size), h / 6);
+    const size = Math.round(Math.min(tmm((show.mrp ?? show.price)!.size), h / 6) * 10) / 10; y = Math.round(y * 10) / 10;
     const half = iw / (show.mrp && show.price ? 2 : 1);
-    if (show.mrp) els.push({ id: eid(), type: 'field', field: 'mrp', text: 'MRP ', x: inset, y, w: half, h: size * 1.2, size, bold: show.mrp.bold, align: show.price ? 'left' : 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 });
-    if (show.price) els.push({ id: eid(), type: 'field', field: 'price', text: show.mrp ? '' : 'Price ', x: inset + (show.mrp ? half : 0), y, w: half, h: size * 1.2, size, bold: true, align: show.mrp ? 'right' : 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 });
+    if (show.mrp) els.push({ id: eid(), type: 'field', field: 'mrp', text: 'MRP ', x: inset, y, w: half, h: Math.round(size * 12) / 10, size, bold: show.mrp.bold, align: show.price ? 'left' : 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 });
+    if (show.price) els.push({ id: eid(), type: 'field', field: 'price', text: show.mrp ? '' : 'Price ', x: inset + (show.mrp ? half : 0), y, w: half, h: Math.round(size * 12) / 10, size, bold: true, align: show.mrp ? 'right' : 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 });
   }
-  return { w, h, elements: els };
+  return fitInside({ w, h, elements: els }, inset);
+}
+
+/**
+ * Keeps a stacked layout inside the safe area: if it runs past the bottom, the barcode gets shorter first (down to
+ * 4 mm), then every text line shrinks together. Elements keep their order and stay a whole layout.
+ */
+function fitInside(t: LabelTemplateBody, inset: number): LabelTemplateBody {
+  const bottom = () => Math.max(...t.elements.map((e) => e.y + e.h));
+  let over = bottom() - (t.h - inset);
+  if (over <= 0.01) return t;
+  const els = t.elements.map((e) => ({ ...e }));
+  const bar = els.find((e) => e.type === 'barcode' || e.type === 'qr');
+  if (bar) {
+    // A QR code stays square and at least 11 mm (version 1 at 3 dots per module, spec ML-10).
+    const cut = Math.min(over, Math.max(0, bar.h - (bar.type === 'qr' ? 11 : 4)));
+    bar.h = Math.round((bar.h - cut) * 10) / 10;
+    if (bar.type === 'qr') { bar.w = bar.h; bar.x = Math.round(((t.w - bar.w) / 2) * 10) / 10; }
+    for (const e of els) if (e.y > bar.y) e.y = Math.round((e.y - cut) * 10) / 10;
+    over -= cut;
+  }
+  if (over > 0.01) {
+    const texts = els.filter((e) => e.type === 'field' || e.type === 'text');
+    const total = texts.reduce((a, e) => a + e.h, 0);
+    const k = Math.max(0.5, (total - over) / total);
+    let shift = 0; let lastY = -1;
+    for (const e of [...els].sort((a, b) => a.y - b.y)) {
+      if (e.y !== lastY) lastY = e.y;
+      e.y = Math.round((e.y - shift) * 10) / 10;
+      if (e.type === 'field' || e.type === 'text') { const nh = e.h * k; const d = e.h - nh; e.h = Math.round(nh * 10) / 10; e.size = Math.round((e.size ?? 2.6) * k * 10) / 10; if (!els.some((o) => o !== e && o.y === e.y && o.id < e.id)) shift += d; }
+    }
+  }
+  return { ...t, elements: els };
 }
 
 /* ============================== Jobs and imposition (spec 3, 5) ============================== */
@@ -345,6 +379,10 @@ export function validateJob(lines: JobLine[], tpl: LabelTemplateBody, stock: Sto
     if (rowWidthMm(stock) > sh.w + 0.05) job('sheet-w', `The labels need ${rowWidthMm(stock)} mm across, wider than ${sh.label} (${sh.w} mm).`);
     if (stock.marginTop + stock.rows * stock.h + (stock.rows - 1) * stock.rowGap > sh.h + 0.05) job('sheet-h', `The rows are taller than a ${sh.label} sheet (${sh.h} mm).`);
   }
+  // Text over a barcode makes it unscannable (QA-L10).
+  const codes = tpl.elements.filter((e) => e.type === 'barcode' || e.type === 'qr');
+  const hit = (a: LabelElement, b: LabelElement) => a.x < b.x + b.w - 0.05 && b.x < a.x + a.w - 0.05 && a.y < b.y + b.h - 0.05 && b.y < a.y + a.h - 0.05;
+  if (tpl.elements.some((e) => (e.type === 'field' || e.type === 'text') && codes.some((c) => hit(e, c))) || codes.some((c, i) => codes.some((d, j) => i < j && hit(c, d)))) job('overlap', 'Text or another code overlaps a barcode, so it may not scan. Move them apart.', 'warning');
   // Elements outside the safe area.
   for (const el of tpl.elements) if (el.x < stock.safeInset - 0.05 || el.y < stock.safeInset - 0.05 || el.x + el.w > tpl.w - stock.safeInset + 0.05 || el.y + el.h > tpl.h - stock.safeInset + 0.05) { job('safe', 'Some elements are outside the safe area, so they may be cut off at the label edge.', 'warning'); break; }
   const total = lines.reduce((s, l) => s + Math.max(0, Math.floor(l.qty)), 0);

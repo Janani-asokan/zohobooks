@@ -30,7 +30,7 @@ const geometrySchema = z.object({
   media: z.enum(['die-cut', 'black-mark', 'continuous']), sheet: z.enum(['roll', 'a4', 'letter']), rows: z.number().int().min(0).max(60), marginTop: mm(0, 60), safeInset: mm(0, 5),
 });
 const printerSchema = z.object({
-  language: z.enum(['browser', 'tspl', 'zpl', 'escpos']), dpi: z.union([z.literal(203), z.literal(300)]), headMm: mm(20, 220),
+  language: z.enum(['browser', 'tspl', 'zpl', 'escpos']), dpi: z.union([z.literal(203), z.literal(300), z.literal(600)]), headMm: mm(20, 220),
   media: z.enum(['die-cut', 'black-mark', 'continuous']), offsetX: mm(-20, 20), offsetY: mm(-20, 20), darkness: z.number().int().min(0).max(15), speed: z.number().min(1).max(14),
 });
 const elementSchema = z.object({

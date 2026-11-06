@@ -72,11 +72,11 @@ const me = (await api('GET', '/auth/me')).body;
 for (const it of [teddy2, kb]) await api('POST', `/shop/items/${it.id}/adjust`, { branchId: me.user.branchId, qty: 20, note: 'Opening stock' });
 
 // 5. Print barcode labels on a 50 x 25 mm label printer
-await p.goto(`${B}/app/items/labels?ids=${teddy2.id},${kb.id}`); await p.waitForSelector('.blabel');
-const bars = await p.locator('.blabel svg.bl-code rect, .blabel svg.bl-code path').count();
-ok(bars > 20, `labels draw real barcodes (${await p.locator('.blabel').count()} labels)`);
-await p.locator('.print-area').screenshot({ path: `${out}/toy-labels.png` });
-printed = []; await p.getByRole('button', { name: 'Print labels' }).click(); await p.waitForTimeout(400);
+await p.goto(`${B}/app/items/labels?ids=${teddy2.id},${kb.id}`); await p.waitForSelector('.ls-sheets .lv');
+const bars = await p.locator('.ls-sheets .lv svg rect, .ls-sheets .lv svg path').count();
+ok(bars > 20, `labels draw real barcodes (${await p.locator('.ls-sheets .lv').count()} labels)`);
+await p.locator('.ls-sheets').screenshot({ path: `${out}/toy-labels.png` });
+printed = []; await p.getByRole('button', { name: /^Print labels/ }).click(); await p.waitForTimeout(400);
 ok(printed.length === 1 && /size: 102mm 25mm/.test(printed[0]), `label page size sent to the printer: ${printed[0]}`);
 
 // 6. Counter billing with a scanner: keys typed with nothing focused, like a USB scanner after tapping the screen

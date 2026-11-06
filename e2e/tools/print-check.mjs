@@ -34,9 +34,9 @@ try {
   const item = (await call('GET', '/shop/items')).find((i) => i.barcode && i.type === 'Goods');
 
   /* Labels */
-  await p.goto(`${B}/app/items/labels?ids=${item.id}`); await p.waitForSelector('.blabel');
-  await p.locator('#ls-preset').selectOption({ label: '100x50 · 1 across · 4 inch roll' });
-  await p.getByRole('button', { name: 'Print labels' }).click();
+  await p.goto(`${B}/app/items/labels?ids=${item.id}`); await p.waitForSelector('.lv');
+  await p.locator('#ls-preset').selectOption({ label: '4-inch, single · 100 × 50' });
+  await p.getByRole('button', { name: /^Print labels/ }).click();
   let r = await asPrinted('l1');
   ok(near(r.w, 104) && near(r.h, 50), `first print as designed: ${r.w} × ${r.h} mm`);
   const ask = card('Quick check, only once for this label size');
@@ -50,15 +50,15 @@ try {
   await ask.waitFor({ timeout: 5000 });
   await ask.getByRole('button', { name: /Right way up/ }).click();
   ok(await card('Label printer is set up').isVisible(), '“Right way up” → set up, won’t ask again');
-  await p.reload(); await p.waitForSelector('.blabel');
-  await p.locator('#ls-preset').selectOption({ label: '100x50 · 1 across · 4 inch roll' });
+  await p.reload(); await p.waitForSelector('.lv');
+  await p.locator('#ls-preset').selectOption({ label: '4-inch, single · 100 × 50' });
   ok(await p.getByRole('radio', { name: 'Turn 90°' }).getAttribute('aria-checked') === 'true' && /Checked on this computer/.test(await p.locator('.ls-panel').last().innerText()), 'after a reload this computer still turns 100 × 50 labels 90°');
-  await p.getByRole('button', { name: 'Print labels' }).click();
+  await p.getByRole('button', { name: /^Print labels/ }).click();
   r = await asPrinted('l3'); await p.waitForTimeout(1800);
   ok(near(r.w, 50) && await p.getByRole('region', { name: /Quick check/ }).count() === 0, 'next print: turned, and no question');
   // Another size: upside down → 180°
-  await p.locator('#ls-preset').selectOption({ label: '50x25 · 2 across · 4 inch roll' });
-  await p.getByRole('button', { name: 'Print labels' }).click(); await asPrinted('l4');
+  await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
+  await p.getByRole('button', { name: /^Print labels/ }).click(); await asPrinted('l4');
   await ask.waitFor({ timeout: 5000 });
   await ask.getByRole('button', { name: /Upside down/ }).click();
   ok(await p.getByRole('radio', { name: 'Turn 180°' }).getAttribute('aria-checked') === 'true', '“Upside down” on 50 × 25 → turned 180° (100 × 50 keeps its own 90°)');

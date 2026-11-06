@@ -6,8 +6,8 @@
 -- unchanged. A replaced barcode stays as an alias, so labels already on shelves still scan.
 CREATE TABLE IF NOT EXISTS item_barcodes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-  item_id uuid NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
+  item_id uuid NOT NULL REFERENCES items(id) ON DELETE RESTRICT,
   value text NOT NULL,
   symbology text NOT NULL DEFAULT 'CODE128' CHECK (symbology IN ('CODE128', 'EAN13', 'EAN8', 'UPC', 'QR')),
   is_primary boolean NOT NULL DEFAULT false,
@@ -29,7 +29,7 @@ ON CONFLICT DO NOTHING;
 -- Label stock: physical geometry only (spec 4.2). Built-in presets live in code; these are the shop's own.
 CREATE TABLE IF NOT EXISTS label_stocks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
   name text NOT NULL,
   geometry jsonb NOT NULL,          -- shared/labelEngine.ts StockGeometry, all in mm
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS label_stocks (
 -- Printer profiles (spec 2.5, 6.4): language, dpi, head width, media, calibrated offsets. A workstation picks one.
 CREATE TABLE IF NOT EXISTS printer_profiles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
   branch_id uuid REFERENCES branches(id) ON DELETE SET NULL,
   name text NOT NULL,
   settings jsonb NOT NULL,          -- shared/labelEngine.ts PrinterSettings
@@ -47,11 +47,12 @@ CREATE TABLE IF NOT EXISTS printer_profiles (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS printer_profiles_branch_idx ON printer_profiles (branch_id);
 
 -- Templates (spec 2.3): a draft that is edited, and published versions that never change (BL-13).
 CREATE TABLE IF NOT EXISTS label_templates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
   name text NOT NULL,
   draft jsonb NOT NULL,             -- { w, h, elements[] }
   current_version int NOT NULL DEFAULT 0,
@@ -63,8 +64,8 @@ CREATE TABLE IF NOT EXISTS label_templates (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS label_template_versions (
-  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-  template_id uuid NOT NULL REFERENCES label_templates(id) ON DELETE CASCADE,
+  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
+  template_id uuid NOT NULL REFERENCES label_templates(id) ON DELETE RESTRICT,
   version int NOT NULL,
   body jsonb NOT NULL,              -- { w, h, elements[] }, immutable
   published_by uuid,
@@ -76,7 +77,7 @@ CREATE TABLE IF NOT EXISTS label_template_versions (
 -- got. Lines keep a data snapshot so a reprint matches the original even after a price change (BP-12).
 CREATE TABLE IF NOT EXISTS print_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
   idem_key text NOT NULL,
   source_type text NOT NULL CHECK (source_type IN ('items', 'batches', 'purchase_order', 'bill', 'csv', 'scan', 'reprint')),
   source_id uuid,
@@ -99,11 +100,13 @@ CREATE TABLE IF NOT EXISTS print_jobs (
 CREATE UNIQUE INDEX IF NOT EXISTS print_jobs_idem_uq ON print_jobs (shop_id, idem_key);
 CREATE INDEX IF NOT EXISTS print_jobs_shop_created_idx ON print_jobs (shop_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS print_jobs_source_idx ON print_jobs (shop_id, source_type, source_id);
+CREATE INDEX IF NOT EXISTS print_jobs_template_idx ON print_jobs (template_id);
+CREATE INDEX IF NOT EXISTS print_jobs_printer_idx ON print_jobs (printer_id);
 
 CREATE TABLE IF NOT EXISTS print_job_lines (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-  job_id uuid NOT NULL REFERENCES print_jobs(id) ON DELETE CASCADE,
+  shop_id uuid NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
+  job_id uuid NOT NULL REFERENCES print_jobs(id) ON DELETE RESTRICT,
   position int NOT NULL,
   item_id uuid REFERENCES items(id) ON DELETE SET NULL,
   batch_no text NOT NULL DEFAULT '',
@@ -123,6 +126,10 @@ BEGIN
       EXECUTE format($p$CREATE POLICY tenant_isolation ON %I
         USING (shop_id = nullif(current_setting('app.shop_id', true), '')::uuid)
         WITH CHECK (shop_id = nullif(current_setting('app.shop_id', true), '')::uuid)$p$, t);
+    END IF;
+    -- Backups read every shop (migration 015).
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = t AND policyname = 'backup_read') THEN
+      EXECUTE format($p$CREATE POLICY backup_read ON %I FOR SELECT USING (current_setting('app.backup_read', true) = 'on')$p$, t);
     END IF;
   END LOOP;
 END $$;
@@ -149,7 +156,7 @@ BEGIN
     END IF;
   END IF;
   -- An archived item frees its values for reuse.
-  IF NEW.archived THEN DELETE FROM item_barcodes WHERE item_id = NEW.id; END IF;
+  IF NEW.archived THEN DELETE FROM item_barcodes WHERE item_id = NEW.id; END IF; -- data-safety: reviewed (a mirror of items.barcode; an archived item frees its codes for reuse)
   RETURN NEW;
 END $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS items_barcode_sync ON items;

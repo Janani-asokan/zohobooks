@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { ArrowUp, Check, Printer, RotateCw, Scissors, X, ZoomOut } from 'lucide-react';
 import { usePrintSettings } from '@/api/hooks';
 import { withPrintDefaults, type PaperSize } from '../../shared/printSettings';
@@ -39,7 +40,9 @@ export function DriverSteps({ paper, children }: { paper: string; children?: Rea
  * After the first receipt printed on this computer (per roll size): "How did it come out?" One tap fixes the page
  * width for this printer and prints it again; if it still comes out small, the driver steps. Mounted in the app shell.
  */
-export function ReceiptCheck() {
+export function ReceiptCheck({ inline }: { inline?: boolean } = {}) {
+  // At the counter the question sits inside the Sale complete box (never over the Charge button).
+  const onPos = useLocation().pathname.startsWith('/app/pos');
   const shop = withPrintDefaults(usePrintSettings().data).thermal.pageWidth;
   const [job, setJob] = useState<ReceiptPrinted | null>(null);
   const [step, setStep] = useState<'ask' | 'fixed' | 'driver' | 'thanks'>('ask');
@@ -55,7 +58,7 @@ export function ReceiptCheck() {
     window.addEventListener(RECEIPT_PRINTED, on);
     return () => { window.removeEventListener(RECEIPT_PRINTED, on); window.clearTimeout(t); };
   }, []);
-  if (!job) return null;
+  if (!job || (!inline && onPos)) return null;
   const paper: PaperSize = job.paper;
   const now = receiptWidth(paper, shop);
   const roll = paper === '2in' ? 58 : 80;
@@ -66,7 +69,7 @@ export function ReceiptCheck() {
     else { rememberReceipt(paper, { width: 'printable', small: (receiptMemory(paper)?.small ?? 0) + 1 }); setStep('driver'); }
   };
   return (
-    <CheckCard title={step === 'thanks' ? 'Receipt printer is set up' : 'Quick check, only this once'} onClose={close}>
+    <CheckCard inline={inline} title={step === 'thanks' ? 'Receipt printer is set up' : 'Quick check, only this once'} onClose={close}>
       {step === 'ask' && <>
         <p className="small" style={{ margin: '6px 0 10px' }}>How did the {roll} mm receipt come out of the printer?</p>
         <div className="pc-choices">

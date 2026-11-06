@@ -309,8 +309,8 @@ export default function Purchases() {
               <div className="mt-16"><Attachments entity="bill" entityId={view.id} canWrite={canWrite} /></div>
               {view.balance > 0 && canWrite && <button className="btn btn-primary mt-16" onClick={() => { startPay(view); setView(null); }}><CheckCircle2 size={15} /> Record payment</button>}
               {view.lines.some((l) => l.type === 'Goods') && (() => {
-                const goods = view.lines.filter((l) => l.type === 'Goods');
-                return <button className="btn btn-secondary mt-16" style={{ marginLeft: 8 }} onClick={() => navigate(`/app/items/labels?ids=${goods.map((l) => l.itemId).join(',')}&qty=${goods.map((l) => Math.round(l.received || l.qty)).join(',')}`)}><Tag size={15} /> Print labels for these items</button>;
+                // Opens the Workbench with this bill's lines and received quantities (and what was already printed).
+                return <button className="btn btn-secondary mt-16" style={{ marginLeft: 8 }} onClick={() => navigate(`/app/items/labels?source=bill&id=${view.id}`)}><Tag size={15} /> Print labels for these items</button>;
               })()}
             </div>
           </aside>

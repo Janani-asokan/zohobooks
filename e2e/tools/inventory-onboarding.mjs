@@ -80,23 +80,24 @@ try {
   ok(/no barcode yet/.test(noticeText), `Items page says how many toys have no barcode: “${noticeText.split('.')[0]}”`);
   await o.screenshot({ path: `${out}/02-items-notice.png` });
   await notice.getByRole('button', { name: /Generate barcodes/ }).click();
-  await o.waitForURL(/items\/labels/); await o.waitForSelector('.blabel');
+  await o.waitForURL(/items\/labels/); await o.waitForSelector('.ls-sheets .lv');
   items = (await oa('GET', '/shop/items')).body;
   const loose = items.filter((i) => i.name.startsWith('Loose') || ['Soft teddy bear 30 cm', 'Building blocks (100 pcs)', 'Jigsaw puzzle 500 pieces', 'Ludo and snakes board game', 'Remote control car'].includes(i.name));
   ok(items.filter((i) => i.type === 'Goods').every((i) => /^\d{12,13}$/.test(i.barcode)), 'every goods item now has a barcode');
-  const labelsNow = await o.locator('.blabel').count();
+  const labelsNow = Number((await o.locator('.ls-summary').innerText()).match(/([\d,]+)\s+labels?/)[1].replace(/,/g, ''));
   const expectLabels = items.filter((i) => i.name.startsWith('Loose')).reduce((s, i) => s + Math.max(1, i.stock), 0) + items.filter((i) => !i.name.startsWith('Loose') && loose.includes(i)).reduce((s, i) => s + Math.max(1, i.stock), 0);
   ok(labelsNow === expectLabels, `labels page opens with one label per piece in stock: ${labelsNow} labels`, `expected ${expectLabels}`);
-  ok(await o.locator('.blabel svg.bl-code rect, .blabel svg.bl-code path').count() > labelsNow * 5, 'each label has a drawn barcode');
-  printed.length = 0; await o.getByRole('button', { name: 'Print labels' }).click(); await o.waitForTimeout(300);
+  ok(await o.locator('.ls-sheets .lv svg rect, .ls-sheets .lv svg path').count() > (await o.locator('.ls-sheets .lv').count()) * 5, 'each label has a drawn barcode');
+  printed.length = 0; await o.getByRole('button', { name: /^Print labels/ }).click(); await o.waitForTimeout(300);
   ok(printed.length === 1 && /size: 102mm 25mm/.test(printed[0]), `labels sent to the 50×25 mm 2-up label printer: ${printed[0]}`);
-  await o.locator('.print-area').first().screenshot({ path: `${out}/03-labels-roll.png` });
+  await o.locator('.ls-sheets').first().screenshot({ path: `${out}/03-labels-roll.png` });
   // Same labels on A4 sheets (shops without a label printer)
   const ps = (await oa('GET', '/shop/print-settings')).body;
   await oa('PUT', '/shop/print-settings', { ...ps, barcode: { ...ps.barcode, printer: 'a4', labelSize: 'a4-65' } });
   await o.reload(); await o.waitForSelector('.label-a4');
-  ok(await o.locator('.label-a4').count() === Math.ceil(labelsNow / 65), `A4 sheets: ${await o.locator('.label-a4').count()} sheet(s) of 65 labels`);
-  printed.length = 0; await o.getByRole('button', { name: 'Print labels' }).click(); await o.waitForTimeout(300);
+  const sheets = Number((await o.locator('.ls-summary').innerText()).match(/(\d+) sheets?/)?.[1]);
+  ok(sheets === Math.ceil(labelsNow / 65), `A4 sheets: ${sheets} sheet(s) of 65 labels`);
+  printed.length = 0; await o.getByRole('button', { name: /^Print labels/ }).click(); await o.waitForTimeout(300);
   ok(/size: A4/.test(printed[0] ?? ''), 'A4 label sheets print on A4');
   await o.locator('.label-a4').first().screenshot({ path: `${out}/04-labels-a4.png` });
   await oa('PUT', '/shop/print-settings', ps);
@@ -123,8 +124,9 @@ try {
   // labels for exactly what came in
   await o.locator('tr.clickable').first().click(); await o.waitForTimeout(500);
   await o.getByRole('button', { name: /Print labels for these items/ }).click();
-  await o.waitForURL(/items\/labels/); await o.waitForSelector('.blabel');
-  ok(await o.locator('.blabel').count() === 25, `labels for the delivery: 24 cars + 1 helicopter = ${await o.locator('.blabel').count()}`);
+  await o.waitForURL(/items\/labels/); await o.waitForSelector('.ls-sheets .lv');
+  await o.waitForTimeout(800); const delivered = (await o.locator('.ls-summary').innerText()).match(/([\d,]+)\s+labels?/)?.[1];
+  ok(delivered === '25', `labels for the delivery: 24 cars + 1 helicopter = ${delivered}`);
   // a damaged toy written off, and the stock summary
   const dmg = await oa('POST', `/shop/items/${heli.id}/adjust`, { branchId: (await oa('GET', '/auth/me')).body.user.branchId, qty: -1, note: 'Damaged in transit' });
   ok(dmg.status === 200, 'damaged helicopter written off with a reason');

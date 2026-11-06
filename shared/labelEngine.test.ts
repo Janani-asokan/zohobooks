@@ -47,6 +47,12 @@ describe('barcode fit (spec 5.3, ML-08..11)', () => {
     expect(qrModules('SKU-12') * 0.375).toBeCloseTo(10.9, 1);
     expect(qrModules('A'.repeat(20)) * 0.375).toBeCloseTo(12.4, 1);
   });
+  it('higher resolution printers get finer whole-dot bars, never below the minimum', () => {
+    const f300 = fitBarcode('8901057510011', 'EAN13', 36, 300); const f600 = fitBarcode('8901057510011', 'EAN13', 36, 600);
+    expect(f300.ok).toBe(false); // 4 dots at 12/mm = 0.333 mm → 37.7 mm, more than 36 mm
+    expect(f600.ok).toBe(true); expect(f600.moduleMm).toBeGreaterThanOrEqual(0.264); expect(f600.widthMm).toBeLessThanOrEqual(36);
+    expect(fitBarcode('SKU-1', 'CODE128', 100, 600).moduleMm).toBeLessThanOrEqual(0.5);
+  });
   it('bars are whole dots and never stretched', () => {
     const f = fitBarcode('SKU-1', 'CODE128', 46, 203);
     expect(f.moduleDots).toBe(Math.round(f.moduleDots)); expect(f.widthMm).toBeLessThanOrEqual(46);
@@ -128,6 +134,16 @@ describe('pre-print checks (spec 3.3)', () => {
   });
 });
 
+describe('overlap (QA-L10)', () => {
+  it('warns when text sits on the barcode; the auto layout never does', () => {
+    const s = stock('4in-50x25x2'); const pr = printer('label-4in-tspl');
+    const t = autoTemplate(50, 25);
+    expect(validateJob([line(1)], t, s, pr).some((x) => x.code === 'overlap')).toBe(false);
+    const bad = { ...t, elements: [...t.elements, { id: 'z', type: 'text' as const, text: 'Hi', x: 10, y: 8, w: 20, h: 3 }] };
+    expect(validateJob([line(1)], bad, s, pr).some((x) => x.code === 'overlap')).toBe(true);
+  });
+});
+
 describe('text overflow (BL-11)', () => {
   it('shrinks to fit, down to the minimum, then reports overflow', () => {
     expect(fitText('Short', { w: 40, h: 4, size: 3, maxLines: 1, overflow: 'shrink', minSize: 1.6 }).overflow).toBe(false);
@@ -166,5 +182,15 @@ describe('printer commands (spec 6.3)', () => {
     const a = printerCommands('tspl', rows, lines, tpl, s, printer('label-4in-tspl')).text.match(/BARCODE (\d+),(\d+)/)!;
     const b = printerCommands('tspl', rows, lines, tpl, s, { ...printer('label-4in-tspl'), offsetX: 1, offsetY: 0.5 }).text.match(/BARCODE (\d+),(\d+)/)!;
     expect(Number(b[1]) - Number(a[1])).toBe(8); expect(Number(b[2]) - Number(a[2])).toBe(4);
+  });
+});
+
+describe('auto layout', () => {
+  it('stays inside the 1 mm safe area on every preset size', () => {
+    for (const p of STOCK_PRESETS) {
+      const t = autoTemplate(p.stock.w, p.stock.h, { company: { size: 22, bold: true }, sku: { size: 18, bold: false }, name: { size: 22, bold: false }, mrp: { size: 22, bold: false }, price: { size: 22, bold: false } });
+      const bottom = Math.max(...t.elements.map((e) => e.y + e.h));
+      expect(bottom, p.name).toBeLessThanOrEqual(p.stock.h - 1 + 0.05);
+    }
   });
 });

@@ -8,7 +8,7 @@ import { badRequest, parse } from '../../http';
 import { primaryBranchId, requireRow } from '../../services/common';
 import { moveStock } from '../../services/stock';
 import { parseCsv, toCsv } from '../../../../shared/csv';
-import { barcodeKey, newShopBarcode } from '../../../../shared/barcode';
+import { DEFAULT_GENERATOR, barcodeKey, newShopBarcode, nextCode, type GeneratorSettings } from '../../../../shared/barcode';
 import { allowed, T } from './ctx';
 import { SerialImport, imei2Cell, looksLikeRowNumbers, serialCell, splitSerialCell } from '../../services/importSerials';
 
@@ -221,16 +221,23 @@ catalogRouter.post(
   T(async (db, req, c) => {
     const b = parse(z.object({ ids: z.array(z.string().uuid()).max(5000).optional() }), req.body ?? {});
     // Lock the shop's items so two people generating at once cannot hand out the same code.
-    const all = await many(db, 'SELECT id, barcode, type, is_group, archived FROM items WHERE shop_id = $1 FOR UPDATE', [c.shopId]);
-    const taken = new Set(all.map((i) => barcodeKey(i.barcode)).filter(Boolean));
+    const org = await one(db, 'SELECT label_settings FROM organizations WHERE shop_id = $1 FOR UPDATE', [c.shopId]);
+    const gen: GeneratorSettings = { ...DEFAULT_GENERATOR, ...(org?.label_settings?.generator ?? {}) };
+    const all = await many(db, 'SELECT id, sku, barcode, type, is_group, archived FROM items WHERE shop_id = $1 FOR UPDATE', [c.shopId]);
+    const old = await many(db, 'SELECT value FROM item_barcodes WHERE shop_id = $1', [c.shopId]);
+    // Earlier barcodes (aliases) still scan to their item, so they are never handed out again.
+    const taken = new Set([...all.map((i) => barcodeKey(i.barcode)), ...old.map((o) => barcodeKey(o.value))].filter(Boolean));
     const want = all.filter((i) => !i.barcode && i.type === 'Goods' && !i.is_group && !i.archived && (!b.ids || b.ids.includes(i.id)));
     const done: Array<{ id: string; barcode: string }> = [];
+    const state = { next: gen.next };
     for (const it of want) {
-      const code = newShopBarcode(taken);
+      // The shop's generator (Barcode labels › Barcodes): in-store EAN-13 by default, SKU, a series or GS1.
+      const code = gen.mode === 'gs1' && !/^\d{6,11}$/.test(gen.gs1Prefix) ? newShopBarcode(taken) : nextCode(gen, it, taken, state);
       await db.query("UPDATE items SET barcode = $3 WHERE shop_id = $1 AND id = $2 AND barcode = ''", [c.shopId, it.id, code]);
       done.push({ id: it.id, barcode: code });
     }
-    if (done.length) await audit(db, req, c.shopId, 'generate_barcodes', 'item', '', { count: done.length });
+    if (state.next !== gen.next) await db.query("UPDATE organizations SET label_settings = jsonb_set(label_settings, '{generator}', $2::jsonb) WHERE shop_id = $1", [c.shopId, JSON.stringify({ ...gen, next: state.next })]);
+    if (done.length) await audit(db, req, c.shopId, 'generate_barcodes', 'item', '', { count: done.length, mode: gen.mode });
     return { generated: done.length, items: done };
   }),
 );
