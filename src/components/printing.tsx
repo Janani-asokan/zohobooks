@@ -39,9 +39,18 @@ export function printWithPage(pageCss: string, bodyClass: string) {
  * (CSS "size: 80mm auto" is invalid, so browsers ignored it and printed on A4.) The receipt is drawn at the roll
  * width on screen, so its on-screen height in CSS pixels converts straight to millimetres.
  */
-/** @page size for a receipt roll: the roll width, and the receipt's own length (at least 40 mm). */
+/**
+ * @page size for a receipt roll: the roll width, and the receipt's length plus room to spare, so it always prints on
+ * ONE page. The length is measured on screen (browsers fire beforeprint before switching to print layout), but on a
+ * counter PC the print often comes out a little taller: Windows fonts print slightly wider, so a long line wraps once
+ * more, and some printers keep a few mm at the top and bottom. With only 4 mm spare, the last lines (the footer) went
+ * onto a second slip. The spare is 10 mm plus 12% of the receipt: a short blank feed at the end, which a roll printer
+ * needs anyway to tear past the cutter, and never a second page.
+ */
 export function rollPageSize(widthMm: number, el: Element | null) {
-  const height = el ? Math.ceil((el.getBoundingClientRect().height * 25.4) / 96) + 4 : 200;
+  if (!el) return `size: ${widthMm}mm 297mm; margin: 0;`;
+  const measured = (el.getBoundingClientRect().height * 25.4) / 96;
+  const height = Math.ceil(measured + 10 + measured * 0.12);
   return `size: ${widthMm}mm ${Math.max(40, height)}mm; margin: 0;`;
 }
 export function printRoll(widthMm: number, selector = '.print-area .receipt') {
