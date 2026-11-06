@@ -30,7 +30,9 @@ export function parse<S extends ZodTypeAny>(schema: S, data: unknown): z.infer<S
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, code: err.code, details: err.details });
   if (err instanceof ZodError) return res.status(400).json({ error: err.issues[0]?.message, code: 'bad_request' });
-  const pgErr = err as { code?: string; constraint?: string; detail?: string };
+  const pgErr = err as { code?: string; constraint?: string; detail?: string; message?: string };
+  // The barcode trigger (migration 026) names the clash: the value is another item's barcode or earlier barcode.
+  if (pgErr?.code === '23505' && /^Barcode .+ is already used by another item$/.test(pgErr.message ?? '')) return res.status(409).json({ error: `${pgErr.message} (as its barcode, or a barcode it had before)`, code: 'conflict' });
   if (pgErr?.code === '23505') return res.status(409).json({ error: uniqueMessage(pgErr.constraint), code: 'conflict' });
   if (pgErr?.code === '23503') return res.status(409).json({ error: 'This record is referenced by other records', code: 'conflict' });
   if (pgErr?.code === '23514') return res.status(400).json({ error: 'Invalid value: ' + (pgErr.constraint ?? 'check failed'), code: 'bad_request' });
@@ -52,6 +54,8 @@ function uniqueMessage(constraint?: string) {
   const map: Record<string, string> = {
     users_email_uq: 'A user with this email already exists',
     items_barcode_uq: 'Barcode already assigned to another item',
+    item_barcodes_value_uq: 'Barcode already used by another item',
+    print_jobs_idem_uq: 'This print job was already sent',
     items_sku_uq: 'SKU already exists',
     tax_slabs_rate_key: 'A slab with this rate already exists',
   };

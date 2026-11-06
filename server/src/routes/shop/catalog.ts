@@ -53,7 +53,8 @@ export async function listItems(db: Db, shopId: string, showCost: boolean, ids?:
     db,
     `SELECT i.*, t.rate AS tax_rate,
             coalesce((SELECT jsonb_object_agg(s.branch_id, s.qty) FROM item_stock s WHERE s.item_id = i.id), '{}'::jsonb) AS stock_by_branch,
-            coalesce((SELECT sum(s.qty) FROM item_stock s WHERE s.item_id = i.id), 0) AS stock
+            coalesce((SELECT sum(s.qty) FROM item_stock s WHERE s.item_id = i.id), 0) AS stock,
+            coalesce((SELECT array_agg(ib.value ORDER BY ib.created_at) FROM item_barcodes ib WHERE ib.item_id = i.id AND ib.status = 'alias'), '{}') AS aliases
        FROM items i JOIN tax_slabs t ON t.id = i.tax_slab_id
       WHERE i.shop_id = $1 AND NOT i.archived ${ids ? 'AND i.id = ANY($2::uuid[])' : ''}
       ORDER BY i.created_at DESC`,
@@ -65,6 +66,8 @@ export async function listItems(db: Db, shopId: string, showCost: boolean, ids?:
     name: r.name,
     sku: r.sku,
     barcode: r.barcode,
+    /** Earlier barcodes of this item: still scan to it (labels already on shelves). */
+    aliases: r.aliases ?? [],
     unit: r.unit,
     hsn: r.hsn,
     cost: showCost ? Number(r.cost) : null,

@@ -12,6 +12,7 @@ import { authRouter } from './routes/auth';
 import { platformRouter } from './routes/platform';
 import { publicRouter } from './routes/public';
 import { catalogRouter } from './routes/shop/catalog';
+import { labelsRouter } from './routes/shop/labels';
 import { billingRouter, coreRouter } from './routes/shop/core';
 import { moneyRouter } from './routes/shop/money';
 import { purchasingRouter } from './routes/shop/purchasing';
@@ -73,7 +74,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), featureGate, aiContext, auditWrites, featuresRouter, coreRouter, catalogRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, briefingRouter, lendingRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), featureGate, aiContext, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, briefingRouter, lendingRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

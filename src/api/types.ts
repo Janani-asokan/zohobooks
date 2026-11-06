@@ -31,7 +31,7 @@ export interface TaxSlab { id: string; name: string; rate: number; active: boole
 export interface Branch { id: string; name: string; address: string; phone: string; isPrimary: boolean }
 
 export interface Item {
-  id: string; type: 'Goods' | 'Services'; name: string; sku: string; barcode: string; unit: string; hsn: string; cost: number | null;
+  id: string; type: 'Goods' | 'Services'; name: string; sku: string; barcode: string; aliases?: string[]; unit: string; hsn: string; cost: number | null;
   sp1: number; sp2: number; sp3: number; taxSlabId: string; taxRate: number; reorderLevel: number; trackBatches: boolean; description: string;
   stock: number; stockByBranch: Record<string, number>; createdAt: string;
   category: string; brand: string; image: string; mrp: number | null;
