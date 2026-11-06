@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight, Boxes, BarChart3, Check, Camera, Store, Calculator, Users, FileText,
   Sparkles, BellRing, IndianRupee, Send, ChevronDown, Zap, LogIn, ScanLine, Mic, BrainCircuit, MapPinned, RefreshCw, Split, Truck, TrendingUp, MessageCircle, Scale,
+  CloudOff, Keyboard, Smartphone, Tag, Printer, Carrot, ShoppingBasket, ShoppingCart, Pill, Gem, Construction, Wrench, Shirt, Puzzle, Briefcase, type LucideIcon,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/Logo';
 import { HeroArt, Photo, SceneArt } from '@/components/Photo';
+import { BUSINESS_TEMPLATES } from '../../shared/templates';
 import '@/styles/landing.css';
 
 const FEATURES = [
@@ -22,6 +24,23 @@ const FEATURES = [
   { icon: BarChart3, tone: 'rose', title: 'GST returns & reports', text: 'GSTR-1, GSTR-3B, e-invoice and e-way bill JSON, P&L and balance sheet. PDF, Excel or CSV.' },
   { icon: Scale, tone: 'sage', title: 'Barcode, thermal & scale', text: 'Scan barcodes, print thermal receipts and labels, and read weights from a USB weighing scale at the counter.' },
 ] as const;
+
+/** The billing counter: what makes the rush hour easy. */
+const COUNTER: Array<{ icon: LucideIcon; tone: string; title: string; text: string }> = [
+  { icon: CloudOff, tone: 'rose', title: 'Keeps billing when the internet drops', text: 'Bills are kept safely on the counter and sent by themselves when the connection is back, each with its proper bill number.' },
+  { icon: Keyboard, tone: 'sage', title: 'Fast as a supermarket till', text: 'Any USB or Bluetooth scanner, quantity keys, F-keys for cash, UPI and card, hold a bill and serve the next customer.' },
+  { icon: Camera, tone: 'gold', title: 'No scanner? Camera, voice or touch', text: 'Point the phone or tablet camera at barcodes, say the item, tap tiles by category, or use the on-screen number pad.' },
+  { icon: Smartphone, tone: 'blush', title: 'Phone shops: bill by IMEI', text: 'Scan the box QR code or the IMEI label. That exact phone goes on the bill, IMEI 1 or IMEI 2, never twice.' },
+  { icon: Tag, tone: 'cocoa', title: 'Barcode labels on any roll', text: '2, 3 or 4 inch label rolls or A4 sticker sheets, any size, 1 to 5 across. Barcodes drawn to scan first time.' },
+  { icon: Printer, tone: 'rose', title: 'The printer sets itself up', text: 'After the first print the app asks one question: how did it come out? It turns labels and fits receipts for that printer.' },
+];
+
+/** Business types the app sets itself up for (shared/templates.ts), with an icon each. */
+const TRADE_ICON: Record<string, LucideIcon> = {
+  general: Briefcase, vegetables: Carrot, kirana: ShoppingBasket, supermarket: ShoppingCart, pharmacy: Pill, jewellery: Gem,
+  steel: Construction, hardware: Wrench, garments: Shirt, toys: Puzzle, mobiles: Smartphone,
+};
+const TRADES = BUSINESS_TEMPLATES.map((t) => ({ key: t.key, name: t.name, line: t.helps[0] ?? t.summary, icon: TRADE_ICON[t.key] ?? Store }));
 
 const AUDIENCE = [
   { img: '/img/owner.webp', tone: 'rose' as const, icon: <Store size={44} />, title: 'For shop owners', text: 'See sales, dues and stock on one screen every morning.', cta: 'See the dashboard' },
@@ -40,6 +59,8 @@ const SCREENS = [
   { id: 'pos', label: 'Speak the bill', icon: Mic, caption: 'Say or type the bill in your own words. Items, customer, discount and payment fill themselves.', src: '/screens/pos.jpg' },
   { id: 'reorder', label: 'Smart reorder', icon: BrainCircuit, caption: 'What to buy, how much and from whom, with festival tips. One tap makes the purchase orders.', src: '/screens/reorder.jpg' },
   { id: 'ask', label: 'Ask AI', icon: MessageCircle, caption: 'Ask your shop anything, by voice or text, and hear the answer read aloud.', src: '/screens/ask.jpg' },
+  { id: 'counter', label: 'Counter & camera', icon: ScanLine, caption: 'Scanner, camera, voice or tap: every way to put items on the bill, with keyboard keys for the rush.', src: '/screens/counter.jpg' },
+  { id: 'labels', label: 'Barcode labels', icon: Tag, caption: 'Pick items, choose your label roll or sticker sheet, and print. What you see is the real label size.', src: '/screens/labels.jpg' },
   { id: 'invoice', label: 'GST invoice', icon: FileText, caption: 'Clean GST invoices with your logo, UPI QR and profit on every bill.', src: '/screens/invoice.jpg' },
   { id: 'reports', label: 'Reports', icon: BarChart3, caption: 'P&L, balance sheet, GST returns and Tally export, ready for your CA.', src: '/screens/reports.jpg' },
 ];
@@ -55,12 +76,18 @@ const COMPARE: Array<[string, string, string]> = [
   ['WhatsApp reminders written in the customer’s language', 'Fixed text', 'AI, 10 languages'],
   ['Salesman route, visits and AI day summary', 'Add-on', 'Included'],
   ['Tally: export and import, any software’s Excel', 'Export only', 'Both ways, AI-matched'],
+  ['Keeps billing at the counter when the internet drops', 'Often stops', 'Yes, sends later'],
+  ['Barcode labels: any size, 1–5 across, any roll or A4', 'A few fixed sizes', 'Yes'],
+  ['Label and receipt printer set-up', 'Settings to find', 'One question, then automatic'],
 ];
 
 const FAQ = [
   ['Is it GST compliant?', 'Yes. Invoices carry your GSTIN, HSN/SAC codes, place of supply and the right tax split. GSTR-1 and GSTR-3B are prepared from your data.'],
   ['Can I upload a bill instead of typing it?', 'Yes. Upload a PDF or take a photo of a supplier bill, price list or product label — the form fills itself and you check it before saving.'],
   ['Can my staff use it?', 'Each person gets their own login and role. You decide who can see costs, reports or purchases.'],
+  ['What if the internet goes off at the counter?', 'Keep billing. Bills are saved safely on the counter and sent by themselves when the connection is back, each getting its proper invoice number then. Nothing is lost if the browser is closed.'],
+  ['Which printers and scanners work?', 'Any USB or Bluetooth barcode scanner, 58 mm and 80 mm thermal receipt printers, label printers with 2, 3 or 4 inch rolls, and normal A4 printers. After the first print, the app asks how it came out and adjusts itself for that printer.'],
+  ['We sell mobile phones. Can we bill by IMEI?', 'Yes. Scan the IMEI label or the box QR code with a scanner or the camera, and that exact phone goes on the bill. IMEIs are added when you buy stock, by scanning or from your supplier’s sheet.'],
   ['Does it work on a phone?', 'Yes. Everything works in a phone browser, and it can be installed like an app.'],
   ['Does invoice numbering restart every year?', 'Yes. The financial year runs 1 April to 31 March and numbering restarts automatically.'],
 ];
@@ -95,7 +122,7 @@ export default function Landing() {
       <span className="lp-dot d1" /><span className="lp-dot d2" /><span className="lp-dot d3" /><span className="lp-dot d4" />
       <header ref={navRef} className={`lp-nav ${scrolled ? 'scrolled' : ''}`}>
         <Link to="/" className="lp-logo" aria-label="Corpus360 home"><BrandLogo height={22} /></Link>
-        <nav className="lp-links"><a href="#home">Home</a><a href="#features">Features</a><a href="#screens">See it</a><a href="#compare">Why us</a><a href="#faq">FAQ</a></nav>
+        <nav className="lp-links"><a href="#features">Features</a><a href="#counter">Counter</a><a href="#trades">Your trade</a><a href="#screens">See it</a><a href="#compare">Why us</a><a href="#faq">FAQ</a></nav>
         <div className="lp-nav-cta">
           <Link to="/login" className="lp-pill lp-pill-light"><LogIn size={15} /> Login</Link>
           <Link to="/login" className="lp-pill lp-pill-rose">Try the demo</Link>
@@ -106,13 +133,14 @@ export default function Landing() {
         <div className="lp-hero-text">
           <span className="lp-badge"><Sparkles size={14} /> Made for Indian shops &amp; distributors</span>
           <h1>Billing &amp; stock is now <span className="lp-hl">much easier</span></h1>
-          <p className="lp-sub">Corpus360 is a simple app for GST invoices, stock and accounts. Make a bill in seconds, upload a photo of a purchase bill to fill it in, and always know what is in your shop.</p>
+          <p className="lp-sub">Corpus360 is a simple app for GST invoices, stock and accounts. Make a bill in seconds, even when the internet drops, upload a photo of a purchase bill to fill it in, and always know what is in your shop.</p>
           <div className="lp-cta">
             <Link to="/login" className="lp-pill lp-pill-rose lg">Get started <ArrowRight size={18} /></Link>
             <a href="#how" className="lp-play"><span><Zap size={16} /></span> See how it works</a>
           </div>
           <ul className="lp-facts">
             <li><Check size={14} /> GSTR-1 &amp; 3B ready</li>
+            <li><Check size={14} /> Bills even offline</li>
             <li><Check size={14} /> Multi-branch stock</li>
             <li><Check size={14} /> WhatsApp &amp; UPI</li>
           </ul>
@@ -153,6 +181,38 @@ export default function Landing() {
               <h3>{f.title}</h3>
               <p>{f.text}</p>
             </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="lp-section" id="counter">
+        <h2 className="reveal">Built for the <span>busy counter</span></h2>
+        <p className="lp-lead reveal">The evening rush, a weak connection, a box of phones, a new label roll: the counter keeps moving.</p>
+        <div className="lp-counter">
+          <div className="lp-counter-art reveal">
+            <div className="lp-frame"><div className="lp-frame-bar"><i /><i /><i /></div><img src="/screens/counter.jpg" alt="Corpus360 billing counter with the camera scanner open and a bill of four items" loading="lazy" /></div>
+            <div className="lp-float lp-offline"><span className="ic sage"><CloudOff size={16} /></span><div><strong>3 bills saved on this counter</strong><span>Sending when the internet is back</span></div></div>
+          </div>
+          <div className="lp-cpoints">
+            {COUNTER.map((c, i) => (
+              <div key={c.title} className="lp-cpoint reveal" style={{ transitionDelay: `${(i % 3) * 0.06}s` }}>
+                <span className={`lp-ficon ${c.tone}`}><c.icon size={20} /></span>
+                <div><h3>{c.title}</h3><p>{c.text}</p></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="lp-section" id="trades">
+        <h2 className="reveal">Made for <span>your trade</span></h2>
+        <p className="lp-lead reveal">Pick your business type and Corpus360 sets itself up: the right item details, units, GST rates and receipt size.</p>
+        <div className="lp-trades">
+          {TRADES.map((t, i) => (
+            <Link key={t.key} to="/login" className="lp-trade reveal" style={{ transitionDelay: `${(i % 4) * 0.05}s` }}>
+              <span className="lp-trade-icon"><t.icon size={22} /></span>
+              <span className="lp-trade-text"><strong>{t.name}</strong><span>{t.line}</span></span>
+            </Link>
           ))}
         </div>
       </section>

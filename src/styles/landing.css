@@ -169,3 +169,38 @@
 .lp-cmp-row .us svg { color: #fff; background: var(--accent-grad, #c75f71); border-radius: 50%; padding: 2px; width: 18px; height: 18px; flex: none; }
 .lp-cmp-head .us { color: #7a2f3d; }
 @media (max-width: 640px) { .lp-cmp-row { grid-template-columns: 1.3fr .8fr 1fr; padding: 12px 14px; font-size: 13px; } }
+
+/* ---------- Built for the busy counter ---------- */
+.lp-counter { display: grid; gap: 48px; margin-top: 40px; text-align: left; }
+.lp-cpoints { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.lp-cpoint { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border-radius: 20px; background: #fff; border: 1px solid #f3e6e2; box-shadow: 0 10px 24px rgba(84, 70, 58, .07); }
+.lp-cpoint .lp-ficon { width: 42px; height: 42px; border-radius: 14px; flex-shrink: 0; }
+.lp-cpoint h3 { font-size: 15px; line-height: 1.3; margin-bottom: 4px; }
+.lp-cpoint p { font-size: 13.5px; line-height: 1.55; color: var(--ink-600); }
+.lp-counter-art { position: relative; max-width: 1000px; width: 100%; margin: 0 auto; }
+.lp-float.lp-offline { position: absolute; left: -24px; bottom: -24px; top: auto; right: auto; }
+
+/* ---------- Made for your trade ---------- */
+.lp-trades { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 40px; text-align: left; }
+.lp-trade { display: flex; gap: 12px; align-items: center; padding: 16px; border-radius: 18px; background: #fff; border: 1px solid #f3e6e2; box-shadow: 0 8px 20px rgba(84, 70, 58, .06); color: inherit; text-decoration: none !important; }
+.lp-trade.reveal.in { transition: transform .25s ease, box-shadow .25s ease, opacity .7s ease; }
+.lp-trade.reveal.in:hover { transform: translateY(-4px); box-shadow: 0 16px 32px rgba(84, 70, 58, .12); }
+.lp-trade-icon { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0; background: linear-gradient(135deg, #fbe3e5, #eef2eb); color: var(--rose); }
+.lp-trade:nth-child(3n+2) .lp-trade-icon { color: #5f6e59; } .lp-trade:nth-child(3n) .lp-trade-icon { color: #8a6a4f; }
+.lp-trade-text { display: grid; gap: 2px; min-width: 0; }
+.lp-trade-text strong { font-size: 15px; color: var(--ink-900); }
+.lp-trade-text span { font-size: 13px; color: var(--ink-600); line-height: 1.45; }
+
+@media (max-width: 1000px) {
+  .lp-cpoints { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-float.lp-offline { left: 8px; }
+  .lp-trades { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .lp-cpoints, .lp-trades { grid-template-columns: minmax(0, 1fr); }
+  .lp-float.lp-offline { position: relative; left: auto; bottom: auto; margin: -14px 0 0 10px; display: inline-flex; animation: none; }
+}
+
+/* Eight screen tabs: wrap as whole pills, never mid-label. */
+.lp-tabs { flex-wrap: wrap; justify-content: center; max-width: 100%; border-radius: 26px; }
+.lp-tabs button { white-space: nowrap; }
