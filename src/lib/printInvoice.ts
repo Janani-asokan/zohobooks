@@ -1,4 +1,5 @@
 import type { PaperSize } from '../../shared/printSettings';
+import { announceReceipt } from './printerMemory';
 
 export type PrintPaper = 'a4' | 'a5' | 'thermal';
 /** Thermal roll width: '2in' = 58 mm, '3in' = 80 mm. Omitted = the shop's Print settings. */
@@ -76,4 +77,5 @@ export async function printInvoice(id: string, paper: PrintPaper, roll?: Roll): 
   setTimeout(p.drop, 60_000);
   w.focus();
   w.print();
+  if (paper === 'thermal' && roll) announceReceipt({ paper: roll, reprint: () => void printInvoice(id, paper, roll) });
 }

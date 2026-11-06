@@ -249,13 +249,13 @@ export default function PrintSettings() {
                   ))}
                 </div>
                 <p className="small muted" style={{ marginTop: 8 }}>Older and handheld printers use 58 mm rolls. You can still pick the other size each time you print.</p>
-                <div className="small muted" style={{ margin: '12px 0 6px' }}>Page width sent to the printer</div>
+                <div className="small muted" style={{ margin: '12px 0 6px' }}>Page width sent to the printer (shop default)</div>
                 <div className="ps-radios">
                   {(['roll', 'printable'] as const).map((w) => (
                     <label key={w} className={`ps-radio ${(th.pageWidth ?? 'roll') === w ? 'active' : ''}`}>{w === 'roll' ? `Full roll (${th.paper === '2in' ? 58 : 80} mm)` : `Printed width only (${th.paper === '2in' ? 48 : 72} mm)`}<input type="radio" name="pageWidth" checked={(th.pageWidth ?? 'roll') === w} onChange={() => setT({ pageWidth: w })} /></label>
                   ))}
                 </div>
-                <p className="small muted" style={{ marginTop: 8 }}>If receipts come out small or squeezed to one side, the printer driver’s paper is narrower than the page: choose <em>Printed width only</em>, or set the driver’s paper to the roll size (see “Setting up the counter printer”).</p>
+                <p className="small muted" style={{ marginTop: 8 }}>You normally don’t need to change this. After the first receipt on each computer, the app asks once how it came out and sets the width for that printer itself.</p>
               </div>
               <div className="ps-sec">
                 <button className={`ps-acc ${open.logo ? 'open' : ''}`} onClick={() => setOpen({ ...open, logo: !open.logo })}>Upload Logo <ChevronDown size={18} /></button>

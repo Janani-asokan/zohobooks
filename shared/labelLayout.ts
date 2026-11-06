@@ -10,6 +10,10 @@
 import { LABEL_SIZES, labelSize } from './printSettings';
 
 export type LabelStock = 'roll' | 'a4';
+export type Turn = 0 | 90 | 180 | 270;
+export const TURNS: readonly Turn[] = [0, 90, 180, 270];
+/** The page is sent turned on its side (width and height swapped). */
+export const sideways = (t: Turn) => t === 90 || t === 270;
 export interface LabelLayout {
   stock: LabelStock;
   /** Label width × height (as the label is read). */
@@ -24,8 +28,8 @@ export interface LabelLayout {
   marginX: number; marginY: number;
   /** Roll width in mm (for checking the labels fit). */
   rollMm: number;
-  /** Turn the printed page 90° or 270° (when labels come out sideways); 0 = as designed. */
-  rotate: 0 | 90 | 270;
+  /** Turn the printed label: 90° / 270° when it comes out sideways, 180° when upside down; 0 = as designed. */
+  rotate: Turn;
 }
 
 export const ROLLS = [
@@ -58,7 +62,7 @@ export const LAYOUT_PRESETS: Array<{ id: string; label: string; layout: LabelLay
 export function resolveLayout(b: { printer: 'a4' | 'label'; labelSize: string; layout?: Partial<LabelLayout> | null }): LabelLayout {
   if (b.layout && b.layout.w && b.layout.h) {
     const l = { ...LAYOUT_PRESETS[0]!.layout, ...b.layout } as LabelLayout;
-    return { ...l, rotate: (l.rotate as unknown) === true ? 90 : l.rotate === 90 || l.rotate === 270 ? l.rotate : 0 };
+    return { ...l, rotate: (l.rotate as unknown) === true ? 90 : TURNS.includes(l.rotate) ? l.rotate : 0 };
   }
   const old = labelSize(b.labelSize);
   if (old.printer === 'a4') return { stock: 'a4', w: old.w, h: old.h, across: old.perRow, rows: old.rowsPerPage ?? 10, gapX: 2, gapY: 0, marginX: 8, marginY: 10, rollMm: 210, rotate: 0 };
@@ -73,7 +77,7 @@ export const rowWidth = (l: LabelLayout) => r1(l.marginX * 2 + l.across * l.w + 
 export function labelPageCss(l: LabelLayout): string {
   if (l.stock === 'a4') return 'size: A4 portrait; margin: 0;';
   const w = rowWidth(l), h = r1(l.h);
-  return l.rotate ? `size: ${h}mm ${w}mm; margin: 0;` : `size: ${w}mm ${h}mm; margin: 0;`;
+  return sideways(l.rotate) ? `size: ${h}mm ${w}mm; margin: 0;` : `size: ${w}mm ${h}mm; margin: 0;`;
 }
 
 /** What is wrong with a layout, or [] (sizes in range, the labels fit the roll / sheet). */
@@ -82,7 +86,7 @@ export function layoutProblems(l: LabelLayout): string[] {
   if (!(l.w >= 10 && l.w <= 200) || !(l.h >= 8 && l.h <= 300)) p.push('Label size must be 10–200 mm wide and 8–300 mm tall');
   if (!(Number.isInteger(l.across) && l.across >= 1 && l.across <= 8)) p.push('Labels across must be 1 to 8');
   if (l.gapX < 0 || l.gapX > 20 || l.gapY < 0 || l.gapY > 20 || l.marginX < 0 || l.marginX > 30 || l.marginY < 0 || l.marginY > 40) p.push('Gaps must be 0–20 mm and margins 0–30 mm');
-  if (![0, 90, 270].includes(l.rotate)) p.push('Turn must be 0°, 90° or 270°');
+  if (!TURNS.includes(l.rotate)) p.push('Turn must be 0°, 90°, 180° or 270°');
   if (l.stock === 'roll' && rowWidth(l) > l.rollMm + 0.05) p.push(`${l.across} labels of ${l.w} mm with the gaps need ${rowWidth(l)} mm, wider than the ${l.rollMm} mm roll`);
   if (l.stock === 'a4') {
     if (!(Number.isInteger(l.rows) && l.rows >= 1 && l.rows <= 40)) p.push('Rows per sheet must be 1 to 40');

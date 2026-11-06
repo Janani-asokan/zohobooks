@@ -151,7 +151,7 @@ const printSchema = z.object({
         across: z.number().int(), rows: z.number().int(),
         gapX: z.number().finite(), gapY: z.number().finite(), marginX: z.number().finite(), marginY: z.number().finite(),
         rollMm: z.number().finite().min(20).max(220),
-        rotate: z.union([z.literal(0), z.literal(90), z.literal(270)]),
+        rotate: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
       }).nullable().optional(),
     })
     .superRefine((b, ctx) => {

@@ -376,3 +376,15 @@
 }
 @media (max-width: 760px) { .ls-grid { grid-template-columns: minmax(0, 1fr); } }
 .ls-sheets.ls-a4 { align-items: flex-start; }
+
+/* ---------- "How did it come out?" printer check ---------- */
+.print-check { position: fixed; right: 16px; bottom: 16px; z-index: 1200; width: min(380px, calc(100vw - 32px)); background: var(--surface); color: var(--ink-900); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 36px rgba(0,0,0,.18); padding: 14px; }
+.print-check.inline { position: static; width: auto; box-shadow: 0 2px 10px rgba(0,0,0,.06); margin-bottom: 10px; border-color: var(--accent); }
+.pc-choices { display: grid; gap: 6px; }
+.print-check.inline .pc-choices { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.pc-choice { display: flex; gap: 10px; align-items: center; text-align: left; padding: 10px 12px; border: 1px solid var(--border-strong, #d9c7c2); border-radius: 10px; background: var(--surface); color: var(--ink-900); font: inherit; cursor: pointer; }
+.pc-choice:hover { border-color: var(--accent); background: var(--accent-soft); }
+.pc-choice > svg { flex-shrink: 0; color: var(--accent); }
+.pc-choice > span { display: grid; gap: 1px; }
+.pc-steps ol { padding-left: 18px; display: grid; gap: 4px; margin: 6px 0; }
+@media print { .print-check { display: none !important; } }

@@ -20,6 +20,10 @@ describe('label layout', () => {
     expect(layoutProblems({ ...preset('50x25 · 1'), across: 0 })[0]).toMatch(/1 to 8/);
   });
   it('every preset fits its stock', () => { for (const p of LAYOUT_PRESETS) expect(layoutProblems(p.layout), p.label).toEqual([]); });
+  it('upside down: turned 180°, same page size', () => {
+    expect(labelPageCss({ ...preset('100x50'), rotate: 180 })).toBe('size: 104mm 50mm; margin: 0;');
+    expect(layoutProblems({ ...preset('100x50'), rotate: 180 })).toEqual([]);
+  });
   it('a layout saved by an older build with rotate: true is turned 90°', () => {
     expect(resolveLayout({ printer: 'label', labelSize: '100x50-1', layout: { ...preset('100x50'), rotate: true as never } }).rotate).toBe(90);
   });

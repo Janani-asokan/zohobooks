@@ -7,6 +7,7 @@ import {
 } from '../../shared/printSettings';
 import { upiLink, useQr } from './qr';
 import { moduleMm, resolveLayout, symbologyFor } from '../../shared/labelLayout';
+import { announceReceipt, receiptWidth } from '@/lib/printerMemory';
 
 /** Print just the `.print-area`, with a page size that matches the paper (receipt roll or label stock). */
 export function printWithPage(pageCss: string, bodyClass: string) {
@@ -46,7 +47,11 @@ export function rollPageSize(widthMm: number, el: Element | null) {
 export function printRoll(widthMm: number, selector = '.print-area .receipt') {
   printWithPage(rollPageSize(widthMm, document.querySelector(selector)), 'print-receipt');
 }
-export const printReceipt = (s: ThermalSettings) => printRoll(rollPageMm(s.paper, s.pageWidth));
+/** Prints a receipt at the page width this computer's printer takes, then asks once how it came out. */
+export function printReceipt(s: ThermalSettings) {
+  printRoll(rollPageMm(s.paper, receiptWidth(s.paper, s.pageWidth)));
+  announceReceipt({ paper: s.paper, reprint: () => printReceipt(s) });
+}
 
 /* ---------------- Thermal receipt ---------------- */
 
@@ -177,7 +182,7 @@ export function ThermalReceipt({ data, org, s }: { data: ReceiptData; org: Recei
   );
 
   return (
-    <div className={`receipt rc-${t} rc-${s.paper} ${s.pageWidth === 'printable' ? 'rc-page-printable' : ''} light-scope`} style={{ width: `${paperWidthMm(s.paper)}mm` }}>
+    <div className={`receipt rc-${t} rc-${s.paper} ${receiptWidth(s.paper, s.pageWidth) === 'printable' ? 'rc-page-printable' : ''} light-scope`} style={{ width: `${paperWidthMm(s.paper)}mm` }}>
       {header}
       <hr />
       {meta}

@@ -6,10 +6,12 @@ import type { Item } from '@/api/types';
 import { useItems, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
 import { BarcodeLabel, printWithPage } from '@/components/printing';
+import { CheckCard, Choice, DriverSteps, TurnIcons, nextTurn } from '@/components/PrintCheck';
+import { labelMemory, rememberLabel } from '@/lib/printerMemory';
 import { SearchInput, Segmented } from '@/components/ui';
 import { withPrintDefaults, type PrintSettings } from '../../../shared/printSettings';
 import {
-  LAYOUT_PRESETS, ROLLS, labelPageCss, layoutProblems, legacySizeFor, resolveLayout, rowWidth, symbologyFor, type LabelLayout,
+  LAYOUT_PRESETS, ROLLS, TURNS, labelPageCss, layoutProblems, legacySizeFor, resolveLayout, rowWidth, sideways, symbologyFor, type LabelLayout, type Turn,
 } from '../../../shared/labelLayout';
 
 const MAX_COPIES = 500;
@@ -85,11 +87,28 @@ export default function BarcodeLabels() {
   const shop = org.data?.companyName ?? '';
   const bad = chosen.filter(({ it }) => 'error' in symbologyFor(it.barcode || it.sku));
 
+  // This computer's label printer: the turn it needs for this label size, learnt from "How did it come out?".
+  const [, setMemTick] = useState(0);
+  const mem = labelMemory(l.w, l.h);
+  const turn: Turn = l.stock === 'roll' ? (mem?.turn ?? l.rotate) : 0;
+  const lp: LabelLayout = { ...l, rotate: turn };
+  const remember = (v: { turn: Turn; ok?: boolean }) => { rememberLabel(l.w, l.h, v); setMemTick((n) => n + 1); };
+  const [check, setCheck] = useState<'' | 'ask' | 'turned' | 'driver' | 'thanks'>('');
+
   const [testOnly, setTestOnly] = useState(false);
   const print = (test = false) => {
     setTestOnly(test);
     // Let React draw just the test row first, then print.
-    requestAnimationFrame(() => requestAnimationFrame(() => { printWithPage(labelPageCss(l), 'print-labels'); setTestOnly(false); }));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      printWithPage(labelPageCss(lp), 'print-labels'); setTestOnly(false);
+      // First print of this label size on this computer: ask once how it came out (after the print box closes).
+      if (lp.stock === 'roll' && !labelMemory(l.w, l.h)?.ok) setTimeout(() => setCheck('ask'), 1200);
+    }));
+  };
+  const answer = (how: 'right' | 'sideways' | 'upside' | 'small') => {
+    if (how === 'right') { remember({ turn, ok: true }); setCheck('thanks'); setTimeout(() => setCheck(''), 2000); return; }
+    if (how === 'small') { setCheck('driver'); return; }
+    remember({ turn: nextTurn(turn, how) }); setCheck('turned');
   };
   const shown = testOnly ? pages.slice(0, 1) : pages;
 
@@ -97,9 +116,9 @@ export default function BarcodeLabels() {
   const saveDefault = () => save.mutate({ ...settings, barcode: { ...s, ...legacySizeFor(l), layout: l } }, { onSuccess: () => setLayout(null) });
 
   const presetId = LAYOUT_PRESETS.find((p) => same({ ...p.layout, rotate: l.rotate }, l))?.id ?? '';
-  const turnLabel = l.rotate === 90 ? 'turned 90°' : l.rotate === 270 ? 'turned 270°' : '';
-  const pageW = l.stock === 'a4' ? 210 : l.rotate ? l.h : rowWidth(l);
-  const pageH = l.stock === 'a4' ? 297 : l.rotate ? rowWidth(l) : l.h;
+  const turnLabel = turn ? `turned ${turn}° for this printer` : '';
+  const pageW = l.stock === 'a4' ? 210 : sideways(turn) ? l.h : rowWidth(l);
+  const pageH = l.stock === 'a4' ? 297 : sideways(turn) ? rowWidth(l) : l.h;
 
   return (
     <div className="page ls-page">
@@ -194,6 +213,28 @@ export default function BarcodeLabels() {
                 <span>{pages.length} {l.stock === 'a4' ? `A4 sheet${pages.length === 1 ? '' : 's'}` : `row${pages.length === 1 ? '' : 's'}`}</span>
                 <span>Page sent to the printer: <strong className="mono">{pageW} × {pageH} mm</strong>{turnLabel && ` (${turnLabel})`}</span>
               </div>
+              {check && (
+                <CheckCard inline title={check === 'thanks' ? 'Label printer is set up' : 'Quick check, only once for this label size'} onClose={() => setCheck('')}>
+                  {check === 'ask' && <>
+                    <p className="small" style={{ margin: '6px 0 10px' }}>How did the labels come out of the printer?</p>
+                    <div className="pc-choices">
+                      <Choice icon={TurnIcons.right} label="Right way up" hint="Text reads along the label" onClick={() => answer('right')} />
+                      <Choice icon={TurnIcons.sideways} label="Sideways" hint="Text runs across, or is cut off" onClick={() => answer('sideways')} />
+                      <Choice icon={<RotateCw size={18} style={{ transform: 'rotate(180deg)' }} />} label="Upside down" onClick={() => answer('upside')} />
+                      <Choice icon={<AlertTriangle size={18} />} label="Too small, or spread over two labels" onClick={() => answer('small')} />
+                    </div>
+                  </>}
+                  {check === 'turned' && <>
+                    <p className="small" style={{ margin: '6px 0 10px' }}>Turned for this printer. Print one row to check; it uses one label.</p>
+                    <button type="button" className="btn btn-primary btn-block" onClick={() => { setCheck(''); print(true); }}><Printer size={15} /> Test print one row</button>
+                  </>}
+                  {check === 'driver' && <DriverSteps paper={`a label of ${pageW} × ${pageH} mm (in label printers: Page Setup → Stock → New, “Labels with gaps”)`}>
+                    <p className="small muted">Labels slowly moving down the roll? Calibrate the printer: hold its feed button until it feeds a few labels.</p>
+                    <button type="button" className="btn btn-primary" onClick={() => { setCheck(''); print(true); }}><Printer size={15} /> Done, test print one row</button>
+                  </DriverSteps>}
+                  {check === 'thanks' && <p className="small" style={{ margin: '6px 0 0' }}>Thanks. This computer won’t ask again for {l.w} × {l.h} mm labels.</p>}
+                </CheckCard>
+              )}
               {bad.length > 0 && <div className="ls-warn no-print"><AlertTriangle size={14} /> {bad.length} item{bad.length === 1 ? '' : 's'} can’t be printed as a barcode (shown in red). Fix the barcode or SKU on the item.</div>}
               {pages.length > 40 && !testOnly && <div className="small muted no-print" style={{ marginBottom: 8 }}>Showing every label; long runs take a moment to send to the printer.</div>}
             </>
@@ -206,8 +247,8 @@ export default function BarcodeLabels() {
                       {row.map((it, j) => <BarcodeLabel key={it.id + j} item={it} shop={shop} s={s} w={l.w} h={l.h} />)}
                     </div>
                   );
-                  return l.rotate
-                    ? <div key={i} className={`label-turn turn-${l.rotate}`} style={{ '--rw': `${rowWidth(l)}mm`, '--rh': `${l.h}mm` } as React.CSSProperties}>{r}</div>
+                  return turn
+                    ? <div key={i} className={`label-turn turn-${turn}`} style={{ '--rw': `${rowWidth(l)}mm`, '--rh': `${l.h}mm` } as React.CSSProperties}>{r}</div>
                     : <div key={i} className="label-page">{r}</div>;
                 })
               : shown.map((sheet, i) => (
@@ -261,11 +302,11 @@ export default function BarcodeLabels() {
           )}
           {l.stock === 'roll' && (
             <div className="field">
-              <label className="row" style={{ gap: 6 }}><RotateCw size={14} /> Labels come out sideways?</label>
+              <label className="row" style={{ gap: 6 }}><RotateCw size={14} /> This computer’s printer</label>
               <div className="ls-chips" role="radiogroup" aria-label="Turn the label">
-                {([0, 90, 270] as const).map((r) => <button key={r} type="button" role="radio" aria-checked={l.rotate === r} className={l.rotate === r ? 'on' : ''} onClick={() => set({ rotate: r })}>{r === 0 ? 'As shown' : `Turn ${r}°`}</button>)}
+                {TURNS.map((r) => <button key={r} type="button" role="radio" aria-checked={turn === r} className={turn === r ? 'on' : ''} onClick={() => remember({ turn: r, ok: mem?.ok })}>{r === 0 ? 'As shown' : `Turn ${r}°`}</button>)}
               </div>
-              <p className="small muted" style={{ marginTop: 4 }}>Some printer drivers feed the label the other way round. Turn 90°; if the text then comes out upside down, use 270°.</p>
+              <p className="small muted" style={{ marginTop: 4 }}>{mem?.ok ? 'Checked on this computer.' : 'You don’t need to set this: after the first print, the app asks how the labels came out and turns them for this printer.'}</p>
             </div>
           )}
           {problems.length > 0 && <div className="ls-warn" role="alert">{problems.map((p) => <div key={p}><AlertTriangle size={13} /> {p}</div>)}</div>}

@@ -22,6 +22,7 @@ import { useClickOutside } from '@/components/useClickOutside';
 import { useShortcuts } from '@/components/useShortcuts';
 import { useOnline } from '@/components/useOnline';
 import { OfflineBillsBadge, OfflineSync } from '@/components/OfflineBills';
+import { ReceiptCheck } from '@/components/PrintCheck';
 import { initials } from '@/lib/format';
 import { AssistantButton } from '@/components/Assistant';
 import { useFieldTracker } from '@/lib/geo';
@@ -245,6 +246,7 @@ export default function AppLayout() {
       {sb.mobileOpen && <div className="scrim" onClick={() => sb.setMobileOpen(false)} />}
       <div className="shell-main">
         <OfflineSync />
+        <ReceiptCheck />
         {!online && (
           <div className="offline-bar no-print" role="status">
             <WifiOff size={15} /> {t('shell.offline')}

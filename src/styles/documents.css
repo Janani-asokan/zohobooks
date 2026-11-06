@@ -149,6 +149,8 @@
   .label-turn > .label-row { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
   .label-turn.turn-90 > .label-row { transform: translateX(var(--rh)) rotate(90deg); }
   .label-turn.turn-270 > .label-row { transform: translateY(var(--rw)) rotate(-90deg); }
+  .label-turn.turn-180 { width: var(--rw); height: var(--rh); }
+  .label-turn.turn-180 > .label-row { transform: translate(var(--rw), var(--rh)) rotate(180deg); }
 }
 @media print { .label-a4 .blabel { border-color: transparent; } body.print-labels .print-area { width: auto; } }
 

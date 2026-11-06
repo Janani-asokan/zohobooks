@@ -33,7 +33,9 @@ await p.goto(B + '/login'); await p.fill('input[type=email]', 'owner@shop.com');
 
 // 1. POS receipt, 80 mm and 58 mm
 await p.goto(B + '/app/pos'); await p.waitForSelector('.pos-tile');
-await p.locator('.pos-tile').nth(0).click(); await p.locator('.pos-tile').nth(1).click();
+// Tap two plain items (not phones that need an IMEI, which open the IMEI box).
+const plain = (await (await p.request.get(B + '/api/shop/items', { headers: { 'x-requested-with': 'ledgerly' } })).json()).filter((i) => i.type === 'Goods' && !i.trackSerials && i.stock > 2).slice(0, 2);
+for (const it of plain) await p.locator('.pos-tile', { has: p.locator('.n', { hasText: it.name }) }).first().click();
 await p.getByRole('button', { name: /^Charge/ }).first().click(); await p.waitForSelector('text=Sale complete');
 await p.getByRole('button', { name: /Print receipt/ }).click(); await p.waitForTimeout(200);
 let r = await asPrinted('pos-80mm');
