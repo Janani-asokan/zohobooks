@@ -5,3 +5,5 @@ backups
 .git
 *.log
 .env
+mobile
+dist-app

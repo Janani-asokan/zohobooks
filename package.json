@@ -8,6 +8,7 @@
     "dev:web": "vite",
     "dev:api": "tsx watch --clear-screen=false server/src/index.ts",
     "build": "tsc -b && vite build && npm run build:api",
+    "build:app": "vite build --mode app --outDir dist-app && node scripts/slim-app.mjs dist-app",
     "build:api": "esbuild server/src/index.ts --bundle --platform=node --target=node20 --packages=external --outfile=server/dist/index.js",
     "start": "NODE_ENV=production node server/dist/index.js",
     "db:migrate": "tsx server/src/migrate.ts",

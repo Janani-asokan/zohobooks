@@ -1,3 +1,4 @@
+import { IS_APP } from '@/lib/platform';
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
   Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift, Tag } from 'lucide-react';
@@ -21,7 +22,10 @@ const CHILD_ICONS: Record<string, LucideIcon> = {
 export interface NavFlags { lending: boolean; has?: (feature: string) => boolean; dailyRates?: boolean }
 
 /** Links to pages of add-on features the shop doesn't have are left out of the sidebar, + New menu and palette. */
+/** Pages that are on the website only, left out of the CorpusLite phone app (shop essentials only). */
+const WEB_ONLY = /^\/app\/(sales\/(quotes|orders|challans|credit-notes|recurring|offers)|field|microfinance|banking|accounting|inventory\/reorder|reports\/gst|features|team|billing|audit)(\/|$|\?)/;
 const featureOk = (to: string, has?: (feature: string) => boolean) => {
+  if (IS_APP && WEB_ONLY.test(to)) return false;
   const f = featureForPage(to.split('?')[0]!);
   return !f || !has || has(f.key);
 };

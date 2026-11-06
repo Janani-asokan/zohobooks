@@ -7,6 +7,8 @@ import { api } from '@/api/client';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useOnline } from '@/components/useOnline';
+import { IS_APP } from '@/lib/platform';
+import { registerDevice } from '@/lib/deviceSeries';
 import { ConfirmModal, Modal } from '@/components/ui';
 import { money } from '@/lib/format';
 import { allBills, offlineRef, onQueueChange, removeBill, syncBills, type OfflineBill } from '@/lib/offlineQueue';
@@ -55,8 +57,12 @@ export function OfflineSync() {
       // The camera barcode reader too, so camera billing works offline on browsers without a built-in reader.
       void import('@zxing/browser').catch(() => undefined);
       const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-      for (const u of ['/shop/items', '/shop/customers', '/shop/organization', '/shop/branches', '/shop/print-settings', ...(me.has('offers_loyalty') ? [`/shop/offers/running?date=${date}`, '/shop/loyalty/settings'] : [])])
+      for (const u of ['/shop/items', '/shop/customers', '/shop/organization', '/shop/branches', '/shop/print-settings', ...(me.has('offers_loyalty') ? [`/shop/offers/running?date=${date}`, '/shop/loyalty/settings'] : []),
+        // The phone app keeps the rest of the essentials too, so every screen opens offline.
+        ...(IS_APP ? ['/shop/tax-slabs', '/shop/invoices', '/shop/label/setup', ...(me.can('purchases.read') ? ['/shop/vendors', '/shop/bills', '/shop/purchase-orders'] : [])] : [])])
         void api.get(u).catch(() => undefined);
+      // CorpusLite: register this phone for its own invoice series (and refresh the next number).
+      if (IS_APP) void registerDevice(me.shop.id);
     }, 4000);
     return () => window.clearTimeout(t);
   }, [online, me]);

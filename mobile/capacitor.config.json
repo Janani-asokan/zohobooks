@@ -1,0 +1,8 @@
+{
+  "appId": "in.corpus360.lite",
+  "appName": "CorpusLite",
+  "webDir": "../dist-app",
+  "android": { "allowMixedContent": false },
+  "server": { "androidScheme": "https", "iosScheme": "capacitor" },
+  "ios": { "contentInset": "always" }
+}

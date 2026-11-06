@@ -1,3 +1,4 @@
+import { API_BASE } from '@/lib/platform';
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, FileText, Trash2, Download, Loader2, Camera } from 'lucide-react';
@@ -8,7 +9,7 @@ import { ACCEPT_UPLOADS, fileToDataUrl, fmtBytes } from '@/lib/files';
 export type AttachEntity = 'invoice' | 'bill' | 'item' | 'customer' | 'vendor' | 'expense' | 'purchase_order' | 'sales_order' | 'credit_note' | 'stock_adjustment' | 'stock_transfer' | 'journal' | 'payment' | 'bill_payment' | 'bank_transaction' | 'delivery_challan';
 export interface Attachment { id: string; filename: string; mime: string; size: number; uploadedBy: string; createdAt: string }
 
-const fileUrl = (id: string, download = false) => `/api/shop/attachments/${id}${download ? '?download=1' : ''}`;
+const fileUrl = (id: string, download = false) => `${API_BASE}/api/shop/attachments/${id}${download ? '?download=1' : ''}`;
 
 /** Upload a file onto a record that already exists (used after a form saves a new record). */
 export async function attachFile(entity: AttachEntity, entityId: string, filename: string, dataUrl: string) {

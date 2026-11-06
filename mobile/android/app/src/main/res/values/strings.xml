@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CorpusLite</string>
+    <string name="title_activity_main">CorpusLite</string>
+    <string name="package_name">in.corpus360.lite</string>
+    <string name="custom_url_scheme">in.corpus360.lite</string>
+</resources>

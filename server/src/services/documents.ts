@@ -214,7 +214,11 @@ async function savePromo(db: Db, shopId: string, id: string, input: InvoiceInput
 }
 
 /** Assigns the next number in the (FY-scoped) series and moves stock out. */
-async function issue(db: Db, req: Request | null, shopId: string, inv: any) {
+/** A bill made on a registered phone (CorpusLite): numbered in that phone's own series, CODE/FY/0001. */
+export interface DeviceNumber { deviceId: string; code: string; seq: number }
+export const deviceInvoiceNumber = (code: string, fy: string, seq: number) => `${code}/${fy}/${String(seq).padStart(4, '0')}`;
+
+async function issue(db: Db, req: Request | null, shopId: string, inv: any, device?: DeviceNumber) {
   const limits = await planLimits(db, shopId);
   if (limits.max_invoices_per_month) {
     const c = await one(db, "SELECT count(*)::int AS n FROM invoices WHERE shop_id = $1 AND status <> 'Draft' AND issued_at >= date_trunc('month', now())", [shopId]);
@@ -222,8 +226,13 @@ async function issue(db: Db, req: Request | null, shopId: string, inv: any) {
   }
   const cfg = await platformConfig(db);
   const fy = fyLabel(inv.date, cfg.fyStartMonth);
-  const n = await nextSeq(db, shopId, invoiceCounterKey('inv', fy, cfg.autoReset));
-  const number = formatInvoiceNumber(n, fy, cfg.autoReset);
+  const number = device ? deviceInvoiceNumber(device.code, fy, device.seq) : formatInvoiceNumber(await nextSeq(db, shopId, invoiceCounterKey('inv', fy, cfg.autoReset)), fy, cfg.autoReset);
+  if (device) {
+    // Each number is used once: a clash means two bills claim the same place in this phone's series.
+    const taken = await one(db, 'SELECT id FROM invoices WHERE shop_id = $1 AND number = $2', [shopId, number]);
+    if (taken) throw new HttpError(409, `Invoice number ${number} is already used. Open the app's sync screen to fix the series.`, 'device_number_taken');
+    await db.query('UPDATE invoices SET device_id = $3 WHERE shop_id = $1 AND id = $2', [shopId, inv.id, device.deviceId]);
+  }
   const lines: StoredLine[] = inv.lines;
   for (const l of lines) {
     if (l.type !== 'Goods') continue;
@@ -249,7 +258,7 @@ async function restock(db: Db, req: Request | null, shopId: string, inv: any, re
   }
 }
 
-export async function createInvoice(db: Db, req: Request | null, shopId: string, input: InvoiceInput, opts: { issue: boolean; source?: 'app' | 'pos' | 'recurring'; recurringId?: string }) {
+export async function createInvoice(db: Db, req: Request | null, shopId: string, input: InvoiceInput, opts: { issue: boolean; source?: 'app' | 'pos' | 'recurring'; recurringId?: string; device?: DeviceNumber }) {
   const source = opts.source ?? 'app';
   const f = await computeInvoiceFields(db, shopId, input, source);
   const cfg = await platformConfig(db);
@@ -270,7 +279,7 @@ export async function createInvoice(db: Db, req: Request | null, shopId: string,
   await savePromo(db, shopId, row.id, input, f.promo);
   if (opts.issue && source === 'app') await checkCreditLimit(db, req, shopId, f.customerId, f.t.total, row.id, input.overrideCreditLimit);
   let number: string | null = null;
-  if (opts.issue) number = await issue(db, req, shopId, row);
+  if (opts.issue) number = await issue(db, req, shopId, row, opts.device);
   await audit(db, req, shopId, opts.issue ? 'issue' : 'create_draft', 'invoice', row.id, { number, total: f.t.total, source });
   return getInvoice(db, shopId, row.id);
 }

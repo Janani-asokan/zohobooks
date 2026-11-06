@@ -1,0 +1,69 @@
+# CorpusLite phone app: builds the Android APK and the iOS app on every push that changes the app.
+# Download them from the run's "Artifacts" (Actions tab). Store uploads (Google Play, TestFlight) are added once the
+# developer accounts exist: their keys go in this repository's secrets, never in the code.
+name: CorpusLite app
+
+on:
+  push:
+    branches: [claude/blissful-hamilton-n7kcit, main]
+    paths: ['src/**', 'shared/**', 'public/**', 'mobile/**', 'index.html', 'vite.config.ts', 'package.json', 'package-lock.json', '.env.app', 'scripts/slim-app.mjs', '.github/workflows/corpuslite.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: corpuslite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: Build the app's web part (shop essentials, offline-ready)
+        run: npm ci --no-audit --no-fund && npm run build:app
+      - name: Capacitor sync
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund && npx cap sync android
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21, cache: gradle }
+      - name: Build the APK
+        working-directory: mobile/android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Size
+        run: ls -la mobile/android/app/build/outputs/apk/debug/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CorpusLite-android-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+  ios:
+    name: iOS app (simulator build)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - name: Build the app's web part
+        run: npm ci --no-audit --no-fund && npm run build:app
+      - name: Capacitor sync
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund && npx cap sync ios
+      - name: Build for the iOS simulator (no signing needed)
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -40
+      - name: Package
+        run: |
+          cd mobile/ios/App/build/Build/Products/Debug-iphonesimulator
+          zip -qry CorpusLite-ios-simulator.zip App.app && ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CorpusLite-ios-simulator
+          path: mobile/ios/App/build/Build/Products/Debug-iphonesimulator/CorpusLite-ios-simulator.zip
+          retention-days: 30

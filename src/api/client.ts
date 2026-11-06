@@ -4,18 +4,28 @@ export class ApiError extends Error {
   }
 }
 
+import { API_BASE, IS_APP, appToken, cacheGet, cachePut } from '@/lib/platform';
+
 type Json = object;
+
+/** Headers for every call. The phone app signs in with a bearer token instead of the browser's cookie. */
+export const apiHeaders = (json: boolean): Record<string, string> => {
+  const t = IS_APP ? appToken() : null;
+  return { 'X-Requested-With': 'ledgerly', ...(json ? { 'Content-Type': 'application/json' } : {}), ...(IS_APP ? { 'X-Client': 'corpuslite' } : {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) };
+};
 
 async function request<T>(method: string, url: string, body?: Json): Promise<T> {
   let res: Response;
   try {
-    res = await fetch('/api' + url, {
+    res = await fetch(API_BASE + '/api' + url, {
       method,
-      credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'ledgerly', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      credentials: IS_APP ? 'omit' : 'same-origin',
+      headers: apiHeaders(body !== undefined),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
+    // The phone app works offline: a screen opens with the last copy it saw (shop data, items, customers …).
+    if (IS_APP && method === 'GET') { const c = await cacheGet<T>(url); if (c) return c.data; }
     throw new ApiError(0, navigator.onLine ? 'Can’t reach the server. Please try again.' : 'You’re offline. Changes can’t be saved until you reconnect.', 'network');
   }
   const text = await res.text();
@@ -25,6 +35,7 @@ async function request<T>(method: string, url: string, body?: Json): Promise<T> 
     if (res.status === 401 || ['license_expired', 'workspace_inactive', 'password_change_required'].includes(err.code)) window.dispatchEvent(new CustomEvent('api:auth', { detail: err }));
     throw err;
   }
+  if (IS_APP && method === 'GET' && !/\/(pdf|download|export)\b/.test(url)) void cachePut(url, data);
   return data as T;
 }
 
@@ -46,10 +57,10 @@ export const api = {
 
 /** Triggers a browser download of an API resource (CSV/JSON), carrying the session cookie. */
 export async function download(url: string, filename: string, init?: { method?: string; body?: Json }) {
-  const res = await fetch('/api' + url, {
+  const res = await fetch(API_BASE + '/api' + url, {
     method: init?.method ?? 'GET',
-    credentials: 'same-origin',
-    headers: { 'X-Requested-With': 'ledgerly', ...(init?.body ? { 'Content-Type': 'application/json' } : {}) },
+    credentials: IS_APP ? 'omit' : 'same-origin',
+    headers: apiHeaders(!!init?.body),
     body: init?.body ? JSON.stringify(init.body) : undefined,
   });
   if (!res.ok) {

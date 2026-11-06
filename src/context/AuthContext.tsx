@@ -4,6 +4,7 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { api, ApiError } from '@/api/client';
 import type { Me } from '@/api/types';
 import type { Permission } from '../../shared/permissions';
+import { IS_APP, cacheClear, setAppToken } from '@/lib/platform';
 
 interface AuthValue {
   me: Me | null;
@@ -65,7 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string, remember: boolean) => {
-      const me = await api.post<Me>('/auth/login', { email, password, remember });
+      const { token, ...me } = await api.post<Me & { token?: string }>('/auth/login', { email, password, remember });
+      // Phone app: the session is a bearer token kept on the phone.
+      if (IS_APP) { setAppToken(token ?? null); await cacheClear(); }
       dropDataCache(qc);
       rememberMe(me);
       qc.setQueryData(['me'], me);
@@ -88,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await api.post('/auth/logout').catch(() => {});
     navigator.serviceWorker?.controller?.postMessage('clear-data');
+    if (IS_APP) { setAppToken(null); await cacheClear(); }
     dropDataCache(qc);
     rememberMe(null);
     qc.setQueryData(['me'], null);

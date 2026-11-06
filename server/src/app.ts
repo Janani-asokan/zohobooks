@@ -13,6 +13,7 @@ import { platformRouter } from './routes/platform';
 import { publicRouter } from './routes/public';
 import { catalogRouter } from './routes/shop/catalog';
 import { labelsRouter } from './routes/shop/labels';
+import { appDevicesRouter } from './routes/shop/appDevices';
 import { billingRouter, coreRouter } from './routes/shop/core';
 import { moneyRouter } from './routes/shop/money';
 import { purchasingRouter } from './routes/shop/purchasing';
@@ -69,12 +70,26 @@ export function createApp() {
     res.json({ ok: true });
   });
 
+  // CorpusLite phone app: its web view calls the API from its own origin (capacitor://localhost on iOS,
+  // https://localhost on Android). Allowed for those origins only, without cookies (the app sends a bearer token).
+  app.use('/api', (req, res, next) => {
+    const o = req.headers.origin;
+    if (o && config.appOrigins.includes(o)) {
+      res.setHeader('Access-Control-Allow-Origin', o);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Headers', 'content-type, x-requested-with, authorization, x-client');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Max-Age', '600');
+      if (req.method === 'OPTIONS') return res.status(204).end();
+    }
+    next();
+  });
   app.use('/api', loadSession, csrfGuard);
   app.use('/api/auth', authRouter);
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), featureGate, aiContext, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, briefingRouter, lendingRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), featureGate, aiContext, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, appDevicesRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, briefingRouter, lendingRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

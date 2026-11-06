@@ -694,6 +694,8 @@ salesRouter.post(
         clientRef: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, 'Invalid bill ID').optional(),
         /** When the bill was made at the counter (offline bills reach us later). */
         madeAt: z.string().datetime().optional(),
+        /** CorpusLite: the bill's place in this phone's own invoice series (the phone numbers it, even offline). */
+        deviceNumber: z.object({ clientId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/), seq: z.number().int().min(1).max(99999) }).optional(),
       }),
       req.body,
     );
@@ -715,11 +717,19 @@ salesRouter.post(
       // Points can't be redeemed without checking the customer's balance online.
       if (b.redeemPoints) throw badRequest('Loyalty points can’t be redeemed on a bill made offline');
     }
+    // A bill from a registered phone keeps the number the phone gave it (spec: a series per phone).
+    let device: { deviceId: string; code: string; seq: number } | undefined;
+    if (b.deviceNumber) {
+      const d = await one(db, 'SELECT id, code FROM app_devices WHERE shop_id = $1 AND client_id = $2', [c.shopId, b.deviceNumber.clientId]);
+      if (!d) throw badRequest('This phone is not registered for billing. Sign in again with the internet on.');
+      device = { deviceId: d.id, code: d.code, seq: b.deviceNumber.seq };
+      await db.query('UPDATE app_devices SET last_seen_at = now() WHERE id = $1', [d.id]);
+    }
     const inv = await createInvoice(
       db, req, c.shopId,
       { customerId: b.customerId, date: today, dueDate: today, branchId: b.branchId ?? c.branchId, lines: b.lines, withGst: b.withGst, reverseCharge: false, tcsRate: 0, notes: '',
         pricesIncludeTax: b.pricesIncludeTax, billDiscount: b.billDiscount, skipOffers: b.skipOffers, redeemPoints: b.redeemPoints },
-      { issue: true, source: 'pos' },
+      { issue: true, source: 'pos', device },
     );
     if (b.clientRef) await db.query('UPDATE invoices SET client_ref = $3, made_offline_at = $4 WHERE shop_id = $1 AND id = $2', [c.shopId, inv.id, b.clientRef, offline ? b.madeAt : null]);
     if (b.split) {

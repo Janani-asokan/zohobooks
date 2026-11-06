@@ -99,7 +99,7 @@ authRouter.post(
       if (r.license_end < todayISO() && r.role !== 'Owner') throw new HttpError(402, 'This workspace’s license has expired. Ask the shop owner to renew.', 'license_expired');
     }
     await query(`UPDATE ${table(p.type)} SET failed_attempts = 0, locked_until = NULL, last_login_at = now() WHERE id = $1`, [r.id]);
-    await createSession(res, req, p.type, r.id, body.remember ?? true);
+    const token = await createSession(res, req, p.type, r.id, body.remember ?? true);
     req.ctx =
       p.type === 'super'
         ? { kind: 'super', id: r.id, name: r.name, email: r.email, mustChangePassword: !!r.must_change_password }
@@ -109,7 +109,8 @@ authRouter.post(
           };
     if (p.type === 'user') await withTenant(r.shop_id, (db) => audit(db, req, r.shop_id, 'login', 'user', r.id));
     else await tx((db) => audit(db, req, null, 'login', 'super_admin', r.id));
-    res.json(await mePayload(req));
+    // The CorpusLite phone app keeps the session as a bearer token (it can't rely on cookies).
+    res.json({ ...(await mePayload(req)), ...(req.headers['x-client'] === 'corpuslite' ? { token } : {}) });
   }),
 );
 

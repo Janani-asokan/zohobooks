@@ -1,3 +1,4 @@
+import { API_BASE } from '@/lib/platform';
 import type { PaperSize } from '../../shared/printSettings';
 import { announceReceipt } from './printerMemory';
 
@@ -7,7 +8,7 @@ export type Roll = PaperSize;
 
 const query = (paper: PrintPaper, roll?: Roll) => `paper=${paper}${paper === 'thermal' && roll ? `&roll=${roll}` : ''}`;
 export const printRoute = (id: string, paper: PrintPaper, roll?: Roll) => `/invoices/${id}/print?${query(paper, roll)}`;
-export const pdfUrl = (id: string, paper: PrintPaper, roll?: Roll) => `/api/shop/invoices/${id}/pdf?${query(paper, roll)}`;
+export const pdfUrl = (id: string, paper: PrintPaper, roll?: Roll) => `${API_BASE}/api/shop/invoices/${id}/pdf?${query(paper, roll)}`;
 
 /** The frame couldn't load (blocked or too slow): open the print view in a tab instead. */
 class FrameUnavailable extends Error {}

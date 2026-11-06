@@ -42,7 +42,7 @@ export const randomToken = (bytes = 32) => crypto.randomBytes(bytes).toString('b
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password-1', 11);
 export const burnPasswordCheck = (p: string) => bcrypt.compare(p, DUMMY_HASH);
 
-export async function createSession(res: Response, req: Request, principalType: 'super' | 'user', principalId: string, remember: boolean) {
+export async function createSession(res: Response, req: Request, principalType: 'super' | 'user', principalId: string, remember: boolean): Promise<string> {
   const token = randomToken();
   const days = remember ? config.sessionDays : 1;
   const expires = new Date(Date.now() + days * 86400000);
@@ -64,6 +64,7 @@ export async function createSession(res: Response, req: Request, principalType: 
       ...(remember ? { expires } : {}), // session cookie when not remembered
     }),
   );
+  return token;
 }
 
 export function clearSessionCookie(res: Response) {
@@ -95,7 +96,10 @@ export async function resolveUserCtx(userId: string, activeShopId: string | null
 /** Resolves the session cookie into req.ctx (or leaves it undefined). */
 export async function loadSession(req: Request, _res: Response, next: NextFunction) {
   try {
-    const token = parseCookie(req.headers.cookie ?? '')[SESSION_COOKIE];
+    // The web app sends the session cookie; the CorpusLite phone app sends the same token as a bearer token (phone
+    // web views block cookies between the app and the server).
+    const bearer = /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(String(req.headers.authorization ?? ''))?.[1];
+    const token = bearer ?? parseCookie(req.headers.cookie ?? '')[SESSION_COOKIE];
     if (!token) return next();
     const hash = sha256(token);
     const [s] = await query('SELECT principal_type, principal_id, active_shop_id FROM sessions WHERE token_hash = $1 AND expires_at > now()', [hash]);
@@ -119,6 +123,8 @@ export function csrfGuard(req: Request, _res: Response, next: NextFunction) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (req.headers['x-requested-with'] !== 'ledgerly') return next(new HttpError(403, 'Missing CSRF header', 'csrf'));
   const origin = req.headers.origin;
+  // The phone app's origin may only act with its bearer token: a cookie session never works from there.
+  if (origin && config.appOrigins.includes(origin)) return /^Bearer /.test(String(req.headers.authorization ?? '')) || /^\/auth\/(login|forgot|reset)/.test(req.path) ? next() : next(new HttpError(403, 'Origin not allowed', 'csrf'));
   if (origin && !config.allowedOrigins.includes(origin)) return next(new HttpError(403, 'Origin not allowed', 'csrf'));
   next();
 }

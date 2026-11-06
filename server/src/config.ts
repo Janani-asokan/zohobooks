@@ -15,6 +15,8 @@ export const config = {
     ...(env.ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:4000,http://localhost:4173').split(',').map((s) => s.trim()),
     ...[env.APP_URL, env.RENDER_EXTERNAL_URL].filter((v): v is string => !!v).map((v) => v.replace(/\/$/, '')),
   ],
+  /** The CorpusLite phone app's web view origins (iOS, Android). They call the API with a bearer token, no cookies. */
+  appOrigins: (env.APP_ORIGINS ?? 'capacitor://localhost,https://localhost,ionic://localhost').split(',').map((s) => s.trim()).filter(Boolean),
   cookieSecure: bool(env.COOKIE_SECURE, env.NODE_ENV === 'production'),
   sessionDays: Number(env.SESSION_DAYS ?? 7),
   /** In development, password-reset links are returned in the API response so the flow is testable without SMTP. */

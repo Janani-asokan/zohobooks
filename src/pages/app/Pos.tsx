@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle, CloudOff, Camera, Mic } from 'lucide-react';
@@ -5,6 +6,8 @@ import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice, type ReceiptData } from '@/components/printing';
 import { isNetworkError, newClientRef, offlineRef, saveBill } from '@/lib/offlineQueue';
+import { peekNumber, takeNumber } from '@/lib/deviceSeries';
+import { IS_APP, cacheUpdate } from '@/lib/platform';
 import { useOnline } from '@/components/useOnline';
 import { OfflineBillsModal, useOfflineBills } from '@/components/OfflineBills';
 import { withPrintDefaults, type PaperSize } from '../../../shared/printSettings';
@@ -39,6 +42,7 @@ interface SpeechLike { lang: string; interimResults: boolean; maxAlternatives: n
 
 /** Fast counter billing: scan → cart → charge. Each sale is an issued invoice with its payment. */
 export default function Pos() {
+  const qc = useQueryClient();
   const me = useShopUser();
   const toast = useToast();
   const items = (useItems().data ?? []).filter((i) => !i.isGroup);
@@ -371,28 +375,31 @@ export default function Pos() {
       lines: lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier, discount: 0, rate: unit(l.it), ...(l.serials?.length ? { serials: l.serials } : {}) })) };
     // Every bill has its own ID, sent with it: a retry after a dropped reply can never save it twice.
     const clientRef = newClientRef();
+    // CorpusLite: the bill takes the next number in this phone's own GST series (final, even offline).
+    const dn = peekNumber(me.shop.id);
+    if (dn) Object.assign(body, { deviceNumber: { clientId: dn.clientId, seq: dn.seq } });
     charging.current = true;
-    if (!navigator.onLine) return void saveOffline(clientRef, body).then((saved) => { if (!saved) charging.current = false; });
+    if (!navigator.onLine) return void saveOffline(clientRef, body, dn).then((saved) => { if (!saved) charging.current = false; });
     sale.mutate({ ...body, clientRef }, {
-      onSuccess: (r) => { setDone(r); countSold(); },
+      onSuccess: (r) => { if (dn) takeNumber(me.shop.id, dn.seq); setDone(r); countSold(); },
       onSettled: (_r, e) => { if (e && !isNetworkError(e)) charging.current = false; },
       // The internet dropped while charging: keep the bill on this device and carry on.
-      onError: (e) => { if (isNetworkError(e)) void saveOffline(clientRef, body).then((saved) => { if (!saved) charging.current = false; }); else toast('error', (e as Error).message); },
+      onError: (e) => { if (isNetworkError(e)) void saveOffline(clientRef, body, dn).then((saved) => { if (!saved) charging.current = false; }); else toast('error', (e as Error).message); },
     });
   };
   /** Keeps the bill on this device, prints its receipt, and lets the counter carry on. Sent automatically later. */
-  const saveOffline = async (clientRef: string, body: Record<string, unknown>): Promise<boolean> => {
+  const saveOffline = async (clientRef: string, body: Record<string, unknown>, dn: ReturnType<typeof peekNumber> = null): Promise<boolean> => {
     if (redeem) { toast('error', 'Points can’t be used offline', 'Loyalty points need the internet to check the balance. Turn points off to bill offline.'); return false; }
     if (lines.some((l) => l.it.trackSerials)) { toast('error', 'This bill needs the internet', 'Items with IMEI / serial numbers are checked online. Bill them when the connection is back.'); return false; }
     const madeAt = new Date().toISOString();
     const fl = promo.on ? priced.lines : applyBillAdjustments(calc, { withGst, pricesIncludeTax: inclusive, billDiscount });
     const receipt: ReceiptData = {
-      number: offlineRef(clientRef), date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      number: dn ? dn.number : offlineRef(clientRef), date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
       customer: { name: customer ? customer.companyName || customer.name : 'Walk-in customer', phone: customer?.phone, gstin: customer?.gstin },
       lines: lines.map((l, i) => ({ name: l.it.name, description: l.it.description, hsn: l.it.hsn, qty: l.qty, unit: l.it.unit, rate: unit(l.it), mrp: l.it.mrp ?? null, taxRate: l.it.taxRate, amount: lineAmount(fl[i] ?? calc[i]!) })),
       withGst, interState: inter, subTotal: totals.subTotal, discount: totals.discount, cgst: totals.cgst, sgst: totals.sgst, igst: totals.igst, roundOff: totals.roundOff,
       total: totals.total, amountPaid: totals.total, paymentMode: mode, offers: promo.on ? priced.applied : [],
-      note: 'Saved offline. The GST invoice number is given when this bill is sent.',
+      note: dn ? 'Saved on this phone. It goes to the server by itself when the internet is back.' : 'Saved offline. The GST invoice number is given when this bill is sent.',
     };
     try {
       await saveBill({ clientRef, shopId: me.shop.id, userId: me.user.id, madeAt, body, expectedTotal: totals.total, status: 'waiting', attempts: 0,
@@ -401,6 +408,13 @@ export default function Pos() {
       toast('error', 'Could not save the bill on this device', 'This browser is blocking storage (private window?). Use a normal window to bill offline.');
       return false;
     }
+    if (dn) takeNumber(me.shop.id, dn.seq);
+    // The phone's copy of the stock goes down now, so the next bill sees what is left.
+    const sold = new Map<string, number>(); for (const l of lines) sold.set(l.itemId, (sold.get(l.itemId) ?? 0) + l.qty);
+    const br = (body.branchId as string | null) || branchId || me.user.branchId || '';
+    const less = (list: Item[]) => list.map((i) => (sold.has(i.id) ? { ...i, stock: i.stock - sold.get(i.id)!, stockByBranch: br ? { ...i.stockByBranch, [br]: (i.stockByBranch?.[br] ?? 0) - sold.get(i.id)! } : i.stockByBranch } : i));
+    qc.setQueryData<Item[]>(['items'], (old) => (old ? less(old) : old));
+    if (IS_APP) void cacheUpdate<Item[]>('/shop/items', less);
     countSold();
     setOffDone({ ref: receipt.number, receipt, change: mode === 'Cash' && tendered ? Math.max(0, Number(tendered) - totals.total) : 0, phone: customer?.phone });
     return true;

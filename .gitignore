@@ -5,3 +5,4 @@ dist
 server/dist
 backups
 .env
+dist-app

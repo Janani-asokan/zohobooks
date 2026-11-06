@@ -8,6 +8,7 @@ import { ToastProvider } from './context/ToastContext';
 import { PrefsProvider } from './context/PrefsContext';
 import { ApiError } from './api/client';
 import { registerServiceWorker } from './pwa';
+import { IS_APP } from './lib/platform';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
@@ -49,4 +50,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 );
 
-registerServiceWorker();
+// The phone app ships its files inside the app; only the website uses the service worker.
+if (!IS_APP) registerServiceWorker();

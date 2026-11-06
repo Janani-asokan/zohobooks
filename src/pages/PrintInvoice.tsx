@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Download, FileX, Loader2, Printer } from 'lucide-react';
-import { download } from '@/api/client';
+import { api, download } from '@/api/client';
+import { IS_APP } from '@/lib/platform';
 import type { Invoice } from '@/api/types';
 import { COPY_LABEL, TaxInvoice, type PrintBranch, type PrintOrg } from '@/components/TaxInvoice';
 import type { ItemField } from '../../shared/templates';
@@ -31,6 +32,8 @@ function pageCss(paper: Paper, label: string, thermalMm: number) {
 }
 
 async function loadBundle(id: string, rt: string | null, share: string | null): Promise<Bundle> {
+  // Phone app: through the API client (bearer token, and the last copy when offline).
+  if (IS_APP && !rt && !share) { const b = await api.get<Bundle>(`/shop/invoices/${id}/print-data`); return { ...b, settings: withPrintDefaults(b.settings) }; }
   const url = rt ? `/api/public/render/invoices/${id}?rt=${encodeURIComponent(rt)}` : share ? `/api/public/invoices/${share}` : `/api/shop/invoices/${id}/print-data`;
   const res = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
   if (res.status === 401) throw Object.assign(new Error('Sign in to view this invoice'), { status: 401 });
