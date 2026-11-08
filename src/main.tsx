@@ -9,6 +9,7 @@ import { PrefsProvider } from './context/PrefsContext';
 import { ApiError } from './api/client';
 import { registerServiceWorker } from './pwa';
 import { IS_APP } from './lib/platform';
+import { installNativeBridges } from './lib/native';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
@@ -23,6 +24,10 @@ import './styles/features.css';
 import './styles/theme.css';
 import './styles/documents.css';
 import './styles/print.css';
+import './styles/app.css';
+
+// On a phone: printing, downloads and outside links go through the app (no-op on the website).
+installNativeBridges();
 
 const queryClient = new QueryClient({
   defaultOptions: {

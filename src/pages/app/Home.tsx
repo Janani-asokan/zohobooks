@@ -1,3 +1,4 @@
+import { isWebOnly } from '@/layouts/nav';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { usePageOk } from '@/components/FeatureOff';
 import { useMemo, useState } from 'react';
@@ -123,7 +124,7 @@ function ShopHome() {
           <StatCard label="Payables" value={money(d.payable)} icon={Receipt} tone="red" foot={d.payableOverdueCount ? <Link to="/app/reports/payables" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{money(d.payableOverdue ?? 0)} overdue</Link> : 'Nothing overdue'} />
         ) : <StatCard label="Total Revenue" value={d ? money(d.fySales) : '—'} icon={IndianRupee} tone="green" foot={d && <>FY {d.fy}</>} />}
         {d?.cash ? (
-          <StatCard label="Cash in bank" value={money(d.cash.reduce((s2, a2) => s2 + a2.balance, 0))} icon={Landmark} tone="blue" foot={<Link to="/app/banking">{d.cash.length} account{d.cash.length === 1 ? '' : 's'}</Link>} />
+          <StatCard label="Cash in bank" value={money(d.cash.reduce((s2, a2) => s2 + a2.balance, 0))} icon={Landmark} tone="blue" foot={pageOk('/app/banking') ? <Link to="/app/banking">{d.cash.length} account{d.cash.length === 1 ? '' : 's'}</Link> : `${d.cash.length} account${d.cash.length === 1 ? '' : 's'}`} />
         ) : <StatCard label="Total Customers" value={customers.data ? custList.length : '—'} icon={Users} tone="violet" trend={{ pct: pctChange(custCur, custPrev), label: 'new vs last month' }} foot={`${custCur} new this month`} />}
         <StatCard label="Sales this month" value={d ? money(d.thisMonthSales) : '—'} icon={IndianRupee} tone="green" trend={d ? { pct: pctChange(d.thisMonthSales, d.lastMonthToDate), label: 'vs same days last month' } : undefined} foot={d && `Last month ${money(d.lastMonthSales)}`} />
       </div>
@@ -212,7 +213,7 @@ function ShopHome() {
           {d?.cash ? (<>
             <div className="card-header"><div><h3>Cash &amp; bank</h3><p>Current balances</p></div>{pageOk('/app/reports/cash-flow') && <Link to="/app/reports/cash-flow" className="btn btn-ghost btn-sm">Cash flow <ArrowRight size={14} /></Link>}</div>
             <ul className="dash-list">{d.cash.map((a) => (
-              <li key={a.id}><Link to="/app/banking"><span><strong>{a.name}</strong><span className="muted small">{a.type}</span></span><span className="num strong" style={a.balance < 0 ? { color: 'var(--red-600)' } : undefined}>{money(a.balance)}</span></Link></li>
+              <li key={a.id}><Link to={pageOk('/app/banking') ? '/app/banking' : '/app/reports/cash-flow'}><span><strong>{a.name}</strong><span className="muted small">{a.type}</span></span><span className="num strong" style={a.balance < 0 ? { color: 'var(--red-600)' } : undefined}>{money(a.balance)}</span></Link></li>
             ))}</ul>
           </>) : (<>
             <div className="card-header"><div><h3>This FY</h3><p>FY {d?.fy}</p></div></div>
@@ -248,7 +249,7 @@ function GettingStarted() {
     { label: 'Add a customer', sub: 'With an auto customer ID', done: customers.length > 0, to: '/app/sales/customers?new=1' },
     { label: 'Create an invoice', sub: 'GST-ready, printable A4', done: invoices.some((i) => i.status !== 'Draft'), to: '/app/sales/invoices/new' },
     ...(vendors ? [{ label: 'Add a vendor', sub: 'For purchases & bills', done: vendors.length > 0, to: '/app/purchases/vendors?new=1' }] : []),
-    ...(staff ? [{ label: 'Invite your team', sub: 'Role-based staff logins', done: staff.length > 1, to: '/app/team' }] : []),
+    ...(staff && !isWebOnly('/app/team') ? [{ label: 'Invite your team', sub: 'Role-based staff logins', done: staff.length > 1, to: '/app/team' }] : []),
   ];
   const done = steps.filter((s) => s.done).length;
   if (done === steps.length) return null;
@@ -284,7 +285,7 @@ function GettingStarted() {
 function LendingSummary() {
   const me = useShopUser();
   const org = useOrg().data;
-  const on = !!org?.lendingEnabled && me.has('microfinance') && (me.can('lending.read') || me.can('lending.collect'));
+  const on = !isWebOnly('/app/microfinance') && !!org?.lendingEnabled && me.has('microfinance') && (me.can('lending.read') || me.can('lending.collect'));
   const q = useLendingDashboard(on);
   if (!on) return null;
   const t = q.data?.totals;
@@ -325,10 +326,10 @@ function AddonTiles() {
     <section className="card mt-16 addon-tiles" aria-label="Your add-ons">
       <div className="card-header">
         <div><h3 className="row" style={{ gap: 8 }}><Puzzle size={17} /> Your add-ons</h3><p className="small muted">{total} add-on{total === 1 ? '' : 's'} on this business, today’s figures from each{lendingAbove ? ' (microfinance is in its own section above)' : ''}</p></div>
-        <Link to="/app/features" className="btn btn-ghost btn-sm">Manage add-ons</Link>
+        {!isWebOnly('/app/features') && <Link to="/app/features" className="btn btn-ghost btn-sm">Manage add-ons</Link>}
       </div>
       <div className="addon-grid">
-        {tiles.map((t) => (
+        {tiles.filter((t) => !isWebOnly(t.link)).map((t) => (
           <Link key={t.key} to={t.link} className="addon-tile" data-addon={t.key}>
             <strong>{t.name} <ArrowRight size={13} /></strong>
             {t.figures.length > 0 && (

@@ -10,8 +10,19 @@ bills, barcode labels and simple reports. Accounting, AI, field staff and microf
   offline. The server checks each number is used once; a new financial year starts the series again.
 - **Small.** The app's web part is built from the same code with the web-only pages left out (`npm run build:app` in
   the repository root, about 2.4 MB), inside a Capacitor shell.
+- **Prints like the website.** Print (receipts, A4/A5 invoices, labels, reports) opens the phone's print screen
+  (Android printing / AirPrint) with the page at the paper's size. On Android, a paired **Bluetooth receipt printer**
+  (58 or 80 mm, chosen once in Print settings → Receipt) prints straight away: the receipt is sent as a picture in
+  ESC/POS, so Tamil/Hindi names, ₹, the logo and the UPI QR print as on screen.
+- **Files and links.** PDF, Excel and CSV downloads are saved on the phone and offered to WhatsApp, Drive, Files…;
+  WhatsApp, maps, phone and UPI links open in the phone's apps; shared bill links point to the website.
+- **Fits the phone.** Keeps clear of the status bar, notch and home bar; the phone's big-font setting doesn't break
+  the layout; Back goes to the previous screen.
 - **Signs in with a token** (`Authorization: Bearer …`), not a cookie; the server allows the app origins
   `capacitor://localhost` (iOS) and `https://localhost` (Android).
+
+The native part is one small plugin, `C360Native` (`android/…/C360NativePlugin.java`, `ios/App/App/C360Native.swift`),
+used from `src/lib/native.ts` and `src/lib/btPrinter.ts`. Checks: `e2e/tools/corpuslite-native.mjs`.
 
 ## Build
 

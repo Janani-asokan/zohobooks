@@ -43,4 +43,9 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- Knowing when the internet comes back, to send bills kept on the phone. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Bluetooth receipt and label printers paired with the phone. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 </manifest>

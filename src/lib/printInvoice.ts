@@ -1,6 +1,8 @@
 import { API_BASE } from '@/lib/platform';
 import type { PaperSize } from '../../shared/printSettings';
 import { announceReceipt } from './printerMemory';
+import { printWindow } from './native';
+import { btPrinter, btPrintReceipt } from './btPrinter';
 
 export type PrintPaper = 'a4' | 'a5' | 'thermal';
 /** Thermal roll width: '2in' = 58 mm, '3in' = 80 mm. Omitted = the shop's Print settings. */
@@ -74,9 +76,19 @@ export async function printInvoice(id: string, paper: PrintPaper, roll?: Roll): 
     throw e;
   }
   const w = p.frame.contentWindow!;
+  const bt = paper === 'thermal' ? btPrinter() : null;
+  if (bt) {
+    // Bluetooth receipt printer (Android app): the receipt is drawn here at its own width and sent to the printer.
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:-10000px;top:0';
+    const rc = w.document.querySelector('.print-doc .receipt');
+    if (rc) box.appendChild(document.importNode(rc, true));
+    document.body.appendChild(box);
+    try { await btPrintReceipt(box.querySelector('.receipt'), bt); } finally { box.remove(); p.drop(); }
+    return;
+  }
   w.addEventListener('afterprint', () => setTimeout(p.drop, 1000), { once: true });
   setTimeout(p.drop, 60_000);
-  w.focus();
-  w.print();
+  printWindow(w);
   if (paper === 'thermal' && roll) announceReceipt({ paper: roll, reprint: () => void printInvoice(id, paper, roll) });
 }

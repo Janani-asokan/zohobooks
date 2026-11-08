@@ -1,3 +1,4 @@
+import { PUBLIC_ORIGIN } from '@/lib/platform';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, FileText, Printer, Send, X, MessageCircle } from 'lucide-react';
@@ -171,7 +172,7 @@ export default function Invoices() {
                       <td className="num hide-split">{inv.status === 'Issued' ? money(Math.max(0, inv.balance)) : '—'}</td>
                       <td className="num hide-split" style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
                         {inv.status === 'Issued' && inv.balance > 0 && org && inv.customer.phone && (
-                          <a className="icon-btn" title="WhatsApp reminder" target="_blank" rel="noreferrer" href={waLink(inv.customer.phone, `Dear ${inv.customer.companyName || inv.customer.name}, a gentle reminder that invoice ${inv.number} has ${money(inv.balance)} due. ${inv.publicToken ? `${window.location.origin}/share/${inv.publicToken}` : ''} — ${org.companyName}`)}><MessageCircle size={15} /></a>
+                          <a className="icon-btn" title="WhatsApp reminder" target="_blank" rel="noreferrer" href={waLink(inv.customer.phone, `Dear ${inv.customer.companyName || inv.customer.name}, a gentle reminder that invoice ${inv.number} has ${money(inv.balance)} due. ${inv.publicToken ? `${PUBLIC_ORIGIN}/share/${inv.publicToken}` : ''} — ${org.companyName}`)}><MessageCircle size={15} /></a>
                         )}
                         <button className="icon-btn" title="Print" onClick={() => printInvoice(inv.id, 'a4').catch((e) => toast('error', 'Could not print', e.message))}><Printer size={15} /></button>
                       </td>

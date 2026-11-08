@@ -1,0 +1,33 @@
+/* Phone app (CorpusLite) and phones in general: keep clear of the status bar, the notch and the home bar.
+   The app draws edge to edge (viewport-fit=cover); Android passes the bar sizes as --safe-area-inset-*, iOS as env().
+   On the website without viewport-fit=cover these are all 0, so nothing changes there. */
+:root {
+  --sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+}
+@media screen {
+.topbar { padding-top: var(--sat); height: calc(var(--topbar-h) + var(--sat)); padding-left: max(var(--sp-3), var(--sal)); padding-right: max(var(--sp-3), var(--sar)); }
+.sidebar { padding-top: var(--sat); padding-bottom: var(--sab); }
+.print-bar { padding-top: calc(var(--sp-2) + var(--sat)); }
+.drawer { padding-top: var(--sat); padding-bottom: var(--sab); }
+.overlay { padding-top: max(8vh, calc(var(--sat) + var(--sp-4))); padding-bottom: calc(var(--sp-4) + var(--sab)); }
+.ai-overlay { padding-top: var(--sat); padding-bottom: var(--sab); }
+.print-check { bottom: calc(16px + var(--sab)); }
+@media (max-width: 760px) {
+  .bottom-nav { padding-bottom: calc(4px + var(--sab)); padding-left: max(4px, var(--sal)); padding-right: max(4px, var(--sar)); }
+  .shell-main main { padding-bottom: calc(64px + var(--sab)); }
+  .toast-stack { bottom: calc(76px + var(--sab)); }
+  .split-page.has-detail .split-panel { padding-top: var(--sat); padding-bottom: var(--sab); }
+  .split-panel-head { top: 0; }
+  .print-check { bottom: calc(76px + var(--sab)); }
+}
+/* Sign-in and other full pages without the app frame. */
+.login { padding-top: var(--sat); padding-bottom: var(--sab); }
+}
+
+/* In the app itself: a phone screen, not a web page. */
+html.native-app, html.native-app body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+html.native-app body { -webkit-touch-callout: none; }
+html.native-ios input, html.native-ios textarea, html.native-ios select { font-size: max(16px, 1em); } /* iOS zooms into smaller fields */

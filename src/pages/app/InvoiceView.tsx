@@ -1,3 +1,4 @@
+import { PUBLIC_ORIGIN } from '@/lib/platform';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy } from 'lucide-react';
@@ -18,7 +19,7 @@ import { fmtDate, money, todayISO } from '@/lib/format';
 import { useQuery } from '@tanstack/react-query';
 import { useAiEnabled, useAiStatus } from '@/components/Assistant';
 
-const shareUrl = (token: string) => `${window.location.origin}/share/${token}`;
+const shareUrl = (token: string) => `${PUBLIC_ORIGIN}/share/${token}`;
 
 export function whatsappText(inv: InvoiceDetail, org: Pick<Organization, 'companyName' | 'upiId'>, reminder = false) {
   const who = inv.customer.companyName || inv.customer.name;

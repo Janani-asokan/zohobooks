@@ -1,4 +1,5 @@
 import { ApiError, download } from '@/api/client';
+import { printWindow } from './native';
 import { toCsv } from '../../shared/csv';
 import { buildXlsx } from '../../shared/xlsx';
 
@@ -68,7 +69,7 @@ export function printTable(t: ReportTable, business = '') {
     ${t.note ? `<p class="note">${esc(t.note)}</p>` : ''}
   </body></html>`);
   w.document.close();
-  setTimeout(() => { w.focus(); w.print(); }, 250);
+  setTimeout(() => printWindow(w), 250);
 }
 
 /**

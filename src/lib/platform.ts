@@ -6,6 +6,9 @@
 export const IS_APP = import.meta.env.VITE_APP === '1';
 export const API_BASE: string = IS_APP ? (import.meta.env.VITE_API_BASE || 'https://ledgerly-books.onrender.com') : '';
 
+/** Where customers open shared links (bills, sign-in): the website, also from the phone app. */
+export const PUBLIC_ORIGIN: string = IS_APP ? API_BASE : (typeof window !== 'undefined' ? window.location.origin : '');
+
 const TOKEN = 'c360.app.token';
 export const appToken = (): string | null => { try { return localStorage.getItem(TOKEN); } catch { return null; } };
 export const setAppToken = (t: string | null) => { try { if (t) localStorage.setItem(TOKEN, t); else localStorage.removeItem(TOKEN); } catch { /* private mode */ } };

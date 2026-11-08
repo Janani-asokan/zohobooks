@@ -1,3 +1,4 @@
+import { isWebOnly } from '@/layouts/nav';
 import { Link } from 'react-router-dom';
 import { Check, Sparkles } from 'lucide-react';
 import { useShopUser } from '@/context/AuthContext';
@@ -38,6 +39,7 @@ export function FeatureOff({ feature, isOwner }: { feature: FeatureDef; isOwner:
 export function usePageOk() {
   const me = useShopUser();
   return (to: string) => {
+    if (isWebOnly(to)) return false;
     const f = featureForPage(to.split('?')[0]!);
     return !f || me.has(f.key);
   };

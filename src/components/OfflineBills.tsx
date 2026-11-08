@@ -48,6 +48,13 @@ export function OfflineSync() {
     if (r.failed.length) toast('error', `${r.failed.length} offline bill${r.failed.length === 1 ? '' : 's'} need${r.failed.length === 1 ? 's' : ''} attention`, r.failed[0]!.lastError ?? '');
   }, [me, qc, toast]);
   useEffect(() => { if (online) void run(); }, [online, run]);
+  // Printing, saving or opening a link through the phone failed: say why.
+  useEffect(() => {
+    if (!IS_APP) return;
+    const on = (e: Event) => toast('error', 'Couldn’t finish on this phone', String((e as CustomEvent).detail ?? ''));
+    window.addEventListener('c360:native-error', on);
+    return () => window.removeEventListener('c360:native-error', on);
+  }, [toast]);
   // Get the counter ready for an outage while the internet is up: load the billing screen's code and the data it
   // needs once, so the service worker has them even if the counter has not opened POS yet today.
   useEffect(() => {

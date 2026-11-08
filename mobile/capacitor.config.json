@@ -2,7 +2,20 @@
   "appId": "in.corpus360.lite",
   "appName": "CorpusLite",
   "webDir": "../dist-app",
-  "android": { "allowMixedContent": false },
-  "server": { "androidScheme": "https", "iosScheme": "capacitor" },
-  "ios": { "contentInset": "always" }
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "capacitor"
+  },
+  "ios": {
+    "contentInset": "never"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
 }

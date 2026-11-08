@@ -1,13 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { btPrinter, btSupported } from '@/lib/btPrinter';
 import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle, CloudOff, Camera, Mic } from 'lucide-react';
 import { api } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice, type ReceiptData } from '@/components/printing';
 import { isNetworkError, newClientRef, offlineRef, saveBill } from '@/lib/offlineQueue';
 import { peekNumber, takeNumber } from '@/lib/deviceSeries';
-import { IS_APP, cacheUpdate } from '@/lib/platform';
+import { IS_APP, cacheUpdate, PUBLIC_ORIGIN } from '@/lib/platform';
 import { useOnline } from '@/components/useOnline';
 import { OfflineBillsModal, useOfflineBills } from '@/components/OfflineBills';
 import { withPrintDefaults, type PaperSize } from '../../../shared/printSettings';
@@ -695,7 +696,7 @@ export default function Pos() {
         footer={
           <>
             {done && done.invoice.customer.phone && org && (
-              <a className="btn btn-secondary" target="_blank" rel="noreferrer" href={waLink(done.invoice.customer.phone, `Thank you for shopping at ${org.companyName}! Bill ${done.invoice.number}: ${money(done.invoice.total)}. ${done.invoice.publicToken ? `${window.location.origin}/share/${done.invoice.publicToken}` : ''}`)}><MessageCircle size={15} /> WhatsApp bill</a>
+              <a className="btn btn-secondary" target="_blank" rel="noreferrer" href={waLink(done.invoice.customer.phone, `Thank you for shopping at ${org.companyName}! Bill ${done.invoice.number}: ${money(done.invoice.total)}. ${done.invoice.publicToken ? `${PUBLIC_ORIGIN}/share/${done.invoice.publicToken}` : ''}`)}><MessageCircle size={15} /> WhatsApp bill</a>
             )}
             <Segmented value={receiptCfg.paper} onChange={setRoll} options={[{ value: '2in', label: '58mm' }, { value: '3in', label: '80mm' }]} />
             <button className="btn btn-secondary" onClick={() => printReceipt(receiptCfg)}><Printer size={15} /> Print receipt</button>
@@ -703,6 +704,7 @@ export default function Pos() {
           </>
         }>
         {done && <ReceiptCheck inline />}
+        {btSupported() && !btPrinter() && <p className="small muted" style={{ margin: '8px 0 0' }}><Link to="/app/print-settings?tab=thermal">Choose a Bluetooth printer</Link> to print receipts straight from this phone.</p>}
         {done && org && (
           <div className="print-area">
             {done.change > 0 && <div className="row no-print" style={{ justifyContent: 'center', gap: 8, marginBottom: 12, fontSize: 16 }}>Give change: <strong style={{ color: 'var(--green-700)', fontSize: 20 }}>{money(done.change)}</strong></div>}
@@ -779,6 +781,7 @@ export default function Pos() {
           </>
         }>
         {offDone && <ReceiptCheck inline />}
+        {btSupported() && !btPrinter() && <p className="small muted" style={{ margin: '8px 0 0' }}><Link to="/app/print-settings?tab=thermal">Choose a Bluetooth printer</Link> to print receipts straight from this phone.</p>}
         {offDone && org && (
           <div className="print-area">
             <div className="pos-offline no-print"><CloudOff size={16} /> No internet. This bill is safe on this device and will be saved with its GST invoice number automatically.</div>

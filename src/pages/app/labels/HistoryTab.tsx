@@ -31,7 +31,7 @@ export default function HistoryTab({ onOpen }: { onOpen: (job: JobRow) => void }
     const rows = (jobs.data ?? []).map((j) => ({ when: j.createdAt, by: j.createdBy ?? '', source: j.source.label || j.source.type, template: j.templateName ? `${j.templateName} v${j.templateVersion}` : 'Auto layout', stock: `${j.stock.w}x${j.stock.h} ${j.stock.across}-up`, printer: j.printerName ?? j.printer.language, labels: j.total, sent: j.sent, printed: j.printed, status: STATUS[j.status].label }));
     const cols = Object.keys(rows[0] ?? {}).map((k) => ({ key: k, label: k[0]!.toUpperCase() + k.slice(1) }));
     const blob = new Blob([toCsv(rows, cols)], { type: 'text/csv' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'label-print-jobs.csv'; a.click(); URL.revokeObjectURL(a.href);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'label-print-jobs.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
   };
   return (
     <section className="card ls-panel" aria-label="Print history">

@@ -32,6 +32,7 @@
     "express": "^4.21.2",
     "fast-xml-parser": "^4.5.0",
     "helmet": "^8.0.0",
+    "html-to-image": "1.11.13",
     "immer": "^10.1.1",
     "jsbarcode": "^3.11.6",
     "leaflet": "^1.9.4",

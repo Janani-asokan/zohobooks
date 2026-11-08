@@ -8,6 +8,8 @@ import {
 import { upiLink, useQr } from './qr';
 import { moduleMm, resolveLayout, symbologyFor } from '../../shared/labelLayout';
 import { announceReceipt, receiptWidth } from '@/lib/printerMemory';
+import { isNativeApp } from '@/lib/native';
+import { btPrinter, btPrintReceipt } from '@/lib/btPrinter';
 
 /** Print just the `.print-area`, with a page size that matches the paper (receipt roll or label stock). */
 export function printWithPage(pageCss: string, bodyClass: string) {
@@ -32,7 +34,9 @@ export function printWithPage(pageCss: string, bodyClass: string) {
   };
   window.addEventListener('afterprint', done);
   window.print();
-  setTimeout(done, 1500);
+  // A browser's print() returns once printing is done; the phone app's print screen stays open, and afterprint
+  // comes when it closes.
+  if (!isNativeApp()) setTimeout(done, 1500);
 }
 /**
  * Receipt roll: the page is exactly the roll width and as long as the receipt, measured just before printing.
@@ -58,6 +62,13 @@ export function printRoll(widthMm: number, selector = '.print-area .receipt') {
 }
 /** Prints a receipt at the page width this computer's printer takes, then asks once how it came out. */
 export function printReceipt(s: ThermalSettings) {
+  // Android app with a Bluetooth printer chosen: straight to the printer.
+  const bt = btPrinter();
+  if (bt) {
+    btPrintReceipt(document.querySelector('.print-area .receipt'), bt)
+      .catch((e) => window.dispatchEvent(new CustomEvent('c360:native-error', { detail: `${bt.name}: ${(e as Error).message}` })));
+    return;
+  }
   printRoll(rollPageMm(s.paper, receiptWidth(s.paper, s.pageWidth)));
   announceReceipt({ paper: s.paper, reprint: () => printReceipt(s) });
 }

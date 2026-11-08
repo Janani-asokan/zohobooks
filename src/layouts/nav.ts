@@ -24,8 +24,10 @@ export interface NavFlags { lending: boolean; has?: (feature: string) => boolean
 /** Links to pages of add-on features the shop doesn't have are left out of the sidebar, + New menu and palette. */
 /** Pages that are on the website only, left out of the CorpusLite phone app (shop essentials only). */
 const WEB_ONLY = /^\/app\/(sales\/(quotes|orders|challans|credit-notes|recurring|offers)|field|microfinance|banking|accounting|inventory\/reorder|reports\/gst|features|team|billing|audit)(\/|$|\?)/;
+/** In the phone app: pages that are only on the website (their links are left out of the app). */
+export const isWebOnly = (to: string) => IS_APP && WEB_ONLY.test(to);
 const featureOk = (to: string, has?: (feature: string) => boolean) => {
-  if (IS_APP && WEB_ONLY.test(to)) return false;
+  if (isWebOnly(to)) return false;
   const f = featureForPage(to.split('?')[0]!);
   return !f || !has || has(f.key);
 };

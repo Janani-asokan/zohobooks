@@ -8,6 +8,7 @@ import { useToast } from '@/context/ToastContext';
 import { TaxInvoice, printOrgFrom } from '@/components/TaxInvoice';
 import { SAMPLE_INVOICE } from '@/components/sampleInvoice';
 import { readLogo } from '@/lib/image';
+import { PhonePrinterCard } from '@/components/PhonePrinter';
 import { SALES_KEYS } from '@/api/hooks';
 import { BarcodeLabel, SAMPLE_LABEL_ITEM, SAMPLE_RECEIPT, ThermalReceipt, printReceipt } from '@/components/printing';
 import {
@@ -298,6 +299,7 @@ export default function PrintSettings() {
                   </div>
                 )}
               </div>
+              <PhonePrinterCard defaultWidth={th.paper === '3in' ? 80 : 58} />
               <div className="ps-sec">
                 <button className="btn btn-secondary btn-block" onClick={() => printReceipt(th)}><Printer size={15} /> Print a test receipt</button>
               </div>

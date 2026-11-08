@@ -1,3 +1,4 @@
+import { PUBLIC_ORIGIN } from '@/lib/platform';
 import { useState } from 'react';
 import { Plus, Users, Building2, Star, Pencil, History, KeyRound, Wand2, Loader2 } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
@@ -156,7 +157,7 @@ export default function Team() {
       </Modal>
 
       <Modal open={!!credentials} onClose={() => setCredentials(null)} title="Sign-in details" subtitle="Share these privately. The password is shown only once and must be changed at first sign-in."
-        footer={<button className="btn btn-primary" onClick={() => { navigator.clipboard?.writeText(`Login: ${window.location.origin}/login\nEmail: ${credentials?.email}\nTemporary password: ${credentials?.password}`); toast('success', 'Copied to clipboard'); }}>Copy details</button>}>
+        footer={<button className="btn btn-primary" onClick={() => { navigator.clipboard?.writeText(`Login: ${PUBLIC_ORIGIN}/login\nEmail: ${credentials?.email}\nTemporary password: ${credentials?.password}`); toast('success', 'Copied to clipboard'); }}>Copy details</button>}>
         <div className="card" style={{ padding: 16, boxShadow: 'none', background: 'var(--ink-50)' }}>
           <div className="small muted">Email</div><div className="strong">{credentials?.email}</div>
           <div className="small muted" style={{ marginTop: 10 }}>Temporary password</div><div className="strong" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>{credentials?.password}</div>
