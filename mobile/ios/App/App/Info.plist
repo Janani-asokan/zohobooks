@@ -8,6 +8,8 @@
 	<string>en</string>
 	<key>NSCameraUsageDescription</key>
 	<string>CorpusLite uses the camera to scan barcodes and IMEI numbers when billing.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>CorpusLite sends labels and receipts to printers on your shop’s Wi-Fi.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>CorpusLite uses the microphone only when you say a bill aloud.</string>
 	<key>CFBundleDisplayName</key>

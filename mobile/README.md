@@ -14,6 +14,9 @@ bills, barcode labels and simple reports. Accounting, AI, field staff and microf
   (Android printing / AirPrint) with the page at the paper's size. On Android, a paired **Bluetooth receipt printer**
   (58 or 80 mm, chosen once in Print settings → Receipt) prints straight away: the receipt is sent as a picture in
   ESC/POS, so Tamil/Hindi names, ₹, the logo and the UPI QR print as on screen.
+- **Label printers without the print screen.** In Barcode & Labels → Send labels, a 2/3/4-inch label printer on
+  Bluetooth (Android) or the shop's Wi-Fi (Android and iPhone, port 9100) gets the labels in its own language (TSPL,
+  ZPL) with the exact label size and gap, so labels never come out sideways or fitted onto 4 × 6 in paper.
 - **Files and links.** PDF, Excel and CSV downloads are saved on the phone and offered to WhatsApp, Drive, Files…;
   WhatsApp, maps, phone and UPI links open in the phone's apps; shared bill links point to the website.
 - **Fits the phone.** Keeps clear of the status bar, notch and home bar; the phone's big-font setting doesn't break

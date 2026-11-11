@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Copy, Pencil, Plus, Printer, Ruler, RotateCcw, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Plus, Printer, Ruler, RotateCcw, Star, Trash2 } from 'lucide-react';
 import { api } from '@/api/client';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -10,7 +10,9 @@ import {
   SHEET_MM, calibrationRuler, rowPitchMm, rowWidthMm, type PrinterSettings, type StockGeometry,
 } from '../../../../shared/labelEngine';
 import { LabelView } from '@/components/labels/LabelView';
-import { LABEL_KEYS, SAMPLE_DATA, allPrinters, allStocks, device, setDevice, useLabelSetup, type LabelStockRow, type PrinterRow } from '@/components/labels/labelsApi';
+import { LABEL_KEYS, SAMPLE_DATA, allPrinters, allStocks, device, sameGeom, setDevice, settingsWithStock, stockFromSettings, turnFromSettings, useLabelSetup, type LabelStockRow, type PrinterRow } from '@/components/labels/labelsApi';
+import { usePrintSettings } from '@/api/hooks';
+import { withPrintDefaults, type PrintSettings } from '../../../../shared/printSettings';
 
 const IN = 25.4;
 /** A number in mm (shown in inches when the user prefers; stored in mm). */
@@ -35,6 +37,18 @@ export default function StockPrinters() {
   const setup = useLabelSetup();
   const manage = me.can('items.write');
   const stocks = allStocks(setup.data); const printers = allPrinters(setup.data);
+  // The shop's default stock: every computer and phone starts with it (also chosen in Print settings → Label stock).
+  const psq = usePrintSettings();
+  const shopStock = psq.data ? stockFromSettings(withPrintDefaults(psq.data)) : null;
+  const makeDefault = async (st: LabelStockRow) => {
+    const ps = withPrintDefaults(psq.data);
+    try {
+      await api.put<PrintSettings>('/shop/print-settings', settingsWithStock(ps, st.geometry, sameGeom(st.geometry, stockFromSettings(ps)) ? turnFromSettings(ps) : 0));
+      setDevice({ stockId: undefined });
+      qc.invalidateQueries({ queryKey: ['printSettings'] });
+      toast('success', `${st.name} is now the shop’s label stock`);
+    } catch (e) { toast('error', 'Could not save', (e as Error).message); }
+  };
   const [editStock, setEditStock] = useState<{ id?: string; name: string; g: StockGeometry } | null>(null);
   const [editPrinter, setEditPrinter] = useState<{ id?: string; name: string; s: PrinterSettings } | null>(null);
   const [inches, setInches] = useState(false);
@@ -78,12 +92,13 @@ export default function StockPrinters() {
           <thead><tr><th>Stock</th><th>Label</th><th>Across</th><th>Row</th><th /></tr></thead>
           <tbody>{stocks.map((s) => (
             <tr key={s.id}>
-              <td>{s.name}{s.preset ? <span className="muted small"> · built-in</span> : ''}<div className="small muted">{s.geometry.sheet === 'roll' ? `${s.geometry.media} roll` : `${SHEET_MM[s.geometry.sheet].label} sheet, ${s.geometry.rows} rows`}</div></td>
+              <td>{s.name}{s.preset ? <span className="muted small"> · built-in</span> : ''}{shopStock && sameGeom(s.geometry, shopStock) && <span className="badge badge-green" style={{ marginLeft: 6 }}>Shop default</span>}<div className="small muted">{s.geometry.sheet === 'roll' ? `${s.geometry.media} roll` : `${SHEET_MM[s.geometry.sheet].label} sheet, ${s.geometry.rows} rows`}</div></td>
               <td className="mono small">{inches ? `${(s.geometry.w / IN).toFixed(2)} × ${(s.geometry.h / IN).toFixed(2)} in` : `${s.geometry.w} × ${s.geometry.h}`}</td>
               <td>{s.geometry.across}</td>
               <td className="small">{s.geometry.sheet === 'roll' ? `${rowWidthMm(s.geometry)} mm · pitch ${rowPitchMm(s.geometry)}` : ''}</td>
               <td className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
                 <button className="icon-btn sm" title="Calibration print" aria-label={`Calibrate with ${s.name}`} onClick={() => { const p = printers.find((x) => x.id === devPrinter) ?? printers[0]!; setCal({ stock: s, printer: p }); setCalOff({ x: p.settings.offsetX, y: p.settings.offsetY, dark: p.settings.darkness, speed: p.settings.speed, across: '', along: '' }); }}><Ruler size={14} /></button>
+                {me.can('admin') && s.geometry.sheet !== 'letter' && !(shopStock && sameGeom(s.geometry, shopStock)) && <button className="icon-btn sm" title="Use as the shop’s label stock" aria-label={`Use ${s.name} as the shop’s label stock`} onClick={() => void makeDefault(s)}><Star size={14} /></button>}
                 {manage && <button className="icon-btn sm" title={s.preset ? 'Copy and change' : 'Edit'} aria-label={`${s.preset ? 'Copy' : 'Edit'} ${s.name}`} onClick={() => setEditStock({ id: s.preset ? undefined : s.id, name: s.preset ? `${s.name} (mine)` : s.name, g: { ...s.geometry } })}>{s.preset ? <Copy size={14} /> : <Pencil size={14} />}</button>}
                 {manage && !s.preset && <button className="icon-btn sm danger" aria-label={`Delete ${s.name}`} onClick={() => void api.del(`/shop/label/stocks/${s.id}`).then(refresh)}><Trash2 size={14} /></button>}
               </td>

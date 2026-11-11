@@ -177,6 +177,31 @@ public class C360NativePlugin extends Plugin {
         return f;
     }
 
+    /* ---------------- Wi-Fi / network printers ---------------- */
+
+    /** Sends bytes (base64: TSPL / ZPL / ESC/POS) to a printer on the shop's network (raw port, usually 9100). */
+    @PluginMethod
+    public void netPrint(PluginCall call) {
+        String host = call.getString("host");
+        int port = call.getInt("port", 9100);
+        String data = call.getString("data");
+        if (host == null || host.trim().isEmpty() || data == null) { call.reject("Enter the printer’s IP address"); return; }
+        byte[] bytes = Base64.decode(data, Base64.DEFAULT);
+        new Thread(() -> {
+            try (java.net.Socket socket = new java.net.Socket()) {
+                socket.connect(new java.net.InetSocketAddress(host.trim(), port), 6000);
+                socket.setSoTimeout(10000);
+                OutputStream out = socket.getOutputStream();
+                for (int i = 0; i < bytes.length; i += 4096) { out.write(bytes, i, Math.min(4096, bytes.length - i)); }
+                out.flush();
+                Thread.sleep(300);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("The printer at " + host + " didn’t answer. Check it is on the same Wi-Fi and the IP address is right.", "connect");
+            }
+        }).start();
+    }
+
     /* ---------------- Bluetooth printers ---------------- */
 
     private boolean needsBtPermission() {

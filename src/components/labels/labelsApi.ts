@@ -5,7 +5,9 @@ import type { Item } from '@/api/types';
 import {
   PRINTER_PRESETS, STOCK_PRESETS, autoTemplate, type ImposeOptions, type JobLine, type LabelData, type LabelTemplateBody, type PrinterSettings, type StockGeometry,
 } from '../../../shared/labelEngine';
-import type { BarcodeSettings } from '../../../shared/printSettings';
+import type { BarcodeSettings, PrintSettings } from '../../../shared/printSettings';
+import { legacySizeFor, resolveLayout, type LabelLayout, type Turn } from '../../../shared/labelLayout';
+import { rowWidthMm } from '../../../shared/labelEngine';
 
 export interface LabelStockRow { id: string; name: string; geometry: StockGeometry; preset?: boolean }
 export interface PrinterRow { id: string; name: string; settings: PrinterSettings; branchId: string | null; branchName?: string | null; canRestore: boolean; preset?: boolean }
@@ -31,6 +33,33 @@ export const allPrinters = (setup?: LabelSetup): PrinterRow[] => [
   ...(setup?.printers ?? []),
   ...PRINTER_PRESETS.map((p) => ({ id: `preset:${p.id}`, name: p.name, settings: p.settings, branchId: null, canRestore: false, preset: true })),
 ];
+
+/* ---------- The shop's default stock (Print settings → Label stock), the same on every computer and phone ---------- */
+/** The stock the saved Print settings describe. Built-in sizes come back exactly (margins, gaps), so they show by name. */
+export function stockFromSettings(ps: PrintSettings): StockGeometry {
+  const l = resolveLayout(ps.barcode);
+  // Older settings (a label size, no layout): the built-in stock of that size, with its real margins.
+  if (!ps.barcode.layout) {
+    const p = STOCK_PRESETS.find((x) => Math.abs(x.stock.w - l.w) < 1.2 && Math.abs(x.stock.h - l.h) < 1.2 && x.stock.across === l.across && (x.stock.sheet === 'roll') === (l.stock === 'roll'));
+    if (p) return { ...p.stock };
+  }
+  if (l.stock === 'a4') return { w: l.w, h: l.h, across: l.across, gutter: l.gapX, marginL: l.marginX, marginR: l.marginX, rowGap: l.gapY, media: 'die-cut', sheet: 'a4', rows: l.rows, marginTop: l.marginY, safeInset: 1 };
+  // Rolls: gapY is the gap between labels along the roll (older layouts left it 0: the usual 3 mm).
+  return { w: l.w, h: l.h, across: l.across, gutter: l.gapX, marginL: l.marginX, marginR: l.marginX, rowGap: l.gapY > 0 ? l.gapY : 3, media: 'die-cut', sheet: 'roll', rows: 0, marginTop: 0, safeInset: 1 };
+}
+/** The turn saved with the shop's default stock (for a printer that takes labels the other way round). */
+export const turnFromSettings = (ps: PrintSettings): Turn => resolveLayout(ps.barcode).rotate;
+/** Print settings for a stock as the shop's default (A4 / roll only; Letter sheets are kept per computer). */
+export function settingsWithStock(ps: PrintSettings, g: StockGeometry, rotate: Turn = 0): PrintSettings {
+  const roll = g.sheet === 'roll';
+  const rw = rowWidthMm(g);
+  const layout: LabelLayout = {
+    stock: roll ? 'roll' : 'a4', w: g.w, h: g.h, across: g.across, rows: roll ? 0 : g.rows, gapX: g.gutter, gapY: g.rowGap,
+    marginX: g.marginL, marginY: roll ? 0 : g.marginTop, rollMm: roll ? (rw > 80 ? 104 : rw > 58 ? 80 : 58) : 210, rotate: roll ? rotate : 0,
+  };
+  return { ...ps, barcode: { ...ps.barcode, ...legacySizeFor(layout), layout } };
+}
+export const sameGeom = (a: StockGeometry, b: StockGeometry) => (['w', 'h', 'across', 'gutter', 'marginL', 'marginR', 'sheet', 'rows', 'marginTop'] as const).every((k) => a[k] === b[k]);
 
 /* ---------- This computer (spec: printer profiles are per workstation) ---------- */
 const DEV = 'c360.labels.device';

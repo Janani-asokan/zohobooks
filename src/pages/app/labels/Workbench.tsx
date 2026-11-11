@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowDown, Check, ChevronLeft, ChevronRight, FileUp, Layers, Minus, Plus, Printer, RotateCw, Save, ScanBarcode, Trash2, X } from 'lucide-react';
+import { Loader2, AlertTriangle, ArrowDown, Check, ChevronLeft, ChevronRight, FileUp, Layers, Minus, Plus, Printer, RotateCw, Save, ScanBarcode, Trash2, X } from 'lucide-react';
 import { api } from '@/api/client';
 import type { Bill, Item, PurchaseOrder } from '@/api/types';
 import { useBills, useItems, useMut, useOrg, usePrintSettings, usePurchaseOrders } from '@/api/hooks';
@@ -13,15 +13,17 @@ import { SearchInput } from '@/components/ui';
 import { labelMemory, rememberLabel } from '@/lib/printerMemory';
 import { parseCsv } from '../../../../shared/csv';
 import { findByCode } from '../../../../shared/barcode';
-import { legacySizeFor, resolveLayout, type Turn } from '../../../../shared/labelLayout';
+import { type Turn } from '../../../../shared/labelLayout';
 import { withPrintDefaults, type PrintSettings } from '../../../../shared/printSettings';
 import {
-  DEFAULT_IMPOSE, JOB_CONFIRM_ABOVE, JOB_MAX, SHEET_MM, STOCK_PRESETS, blockedLines, impose, jobBlocked, jobMetrics, rowPitchMm, rowWidthMm, validateJob,
+  DEFAULT_IMPOSE, JOB_CONFIRM_ABOVE, JOB_MAX, SHEET_MM, blockedLines, impose, jobBlocked, jobMetrics, rowPitchMm, rowWidthMm, validateJob,
   type ImposeOptions, type Issue, type JobLine, type LabelTemplateBody, type StockGeometry,
 } from '../../../../shared/labelEngine';
 import { LabelView } from '@/components/labels/LabelView';
+import { DirectPrinterPicker, useDirectConn } from '@/components/labels/DirectPrinter';
+import { directSupported, printRowsDirect } from '@/lib/labelDirect';
 import {
-  LABEL_KEYS, allPrinters, allStocks, autoFromSettings, device, labelDataFor, newKey, setDevice, templateFor, useLabelSetup, type JobRow,
+  LABEL_KEYS, allPrinters, allStocks, autoFromSettings, device, labelDataFor, newKey, sameGeom, setDevice, settingsWithStock, stockFromSettings, templateFor, turnFromSettings, useLabelSetup, type JobRow,
 } from '@/components/labels/labelsApi';
 
 type Src = 'items' | 'purchase_order' | 'bill' | 'batches' | 'csv' | 'scan';
@@ -31,18 +33,6 @@ const ROWS_PER_SCREEN = 12;
 const CHUNK_ROWS = 100;          // BP-09: output in chunks of 100 rows
 const IMMEDIATE_LABELS = 500;    // BP-08
 
-/** The stock as the saved Print settings layout described it (older shops), else the 2-up standard. */
-function stockFromSettings(ps: PrintSettings): StockGeometry {
-  const l = resolveLayout(ps.barcode);
-  // Older settings (a label size, no layout): the built-in stock of that size, with its real sheet margins.
-  if (!ps.barcode.layout) {
-    const p = STOCK_PRESETS.find((x) => Math.abs(x.stock.w - l.w) < 1.2 && Math.abs(x.stock.h - l.h) < 1.2 && x.stock.across === l.across && (x.stock.sheet === 'roll') === (l.stock === 'roll'));
-    if (p && p.stock.sheet !== 'roll') return { ...p.stock };
-  }
-  if (l.stock === 'a4') return { w: l.w, h: l.h, across: l.across, gutter: l.gapX, marginL: l.marginX, marginR: l.marginX, rowGap: l.gapY, media: 'die-cut', sheet: 'a4', rows: l.rows, marginTop: l.marginY, safeInset: 1 };
-  return { w: l.w, h: l.h, across: l.across, gutter: l.gapX, marginL: l.marginX, marginR: l.marginX, rowGap: 3, media: 'die-cut', sheet: 'roll', rows: 0, marginTop: 0, safeInset: 1 };
-}
-const sameGeom = (a: StockGeometry, b: StockGeometry) => (['w', 'h', 'across', 'gutter', 'marginL', 'marginR', 'sheet', 'rows', 'marginTop'] as const).every((k) => a[k] === b[k]);
 const sideways = (t: Turn) => t === 90 || t === 270;
 const pageCss = (s: StockGeometry, turn: Turn) => {
   // Sheets by name: printer drivers map "A4" / "letter" to their own paper exactly.
@@ -94,7 +84,12 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
   // Device turn for this label size (the one-question printer check), as before.
   const [, setTick] = useState(0);
   const mem = labelMemory(stock.w, stock.h);
-  const turn: Turn = stock.sheet === 'roll' ? (mem?.turn ?? 0) : 0;
+  // This computer's answer to the printer check, else the turn saved with the shop's default stock of this size.
+  const shopTurn = sameGeom(stock, saved) ? turnFromSettings(settings) : 0;
+  const turn: Turn = stock.sheet === 'roll' ? (mem?.turn ?? shopTurn) : 0;
+  // Phone app: straight to a Bluetooth / Wi-Fi label printer, told the exact label size (no print screen).
+  const conn = useDirectConn();
+  const [sending, setSending] = useState(false);
   const rememberTurn = (v: { turn: Turn; ok?: boolean }) => { rememberLabel(stock.w, stock.h, v); setTick((n) => n + 1); };
 
   /* ---------- Lines ---------- */
@@ -173,12 +168,22 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
   const doPrint = (range: { from: number; to: number }, after?: () => void) => {
     setPrintRange(range);
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (conn && stock.sheet === 'roll') {
+        setSending(true);
+        printRowsDirect(document.querySelector('.lb-print') ?? document, stock, printer, conn, turn)
+          .then((n) => { toast('success', `${n} row${n === 1 ? '' : 's'} sent to ${conn.kind === 'bt' ? conn.name : conn.host}`); after?.(); })
+          .catch((e) => toast('error', 'Printer', (e as Error).message))
+          .finally(() => { setPrintRange(null); setSending(false); });
+        return;
+      }
       printWithPage(pageCss(stock, turn), 'print-labels');
       setPrintRange(null);
       after?.();
     }));
   };
-  const testPrint = () => doPrint({ from: 0, to: 1 }, () => { if (stock.sheet === 'roll' && !labelMemory(stock.w, stock.h)?.ok) setTimeout(() => setCheck('ask'), 1200); });
+  // The "how did it come out?" check is for the print screen; a printer told the exact size needs none.
+  const askCheck = () => { if (stock.sheet === 'roll' && !conn && !labelMemory(stock.w, stock.h)?.ok) setTimeout(() => setCheck('ask'), 1200); };
+  const testPrint = () => doPrint({ from: 0, to: 1 }, askCheck);
   const ensureJob = async (): Promise<JobRow | null> => {
     if (job) return job;
     const out = lines.filter((_, i) => !blocked.has(i) && lines[i]!.qty > 0);
@@ -202,7 +207,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
       void api.post<JobRow>(`/shop/label/jobs/${j.id}/progress`, { sent: sentLabels, status: 'sent' }).then((u) => { setJob(u); qc.invalidateQueries({ queryKey: LABEL_KEYS.jobs }); }).catch(() => undefined);
       if (c + 1 < chunks) setChunk(c + 1);
       else setConfirm({ sent: sentLabels, total: j.total });
-      if (stock.sheet === 'roll' && !labelMemory(stock.w, stock.h)?.ok) setTimeout(() => setCheck('ask'), 1200);
+      askCheck();
     });
   };
   const markPrinted = async (printed: number) => {
@@ -266,7 +271,8 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           {row.map((s, j) => <div key={j} className={`lb-slot ${s ? '' : 'empty'}`} style={{ width: `${stock.w}mm`, height: `${stock.h}mm` }}>{s && <LabelView tpl={tpl} data={printable[s.line]!.data} dpi={printer.dpi} />}</div>)}
         </div>
       );
-      return turn ? <div key={key} className={`label-turn turn-${turn}`} style={{ '--rw': `${rowWidthMm(stock)}mm`, '--rh': `${stock.h}mm` } as React.CSSProperties}>{r}</div>
+      const t = forPrint && conn && stock.sheet === 'roll' ? 0 : turn;
+      return t ? <div key={key} className={`label-turn turn-${t}`} style={{ '--rw': `${rowWidthMm(stock)}mm`, '--rh': `${stock.h}mm` } as React.CSSProperties}>{r}</div>
         : <div key={key} className={`label-page ${!forPrint && overlay ? 'lb-overlay' : ''}`} style={!forPrint && overlay ? { '--head': `${printer.headMm}mm` } as React.CSSProperties : undefined}>{r}</div>;
     })()
   ) : (
@@ -413,6 +419,13 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
               {from > 1 && <span className="lb-warn">Resuming from label {from}</span>}
               <span>Page: <strong className="mono">{stock.sheet === 'roll' ? (sideways(turn) ? `${stock.h} × ${rowWidthMm(stock)}` : `${rowWidthMm(stock)} × ${stock.h}`) : `${SHEET_MM[stock.sheet].w} × ${SHEET_MM[stock.sheet].h}`} mm</strong>{turn ? ` (turned ${turn}°)` : ''}</span>
             </div>
+            {stock.sheet === 'roll' && !conn && lines.length > 0 && (
+              <p className="small ls-paper-hint no-print" data-testid="paper-hint">
+                In the print window, the paper must be <strong>{sideways(turn) ? `${stock.h} × ${rowWidthMm(stock)}` : `${rowWidthMm(stock)} × ${stock.h}`} mm</strong>, not the printer’s 4 × 6 in (100 × 150 mm):
+                on 4 × 6 paper the row is turned to fit and labels come out sideways. Set it once in the printer’s Printing preferences → Page Setup → Stock → New
+                (width {rowWidthMm(stock)} mm, height {stock.h} mm, gap {stock.rowGap} mm){directSupported() ? ', or choose Bluetooth / Wi-Fi under “Send labels” to print straight to the printer' : ''}.
+              </p>
+            )}
             {jobIssues.length > 0 && <div className="ls-warn no-print" role="alert">{jobIssues.map((x) => <div key={x.code}><AlertTriangle size={13} /> {x.message}</div>)}</div>}
             {blocked.size > 0 && <div className="ls-warn no-print"><AlertTriangle size={13} /> {blocked.size} line{blocked.size === 1 ? '' : 's'} can’t print and {blocked.size === 1 ? 'is' : 'are'} skipped; the rest print.</div>}
             {check && (
@@ -482,6 +495,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           </select>
           <p className="small muted" style={{ marginTop: 4 }}>{printer.headMm} mm head · {printer.dpi} dpi. Remembered on this computer.</p>
         </div>
+        {stock.sheet === 'roll' && <DirectPrinterPicker />}
         <div className="field">
           <label htmlFor="lb-template">Template</label>
           <select id="lb-template" className="select" value={chosenTpl?.id ?? ''} onChange={(e) => { setTemplateId(e.target.value); setDevice({ templateId: e.target.value }); }}>
@@ -517,12 +531,12 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           </div>
         </details>
         <div className="lb-actions">
-          <button type="button" className="btn btn-secondary" onClick={testPrint} disabled={!metrics.labels || jobBlocked(issues)} title="Prints only the first row or sheet, to check alignment"><Printer size={15} /> Test print</button>
-          <button type="button" className="btn btn-primary" onClick={() => void print()} disabled={!metrics.labels || jobBlocked(issues)}><Printer size={15} /> {chunks > 1 ? `Print labels (part ${Math.min(chunk, chunks - 1) + 1} of ${chunks})` : 'Print labels'}</button>
+          <button type="button" className="btn btn-secondary" onClick={testPrint} disabled={!metrics.labels || jobBlocked(issues) || sending} title="Prints only the first row or sheet, to check alignment"><Printer size={15} /> Test print</button>
+          <button type="button" className="btn btn-primary" onClick={() => void print()} disabled={!metrics.labels || jobBlocked(issues) || sending}>{sending ? <Loader2 size={15} className="spin" /> : <Printer size={15} />} {chunks > 1 ? `Print labels (part ${Math.min(chunk, chunks - 1) + 1} of ${chunks})` : 'Print labels'}</button>
         </div>
         {chunks > 1 && <p className="small muted">Big jobs go to the printer {CHUNK_ROWS} rows at a time, so a jam never wastes the whole roll.</p>}
-        {me.can('admin') && !sameGeom(stock, saved) && stock.sheet !== 'letter' && (
-          <button type="button" className="btn btn-ghost btn-sm btn-block" onClick={() => saveDefault.mutate({ ...settings, barcode: { ...settings.barcode, ...legacySizeFor({ stock: stock.sheet === 'roll' ? 'roll' : 'a4', w: stock.w, h: stock.h, across: stock.across, rows: stock.rows || 0, gapX: stock.gutter, gapY: stock.rowGap, marginX: stock.marginL, marginY: stock.marginTop, rollMm: stock.sheet === 'roll' ? Math.max(58, rowWidthMm(stock)) : 210, rotate: 0 }), layout: { stock: stock.sheet === 'roll' ? 'roll' : 'a4', w: stock.w, h: stock.h, across: stock.across, rows: stock.sheet === 'roll' ? 0 : stock.rows, gapX: stock.gutter, gapY: stock.sheet === 'roll' ? 0 : stock.rowGap, marginX: stock.marginL, marginY: stock.marginTop, rollMm: stock.sheet === 'roll' ? (rowWidthMm(stock) > 80 ? 104 : rowWidthMm(stock) > 58 ? 80 : 58) : 210, rotate: 0 } } })}>
+        {me.can('admin') && stock.sheet !== 'letter' && (!sameGeom(stock, saved) || turn !== turnFromSettings(settings)) && (
+          <button type="button" className="btn btn-ghost btn-sm btn-block" onClick={() => saveDefault.mutate(settingsWithStock(settings, stock, turn))} title="Every computer and phone of this shop starts with this stock and turn">
             <Save size={14} /> Save as this shop’s default stock
           </button>
         )}

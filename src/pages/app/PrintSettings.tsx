@@ -9,13 +9,16 @@ import { TaxInvoice, printOrgFrom } from '@/components/TaxInvoice';
 import { SAMPLE_INVOICE } from '@/components/sampleInvoice';
 import { readLogo } from '@/lib/image';
 import { PhonePrinterCard } from '@/components/PhonePrinter';
+import { allStocks, sameGeom, setDevice, settingsWithStock, stockFromSettings, useLabelSetup } from '@/components/labels/labelsApi';
+import { rowWidthMm } from '../../../shared/labelEngine';
 import { SALES_KEYS } from '@/api/hooks';
 import { BarcodeLabel, SAMPLE_LABEL_ITEM, SAMPLE_RECEIPT, ThermalReceipt, printReceipt } from '@/components/printing';
 import {
   BARCODE_FIELD_LABEL, INVOICE_FIELDS, INVOICE_FIELD_LABEL, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, withPrintDefaults,
   type BarcodeSettings, type InvoicePrintSettings, type InvoiceTemplate, type PrintSettings as PS, type ThermalSettings, type ThermalTheme,
 } from '../../../shared/printSettings';
-import { resolveLayout, rowWidth } from '../../../shared/labelLayout';
+import { resolveLayout, rowWidth, type Turn } from '../../../shared/labelLayout';
+import { Segmented } from '@/components/ui';
 
 const INVOICE_TEMPLATES: Array<{ id: InvoiceTemplate; label: string; tip: string }> = [
   { id: 'standard', label: 'Standard', tip: 'Ruled header, light table head.' },
@@ -63,6 +66,7 @@ export default function PrintSettings() {
   const [open, setOpen] = useState<Record<string, boolean>>({ details: true });
   const [hoverTheme, setHoverTheme] = useState<ThermalTheme | null>(null);
   const canEdit = me.can('admin');
+  const labelSetup = useLabelSetup();
 
   useEffect(() => { if (q.data && !draft) setDraft(withPrintDefaults(q.data)); }, [q.data]);
   const dirty = useMemo(() => !!draft && !!q.data && JSON.stringify(draft) !== JSON.stringify(withPrintDefaults(q.data)), [draft, q.data]);
@@ -311,7 +315,42 @@ export default function PrintSettings() {
                 <p className="small" style={{ margin: '2px 0 8px' }}>
                   <strong>{lay.w} × {lay.h} mm</strong>, {lay.stock === 'a4' ? `${lay.across} × ${lay.rows} on an A4 sheet` : `${lay.across} across a ${lay.rollMm} mm roll${lay.rotate ? `, turned ${lay.rotate}°` : ''}`}
                 </p>
-                <Link to="/app/items/labels" className="btn btn-secondary btn-sm"><Tag size={14} /> Change roll, size and labels across</Link>
+                {(() => {
+                  const rows = allStocks(labelSetup.data).filter((x) => x.geometry.sheet !== 'letter');
+                  const cur = stockFromSettings(draft);
+                  const curId = rows.find((x) => sameGeom(x.geometry, cur))?.id ?? '';
+                  const roll = cur.sheet === 'roll';
+                  const rw = rowWidthMm(cur);
+                  return (<>
+                    <div className="field">
+                      <label htmlFor="ps-stock">Label stock for this shop</label>
+                      <select id="ps-stock" className="select" value={curId} disabled={!canEdit}
+                        onChange={(e) => { const x = rows.find((r) => r.id === e.target.value); if (x) { setDraft(settingsWithStock(draft, x.geometry, x.geometry.sheet === 'roll' ? lay.rotate : 0)); setDevice({ stockId: undefined }); } }}>
+                        {!curId && <option value="">{lay.w} × {lay.h} mm, {lay.across} across (custom)</option>}
+                        <optgroup label="Label printer rolls">{rows.filter((x) => x.geometry.sheet === 'roll').map((x) => <option key={x.id} value={x.id}>{x.name}{x.preset ? '' : ' (yours)'}</option>)}</optgroup>
+                        <optgroup label="A4 label sheets">{rows.filter((x) => x.geometry.sheet === 'a4').map((x) => <option key={x.id} value={x.id}>{x.name}{x.preset ? '' : ' (yours)'}</option>)}</optgroup>
+                      </select>
+                      <span className="field-hint">Every computer and phone of the shop starts with this stock. Save to keep it.</span>
+                    </div>
+                    {roll && (
+                      <div className="field">
+                        <label>Labels come out of the printer</label>
+                        <Segmented value={String(lay.rotate) as '0' | '90' | '180' | '270'} onChange={(v: string) => canEdit && setDraft(settingsWithStock(draft, cur, Number(v) as Turn))}
+                          options={[{ value: '0', label: 'As shown' }, { value: '90', label: 'Turn 90°' }, { value: '180', label: 'Turn 180°' }, { value: '270', label: 'Turn 270°' }]} />
+                        <span className="field-hint">Only if your printer turns them. Most don’t once the paper size below is set.</span>
+                      </div>
+                    )}
+                    {roll && (
+                      <p className="small ps-paper-note" data-testid="paper-size-note">
+                        <strong>Paper size in the print window: {rw} × {cur.h} mm.</strong> A 4-inch label printer starts on 4 × 6 in (100 × 150 mm) paper,
+                        and printing a {rw} × {cur.h} mm row onto it turns the labels sideways. Set it once in the printer’s
+                        Printing preferences → Page Setup → Stock → New: width {rw} mm, height {cur.h} mm, gap {cur.rowGap} mm. In the phone app you can
+                        print straight to a Bluetooth or Wi-Fi label printer instead, with no paper size to set.
+                      </p>
+                    )}
+                  </>);
+                })()}
+                <Link to="/app/items/labels" className="btn btn-secondary btn-sm"><Tag size={14} /> Open Barcode &amp; Labels</Link>
                 <div className="field" style={{ marginTop: 12 }}>
                   <label>Barcode height · {bc.barcodeHeight}% of the label</label>
                   <input type="range" min={20} max={70} value={bc.barcodeHeight} onChange={(e) => setB({ barcodeHeight: Number(e.target.value) })} style={{ accentColor: '#1c1917' }} />

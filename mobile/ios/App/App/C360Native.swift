@@ -1,6 +1,7 @@
 import UIKit
 import WebKit
 import Capacitor
+import Network
 
 /// The app's web view, with the CorpusLite native plugin added.
 class AppViewController: CAPBridgeViewController {
@@ -23,6 +24,7 @@ public class C360NativePlugin: CAPPlugin, CAPBridgedPlugin, UIPrintInteractionCo
         CAPPluginMethod(name: "openUrl", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "btList", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "btPrint", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "netPrint", returnType: CAPPluginReturnPromise),
     ]
 
     private var pageSize: CGSize?
@@ -99,6 +101,36 @@ public class C360NativePlugin: CAPPlugin, CAPBridgedPlugin, UIPrintInteractionCo
         DispatchQueue.main.async {
             UIApplication.shared.open(url, options: [:]) { ok in ok ? call.resolve() : call.reject("No app on this phone opens this link") }
         }
+    }
+
+    /// Sends bytes (TSPL / ZPL / ESC/POS) to a printer on the shop's Wi-Fi (raw port, usually 9100).
+    @objc func netPrint(_ call: CAPPluginCall) {
+        guard let host = call.getString("host")?.trimmingCharacters(in: .whitespaces), !host.isEmpty,
+              let b64 = call.getString("data"), let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters) else { call.reject("Enter the printer’s IP address"); return }
+        let portNumber = UInt16(call.getInt("port") ?? 9100)
+        guard let port = NWEndpoint.Port(rawValue: portNumber) else { call.reject("Wrong port"); return }
+        let conn = NWConnection(host: NWEndpoint.Host(host), port: port, using: .tcp)
+        let queue = DispatchQueue(label: "c360.netprint")  // one queue, so the callbacks never race
+        var finished = false
+        let finish: (String?) -> Void = { err in
+            if finished { return }
+            finished = true
+            conn.cancel()
+            if let err = err { call.reject(err, "connect") } else { call.resolve() }
+        }
+        conn.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                conn.send(content: data, completion: .contentProcessed { error in
+                    queue.asyncAfter(deadline: .now() + 0.3) { finish(error == nil ? nil : "Could not send to the printer") }
+                })
+            case .failed, .waiting:
+                finish("The printer at \(host) didn’t answer. Check it is on the same Wi-Fi and the IP address is right.")
+            default: break
+            }
+        }
+        conn.start(queue: queue)
+        queue.asyncAfter(deadline: .now() + 8) { finish("The printer at \(host) didn’t answer in time.") }
     }
 
     @objc func btList(_ call: CAPPluginCall) {
