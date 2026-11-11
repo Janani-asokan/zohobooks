@@ -9,7 +9,7 @@ import {
 function Bars({ code, sym, el, dpi, showQuiet }: { code: string; sym: Exclude<Symbology, 'QR'>; el: LabelElement; dpi: number; showQuiet?: boolean }) {
   const ref = useRef<SVGSVGElement>(null);
   const fit = fitBarcode(code, sym, el.w, dpi);
-  const valueH = el.showValue ? Math.min(2.6, el.h * 0.25) : 0;
+  const valueH = el.showValue ? Math.min(Math.max(2.6, el.h * 0.09), 5, el.h * 0.25) : 0;
   const barsH = Math.max(1, el.h - valueH);
   useLayoutEffect(() => {
     const svg = ref.current; if (!svg || !fit.ok) return;

@@ -36,7 +36,9 @@ const sheet = (s: Exclude<Sheet, 'roll'>, w: number, h: number, across: number, 
 /** Standard presets (spec 4.1, plus common Indian and A4 / Letter sheet stock). Users clone or add their own. */
 export const STOCK_PRESETS: Array<{ id: string; name: string; fits: string; stock: StockGeometry }> = [
   { id: '4in-100x50', name: '4-inch, single · 100 × 50', fits: '4-inch', stock: roll(100, 50, 1, 2, 0) },
-  { id: '4in-100x150', name: '4-inch, shipping · 100 × 150', fits: '4-inch', stock: roll(100, 150, 1, 2, 0) },
+  { id: '4in-100x75', name: '4-inch, single · 100 × 75', fits: '4-inch', stock: roll(100, 75, 1, 2, 0) },
+  { id: '4in-100x100', name: '4-inch, square · 100 × 100', fits: '4-inch', stock: roll(100, 100, 1, 2, 0) },
+  { id: '4in-100x150', name: '4-inch, shipping (4 × 6 in) · 100 × 150', fits: '4-inch', stock: roll(100, 150, 1, 2, 0) },
   { id: '4in-50x25x2', name: '2-up standard · 50 × 25', fits: '4-inch', stock: roll(50, 25, 2, 1, 2) },
   { id: '4in-33x25x3', name: '3-up · 33 × 25', fits: '4-inch', stock: roll(33, 25, 3, 0.5, 2) },
   { id: '4in-25x25x4', name: '4-up · 25 × 25', fits: '4-inch', stock: roll(25, 25, 4, 0.5, 1) },
@@ -227,7 +229,10 @@ const eid = () => `e${Date.now().toString(36)}${(seq++).toString(36)}`;
  */
 export function autoTemplate(w: number, h: number, show: Partial<Record<'company' | 'sku' | 'name' | 'mrp' | 'price' | 'category' | 'brand' | 'unit', { size: number; bold: boolean }>> = { company: { size: 22, bold: true }, name: { size: 22, bold: false }, mrp: { size: 22, bold: false }, price: { size: 22, bold: false } }, barcodeShare = 40): LabelTemplateBody {
   const inset = 1; const iw = w - inset * 2;
-  const tmm = (s: number) => Math.round(s * 0.13 * 100) / 100; // settings size → mm (22 ≈ 2.9 mm)
+  // Settings size → mm (22 ≈ 2.9 mm on a 50 × 25 label). Bigger labels get bigger text, so a design fills a 100 × 100
+  // label instead of printing as a small label in the middle of it.
+  const grow = Math.max(1, Math.min(w / 50, h / 25, 3));
+  const tmm = (s: number) => Math.round(s * 0.13 * grow * 100) / 100;
   const els: LabelElement[] = [];
   let y = inset;
   const line = (field: LabelField, o: { size: number; bold: boolean }, prefix = '') => {

@@ -104,7 +104,7 @@ export default function StockPrinters() {
               </td>
             </tr>))}</tbody>
         </table></div>
-        {manage && <button className="btn btn-soft btn-sm" style={{ marginTop: 8 }} onClick={() => setEditStock({ name: 'My labels', g: { ...stocks[2]!.geometry } })}><Plus size={14} /> Add label stock</button>}
+        {manage && <button className="btn btn-soft btn-sm" style={{ marginTop: 8 }} onClick={() => setEditStock({ name: 'My labels', g: { ...(stocks.find((x) => x.id === 'preset:4in-50x25x2') ?? stocks[0]!).geometry } })}><Plus size={14} /> Add label stock</button>}
       </section>
 
       <aside className="card ls-panel" aria-label="Printers">

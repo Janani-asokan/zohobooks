@@ -33,6 +33,14 @@ const ROWS_PER_SCREEN = 12;
 const CHUNK_ROWS = 100;          // BP-09: output in chunks of 100 rows
 const IMMEDIATE_LABELS = 500;    // BP-08
 
+/** The usual 4-inch printer rolls, drawn to scale, for "Which labels are in the printer?". */
+const IN_PRINTER = [
+  { id: 'preset:4in-50x25x2', label: '50 × 25, 2 across', across: 2, w: 104, h: 25 },
+  { id: 'preset:4in-100x50', label: '100 × 50', across: 1, w: 104, h: 50 },
+  { id: 'preset:4in-100x75', label: '100 × 75', across: 1, w: 104, h: 75 },
+  { id: 'preset:4in-100x100', label: '100 × 100', across: 1, w: 104, h: 100 },
+  { id: 'preset:4in-100x150', label: '100 × 150 (4 × 6 in)', across: 1, w: 104, h: 150 },
+].map((x) => ({ ...x, pw: x.w / 4, ph: x.h / 4 }));
 const sideways = (t: Turn) => t === 90 || t === 270;
 const pageCss = (s: StockGeometry, turn: Turn) => {
   // Sheets by name: printer drivers map "A4" / "letter" to their own paper exactly.
@@ -478,6 +486,22 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
       {/* ---------- Stock, printer, template ---------- */}
       <section className="card ls-panel no-print" aria-label="Label stock and printer">
         <h3>2 · Stock, printer and template</h3>
+        {/* The labels on the roll decide everything: printing 50 × 25 on a roll of 100 × 100 labels puts one small label on
+            each big one. Measure one label (across × along the roll) and pick it. */}
+        <div className="field ls-measure" data-testid="labels-in-printer">
+          <label>Which labels are in the printer?</label>
+          <div className="ls-chips" role="radiogroup" aria-label="Labels in the printer">
+            {IN_PRINTER.filter((x) => stocks.some((s) => s.id === x.id)).map((x) => {
+              const s = stocks.find((y) => y.id === x.id)!;
+              const on = sameGeom(s.geometry, stock);
+              return <button key={x.id} type="button" role="radio" aria-checked={on} className={on ? 'on' : ''} title={s.name}
+                onClick={() => { setStockId(s.id); setGeom(s.geometry); setDevice({ stockId: s.id }); setView(0); setChunk(0); }}>
+                <span className="ls-measure-pic" style={{ width: `${Math.round(x.pw)}px`, height: `${Math.round(x.ph)}px` }}>{x.across > 1 && <i />}</span>{x.label}
+              </button>;
+            })}
+          </div>
+          <p className="small muted" style={{ marginTop: 4 }}>Measure one label: across the roll × along it. If the labels are bigger than the size chosen, each small label prints alone in the middle or at the top of a big one.</p>
+        </div>
         <div className="field">
           <label htmlFor="ls-preset">Label stock</label>
           <select id="ls-preset" className="select" value={stockId} onChange={(e) => { const s = stocks.find((x) => x.id === e.target.value); if (s) { setStockId(s.id); setGeom(s.geometry); setDevice({ stockId: s.id }); setView(0); setChunk(0); } }}>

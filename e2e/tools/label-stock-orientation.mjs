@@ -54,6 +54,17 @@ try {
   ok(/size:\s*104mm 25mm/.test(css), 'the print page is the real row: 104 × 25 mm', (css.match(/size:[^;]+/) ?? [''])[0]);
   await p2.screenshot({ path: `${out}/workbench.png` });
 
+  /* Big labels on the roll (the photo: 100 × 100 labels, 50 × 25 chosen): pick what is in the printer */
+  await p2.evaluate(() => { window.__printed = []; });
+  await p2.getByTestId('labels-in-printer').getByRole('radio', { name: /100 × 100/ }).click();
+  ok((await selText(p2, '#ls-preset')).includes('100 × 100'), '“Which labels are in the printer?” → 100 × 100 sets the stock');
+  await p2.getByRole('button', { name: /^Test print/ }).click();
+  await p2.waitForFunction(() => window.__printed.length > 0, null, { timeout: 10000 });
+  ok(/size:\s*104mm 100mm/.test(await p2.evaluate(() => window.__printed[0])), 'the page is then one 100 × 100 label (104 × 100 mm with the roll margins)');
+  const fills = await p2.evaluate(() => { const r = document.querySelector('.ls-sheets .lb-slot'); const bar = r?.querySelector('svg, canvas, img'); return r && bar ? bar.getBoundingClientRect().width / r.getBoundingClientRect().width : 0; });
+  ok(fills > 0.6, `the design fills the big label (barcode ${Math.round(fills * 100)}% of its width)`);
+  await p2.screenshot({ path: `${out}/workbench-100x100.png` });
+
   /* The turn saved for the shop applies on a new computer */
   await setStock(p, 'preset:4in-50x25x2', 90);
   const p3 = await fresh(() => { window.__printed = []; window.print = () => { window.__printed.push([...document.querySelectorAll('style')].map((s) => s.textContent).join('\n')); window.dispatchEvent(new Event('afterprint')); }; });
@@ -95,6 +106,12 @@ try {
   const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 0;
   fs.writeFileSync(`${out}/tspl-row.png`, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]));
   ok(ink > 2000, `the row has the labels on it (${ink} black dots)`);
+  await pa.evaluate(() => { window.__native.length = 0; });
+  await pa.getByTestId('labels-in-printer').getByRole('radio', { name: /100 × 100/ }).click();
+  await pa.getByRole('button', { name: /^Test print/ }).click();
+  await pa.waitForFunction(() => window.__native.some((c) => c.m === 'netPrint'), null, { timeout: 20000 });
+  const big = Buffer.from(await pa.evaluate(() => window.__native.find((c) => c.m === 'netPrint').o.data), 'base64').subarray(0, 60).toString('latin1');
+  ok(big.startsWith('SIZE 104 mm,100 mm'), 'on 100 × 100 labels the printer is told SIZE 104 mm,100 mm', big.split('\r\n')[0]);
   await pa.evaluate(() => { localStorage.removeItem('c360.labels.direct'); });
   // Put the demo shop back as it was.
   await p.evaluate(async (s) => { await fetch('/api/shop/print-settings', { method: 'PUT', headers: { 'content-type': 'application/json', 'x-requested-with': 'ledgerly' }, body: JSON.stringify(s) }); }, before);
