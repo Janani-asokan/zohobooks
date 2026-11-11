@@ -25,7 +25,13 @@ export const Choice = ({ icon, label, hint, onClick }: { icon: ReactNode; label:
  * Label printers on the website: the paper (label stock) is set in the printer's Windows driver, which a web page
  * can't open. Chrome's print window reaches it through "Print using system dialog" → Preferences.
  */
-export function LabelPaperSteps({ w, h, gap, printer = 'the label printer', testId }: { w: number; h: number; gap: number; printer?: string; testId?: string }) {
+export function LabelPaperSteps({ w, h, gap, printer = 'the label printer', testId, folded }: { w: number; h: number; gap: number; printer?: string; testId?: string; folded?: boolean }) {
+  if (folded) return (
+    <details className="small ls-paper-hint ls-paper-folded no-print" data-testid={testId}>
+      <summary>Paper on this computer: <strong>{w} × {h} mm</strong> (already working). How to set it again</summary>
+      <LabelPaperSteps w={w} h={h} gap={gap} printer={printer} />
+    </details>
+  );
   return (
     <div className="small ls-paper-hint no-print" data-testid={testId}>
       <strong>Set the label size once on this computer: {w} × {h} mm.</strong> Until it is set, the printer uses its own paper size

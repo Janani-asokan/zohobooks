@@ -482,3 +482,12 @@
 .ls-measure .ls-chips button { display: inline-flex; align-items: center; gap: 6px; }
 .ls-measure-pic { display: inline-block; position: relative; border: 1.5px solid currentColor; border-radius: 2px; opacity: .7; flex-shrink: 0; }
 .ls-measure-pic i { position: absolute; top: -1px; bottom: -1px; left: 50%; border-left: 1.5px dashed currentColor; }
+
+/* Label screen: the one-line setup summary, the folded settings and why Print is greyed out. */
+.ls-setup-line { margin: 10px 0 4px; line-height: 1.5; }
+.ls-more { border-top: 1px dashed var(--line, #e7e5e4); margin-top: 6px; padding-top: 6px; }
+.ls-why { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-top: 8px; padding: 8px 10px; border-radius: var(--radius-sm, 8px); background: var(--amber-50, #fff8eb); border: 1px solid var(--amber-200, #f5d9a8); font-size: 13px; line-height: 1.4; }
+.ls-why > span { flex: 1 1 160px; }
+.ls-start { margin: 6px 0 0; padding: 8px 10px; border-radius: var(--radius-sm, 8px); background: var(--rose-50, #fdf2f4); }
+.ls-panel .lb-actions + .ls-why, .ls-panel .lb-actions { margin-top: 10px; }
+.ls-paper-folded summary { cursor: pointer; } .ls-paper-folded > .ls-paper-hint { border: 0; background: none; padding: 6px 0 0; margin: 0; }

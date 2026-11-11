@@ -7,6 +7,8 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
+// The label screen folds stock / printer / template under “More settings”.
+const openMore = async (pg) => { const m = pg.getByRole('button', { name: 'More settings' }); if (await m.isVisible().catch(() => false)) await m.click(); };
 import zx from '@zxing/library';
 const { BinaryBitmap, DecodeHintType, HybridBinarizer, MultiFormatReader, RGBLuminanceSource, BarcodeFormat } = zx;
 const B = process.env.BASE ?? 'http://localhost:4000';
@@ -101,7 +103,7 @@ try {
   ok(mods.length > 0 && mods.every((m) => Math.abs(m * 8 - Math.round(m * 8)) < 1e-6 && m >= 0.25), `every barcode on whole 0.125 mm dots (${[...new Set(mods)].join(', ')} mm)`);
 
   /* A. 2-up standard, one row each */
-  await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
   await p.getByRole('button', { name: 'One row each' }).click();
   await p.getByRole('button', { name: /^Print labels/ }).click();
   let r = await asPrinted('roll-2up'); await closeCards();
@@ -113,7 +115,7 @@ try {
   execFileSync('pdftoppm', ['-png', '-r', '200', '-f', '1', '-l', '1', r.file, `${out}/roll-2up`]);
 
   /* B. 100x50 turned 90° */
-  await p.locator('#ls-preset').selectOption({ label: '4-inch, single · 100 × 50' });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: '4-inch, single · 100 × 50' });
   await p.getByRole('radio', { name: 'Turn 90°' }).click();
   await p.getByRole('button', { name: 'Test print' }).click();
   r = await asPrinted('turned'); await closeCards();
@@ -122,7 +124,7 @@ try {
   await p.getByRole('radio', { name: 'As shown' }).click();
 
   /* C. 4-up 25 × 25: QR codes (Code 128 can’t fit 23 mm) */
-  await p.locator('#ls-preset').selectOption({ label: '4-up · 25 × 25' });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: '4-up · 25 × 25' });
   ok(await p.locator('.ls-sheets .lv-qr').count() > 0, '4-up uses QR codes (spec 5: Code 128 holds only 3 characters at 25 mm)');
   await p.getByRole('button', { name: 'One row each' }).click();
   await p.getByRole('button', { name: /^Print labels/ }).click();
@@ -132,7 +134,7 @@ try {
   ok(q.every((c) => c?.text === ean && c.format === 'QR_CODE'), '4-up QR codes scan at 203 dpi', JSON.stringify(q));
 
   /* D. A4 65 per sheet */
-  await p.locator('#ls-preset').selectOption({ label: 'A4 · 65 per sheet (38.1 × 21.2)' });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: 'A4 · 65 per sheet (38.1 × 21.2)' });
   await p.locator('.lb-lines li').first().locator('input[type=number]').fill('70');
   await p.getByRole('button', { name: /^Print labels/ }).click();
   r = await asPrinted('a4'); await closeCards();
@@ -146,7 +148,7 @@ try {
   await p.goto(`${B}/app/items/labels?source=bill&id=${bill.id}`); await p.waitForSelector('.lb-lines li');
   const qtys = await p.locator('.lb-lines li input[type=number]').evaluateAll((els) => els.map((e) => Number(e.value)));
   ok(qtys.join(',') === '10,4', `a bill opens with what arrived: ${qtys.join(', ')} labels`);
-  await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
   await p.getByRole('button', { name: /^Print labels/ }).click();
   r = await asPrinted('bill');
   ok(r.pages === 7, `14 labels, 2-up: ${r.pages} rows`);
@@ -181,8 +183,8 @@ try {
   const t = (await call('POST', '/shop/label/templates', { name: `QR tag ${tag}`, draft: tpl })).body;
   await call('POST', `/shop/label/templates/${t.id}/publish`);
   await p.goto(`${B}/app/items/labels?ids=${retail.id}`); await p.waitForSelector('.lb-lines li');
-  await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
-  await p.locator('#lb-template').selectOption({ label: `QR tag ${tag} · v1` });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
+  await openMore(p); await p.locator('#lb-template').selectOption({ label: `QR tag ${tag} · v1` });
   ok(await p.locator('.ls-sheets .lv-qr').count() > 0, 'a published template is chosen and drawn in the preview');
   await p.getByRole('button', { name: /^Print labels/ }).click();
   r = await asPrinted('template'); await closeCards();

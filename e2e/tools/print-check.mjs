@@ -8,6 +8,8 @@
 // Usage: BASE=http://localhost:4000 node e2e/tools/print-check.mjs <outDir>
 import { chromium } from 'playwright';
 import fs from 'node:fs';
+// The label screen folds stock / printer / template under “More settings”.
+const openMore = async (pg) => { const m = pg.getByRole('button', { name: 'More settings' }); if (await m.isVisible().catch(() => false)) await m.click(); };
 import { execFileSync } from 'node:child_process';
 const B = process.env.BASE ?? 'http://localhost:4000';
 const out = process.argv[2] ?? '.'; fs.mkdirSync(out, { recursive: true });
@@ -23,7 +25,17 @@ try {
   const asPrinted = async (name) => {
     await p.waitForFunction(() => window.__printed > 0);
     await p.evaluate(() => { document.body.className = window.__pc; });
-    await p.emulateMedia({ media: 'print' }); const f = `${out}/${name}.pdf`; fs.writeFileSync(f, await p.pdf({ preferCSSPageSize: true, printBackground: true })); await p.emulateMedia({ media: 'screen' });
+    await p.emulateMedia({ media: 'print' });
+    // A wide label row has no CSS page size on the website: the paper is the label stock set in the printer driver.
+    await p.evaluate(() => {
+      const kept = [...document.querySelectorAll('style[data-keep]')].map((x) => x.textContent).join('');
+      const r = document.querySelector('#print-root .label-row')?.getBoundingClientRect();
+      if (/size\s*:/.test(kept) || !r || !r.width) return;
+      const st = document.createElement('style'); st.dataset.keep = '1';
+      st.textContent = `@page { size: ${(r.width * 25.4 / 96).toFixed(2)}mm ${(r.height * 25.4 / 96).toFixed(2)}mm; }`;
+      document.head.appendChild(st);
+    });
+    const f = `${out}/${name}.pdf`; fs.writeFileSync(f, await p.pdf({ preferCSSPageSize: true, printBackground: true })); await p.emulateMedia({ media: 'screen' });
     await p.evaluate(() => { document.querySelectorAll('style[data-keep]').forEach((s) => s.remove()); document.getElementById('print-root')?.remove(); document.body.classList.remove('printing', 'print-labels', 'print-receipt'); window.__printed = 0; });
     return info(f);
   };
@@ -35,7 +47,7 @@ try {
 
   /* Labels */
   await p.goto(`${B}/app/items/labels?ids=${item.id}`); await p.waitForSelector('.lv');
-  await p.locator('#ls-preset').selectOption({ label: '4-inch, single · 100 × 50' });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: '4-inch, single · 100 × 50' });
   await p.getByRole('button', { name: /^Print labels/ }).click();
   let r = await asPrinted('l1');
   ok(near(r.w, 104) && near(r.h, 50), `first print as designed: ${r.w} × ${r.h} mm`);
@@ -51,16 +63,17 @@ try {
   await ask.getByRole('button', { name: /Right way up/ }).click();
   ok(await card('Label printer is set up').isVisible(), '“Right way up” → set up, won’t ask again');
   await p.reload(); await p.waitForSelector('.lv');
-  await p.locator('#ls-preset').selectOption({ label: '4-inch, single · 100 × 50' });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: '4-inch, single · 100 × 50' });
   ok(await p.getByRole('radio', { name: 'Turn 90°' }).getAttribute('aria-checked') === 'true' && /Checked on this computer/.test(await p.locator('.ls-panel').last().innerText()), 'after a reload this computer still turns 100 × 50 labels 90°');
   await p.getByRole('button', { name: /^Print labels/ }).click();
   r = await asPrinted('l3'); await p.waitForTimeout(1800);
   ok(near(r.w, 50) && await p.getByRole('region', { name: /Quick check/ }).count() === 0, 'next print: turned, and no question');
   // Another size: upside down → 180°
-  await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
   await p.getByRole('button', { name: /^Print labels/ }).click(); await asPrinted('l4');
   await ask.waitFor({ timeout: 5000 });
   await ask.getByRole('button', { name: /Upside down/ }).click();
+  await openMore(p);
   ok(await p.getByRole('radio', { name: 'Turn 180°' }).getAttribute('aria-checked') === 'true', '“Upside down” on 50 × 25 → turned 180° (100 × 50 keeps its own 90°)');
   await ask.getByRole('button', { name: 'Test print one row' }).click(); r = await asPrinted('l5');
   ok(near(r.w, 102) || near(r.w, 104), `180° keeps the page size: ${r.w} × ${r.h} mm`);

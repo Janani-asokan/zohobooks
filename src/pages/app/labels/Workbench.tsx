@@ -312,11 +312,29 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
     try { await api.post('/shop/label/barcodes/bulk-generate', { ids: noBarcode.map((l) => l.itemId) }); await qc.invalidateQueries({ queryKey: ['items'] }); toast('success', 'Barcodes made for the items without one'); } catch (e) { toast('error', 'Could not make barcodes', (e as Error).message); }
   };
 
+  // Why Print is greyed out, in plain words, with the one tap that fixes it.
+  const focusItems = () => { setSrcTab('items'); setTimeout(() => { const el = document.querySelector<HTMLInputElement>('.ls-pick input'); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus(); }, 0); };
+  const fitPrinter = printers.find((p) => p.preset && p.settings.language !== 'browser' && p.settings.headMm >= rowWidthMm(stock) - 2);
+  const jobBlocker = issues.find((x) => x.scope === 'job' && x.severity === 'blocker');
+  const why: null | { msg: string; fix?: { label: string; run: () => void } } = sending ? null
+    : !lines.length ? { msg: 'Nothing to print yet. Tap the items you want labels for.', fix: { label: 'Choose items', run: focusItems } }
+    : lines.every((l) => l.qty <= 0) ? { msg: 'Every item is set to 0 labels.', fix: { label: 'Print 1 label each', run: () => setLines((ls) => ls.map((l) => ({ ...l, qty: 1 }))) } }
+    : jobBlocker ? {
+      msg: jobBlocker.message,
+      fix: jobBlocker.code === 'head' && fitPrinter ? { label: `Use the ${fitPrinter.name.split(' · ')[0]}`, run: () => { setPrinterId(fitPrinter.id); setDevice({ printerId: fitPrinter.id }); } }
+        : jobBlocker.code === 'size' ? { label: 'Use the automatic layout', run: () => { setTemplateId(''); setDevice({ templateId: '' }); } } : undefined,
+    }
+    : !metrics.labels ? (noBarcode.length && me.can('items.write')
+      ? { msg: `${noBarcode.length === lines.length ? 'These items have' : 'Some items have'} no barcode, so there is nothing to print.`, fix: { label: 'Make barcodes for them', run: () => void genMissing() } }
+      : { msg: 'None of these items can print. See the red notes under each item.' })
+    : null;
+  const [more, setMore] = useState(false);
+
   return (
     <div className="lb-grid">
       {/* ---------- Lines ---------- */}
       <section className="card ls-panel no-print" aria-label="Job lines">
-        <div className="row between"><h3>1 · What to print</h3>{source.label && lines.length > 0 && <span className="small muted">{source.label}</span>}</div>
+        <div className="row between"><h3>1 · Choose items</h3>{source.label && lines.length > 0 && <span className="small muted">{source.label}</span>}</div>
         {lines.length > 0 && <>
           <div className="lb-bulk" style={{ marginTop: 4 }} aria-label="Quantity for every line">
             <span className="small muted">All lines:</span>
@@ -350,6 +368,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           </ul>
           {noBarcode.length > 0 && me.can('items.write') && <button type="button" className="btn btn-soft btn-sm" style={{ marginTop: 8 }} onClick={() => void genMissing()}>Make barcodes for {noBarcode.length} item{noBarcode.length === 1 ? '' : 's'} without one</button>}
         </>}
+        {!lines.length && <p className="small ls-start">Tap an item below to add it. Each tap adds one row of labels; change the number later.</p>}
         <div className="small muted" style={{ margin: '12px 0 6px' }}>{lines.length ? 'Add more from' : 'Add from'}</div>
         <div className="lb-src" role="tablist" aria-label="Add lines from">
           {([['items', 'Items'], ...(canPurch ? [['purchase_order', 'Purchase order'], ['bill', 'Bill']] : []), ['batches', 'Batches'], ['csv', 'CSV'], ['scan', 'Scan']] as Array<[Src, string]>).map(([k, l]) => (
@@ -446,7 +465,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
             </div>
             {stock.sheet === 'roll' && !conn && lines.length > 0 && (<>
               {!isNativeApp() && <LabelPaperSteps testId="paper-hint" w={sideways(turn) ? stock.h : rowWidthMm(stock)} h={sideways(turn) ? rowWidthMm(stock) : stock.h} gap={stock.rowGap}
-                printer={/tvs/i.test(printerRow.name) ? 'TVS LP 46 Lite' : 'the label printer'} />}
+                printer={/tvs/i.test(printerRow.name) ? 'TVS LP 46 Lite' : 'the label printer'} folded={!!mem?.ok} />}
               {directSupported() && <p className="small muted no-print">Or choose Bluetooth / Wi-Fi under “Send labels” to print straight to the printer, with no paper size to set.</p>}
             </>)}
             {jobIssues.length > 0 && <div className="ls-warn no-print" role="alert">{jobIssues.map((x) => <div key={x.code}><AlertTriangle size={13} /> {x.message}</div>)}</div>}
@@ -500,7 +519,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
 
       {/* ---------- Stock, printer, template ---------- */}
       <section className="card ls-panel no-print" aria-label="Label stock and printer">
-        <h3>2 · Stock, printer and template</h3>
+        <h3>2 · Print</h3>
         {/* The labels on the roll decide everything: printing 50 × 25 on a roll of 100 × 100 labels puts one small label on
             each big one. Measure one label (across × along the roll) and pick it. */}
         <div className="field ls-measure" data-testid="labels-in-printer">
@@ -520,6 +539,21 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           </div>
           <p className="small muted" style={{ marginTop: 4 }}>Measure one label: across the roll × along it. If the labels are bigger than the size chosen, each small label prints alone in the middle or at the top of a big one.</p>
         </div>
+        {stock.sheet === 'roll' && <DirectPrinterPicker />}
+        <div className="lb-actions">
+          <button type="button" className="btn btn-secondary" onClick={testPrint} disabled={!metrics.labels || jobBlocked(issues) || sending} title="Prints only the first row or sheet, to check alignment"><Printer size={15} /> Test print</button>
+          <button type="button" className="btn btn-primary" onClick={() => void print()} disabled={!metrics.labels || jobBlocked(issues) || sending}>{sending ? <Loader2 size={15} className="spin" /> : <Printer size={15} />} {chunks > 1 ? `Print labels (part ${Math.min(chunk, chunks - 1) + 1} of ${chunks})` : 'Print labels'}</button>
+        </div>
+        {why && <div className="ls-why" role="status" data-testid="why-no-print">
+          <AlertTriangle size={14} /> <span>{why.msg}</span>
+          {why.fix && <button type="button" className="btn btn-soft btn-sm" onClick={why.fix.run}>{why.fix.label}</button>}
+        </div>}
+        {chunks > 1 && <p className="small muted">Big jobs go to the printer {CHUNK_ROWS} rows at a time, so a jam never wastes the whole roll.</p>}
+        <p className="small ls-setup-line">
+          Printer: <strong>{printerRow.name.split(' · ')[0]}</strong> · {chosenTpl ? chosenTpl.name : 'automatic layout'}{turn ? ` · turned ${turn}°` : ''}.{' '}
+          <button type="button" className="lb-linkname" aria-expanded={more} onClick={() => setMore((v) => !v)}>{more ? 'Hide settings' : 'More settings'}</button>
+        </p>
+        <div className="ls-more" data-testid="more-settings" hidden={!more}>
         <div className="field">
           <label htmlFor="ls-preset">Label stock</label>
           <select id="ls-preset" className="select" value={stockId} onChange={(e) => { const s = stocks.find((x) => x.id === e.target.value); if (s) { setStockId(s.id); setGeom(s.geometry); setDevice({ stockId: s.id }); setView(0); setChunk(0); } }}>
@@ -537,7 +571,6 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           </select>
           <p className="small muted" style={{ marginTop: 4 }}>{printer.headMm} mm head · {printer.dpi} dpi. Remembered on this computer.</p>
         </div>
-        {stock.sheet === 'roll' && <DirectPrinterPicker />}
         <div className="field">
           <label htmlFor="lb-template">Template</label>
           <select id="lb-template" className="select" value={chosenTpl?.id ?? ''} onChange={(e) => { setTemplateId(e.target.value); setDevice({ templateId: e.target.value }); }}>
@@ -557,7 +590,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
             <p className="small muted" style={{ marginTop: 4 }}>{mem?.ok ? 'Checked on this computer.' : 'You don’t need to set this: after the first print the app asks how the labels came out and turns them for this printer.'}</p>
           </div>
         )}
-        <details className="ls-tips">
+        <details className="ls-tips" open>
           <summary><Layers size={14} /> Layout options</summary>
           <div className="lb-opts">
             <label className="small">Fill <select className="select" value={opts.fill} onChange={(e) => setOpts({ ...opts, fill: e.target.value as ImposeOptions['fill'] })}><option value="row">Across, row by row</option><option value="column">Down, column by column</option></select></label>
@@ -572,11 +605,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
             <label className="small">Start from label number (resume) <input className="input" type="number" min={1} value={from} onChange={(e) => setFrom(Math.max(1, Number(e.target.value) || 1))} /></label>
           </div>
         </details>
-        <div className="lb-actions">
-          <button type="button" className="btn btn-secondary" onClick={testPrint} disabled={!metrics.labels || jobBlocked(issues) || sending} title="Prints only the first row or sheet, to check alignment"><Printer size={15} /> Test print</button>
-          <button type="button" className="btn btn-primary" onClick={() => void print()} disabled={!metrics.labels || jobBlocked(issues) || sending}>{sending ? <Loader2 size={15} className="spin" /> : <Printer size={15} />} {chunks > 1 ? `Print labels (part ${Math.min(chunk, chunks - 1) + 1} of ${chunks})` : 'Print labels'}</button>
         </div>
-        {chunks > 1 && <p className="small muted">Big jobs go to the printer {CHUNK_ROWS} rows at a time, so a jam never wastes the whole roll.</p>}
         {me.can('admin') && stock.sheet !== 'letter' && (!sameGeom(stock, saved) || turn !== turnFromSettings(settings)) && (
           <button type="button" className="btn btn-ghost btn-sm btn-block" onClick={() => saveDefault.mutate(settingsWithStock(settings, stock, turn))} title="Every computer and phone of this shop starts with this stock and turn">
             <Save size={14} /> Save as this shop’s default stock

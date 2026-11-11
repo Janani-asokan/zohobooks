@@ -3,6 +3,8 @@
 // previews in under 2 seconds (QA-P07, only visible rows render) and a 10,001-label job is blocked (BP-05).
 // Usage: BASE=http://localhost:4000 node e2e/tools/label-designer.mjs <outDir>
 import { chromium } from 'playwright';
+// The label screen folds stock / printer / template under “More settings”.
+const openMore = async (pg) => { const m = pg.getByRole('button', { name: 'More settings' }); if (await m.isVisible().catch(() => false)) await m.click(); };
 import fs from 'node:fs';
 const B = process.env.BASE ?? 'http://localhost:4000';
 const out = process.argv[2] ?? '.'; fs.mkdirSync(out, { recursive: true });
@@ -60,7 +62,7 @@ try {
   /* 10,000 labels */
   const item = (await call('GET', '/shop/items')).body.find((i) => i.barcode && i.type === 'Goods' && !i.trackSerials);
   await p.goto(`${B}/app/items/labels?ids=${item.id}`); await p.waitForSelector('.lb-lines li');
-  await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
+  await openMore(p); await p.locator('#ls-preset').selectOption({ label: '2-up standard · 50 × 25' });
   const t0 = Date.now();
   await p.locator('.lb-lines li input[type=number]').fill('10000');
   await p.waitForFunction(() => /10,000\s+labels/.test(document.querySelector('.ls-summary')?.textContent ?? ''), null, { timeout: 10000 });

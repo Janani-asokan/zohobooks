@@ -46,7 +46,7 @@ try {
   const items = await p.evaluate(async () => (await (await fetch('/api/shop/items')).json()).filter((i) => i.type === 'Goods' && (i.barcode || i.sku)).slice(0, 2).map((i) => i.id));
   const p2 = await fresh(() => { window.__printed = []; window.print = () => { window.__printed.push([...document.querySelectorAll('style')].map((s) => s.textContent).join('\n')); window.dispatchEvent(new Event('afterprint')); }; });
   await login(p2, B);
-  await p2.goto(B + `/app/items/labels?ids=${items.join(',')}&qty=2,2`); await p2.waitForSelector('#ls-preset'); await p2.waitForTimeout(1500);
+  await p2.goto(B + `/app/items/labels?ids=${items.join(',')}&qty=2,2`); await p2.waitForSelector('#ls-preset', { state: 'attached' }); await p2.waitForTimeout(1500);
   ok((await selText(p2, '#ls-preset')) === '2-up standard · 50 × 25', 'a new computer opens Barcode & Labels on the shop’s 2-up standard 50 × 25', await selText(p2, '#ls-preset'));
   ok(/4-inch/.test(await selText(p2, '#lb-printer')), 'the 4-inch label printer is picked for it', await selText(p2, '#lb-printer'));
   ok(await p2.getByTestId('paper-hint').isVisible(), 'the label screen reminds which paper size to use');
@@ -72,19 +72,38 @@ try {
   await setStock(p, 'preset:4in-50x25x2', 90);
   const p3 = await fresh(() => { window.__printed = []; window.print = () => { window.__printed.push([...document.querySelectorAll('style')].map((s) => s.textContent).join('\n')); window.dispatchEvent(new Event('afterprint')); }; });
   await login(p3, B);
-  await p3.goto(B + `/app/items/labels?ids=${items[0]}&qty=2`); await p3.waitForSelector('#ls-preset'); await p3.waitForTimeout(1500);
+  await p3.goto(B + `/app/items/labels?ids=${items[0]}&qty=2`); await p3.waitForSelector('#ls-preset', { state: 'attached' }); await p3.waitForTimeout(1500);
+  await p3.getByRole('button', { name: 'More settings' }).click();
   ok(await p3.getByRole('radio', { name: 'Turn 90°' }).first().getAttribute('aria-checked') === 'true', 'the shop’s saved turn (90°) is used on a new computer');
   await p3.getByRole('button', { name: /^Test print/ }).click();
   await p3.waitForFunction(() => window.__printed.length > 0, null, { timeout: 10000 });
   ok(/size:\s*25mm 104mm/.test(await p3.evaluate(() => window.__printed[0])), 'turned 90°: the page is sent 25 × 104 mm');
   await setStock(p, 'preset:4in-50x25x2', 0);
 
+  /* A normal user: Print greyed out says why, and one tap fixes it */
+  const pu = await fresh();
+  await login(pu, B);
+  await pu.goto(B + '/app/items/labels'); await pu.waitForSelector('#ls-preset', { state: 'attached' }); await pu.waitForTimeout(1200);
+  ok(await pu.getByRole('button', { name: /^Print labels/ }).isDisabled() && /Tap the items/.test(await pu.getByTestId('why-no-print').innerText()), 'with nothing chosen, Print is greyed out and says to choose items');
+  ok(!(await pu.locator('#lb-printer').isVisible()) && /Printer:/.test(await pu.locator('.ls-setup-line').innerText()), 'stock, printer, template and layout are folded under “More settings”; the printer shows in one line');
+  await pu.getByTestId('why-no-print').getByRole('button', { name: 'Choose items' }).click();
+  await pu.locator('.ls-results button').first().click();
+  await pu.waitForTimeout(500);
+  ok(await pu.getByRole('button', { name: /^Print labels/ }).isEnabled() && await pu.getByTestId('why-no-print').count() === 0, 'after tapping one item Print is ready, with no warning');
+  await pu.locator('.lb-lines input[type=number]').first().fill('0'); await pu.waitForTimeout(300);
+  ok(/0 labels/.test(await pu.getByTestId('why-no-print').innerText()), 'set to 0 labels: it says so');
+  await pu.getByRole('button', { name: 'Print 1 label each' }).click(); await pu.waitForTimeout(300);
+  ok(await pu.getByRole('button', { name: /^Print labels/ }).isEnabled(), '“Print 1 label each” makes it printable again');
+  await pu.getByRole('button', { name: 'More settings' }).click();
+  ok(await pu.locator('#lb-printer').isVisible(), '“More settings” opens the printer and stock choices');
+  await pu.screenshot({ path: `${out}/simple-panel.png`, fullPage: true });
+
   /* The 3-inch TVS LP 46 Lite with 2-up 38 × 25 labels */
   await setStock(p, 'preset:3in-38x25x2', 0);
   ok(/80 × 25 mm/.test(await p.getByTestId('paper-size-note').innerText()) && /TVS LP 46 Lite/.test(await p.getByTestId('paper-size-note').innerText()), 'Print settings gives the TVS LP 46 Lite steps for 80 × 25 mm');
   const p4 = await fresh(() => { window.__printed = []; window.print = () => { window.__printed.push([...document.querySelectorAll('style')].map((s) => s.textContent).join('\n')); window.dispatchEvent(new Event('afterprint')); }; });
   await login(p4, B);
-  await p4.goto(B + `/app/items/labels?ids=${items.join(',')}&qty=2,2`); await p4.waitForSelector('#ls-preset'); await p4.waitForTimeout(1500);
+  await p4.goto(B + `/app/items/labels?ids=${items.join(',')}&qty=2,2`); await p4.waitForSelector('#ls-preset', { state: 'attached' }); await p4.waitForTimeout(1500);
   ok((await selText(p4, '#ls-preset')) === '3-inch, 2-up · 38 × 25', 'a new computer opens on the shop’s 3-inch 2-up 38 × 25', await selText(p4, '#ls-preset'));
   ok(/TVS LP 46 Lite/.test(await selText(p4, '#lb-printer')), 'the 3-inch TVS LP 46 Lite is the printer picked', await selText(p4, '#lb-printer'));
   ok(await p4.getByRole('radio', { name: /^3-inch roll/ }).getAttribute('aria-checked') === 'true' && await p4.getByTestId('labels-in-printer').getByRole('radio', { name: '38 × 25, 2 across' }).getAttribute('aria-checked') === 'true', '“Which labels are in the printer?” shows the 3-inch roll with 38 × 25, 2 across chosen');
@@ -102,7 +121,7 @@ try {
     window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', nativePromise: (pl, m, o) => { window.__native.push({ m, o }); return new Promise((r) => setTimeout(() => r(m === 'btList' ? { devices: [] } : {}), 30)); } };
   });
   await login(pa, APP);
-  await pa.goto(APP + `/app/items/labels?ids=${items.join(',')}&qty=2,2`); await pa.waitForSelector('#ls-preset'); await pa.waitForTimeout(1500);
+  await pa.goto(APP + `/app/items/labels?ids=${items.join(',')}&qty=2,2`); await pa.waitForSelector('#ls-preset', { state: 'attached' }); await pa.waitForTimeout(1500);
   ok((await selText(pa, '#ls-preset')) === '2-up standard · 50 × 25', 'the phone app opens on the shop’s 2-up standard 50 × 25 too');
   await pa.getByRole('radio', { name: /Wi-Fi/ }).click();
   await pa.getByLabel('Printer IP address').fill('192.168.1.50');
