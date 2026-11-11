@@ -53,6 +53,17 @@ try {
     await p.evaluate(() => { if (window.__printClass) document.body.className = window.__printClass; });
     await p.emulateMedia({ media: 'print' });
     const file = `${out}/${name}.pdf`;
+    // A wide roll row gets no CSS page size on the website (Chrome would print it landscape and the label driver
+    // would turn it): the paper is the label stock set in the printer driver. Print onto that paper: one row.
+    await p.evaluate(() => {
+      const kept = [...document.querySelectorAll('style[data-keep]')].map((x) => x.textContent).join('');
+      if (/size\s*:/.test(kept)) return;
+      const r = document.querySelector('#print-root .label-row')?.getBoundingClientRect();
+      if (!r || !r.width) return;
+      const st = document.createElement('style'); st.dataset.keep = '1';
+      st.textContent = `@page { size: ${(r.width * 25.4 / 96).toFixed(2)}mm ${(r.height * 25.4 / 96).toFixed(2)}mm; }`;
+      document.head.appendChild(st);
+    });
     fs.writeFileSync(file, await p.pdf({ preferCSSPageSize: true, printBackground: true }));
     await p.emulateMedia({ media: 'screen' });
     await p.evaluate(() => { document.querySelectorAll('style[data-keep]').forEach((s) => s.remove()); document.getElementById('print-root')?.remove(); document.body.classList.remove('printing', 'print-labels'); window.__printed = 0; });

@@ -42,8 +42,10 @@ export const STOCK_PRESETS: Array<{ id: string; name: string; fits: string; stoc
   { id: '4in-50x25x2', name: '2-up standard · 50 × 25', fits: '4-inch', stock: roll(50, 25, 2, 1, 2) },
   { id: '4in-33x25x3', name: '3-up · 33 × 25', fits: '4-inch', stock: roll(33, 25, 3, 0.5, 2) },
   { id: '4in-25x25x4', name: '4-up · 25 × 25', fits: '4-inch', stock: roll(25, 25, 4, 0.5, 1) },
+  { id: '3in-38x25x2', name: '3-inch, 2-up · 38 × 25', fits: '3-inch, 4-inch', stock: roll(38, 25, 2, 1, 2) },
   { id: '50x25x1', name: '1-up standard · 50 × 25', fits: '3-inch, 4-inch', stock: roll(50, 25, 1, 1, 0) },
-  { id: '3in-38x25x2', name: '2-up · 38 × 25', fits: '3-inch, 4-inch', stock: roll(38, 25, 2, 1, 2) },
+  { id: '3in-75x25', name: '3-inch, single · 75 × 25', fits: '3-inch, 4-inch', stock: roll(75, 25, 1, 1.5, 0) },
+  { id: '3in-75x38', name: '3-inch, single · 75 × 38', fits: '3-inch, 4-inch', stock: roll(75, 38, 1, 1.5, 0) },
   { id: '3in-75x50', name: '3-inch, single · 75 × 50', fits: '3-inch, 4-inch', stock: roll(75, 50, 1, 1.5, 0) },
   { id: '3in-cont', name: '3-inch continuous · 72 wide', fits: '3-inch, 4-inch', stock: roll(72, 40, 1, 0, 0, 'continuous') },
   { id: '2in-cont', name: '2-inch continuous (POS-58) · 48 wide', fits: '2-inch, 3-inch, 4-inch', stock: roll(48, 30, 1, 0, 0, 'continuous') },
@@ -73,6 +75,8 @@ export interface PrinterSettings {
   darkness: number; speed: number;  // darkness 0–15, speed in inches per second
 }
 export const PRINTER_PRESETS: Array<{ id: string; name: string; settings: PrinterSettings }> = [
+  // The shop's own printer first: picked for every roll up to 3 inches (80 mm) wide.
+  { id: 'tvs-lp46-lite', name: '3-inch label printer · TVS LP 46 Lite (TSPL)', settings: { language: 'tspl', dpi: 203, headMm: 80, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
   { id: 'label-4in-tspl', name: '4-inch label printer (TSC, Xprinter, TVS, Honeywell…) · TSPL', settings: { language: 'tspl', dpi: 203, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
   { id: 'label-4in-zpl', name: '4-inch label printer (Zebra) · ZPL', settings: { language: 'zpl', dpi: 203, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 15, speed: 4 } },
   { id: 'label-4in-300', name: '4-inch label printer, 300 dpi', settings: { language: 'tspl', dpi: 300, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 3 } },

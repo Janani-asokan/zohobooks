@@ -8,7 +8,7 @@ import { useBills, useItems, useMut, useOrg, usePrintSettings, usePurchaseOrders
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { printWithPage } from '@/components/printing';
-import { CheckCard, Choice, DriverSteps, TurnIcons, nextTurn } from '@/components/PrintCheck';
+import { CheckCard, Choice, DriverSteps, LabelPaperSteps, TurnIcons, nextTurn } from '@/components/PrintCheck';
 import { SearchInput } from '@/components/ui';
 import { labelMemory, rememberLabel } from '@/lib/printerMemory';
 import { parseCsv } from '../../../../shared/csv';
@@ -22,6 +22,7 @@ import {
 import { LabelView } from '@/components/labels/LabelView';
 import { DirectPrinterPicker, useDirectConn } from '@/components/labels/DirectPrinter';
 import { directSupported, printRowsDirect } from '@/lib/labelDirect';
+import { isNativeApp } from '@/lib/native';
 import {
   LABEL_KEYS, allPrinters, allStocks, autoFromSettings, device, labelDataFor, newKey, sameGeom, setDevice, settingsWithStock, stockFromSettings, templateFor, turnFromSettings, useLabelSetup, type JobRow,
 } from '@/components/labels/labelsApi';
@@ -33,20 +34,33 @@ const ROWS_PER_SCREEN = 12;
 const CHUNK_ROWS = 100;          // BP-09: output in chunks of 100 rows
 const IMMEDIATE_LABELS = 500;    // BP-08
 
-/** The usual 4-inch printer rolls, drawn to scale, for "Which labels are in the printer?". */
+/** The usual 3-inch and 4-inch printer rolls, drawn to scale, for "Which labels are in the printer?". */
 const IN_PRINTER = [
-  { id: 'preset:4in-50x25x2', label: '50 × 25, 2 across', across: 2, w: 104, h: 25 },
-  { id: 'preset:4in-100x50', label: '100 × 50', across: 1, w: 104, h: 50 },
-  { id: 'preset:4in-100x75', label: '100 × 75', across: 1, w: 104, h: 75 },
-  { id: 'preset:4in-100x100', label: '100 × 100', across: 1, w: 104, h: 100 },
-  { id: 'preset:4in-100x150', label: '100 × 150 (4 × 6 in)', across: 1, w: 104, h: 150 },
+  { roll: 3, id: 'preset:3in-38x25x2', label: '38 × 25, 2 across', across: 2, w: 80, h: 25 },
+  { roll: 3, id: 'preset:50x25x1', label: '50 × 25', across: 1, w: 52, h: 25 },
+  { roll: 3, id: 'preset:3in-75x25', label: '75 × 25', across: 1, w: 78, h: 25 },
+  { roll: 3, id: 'preset:3in-75x38', label: '75 × 38', across: 1, w: 78, h: 38 },
+  { roll: 3, id: 'preset:3in-75x50', label: '75 × 50', across: 1, w: 78, h: 50 },
+  { roll: 4, id: 'preset:4in-50x25x2', label: '50 × 25, 2 across', across: 2, w: 104, h: 25 },
+  { roll: 4, id: 'preset:4in-100x50', label: '100 × 50', across: 1, w: 104, h: 50 },
+  { roll: 4, id: 'preset:4in-100x75', label: '100 × 75', across: 1, w: 104, h: 75 },
+  { roll: 4, id: 'preset:4in-100x100', label: '100 × 100', across: 1, w: 104, h: 100 },
+  { roll: 4, id: 'preset:4in-100x150', label: '100 × 150 (4 × 6 in)', across: 1, w: 104, h: 150 },
 ].map((x) => ({ ...x, pw: x.w / 4, ph: x.h / 4 }));
 const sideways = (t: Turn) => t === 90 || t === 270;
-const pageCss = (s: StockGeometry, turn: Turn) => {
+/**
+ * The page for one printed row. A row wider than it is tall (80 × 25 mm, 104 × 25 mm…) is NOT given a page size on
+ * the website: Chrome treats a wide page size as "landscape", and the Windows label printer driver then turns the
+ * whole page 90° onto its paper and shrinks it (labels come out sideways, small, spread over two labels). Without a
+ * size, Chrome prints portrait onto the paper chosen for the printer (its Page Setup stock), at 100 %. Tall labels and
+ * sheets keep their size; the phone app always gets it (the phone's print screen needs it and has no driver).
+ */
+const pageCss = (s: StockGeometry, turn: Turn, app = isNativeApp()) => {
   // Sheets by name: printer drivers map "A4" / "letter" to their own paper exactly.
   if (s.sheet !== 'roll') return `size: ${s.sheet === 'a4' ? 'A4' : 'letter'} portrait; margin: 0;`;
-  const w = rowWidthMm(s), h = s.h;
-  return sideways(turn) ? `size: ${h}mm ${w}mm; margin: 0;` : `size: ${w}mm ${h}mm; margin: 0;`;
+  const [w, h] = sideways(turn) ? [s.h, rowWidthMm(s)] : [rowWidthMm(s), s.h];
+  if (w > h && !app) return 'margin: 0;';
+  return `size: ${w}mm ${h}mm; margin: 0;`;
 };
 
 /** Print Workbench (spec 2.1): build a job from any source, check it, preview it at real size, print it. */
@@ -83,6 +97,9 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
   const [printerId, setPrinterId] = useState<string>(() => dev.printerId ?? '');
   const printerRow = printers.find((p) => p.id === printerId) ?? printers.find((p) => p.preset && (stock.sheet !== 'roll' ? p.settings.language === 'browser' : p.settings.headMm >= rowWidthMm(stock) - 2 && p.settings.language !== 'browser')) ?? printers.at(-1)!;
   const printer = printerRow.settings;
+  // Which roll width the label chips show: the chosen stock's (a row up to 80 mm is a 3-inch roll).
+  const [rollPick, setRollIn] = useState<3 | 4 | null>(null);
+  const rollIn: 3 | 4 = rollPick ?? (stock.sheet === 'roll' && rowWidthMm(stock) > 82 ? 4 : 3);
   const templates = (setup.data?.templates ?? []).filter((t) => t.published);
   const [templateId, setTemplateId] = useState<string>(() => dev.templateId ?? '');
   const sizeTemplates = templates.filter((t) => Math.abs(t.published!.w - stock.w) < 0.25 && Math.abs(t.published!.h - stock.h) < 0.25);
@@ -427,13 +444,11 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
               {from > 1 && <span className="lb-warn">Resuming from label {from}</span>}
               <span>Page: <strong className="mono">{stock.sheet === 'roll' ? (sideways(turn) ? `${stock.h} × ${rowWidthMm(stock)}` : `${rowWidthMm(stock)} × ${stock.h}`) : `${SHEET_MM[stock.sheet].w} × ${SHEET_MM[stock.sheet].h}`} mm</strong>{turn ? ` (turned ${turn}°)` : ''}</span>
             </div>
-            {stock.sheet === 'roll' && !conn && lines.length > 0 && (
-              <p className="small ls-paper-hint no-print" data-testid="paper-hint">
-                In the print window, the paper must be <strong>{sideways(turn) ? `${stock.h} × ${rowWidthMm(stock)}` : `${rowWidthMm(stock)} × ${stock.h}`} mm</strong>, not the printer’s 4 × 6 in (100 × 150 mm):
-                on 4 × 6 paper the row is turned to fit and labels come out sideways. Set it once in the printer’s Printing preferences → Page Setup → Stock → New
-                (width {rowWidthMm(stock)} mm, height {stock.h} mm, gap {stock.rowGap} mm){directSupported() ? ', or choose Bluetooth / Wi-Fi under “Send labels” to print straight to the printer' : ''}.
-              </p>
-            )}
+            {stock.sheet === 'roll' && !conn && lines.length > 0 && (<>
+              {!isNativeApp() && <LabelPaperSteps testId="paper-hint" w={sideways(turn) ? stock.h : rowWidthMm(stock)} h={sideways(turn) ? rowWidthMm(stock) : stock.h} gap={stock.rowGap}
+                printer={/tvs/i.test(printerRow.name) ? 'TVS LP 46 Lite' : 'the label printer'} />}
+              {directSupported() && <p className="small muted no-print">Or choose Bluetooth / Wi-Fi under “Send labels” to print straight to the printer, with no paper size to set.</p>}
+            </>)}
             {jobIssues.length > 0 && <div className="ls-warn no-print" role="alert">{jobIssues.map((x) => <div key={x.code}><AlertTriangle size={13} /> {x.message}</div>)}</div>}
             {blocked.size > 0 && <div className="ls-warn no-print"><AlertTriangle size={13} /> {blocked.size} line{blocked.size === 1 ? '' : 's'} can’t print and {blocked.size === 1 ? 'is' : 'are'} skipped; the rest print.</div>}
             {check && (
@@ -490,8 +505,11 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
             each big one. Measure one label (across × along the roll) and pick it. */}
         <div className="field ls-measure" data-testid="labels-in-printer">
           <label>Which labels are in the printer?</label>
+          <div className="ls-chips ls-rollw" role="radiogroup" aria-label="Roll width">
+            {([3, 4] as const).map((r) => <button key={r} type="button" role="radio" aria-checked={rollIn === r} className={rollIn === r ? 'on' : ''} onClick={() => setRollIn(r)}>{r}-inch roll{r === 3 ? ' (TVS LP 46 Lite)' : ''}</button>)}
+          </div>
           <div className="ls-chips" role="radiogroup" aria-label="Labels in the printer">
-            {IN_PRINTER.filter((x) => stocks.some((s) => s.id === x.id)).map((x) => {
+            {IN_PRINTER.filter((x) => x.roll === rollIn && stocks.some((s) => s.id === x.id)).map((x) => {
               const s = stocks.find((y) => y.id === x.id)!;
               const on = sameGeom(s.geometry, stock);
               return <button key={x.id} type="button" role="radio" aria-checked={on} className={on ? 'on' : ''} title={s.name}

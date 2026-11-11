@@ -9,6 +9,8 @@ import { TaxInvoice, printOrgFrom } from '@/components/TaxInvoice';
 import { SAMPLE_INVOICE } from '@/components/sampleInvoice';
 import { readLogo } from '@/lib/image';
 import { PhonePrinterCard } from '@/components/PhonePrinter';
+import { isNativeApp } from '@/lib/native';
+import { LabelPaperSteps } from '@/components/PrintCheck';
 import { allStocks, sameGeom, setDevice, settingsWithStock, stockFromSettings, useLabelSetup } from '@/components/labels/labelsApi';
 import { rowWidthMm } from '../../../shared/labelEngine';
 import { SALES_KEYS } from '@/api/hooks';
@@ -341,12 +343,9 @@ export default function PrintSettings() {
                       </div>
                     )}
                     {roll && (
-                      <p className="small ps-paper-note" data-testid="paper-size-note">
-                        <strong>Paper size in the print window: {rw} × {cur.h} mm.</strong> A 4-inch label printer starts on 4 × 6 in (100 × 150 mm) paper,
-                        and printing a {rw} × {cur.h} mm row onto it turns the labels sideways. Set it once in the printer’s
-                        Printing preferences → Page Setup → Stock → New: width {rw} mm, height {cur.h} mm, gap {cur.rowGap} mm. In the phone app you can
-                        print straight to a Bluetooth or Wi-Fi label printer instead, with no paper size to set.
-                      </p>
+                      isNativeApp()
+                        ? <p className="small ps-paper-note" data-testid="paper-size-note">In the app, choose <strong>Send labels → Bluetooth or Wi-Fi</strong> on the label screen to print straight to the label printer at exactly {rw} × {cur.h} mm.</p>
+                        : <LabelPaperSteps testId="paper-size-note" w={rw} h={cur.h} gap={cur.rowGap} printer={rw <= 82 ? 'TVS LP 46 Lite' : 'the label printer'} />
                     )}
                   </>);
                 })()}

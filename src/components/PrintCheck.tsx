@@ -21,6 +21,25 @@ export const Choice = ({ icon, label, hint, onClick }: { icon: ReactNode; label:
   <button type="button" className="pc-choice" onClick={onClick}>{icon}<span><span className="strong">{label}</span>{hint && <span className="small muted">{hint}</span>}</span></button>
 );
 
+/**
+ * Label printers on the website: the paper (label stock) is set in the printer's Windows driver, which a web page
+ * can't open. Chrome's print window reaches it through "Print using system dialog" → Preferences.
+ */
+export function LabelPaperSteps({ w, h, gap, printer = 'the label printer', testId }: { w: number; h: number; gap: number; printer?: string; testId?: string }) {
+  return (
+    <div className="small ls-paper-hint no-print" data-testid={testId}>
+      <strong>Set the label size once on this computer: {w} × {h} mm.</strong> Until it is set, the printer uses its own paper size
+      (often 4 × 6 in) and the labels come out shrunk, sideways or spread over two labels.
+      <ol>
+        <li>In Chrome’s print window, click <strong>Print using system dialog</strong> at the bottom (or press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>), pick <strong>{printer}</strong> and click <strong>Preferences</strong>.
+          (Or: Windows Start → Settings → Printers &amp; scanners → {printer} → <strong>Printing preferences</strong>.)</li>
+        <li><strong>Page Setup → Stock → New</strong>: width <strong>{w} mm</strong>, height <strong>{h} mm</strong>, “Labels with gaps”, gap <strong>{gap} mm</strong>. Orientation <strong>Portrait</strong>. Press OK.</li>
+        <li>Back in Chrome’s print window, under <em>More settings</em>: Paper size <strong>{w} × {h} mm</strong> (the stock you made), Margins <strong>None</strong>, Scale <strong>Default</strong>.</li>
+      </ol>
+    </div>
+  );
+}
+
 /** Steps for the one thing no web page can change: the paper size set in the printer's Windows driver. */
 export function DriverSteps({ paper, children }: { paper: string; children?: ReactNode }) {
   return (

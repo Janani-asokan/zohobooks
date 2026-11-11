@@ -103,7 +103,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   },
   barcode: {
     printer: 'label',
-    labelSize: '50x25-2',
+    labelSize: '38x25-2',   // 3-inch roll, 2 across (the TVS LP 46 Lite's usual roll)
     barcodeHeight: 40,
     fields: [
       { key: 'businessName', enabled: true, size: 22, bold: true },

@@ -2,7 +2,9 @@
 //  - the shop's label stock is chosen in Print settings → Label stock, saved, and every new computer / phone starts
 //    with it (2-up standard 50 × 25 shows by name, not "Saved size");
 //  - the turn saved with it applies on a new computer;
-//  - the print page is the real row (104 × 25 mm) and the paper-size reminder is shown;
+//  - a row wider than tall (104 × 25, 80 × 25…) is printed with NO page size on the website (a wide size makes Chrome
+//    print landscape and the Windows label driver turns it sideways); the paper-size steps are shown instead;
+//  - the 3-inch TVS LP 46 Lite with 2-up 38 × 25 labels: picked, shown and sent as SIZE 80 mm,25 mm;
 //  - in the app, "Send labels → Wi-Fi" sends TSPL with SIZE 104 mm,25 mm and the rows as bitmaps (saved as a PNG).
 // Usage: BASE=http://localhost:4000 APP=http://localhost:5555 node e2e/tools/label-stock-orientation.mjs <outDir>
 import { chromium } from 'playwright';
@@ -51,7 +53,8 @@ try {
   await p2.getByRole('button', { name: /^Test print/ }).click();
   await p2.waitForFunction(() => window.__printed.length > 0, null, { timeout: 10000 });
   const css = await p2.evaluate(() => window.__printed[0]);
-  ok(/size:\s*104mm 25mm/.test(css), 'the print page is the real row: 104 × 25 mm', (css.match(/size:[^;]+/) ?? [''])[0]);
+  const pageRule = (c) => (c.match(/@page\s*\{[^}]*\}/) ?? [''])[0];
+  ok(pageRule(css) && !/size/.test(pageRule(css)), 'a wide row (104 × 25 mm) is printed without a page size, so Chrome never turns it landscape', pageRule(css));
   await p2.screenshot({ path: `${out}/workbench.png` });
 
   /* Big labels on the roll (the photo: 100 × 100 labels, 50 × 25 chosen): pick what is in the printer */
@@ -60,7 +63,7 @@ try {
   ok((await selText(p2, '#ls-preset')).includes('100 × 100'), '“Which labels are in the printer?” → 100 × 100 sets the stock');
   await p2.getByRole('button', { name: /^Test print/ }).click();
   await p2.waitForFunction(() => window.__printed.length > 0, null, { timeout: 10000 });
-  ok(/size:\s*104mm 100mm/.test(await p2.evaluate(() => window.__printed[0])), 'the page is then one 100 × 100 label (104 × 100 mm with the roll margins)');
+  ok(!/size/.test(pageRule(await p2.evaluate(() => window.__printed[0]))), 'the 104 × 100 mm page (100 × 100 label with the roll margins) is not sent as landscape either');
   const fills = await p2.evaluate(() => { const r = document.querySelector('.ls-sheets .lb-slot'); const bar = r?.querySelector('svg, canvas, img'); return r && bar ? bar.getBoundingClientRect().width / r.getBoundingClientRect().width : 0; });
   ok(fills > 0.6, `the design fills the big label (barcode ${Math.round(fills * 100)}% of its width)`);
   await p2.screenshot({ path: `${out}/workbench-100x100.png` });
@@ -74,6 +77,23 @@ try {
   await p3.getByRole('button', { name: /^Test print/ }).click();
   await p3.waitForFunction(() => window.__printed.length > 0, null, { timeout: 10000 });
   ok(/size:\s*25mm 104mm/.test(await p3.evaluate(() => window.__printed[0])), 'turned 90°: the page is sent 25 × 104 mm');
+  await setStock(p, 'preset:4in-50x25x2', 0);
+
+  /* The 3-inch TVS LP 46 Lite with 2-up 38 × 25 labels */
+  await setStock(p, 'preset:3in-38x25x2', 0);
+  ok(/80 × 25 mm/.test(await p.getByTestId('paper-size-note').innerText()) && /TVS LP 46 Lite/.test(await p.getByTestId('paper-size-note').innerText()), 'Print settings gives the TVS LP 46 Lite steps for 80 × 25 mm');
+  const p4 = await fresh(() => { window.__printed = []; window.print = () => { window.__printed.push([...document.querySelectorAll('style')].map((s) => s.textContent).join('\n')); window.dispatchEvent(new Event('afterprint')); }; });
+  await login(p4, B);
+  await p4.goto(B + `/app/items/labels?ids=${items.join(',')}&qty=2,2`); await p4.waitForSelector('#ls-preset'); await p4.waitForTimeout(1500);
+  ok((await selText(p4, '#ls-preset')) === '3-inch, 2-up · 38 × 25', 'a new computer opens on the shop’s 3-inch 2-up 38 × 25', await selText(p4, '#ls-preset'));
+  ok(/TVS LP 46 Lite/.test(await selText(p4, '#lb-printer')), 'the 3-inch TVS LP 46 Lite is the printer picked', await selText(p4, '#lb-printer'));
+  ok(await p4.getByRole('radio', { name: /^3-inch roll/ }).getAttribute('aria-checked') === 'true' && await p4.getByTestId('labels-in-printer').getByRole('radio', { name: '38 × 25, 2 across' }).getAttribute('aria-checked') === 'true', '“Which labels are in the printer?” shows the 3-inch roll with 38 × 25, 2 across chosen');
+  const hint = await p4.getByTestId('paper-hint').innerText();
+  ok(/80 × 25 mm/.test(hint) && /Print using system dialog/.test(hint) && /Page Setup/.test(hint), 'the label screen shows how to reach Page Setup from Chrome (system dialog → Preferences) for 80 × 25 mm');
+  await p4.getByRole('button', { name: /^Test print/ }).click();
+  await p4.waitForFunction(() => window.__printed.length > 0, null, { timeout: 10000 });
+  ok(!/size/.test(pageRule(await p4.evaluate(() => window.__printed[0]))), 'the 80 × 25 mm row is printed portrait onto the printer’s label stock (no landscape page size)');
+  await p4.screenshot({ path: `${out}/workbench-3in.png`, fullPage: true });
   await setStock(p, 'preset:4in-50x25x2', 0);
 
   /* Phone app: straight to a Wi-Fi label printer in TSPL */
@@ -112,6 +132,15 @@ try {
   await pa.waitForFunction(() => window.__native.some((c) => c.m === 'netPrint'), null, { timeout: 20000 });
   const big = Buffer.from(await pa.evaluate(() => window.__native.find((c) => c.m === 'netPrint').o.data), 'base64').subarray(0, 60).toString('latin1');
   ok(big.startsWith('SIZE 104 mm,100 mm'), 'on 100 × 100 labels the printer is told SIZE 104 mm,100 mm', big.split('\r\n')[0]);
+  await pa.evaluate(() => { window.__native.length = 0; });
+  await pa.getByRole('radio', { name: /^3-inch roll/ }).click();
+  await pa.getByTestId('labels-in-printer').getByRole('radio', { name: '38 × 25, 2 across' }).click();
+  await pa.getByRole('button', { name: /^Test print/ }).click();
+  await pa.waitForFunction(() => window.__native.some((c) => c.m === 'netPrint'), null, { timeout: 20000 });
+  const tvs = Buffer.from(await pa.evaluate(() => window.__native.find((c) => c.m === 'netPrint').o.data), 'base64');
+  const tvsHead = tvs.subarray(0, 120).toString('latin1');
+  const th = tvs.subarray(tvs.indexOf('BITMAP 0,0,'), tvs.indexOf('BITMAP 0,0,') + 40).toString('latin1').match(/BITMAP 0,0,(\d+),(\d+),/);
+  ok(tvsHead.startsWith('SIZE 80 mm,25 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 1,0') && th && Number(th[1]) === 80 && Number(th[2]) === 200, '3-inch 2-up 38 × 25: SIZE 80 mm,25 mm, upright, 640 × 200 dots', tvsHead.split('\r\n').slice(0, 3).join(' | '));
   await pa.evaluate(() => { localStorage.removeItem('c360.labels.direct'); });
   // Put the demo shop back as it was.
   await p.evaluate(async (s) => { await fetch('/api/shop/print-settings', { method: 'PUT', headers: { 'content-type': 'application/json', 'x-requested-with': 'ledgerly' }, body: JSON.stringify(s) }); }, before);

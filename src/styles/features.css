@@ -475,6 +475,8 @@
 @media (max-width: 760px) { .lb-grid, .lb-two, .lb-cal { grid-template-columns: minmax(0, 1fr); } .lb-stats { grid-template-columns: 1fr; } }
 .lb-calpage .lv { background: transparent; }
 /* Label paper-size reminders (4-inch printers default to 4 × 6 in paper and turn a wide row sideways). */
+.ls-paper-hint ol { margin: 6px 0 0; padding-left: 18px; } .ls-paper-hint li { margin: 2px 0; }
+.ls-rollw { margin-bottom: 6px; }
 .ls-paper-hint, .ps-paper-note { margin: 8px 0 0; padding: 8px 10px; border-radius: var(--radius-sm, 8px); background: var(--amber-50, #fff8eb); border: 1px solid var(--amber-200, #f5d9a8); color: var(--ink-700, #44403c); line-height: 1.45; }
 /* "Which labels are in the printer?": the usual 4-inch rolls drawn to scale. */
 .ls-measure .ls-chips button { display: inline-flex; align-items: center; gap: 6px; }

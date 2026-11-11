@@ -21,7 +21,11 @@ describe('the shop’s default label stock', () => {
     expect(stockFromSettings(saved).rowGap).toBe(3);
     expect(turnFromSettings(saved)).toBe(90);
   });
-  it('a new shop starts on the 2-up standard 50 × 25', () => {
-    expect(sameGeom(stockFromSettings(ps), STOCK_PRESETS.find((x) => x.id === '4in-50x25x2')!.stock)).toBe(true);
+  it('a new shop starts on the 3-inch roll, 2-up 38 × 25 (the TVS LP 46 Lite’s roll)', () => {
+    expect(sameGeom(stockFromSettings(ps), STOCK_PRESETS.find((x) => x.id === '3in-38x25x2')!.stock)).toBe(true);
+  });
+  it('a shop that saved the 2-up 50 × 25 keeps it', () => {
+    const old = withPrintDefaults({ barcode: { printer: 'label', labelSize: '50x25-2' } });
+    expect(sameGeom(stockFromSettings(old), STOCK_PRESETS.find((x) => x.id === '4in-50x25x2')!.stock)).toBe(true);
   });
 });
