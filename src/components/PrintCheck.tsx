@@ -22,26 +22,33 @@ export const Choice = ({ icon, label, hint, onClick }: { icon: ReactNode; label:
 );
 
 /**
- * Label printers on the website: the paper (label stock) is set in the printer's Windows driver, which a web page
- * can't open. Chrome's print window reaches it through "Print using system dialog" → Preferences.
+ * Label printers on the website: the label size is set in the printer's Windows driver, which a web page can't open.
+ * Chrome's print window reaches it through "Print using system dialog" → Preferences. Shown as three short steps.
  */
 export function LabelPaperSteps({ w, h, gap, printer = 'the label printer', testId, folded }: { w: number; h: number; gap: number; printer?: string; testId?: string; folded?: boolean }) {
-  if (folded) return (
-    <details className="small ls-paper-hint ls-paper-folded no-print" data-testid={testId}>
-      <summary>Paper on this computer: <strong>{w} × {h} mm</strong> (already working). How to set it again</summary>
-      <LabelPaperSteps w={w} h={h} gap={gap} printer={printer} />
-    </details>
-  );
+  const [open, setOpen] = useState(!folded);
+  const size = `${w} × ${h} mm`;
   return (
-    <div className="small ls-paper-hint no-print" data-testid={testId}>
-      <strong>Set the label size once on this computer: {w} × {h} mm.</strong> Until it is set, the printer uses its own paper size
-      (often 4 × 6 in) and the labels come out shrunk, sideways or spread over two labels.
-      <ol>
-        <li>In Chrome’s print window, click <strong>Print using system dialog</strong> at the bottom (or press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>), pick <strong>{printer}</strong> and click <strong>Preferences</strong>.
-          (Or: Windows Start → Settings → Printers &amp; scanners → {printer} → <strong>Printing preferences</strong>.)</li>
-        <li><strong>Page Setup → Stock → New</strong>: width <strong>{w} mm</strong>, height <strong>{h} mm</strong>, “Labels with gaps”, gap <strong>{gap} mm</strong>. Orientation <strong>Portrait</strong>. Press OK.</li>
-        <li>Back in Chrome’s print window, under <em>More settings</em>: Paper size <strong>{w} × {h} mm</strong> (the stock you made), Margins <strong>None</strong>, Scale <strong>Default</strong>.</li>
-      </ol>
+    <div className="lp-card no-print" data-testid={testId}>
+      <div className="lp-head">
+        <span className="lp-icon" aria-hidden="true"><Printer size={18} /></span>
+        <div className="lp-title">
+          <strong>{folded ? 'This computer is set up' : 'Set up this computer once'}</strong>
+          <span>{folded ? 'Labels print at the right size.' : 'Takes a minute. Without it, labels print small or sideways.'}</span>
+        </div>
+        <span className="lp-size" title="Label size to set">{size}</span>
+      </div>
+      <button type="button" className="lp-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{open ? 'Hide the steps' : folded ? 'Show the steps again' : 'Show me how'}</button>
+      {open && (
+        <ol className="lp-steps">
+          <li><span className="lp-n">1</span><div><strong>Open the printer’s settings</strong>
+            <span>Click <b>Print labels</b>. In the print window click <b>Print using system dialog</b> (or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>), choose <b>{printer}</b>, then <b>Preferences</b>.</span></div></li>
+          <li><span className="lp-n">2</span><div><strong>Add the label size</strong>
+            <span><b>Page Setup → Stock → New</b>. Width <b>{w} mm</b>, height <b>{h} mm</b>, gap <b>{gap} mm</b>. Orientation <b>Portrait</b>. Click OK.</span></div></li>
+          <li><span className="lp-n">3</span><div><strong>Print</strong>
+            <span>In <i>More settings</i>: Paper size <b>{size}</b>, Margins <b>None</b>, Scale <b>Default</b>. Chrome remembers it next time.</span></div></li>
+        </ol>
+      )}
     </div>
   );
 }

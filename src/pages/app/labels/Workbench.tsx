@@ -21,7 +21,7 @@ import {
 } from '../../../../shared/labelEngine';
 import { LabelView } from '@/components/labels/LabelView';
 import { DirectPrinterPicker, useDirectConn } from '@/components/labels/DirectPrinter';
-import { directSupported, printRowsDirect } from '@/lib/labelDirect';
+import { directSupported, printRowsDirect, rowBitmap } from '@/lib/labelDirect';
 import { isNativeApp } from '@/lib/native';
 import {
   LABEL_KEYS, allPrinters, allStocks, autoFromSettings, device, labelDataFor, newKey, sameGeom, setDevice, settingsWithStock, stockFromSettings, templateFor, turnFromSettings, useLabelSetup, type JobRow,
@@ -174,7 +174,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
   const viewCount = Math.max(1, Math.ceil(pages.length / perView));
   const vi = Math.min(view, viewCount - 1);
   const shownPages = pages.slice(vi * perView, vi * perView + perView);
-  const [overlay, setOverlay] = useState(true);
+  const [overlay, setOverlay] = useState(false);
   const [mono, setMono] = useState(false);
   const jumpToLine = (li: number) => { const r = pages.findIndex((pg) => pg.some((row) => row.some((s) => s?.line === li))); if (r >= 0) setView(Math.floor(r / perView)); };
 
@@ -286,6 +286,37 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
     setLines((ls) => { const i = ls.findIndex((l) => l.itemId === it.id && !l.batch); if (i < 0) return [...ls, mkLine(it, 1)]; const c = [...ls]; c[i] = { ...c[i]!, qty: clamp(c[i]!.qty + 1) }; return c; });
   };
 
+  /* ---------- "As the printer sees it": the very dots the printer gets (not a screen filter) ---------- */
+  const [monoImgs, setMonoImgs] = useState<Record<string, string>>({});
+  // (The automatic layout gets new element ids on every render, so ids are left out of the signature.)
+  const monoSig = mono && stock.sheet === 'roll' ? JSON.stringify([vi, stock, printer.dpi, tpl, shownPages, printable.map((l) => [l.itemId, l.data])], (k, v) => (k === 'id' ? undefined : v)) : '';
+  useEffect(() => {
+    setMonoImgs({});
+    if (!monoSig) return;
+    let dead = false;
+    const t = setTimeout(async () => {
+      const els = [...document.querySelectorAll<HTMLElement>('.ls-sheets [data-row-key] .label-row')];
+      const out: Record<string, string> = {};
+      for (const el of els) {
+        if (dead) return;
+        try {
+          const b = await rowBitmap(el, stock, printer.dpi);
+          const c = document.createElement('canvas'); c.width = b.width; c.height = b.height;
+          const ctx = c.getContext('2d')!; const img = ctx.createImageData(b.width, b.height); const bpr = Math.ceil(b.width / 8);
+          for (let y = 0; y < b.height; y++) for (let x = 0; x < b.width; x++) {
+            const v = b.mono[y * bpr + (x >> 3)]! & (0x80 >> (x & 7)) ? 0 : 255; const o = (y * b.width + x) * 4;
+            img.data[o] = img.data[o + 1] = img.data[o + 2] = v; img.data[o + 3] = 255;
+          }
+          ctx.putImageData(img, 0, 0);
+          out[el.closest<HTMLElement>('[data-row-key]')!.dataset.rowKey!] = c.toDataURL();
+        } catch { /* keep the normal preview for this row */ }
+      }
+      if (!dead) setMonoImgs(out);
+    }, 150);
+    return () => { dead = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monoSig]);
+
   /* ---------- Render ---------- */
   const rangeRows = printRange ? pages.slice(printRange.from, printRange.to) : [];
   const renderPage = (pg: (typeof pages)[number], key: string | number, forPrint: boolean) => stock.sheet === 'roll' ? (
@@ -297,8 +328,11 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
         </div>
       );
       const t = forPrint && conn && stock.sheet === 'roll' ? 0 : turn;
-      return t ? <div key={key} className={`label-turn turn-${t}`} style={{ '--rw': `${rowWidthMm(stock)}mm`, '--rh': `${stock.h}mm` } as React.CSSProperties}>{r}</div>
-        : <div key={key} className={`label-page ${!forPrint && overlay ? 'lb-overlay' : ''}`} style={!forPrint && overlay ? { '--head': `${printer.headMm}mm` } as React.CSSProperties : undefined}>{r}</div>;
+      const dots = !forPrint && mono ? monoImgs[String(key)] : undefined;
+      const pic = dots ? <img className="lb-mono-img" src={dots} alt="" style={{ width: `${rowWidthMm(stock)}mm`, height: `${stock.h}mm` }} /> : null;
+      const rk = forPrint ? undefined : String(key);
+      return t ? <div key={key} data-row-key={rk} className={`label-turn turn-${t}`} style={{ '--rw': `${rowWidthMm(stock)}mm`, '--rh': `${stock.h}mm` } as React.CSSProperties}>{r}{pic}</div>
+        : <div key={key} data-row-key={rk} className={`label-page ${!forPrint && overlay ? 'lb-overlay' : ''}`} style={!forPrint && overlay ? { '--head': `${printer.headMm}mm` } as React.CSSProperties : undefined}>{r}{pic}</div>;
     })()
   ) : (
     <div key={key} className="label-a4" style={{ width: `${SHEET_MM[stock.sheet].w}mm`, height: `${SHEET_MM[stock.sheet].h}mm`, padding: `${stock.marginTop}mm ${stock.marginR}mm 0 ${stock.marginL}mm`, gridTemplateColumns: `repeat(${stock.across}, ${stock.w}mm)`, gridAutoRows: `${stock.h}mm`, columnGap: `${stock.gutter}mm`, rowGap: `${stock.rowGap}mm` }}>
@@ -499,7 +533,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
               </div>
             )}
             <div className="lb-tools no-print">
-              <label className="small row" style={{ gap: 4 }}><input type="checkbox" checked={overlay} onChange={(e) => setOverlay(e.target.checked)} /> Head width &amp; feed</label>
+              <label className="small row" style={{ gap: 4 }}><input type="checkbox" checked={overlay} onChange={(e) => setOverlay(e.target.checked)} /> Show the printer’s edges</label>
               <label className="small row" style={{ gap: 4 }}><input type="checkbox" checked={mono} onChange={(e) => setMono(e.target.checked)} /> As the printer sees it (1-bit)</label>
               {viewCount > 1 && <span className="row" style={{ gap: 4, marginLeft: 'auto' }}>
                 <button type="button" className="icon-btn sm" aria-label="Previous rows" disabled={vi === 0} onClick={() => setView(vi - 1)}><ChevronLeft size={15} /></button>
@@ -525,7 +559,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
         <div className="field ls-measure" data-testid="labels-in-printer">
           <label>Which labels are in the printer?</label>
           <div className="ls-chips ls-rollw" role="radiogroup" aria-label="Roll width">
-            {([3, 4] as const).map((r) => <button key={r} type="button" role="radio" aria-checked={rollIn === r} className={rollIn === r ? 'on' : ''} onClick={() => setRollIn(r)}>{r}-inch roll{r === 3 ? ' (TVS LP 46 Lite)' : ''}</button>)}
+            {([3, 4] as const).map((r) => <button key={r} type="button" role="radio" aria-checked={rollIn === r} className={rollIn === r ? 'on' : ''} onClick={() => setRollIn(r)}>{r}-inch roll</button>)}
           </div>
           <div className="ls-chips" role="radiogroup" aria-label="Labels in the printer">
             {IN_PRINTER.filter((x) => x.roll === rollIn && stocks.some((s) => s.id === x.id)).map((x) => {

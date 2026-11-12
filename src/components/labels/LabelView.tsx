@@ -3,6 +3,7 @@ import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
 import {
   QUIET, badChar, elementCode, elementSymbology, elementText, fitBarcode, fitText, type LabelData, type LabelElement, type LabelTemplateBody, type Symbology,
+  withLonePrices,
 } from '../../../shared/labelEngine';
 
 /** A linear barcode at a whole-dot narrow bar, with quiet zones, never stretched (ML-11). */
@@ -56,7 +57,7 @@ export const LabelView = memo(function LabelView({ tpl, data, dpi = 203, design 
   return (
     <div className={`lv ${design ? 'lv-design' : ''}`} style={{ width: `${tpl.w}mm`, height: `${tpl.h}mm` }}>
       {design && <div className="lv-safe" style={{ inset: `${design.safe}mm` }} aria-hidden="true" />}
-      {tpl.elements.map((el) => {
+      {(design ? tpl.elements : withLonePrices(tpl, data)).map((el) => {
         const box: React.CSSProperties = { left: `${el.x}mm`, top: `${el.y}mm`, width: `${el.w}mm`, height: `${el.h}mm` };
         const pick = design?.onPick ? { onPointerDown: (e: React.PointerEvent) => design.onPick!(el.id, e) } : {};
         const cls = `lv-el lv-${el.type} ${design?.selected === el.id ? 'sel' : ''}`;

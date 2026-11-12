@@ -75,8 +75,8 @@ export interface PrinterSettings {
   darkness: number; speed: number;  // darkness 0–15, speed in inches per second
 }
 export const PRINTER_PRESETS: Array<{ id: string; name: string; settings: PrinterSettings }> = [
-  // The shop's own printer first: picked for every roll up to 3 inches (80 mm) wide.
-  { id: 'tvs-lp46-lite', name: '3-inch label printer · TVS LP 46 Lite (TSPL)', settings: { language: 'tspl', dpi: 203, headMm: 80, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
+  // The shop's own printer first. Its head prints 104 mm (4.25 in), so it takes 3-inch and 4-inch rolls.
+  { id: 'tvs-lp46-lite', name: 'TVS LP 46 Lite · 3-inch and 4-inch rolls (TSPL)', settings: { language: 'tspl', dpi: 203, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
   { id: 'label-4in-tspl', name: '4-inch label printer (TSC, Xprinter, TVS, Honeywell…) · TSPL', settings: { language: 'tspl', dpi: 203, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
   { id: 'label-4in-zpl', name: '4-inch label printer (Zebra) · ZPL', settings: { language: 'zpl', dpi: 203, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 15, speed: 4 } },
   { id: 'label-4in-300', name: '4-inch label printer, 300 dpi', settings: { language: 'tspl', dpi: 300, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 3 } },
@@ -255,7 +255,26 @@ export function autoTemplate(w: number, h: number, show: Partial<Record<'company
     if (show.mrp) els.push({ id: eid(), type: 'field', field: 'mrp', text: 'MRP ', x: inset, y, w: half, h: Math.round(size * 12) / 10, size, bold: show.mrp.bold, align: show.price ? 'left' : 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 });
     if (show.price) els.push({ id: eid(), type: 'field', field: 'price', text: show.mrp ? '' : 'Price ', x: inset + (show.mrp ? half : 0), y, w: half, h: Math.round(size * 12) / 10, size, bold: true, align: show.mrp ? 'right' : 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 });
   }
-  return fitInside({ w, h, elements: els }, inset);
+  const fitted = fitInside({ w, h, elements: els }, inset);
+  // Big labels: put the design in the middle instead of leaving the bottom empty.
+  const spare = h - inset - Math.max(...fitted.elements.map((e) => e.y + e.h));
+  if (spare < 1.5) return fitted;
+  const dy = Math.round((spare / 2) * 10) / 10;
+  return { ...fitted, elements: fitted.elements.map((e) => ({ ...e, y: Math.round((e.y + dy) * 10) / 10 })) };
+}
+
+/**
+ * MRP and price share a line. When one of them is blank for an item (no MRP), the other takes the whole line,
+ * centred, instead of sitting at one edge next to an empty box.
+ */
+export function withLonePrices(t: LabelTemplateBody, d: LabelData): LabelElement[] {
+  const blank = (e: LabelElement) => e.type === 'field' && (e.field === 'mrp' || e.field === 'price') && !fieldText(e.field, d);
+  const pair = t.elements.filter((e) => e.type === 'field' && (e.field === 'mrp' || e.field === 'price'));
+  if (pair.length !== 2 || Math.abs(pair[0]!.y - pair[1]!.y) > 0.3) return t.elements;
+  const gone = pair.find(blank); const keep = pair.find((e) => !blank(e));
+  if (!gone || !keep) return t.elements;
+  const x = Math.min(pair[0]!.x, pair[1]!.x), w = Math.max(pair[0]!.x + pair[0]!.w, pair[1]!.x + pair[1]!.w) - x;
+  return t.elements.filter((e) => e !== gone).map((e) => (e === keep ? { ...e, x, w, align: 'center' as const } : e));
 }
 
 /**
@@ -381,7 +400,7 @@ export function validateJob(lines: JobLine[], tpl: LabelTemplateBody, stock: Sto
     const row = rowWidthMm(stock);
     // What actually prints: from the first label's safe area to the last one's (side margins are blank).
     const printed = row - stock.marginL - stock.marginR - 2 * stock.safeInset;
-    if (printed > printer.headMm + 0.05) job('head', `A row of ${stock.across} × ${stock.w} mm labels prints ${r1(printed)} mm wide, more than this printer’s ${printer.headMm} mm head. Change the stock or the printer.`);
+    if (printed > printer.headMm + 0.05) job('head', `These labels are ${r1(row)} mm across, but this printer prints only ${printer.headMm} mm wide. Choose the printer that takes this roll.`);
     else if (row > printer.headMm + 0.05) job('head-inset', `The row is ${row} mm on a ${printer.headMm} mm head: it prints only if every element stays ${stock.safeInset} mm inside the label edges.`, 'warning');
   } else {
     const sh = SHEET_MM[stock.sheet];

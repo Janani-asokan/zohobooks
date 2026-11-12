@@ -10,6 +10,8 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import zlib from 'node:zlib';
+import zx from '@zxing/library';
+const { MultiFormatReader, BinaryBitmap, HybridBinarizer, RGBLuminanceSource, DecodeHintType, BarcodeFormat } = zx;
 const B = process.env.BASE ?? 'http://localhost:4000';
 const APP = process.env.APP ?? 'http://localhost:5555';
 const out = process.argv[2] ?? '.'; fs.mkdirSync(out, { recursive: true });
@@ -97,6 +99,34 @@ try {
   await pu.getByRole('button', { name: 'More settings' }).click();
   ok(await pu.locator('#lb-printer').isVisible(), '“More settings” opens the printer and stock choices');
   await pu.screenshot({ path: `${out}/simple-panel.png`, fullPage: true });
+
+  /* The photo: TVS LP 46 Lite with 100 × 100 labels, an item without MRP, "As the printer sees it" */
+  const pt = await fresh(() => { localStorage.setItem('c360.labels.device', JSON.stringify({ printerId: 'preset:tvs-lp46-lite' })); });
+  await login(pt, B);
+  const noMrp = await pt.evaluate(async () => (await (await fetch('/api/shop/items')).json()).find((i) => i.type === 'Goods' && /^\d{13}$/.test(i.barcode ?? '') && !i.mrp && i.sp1));
+  await pt.goto(B + `/app/items/labels?ids=${noMrp.id}&qty=1`); await pt.waitForSelector('#ls-preset', { state: 'attached' }); await pt.waitForTimeout(1200);
+  await pt.getByTestId('labels-in-printer').getByRole('radio', { name: /100 × 100/ }).click(); await pt.waitForTimeout(400);
+  ok(/TVS LP 46 Lite/.test(await selText(pt, '#lb-printer')) && !/prints only|head/.test(await pt.locator('.ls-stage').innerText()), 'TVS LP 46 Lite takes 100 × 100 labels: no “too wide for the head” warning', await selText(pt, '#lb-printer'));
+  ok(await pt.getByRole('button', { name: /^Print labels/ }).isEnabled(), 'Print labels is ready');
+  const priceBox = await pt.evaluate(() => { const lv = document.querySelector('.ls-sheets .lv'); const pr = [...lv.querySelectorAll('.lv-field')].find((e) => /₹/.test(e.textContent)); const a = lv.getBoundingClientRect(), b = pr.getBoundingClientRect(); return { mid: (b.left + b.right) / 2 - (a.left + a.right) / 2, w: a.width, align: getComputedStyle(pr).textAlign }; });
+  ok(priceBox.align === 'center' && Math.abs(priceBox.mid) < priceBox.w * 0.05, 'no MRP: the price is centred on the label, not pushed to the edge', JSON.stringify(priceBox));
+  const gaps = await pt.evaluate(() => { const lv = document.querySelector('.ls-sheets .lv'); const a = lv.getBoundingClientRect(); const els = [...lv.querySelectorAll('.lv-el')].map((e) => e.getBoundingClientRect()); return { top: Math.min(...els.map((r) => r.top)) - a.top, bottom: a.bottom - Math.max(...els.map((r) => r.bottom)) }; });
+  ok(Math.abs(gaps.top - gaps.bottom) < 6, `the design sits in the middle of the big label (top ${Math.round(gaps.top)} px, bottom ${Math.round(gaps.bottom)} px)`);
+  await pt.getByLabel(/As the printer sees it/).check();
+  await pt.waitForSelector('.lb-mono-img', { timeout: 15000 });
+  const monoPng = await pt.evaluate(() => document.querySelector('.lb-mono-img').src);
+  const decoded = await pt.evaluate(async (src) => {
+    const im = new Image(); im.src = src; await im.decode();
+    const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d'); x.drawImage(im, 0, 0);
+    return { w: im.width, h: im.height, data: Array.from(x.getImageData(0, 0, im.width, im.height).data.filter((_, i) => i % 4 === 0)) };
+  }, monoPng);
+  let code = null;
+  try { const hints = new Map([[DecodeHintType.TRY_HARDER, true]]); const r = new MultiFormatReader(); r.setHints(hints); code = r.decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(Uint8ClampedArray.from(decoded.data), decoded.w, decoded.h)))).getText(); } catch { /* no code */ }
+  ok(decoded.w === 832 && decoded.h === 800, `“As the printer sees it” is the printer’s own dots: ${decoded.w} × ${decoded.h} (104 × 100 mm at 203 dpi)`);
+  ok(code === noMrp.barcode, `the barcode in that view scans as ${noMrp.barcode}`, String(code));
+  await pt.screenshot({ path: `${out}/tvs-100x100-1bit.png`, fullPage: true });
+  await pt.getByLabel(/As the printer sees it/).uncheck();
+  await pt.screenshot({ path: `${out}/tvs-100x100.png`, fullPage: true });
 
   /* The 3-inch TVS LP 46 Lite with 2-up 38 × 25 labels */
   await setStock(p, 'preset:3in-38x25x2', 0);
