@@ -140,7 +140,7 @@ export function qrModules(value: string): number {
   const v = cap.findIndex((c) => bytes <= c) + 1 || 11;
   return 17 + 4 * v + 8;
 }
-export interface BarcodeFit { ok: boolean; moduleDots: number; moduleMm: number; widthMm: number; modules: number; reason?: string }
+export interface BarcodeFit { ok: boolean; moduleDots: number; moduleMm: number; widthMm: number; modules: number; reason?: string; /** Retail code printed below the 0.264 mm GS1 minimum (down to 0.25 mm): shop scanners read it. */ small?: boolean }
 /**
  * The largest whole-dot narrow bar at which the code fits the given width (never smaller than the minimum, never
  * stretched). Not ok when even the minimum is too wide: the label is refused, not shrunk (ML-11, QA-B05).
@@ -153,6 +153,10 @@ export function fitBarcode(value: string, sym: Symbology, widthMm: number, dpi: 
   const cap = Math.max(min, maxModuleDots ?? Math.floor(0.5 * dotsPerMm(dpi) + 1e-9));
   const fits = Math.floor(widthMm / (modules * dot) + 1e-9);
   const moduleDots = Math.min(cap, fits);
+  // EAN / UPC on a 38 mm label at 203 dpi: 3 dots (0.375 mm) is too wide and 2 dots (0.25 mm) is just under the GS1
+  // 0.264 mm minimum. Every Indian 38 × 25 roll is printed that way and shop scanners read it: allowed, with a note.
+  const compact = (sym === 'EAN13' || sym === 'UPC' || sym === 'EAN8') ? Math.max(2, Math.ceil(0.25 * dotsPerMm(dpi) - 1e-9)) : min;
+  if (moduleDots < min && moduleDots >= compact) return { ok: true, small: true, moduleDots, moduleMm: moduleDots * dot, widthMm: modules * moduleDots * dot, modules };
   if (moduleDots < min) {
     return { ok: false, moduleDots: min, moduleMm: min * dot, widthMm: modules * min * dot, modules, reason: `needs ${r1(modules * min * dot)} mm at the smallest scannable size; the space is ${r1(widthMm)} mm` };
   }
@@ -427,6 +431,7 @@ export function validateJob(lines: JobLine[], tpl: LabelTemplateBody, stock: Sto
         if (bad) { add('blocker', 'bad-char', `${l.data.name}: “${bad}” can’t go in a barcode. Use QR, or English letters and digits in the barcode or SKU.`); continue; }
         const fit = fitBarcode(code, sym, sym === 'QR' ? Math.min(el.w, el.h) : el.w, printer.dpi);
         if (!fit.ok) add('blocker', 'no-fit', `${l.data.name}: the barcode ${fit.reason}. Switch to QR, choose larger stock, or shorten the value.`);
+        else if (fit.small) add('warning', 'small-bars', `${l.data.name}: thin barcode bars to fit the label (scanners read them; check one).`);
         else if (sym === 'EAN13' || sym === 'UPC') {
           // Standard EAN-13 height is 69.24 modules (22.85 mm at 0.33 mm); a label too short for it truncates the bars (ML-09).
           const full = fit.moduleMm * 69.24;

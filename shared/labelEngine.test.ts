@@ -41,7 +41,12 @@ describe('barcode fit (spec 5.3, ML-08..11)', () => {
   it('EAN-13 never below the 0.264 mm minimum: 3 dots (0.375 mm) at 203 dpi, ~42.4 mm with quiet zones', () => {
     const f = fitBarcode('8901057510011', 'EAN13', 48, 203, 3);
     expect(f.ok).toBe(true); expect(f.moduleDots).toBe(3); expect(f.widthMm).toBeCloseTo(42.4, 1);
-    expect(fitBarcode('8901057510011', 'EAN13', 40, 203).ok).toBe(false); // too narrow: refused, never shrunk
+    // 40 mm: 3 dots don't fit; 2 dots (0.25 mm, 28.3 mm) do and are marked small (the usual 38 × 25 roll).
+    const c = fitBarcode('8901057510011', 'EAN13', 40, 203); expect(c.ok).toBe(true); expect(c.small).toBe(true); expect(c.moduleDots).toBe(2);
+    expect(fitBarcode('8901057510011', 'EAN13', 27, 203).ok).toBe(false); // narrower than 0.25 mm bars: refused, never shrunk
+  });
+  it('a 38 × 25 label at 203 dpi prints an EAN-13 (with a note), it is not skipped', () => {
+    const f = fitBarcode('8901057510011', 'EAN13', 36, 203); expect(f.ok).toBe(true); expect(f.small).toBe(true); expect(f.widthMm).toBeLessThanOrEqual(36);
   });
   it('QR at 3 dots per module: ~11 mm for version 1, ~12.4 mm for version 2', () => {
     expect(qrModules('SKU-12') * 0.375).toBeCloseTo(10.9, 1);
@@ -49,7 +54,7 @@ describe('barcode fit (spec 5.3, ML-08..11)', () => {
   });
   it('higher resolution printers get finer whole-dot bars, never below the minimum', () => {
     const f300 = fitBarcode('8901057510011', 'EAN13', 36, 300); const f600 = fitBarcode('8901057510011', 'EAN13', 36, 600);
-    expect(f300.ok).toBe(false); // 4 dots at 12/mm = 0.333 mm → 37.7 mm, more than 36 mm
+    expect(f300.ok).toBe(true); expect(f300.small).toBe(true); expect(f300.moduleDots).toBe(3); // 4 dots (37.7 mm) don't fit 36 mm; 3 dots = 0.25 mm do
     expect(f600.ok).toBe(true); expect(f600.moduleMm).toBeGreaterThanOrEqual(0.264); expect(f600.widthMm).toBeLessThanOrEqual(36);
     expect(fitBarcode('SKU-1', 'CODE128', 100, 600).moduleMm).toBeLessThanOrEqual(0.5);
   });

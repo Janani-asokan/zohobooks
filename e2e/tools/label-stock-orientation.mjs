@@ -143,6 +143,29 @@ try {
   await p4.waitForFunction(() => window.__printed.length > 0, null, { timeout: 10000 });
   ok(!/size/.test(pageRule(await p4.evaluate(() => window.__printed[0]))), 'the 80 × 25 mm row is printed portrait onto the printer’s label stock (no landscape page size)');
   await p4.screenshot({ path: `${out}/workbench-3in.png`, fullPage: true });
+  ok(/big white A4 page/.test(hint), 'the set-up card says what an A4 preview means (printer still on A4)');
+  // The message on WhatsApp: a 13-digit code on 38 × 25 labels was "skipped" and nothing printed.
+  const ean = await p4.evaluate(async () => {
+    const ok = (d) => { let t = 0; for (let i = 0; i < 12; i++) t += Number(d[11 - i]) * (i % 2 === 0 ? 3 : 1); return (10 - (t % 10)) % 10 === Number(d[12]); };
+    return (await (await fetch('/api/shop/items')).json()).find((i) => i.type === 'Goods' && /^\d{13}$/.test(i.barcode ?? '') && ok(i.barcode));
+  });
+  await p4.goto(B + `/app/items/labels?ids=${ean.id}&qty=2`); await p4.waitForSelector('#ls-preset', { state: 'attached' }); await p4.waitForTimeout(1200);
+  ok((await selText(p4, '#ls-preset')) === '3-inch, 2-up · 38 × 25' && await p4.getByRole('button', { name: /^Print labels/ }).isEnabled(), `an EAN-13 item (${ean.barcode}) on 38 × 25 labels prints, not skipped`);
+  ok(!/can’t print/.test(await p4.locator('body').innerText()) && /thin barcode bars/.test(await p4.locator('.lb-lines').innerText()), 'no “can’t print”; a gentle note says the bars are thin to fit');
+  const bars = await p4.evaluate(() => { const s = document.querySelector('.ls-sheets .lv-barcode svg'); return s ? { mm: Number(s.dataset.moduleMm), w: s.getBoundingClientRect().width * 25.4 / 96 } : null; });
+  ok(bars && Math.abs(bars.mm - 0.25) < 0.001 && bars.w <= 36.1, `the barcode is 0.25 mm bars, ${bars && bars.w.toFixed(1)} mm wide, inside the 38 mm label`);
+  await p4.getByLabel(/As the printer sees it/).check();
+  await p4.waitForSelector('.lb-mono-img', { timeout: 15000 });
+  const px = await p4.evaluate(async () => {
+    const im = new Image(); im.src = document.querySelector('.lb-mono-img').src; await im.decode();
+    const c = document.createElement('canvas'); c.width = im.width / 2; c.height = im.height; c.getContext('2d').drawImage(im, 0, 0);   // left label of the two
+    return { w: c.width, h: c.height, data: Array.from(c.getContext('2d').getImageData(0, 0, c.width, c.height).data.filter((_, i) => i % 4 === 0)) };
+  });
+  let got = null;
+  try { const r = new MultiFormatReader(); r.setHints(new Map([[DecodeHintType.TRY_HARDER, true]])); got = r.decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(Uint8ClampedArray.from(px.data), px.w, px.h)))).getText(); } catch { /* none */ }
+  fs.writeFileSync(`${out}/ean-38x25-dots.png`, Buffer.from((await p4.evaluate(() => document.querySelector('.lb-mono-img').src)).split(',')[1], 'base64'));
+  ok(got === ean.barcode, `the 0.25 mm EAN-13 on a 38 × 25 label scans at the printer’s 203 dpi: ${got}`);
+  await p4.screenshot({ path: `${out}/workbench-3in-ean.png`, fullPage: true });
   await setStock(p, 'preset:4in-50x25x2', 0);
 
   /* Phone app: straight to a Wi-Fi label printer in TSPL */

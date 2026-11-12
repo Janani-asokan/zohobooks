@@ -41,10 +41,13 @@ export async function rowBitmap(el: HTMLElement, stock: StockGeometry, dpi: numb
   const dpm = dotsPerMm(dpi);
   const width = Math.round(rowWidthMm(stock) * dpm);
   const height = Math.round(stock.h * dpm);
-  const cssW = el.getBoundingClientRect().width || el.offsetWidth || 1;
+  // Drawn straight at the printer's dots: the row's exact CSS size (mm → px) onto a canvas of exactly width × height
+  // dots. (Drawing at the screen size and then squeezing it to the printer's width shifted thin bars by a dot halfway
+  // along a barcode, so 2-dot EAN bars came out 1 and 3 dots wide and stopped scanning.)
+  const pxW = (rowWidthMm(stock) * 96) / 25.4, pxH = (stock.h * 96) / 25.4;
   const canvas = await toCanvas(el, {
-    pixelRatio: width / cssW, backgroundColor: '#ffffff', cacheBust: false,
-    style: { margin: '0', boxShadow: 'none', position: 'static', left: 'auto', top: 'auto', transform: 'none', outline: 'none' },
+    width: pxW, height: pxH, canvasWidth: width, canvasHeight: height, pixelRatio: 1, backgroundColor: '#ffffff', cacheBust: false,
+    style: { margin: '0', boxShadow: 'none', position: 'static', left: 'auto', top: 'auto', transform: 'none', outline: 'none', width: `${pxW}px`, height: `${pxH}px` },
   });
   const out = document.createElement('canvas');
   out.width = width; out.height = height;

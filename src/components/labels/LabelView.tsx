@@ -2,7 +2,7 @@ import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
 import {
-  QUIET, badChar, elementCode, elementSymbology, elementText, fitBarcode, fitText, type LabelData, type LabelElement, type LabelTemplateBody, type Symbology,
+  QUIET, badChar, dotsPerMm, elementCode, elementSymbology, elementText, fitBarcode, fitText, type LabelData, type LabelElement, type LabelTemplateBody, type Symbology,
   withLonePrices,
 } from '../../../shared/labelEngine';
 
@@ -22,8 +22,14 @@ function Bars({ code, sym, el, dpi, showQuiet }: { code: string; sym: Exclude<Sy
   }, [code, sym, fit.widthMm, barsH, fit.ok]);
   if (!fit.ok) return <div className="lv-err">Barcode too long for this space</div>;
   const just = el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center';
+  // The bars start on a whole printer dot: a barcode centred by a fraction of a dot prints its 2-dot bars as 1 and 3
+  // dots wide (and stops scanning). Offset from the element, snapped to the printer's dot grid.
+  const dpm = dotsPerMm(dpi);
+  const free = Math.max(0, el.w - fit.widthMm);
+  const want = el.align === 'left' ? 0 : el.align === 'right' ? free : free / 2;
+  const off = Math.max(0, Math.min(free, Math.round((el.x + want) * dpm) / dpm - el.x));
   return (
-    <div className="lv-bars" style={{ alignItems: just }}>
+    <div className="lv-bars" style={{ alignItems: just, marginLeft: `${off}mm`, alignSelf: 'flex-start' }} data-bars-off={off}>
       <svg ref={ref} className={showQuiet ? 'lv-quiet' : ''} role="img" aria-label={`Barcode ${code}`} data-module-mm={fit.moduleMm} data-modules={fit.modules} />
       {el.showValue && <div className="lv-value" style={{ fontSize: `${valueH * 0.82}mm`, width: `${fit.widthMm}mm` }}>{code}</div>}
     </div>
@@ -66,7 +72,7 @@ export const LabelView = memo(function LabelView({ tpl, data, dpi = 203, design 
           const sym = elementSymbology(el, code);
           const bad = !code ? 'No barcode' : badChar(code, sym) ? `“${badChar(code, sym)}” can’t go in a barcode` : '';
           return (
-            <div key={el.id} className={cls} style={{ ...box, justifyContent: el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center' }} {...pick} data-el={el.id}>
+            <div key={el.id} className={cls} style={{ ...box, justifyContent: el.type === 'barcode' && !bad ? 'flex-start' : el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center' }} {...pick} data-el={el.id}>
               {bad ? <div className="lv-err">{bad}</div> : sym === 'QR' ? <Qr code={code} el={el} dpi={dpi} /> : <Bars code={code} sym={sym} el={el} dpi={dpi} showQuiet={!!design} />}
             </div>
           );

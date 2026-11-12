@@ -345,7 +345,7 @@ export default function PrintSettings() {
                     {roll && (
                       isNativeApp()
                         ? <p className="small ps-paper-note" data-testid="paper-size-note">In the app, choose <strong>Send labels → Bluetooth or Wi-Fi</strong> on the label screen to print straight to the label printer at exactly {rw} × {cur.h} mm.</p>
-                        : <LabelPaperSteps testId="paper-size-note" w={rw} h={cur.h} gap={cur.rowGap} printer={rw <= 82 ? 'TVS LP 46 Lite' : 'the label printer'} />
+                        : <LabelPaperSteps testId="paper-size-note" w={rw} h={cur.h} gap={cur.rowGap} />
                     )}
                   </>);
                 })()}

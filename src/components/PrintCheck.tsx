@@ -25,7 +25,7 @@ export const Choice = ({ icon, label, hint, onClick }: { icon: ReactNode; label:
  * Label printers on the website: the label size is set in the printer's Windows driver, which a web page can't open.
  * Chrome's print window reaches it through "Print using system dialog" → Preferences. Shown as three short steps.
  */
-export function LabelPaperSteps({ w, h, gap, printer = 'the label printer', testId, folded }: { w: number; h: number; gap: number; printer?: string; testId?: string; folded?: boolean }) {
+export function LabelPaperSteps({ w, h, gap, printer, testId, folded }: { w: number; h: number; gap: number; printer?: string; testId?: string; folded?: boolean }) {
   const [open, setOpen] = useState(!folded);
   const size = `${w} × ${h} mm`;
   return (
@@ -42,12 +42,15 @@ export function LabelPaperSteps({ w, h, gap, printer = 'the label printer', test
       {open && (
         <ol className="lp-steps">
           <li><span className="lp-n">1</span><div><strong>Open the printer’s settings</strong>
-            <span>Click <b>Print labels</b>. In the print window click <b>Print using system dialog</b> (or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>), choose <b>{printer}</b>, then <b>Preferences</b>.</span></div></li>
-          <li><span className="lp-n">2</span><div><strong>Add the label size</strong>
-            <span><b>Page Setup → Stock → New</b>. Width <b>{w} mm</b>, height <b>{h} mm</b>, gap <b>{gap} mm</b>. Orientation <b>Portrait</b>. Click OK.</span></div></li>
+            <span>Click <b>Print labels</b>. In the print window click <b>Print using system dialog</b> (or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>), choose {printer ? <b>{printer}</b> : <>your label printer (it may be named <b>TVS LP 46 Lite</b> or <b>Bar Code Printer TT065-50</b>)</>}, then <b>Preferences</b>.</span></div></li>
+          <li><span className="lp-n">2</span><div><strong>Add the label size and make it the default</strong>
+            <span>In <b>Page Setup</b> (or <b>Paper</b>), click <b>New</b>: width <b>{w} mm</b>, height <b>{h} mm</b>, gap <b>{gap} mm</b>. Choose it as the paper, Orientation <b>Portrait</b>, click OK.</span></div></li>
           <li><span className="lp-n">3</span><div><strong>Print</strong>
             <span>In <i>More settings</i>: Paper size <b>{size}</b>, Margins <b>None</b>, Scale <b>Default</b>. Chrome remembers it next time.</span></div></li>
         </ol>
+      )}
+      {open && (
+        <p className="lp-check"><b>How to know it worked:</b> Chrome’s preview shows small label-sized pages ({size}). If it shows a big white A4 page with the labels at the top, the printer is still set to A4: do step 2 again.</p>
       )}
     </div>
   );

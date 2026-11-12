@@ -360,7 +360,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
     }
     : !metrics.labels ? (noBarcode.length && me.can('items.write')
       ? { msg: `${noBarcode.length === lines.length ? 'These items have' : 'Some items have'} no barcode, so there is nothing to print.`, fix: { label: 'Make barcodes for them', run: () => void genMissing() } }
-      : { msg: 'None of these items can print. See the red notes under each item.' })
+      : { msg: `Can’t print: ${(issues.find((x) => x.scope === 'line' && x.severity === 'blocker')?.message ?? 'see the red note under each item.').replace(/^[^:]+: /, '')}` })
     : null;
   const [more, setMore] = useState(false);
 
@@ -388,7 +388,9 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
                     <button type="button" className="lb-linkname strong" onClick={() => jumpToLine(i)} title="Show in preview">{it?.name ?? 'Unknown item'}</button>
                     <span className="small muted mono">{it?.barcode || it?.sku || 'no code'}{l.batch ? ` · batch ${l.batch}` : ''}{l.expiry ? ` · exp ${l.expiry}` : ''}</span>
                     {(l.ordered != null || l.printed) ? <span className="small muted">{l.ordered != null ? `ordered ${l.ordered} · received ${l.received ?? 0}` : ''}{l.printed ? ` · ${l.printed} printed before` : ''}</span> : null}
-                    {iss && <span className={`small ${iss.severity === 'blocker' ? 'ls-err' : 'lb-warn'}`}><AlertTriangle size={12} /> {iss.message.replace(`${it?.name}: `, '')}{iss.severity === 'blocker' ? ' (skipped)' : ''}</span>}
+                    {issues.filter((x) => x.line === i).sort((a, b) => (a.severity === 'blocker' ? -1 : 0) - (b.severity === 'blocker' ? -1 : 0)).map((x) => (
+                      <span key={x.code} className={`small ${x.severity === 'blocker' ? 'ls-err' : 'lb-warn'}`}><AlertTriangle size={12} /> {x.message.replace(`${it?.name}: `, '')}{x.severity === 'blocker' ? ' (not printed)' : ''}</span>
+                    ))}
                   </div>
                   <div className="ls-step" aria-label={`Labels for ${it?.name}`}>
                     <button type="button" onClick={() => setQty(l.key, l.qty - 1)} disabled={l.qty <= 0} aria-label="One less"><Minus size={13} /></button>
@@ -499,11 +501,11 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
             </div>
             {stock.sheet === 'roll' && !conn && lines.length > 0 && (<>
               {!isNativeApp() && <LabelPaperSteps testId="paper-hint" w={sideways(turn) ? stock.h : rowWidthMm(stock)} h={sideways(turn) ? rowWidthMm(stock) : stock.h} gap={stock.rowGap}
-                printer={/tvs/i.test(printerRow.name) ? 'TVS LP 46 Lite' : 'the label printer'} folded={!!mem?.ok} />}
+                folded={!!mem?.ok} />}
               {directSupported() && <p className="small muted no-print">Or choose Bluetooth / Wi-Fi under “Send labels” to print straight to the printer, with no paper size to set.</p>}
             </>)}
             {jobIssues.length > 0 && <div className="ls-warn no-print" role="alert">{jobIssues.map((x) => <div key={x.code}><AlertTriangle size={13} /> {x.message}</div>)}</div>}
-            {blocked.size > 0 && <div className="ls-warn no-print"><AlertTriangle size={13} /> {blocked.size} line{blocked.size === 1 ? '' : 's'} can’t print and {blocked.size === 1 ? 'is' : 'are'} skipped; the rest print.</div>}
+            {blocked.size > 0 && metrics.labels > 0 && <div className="ls-warn no-print"><AlertTriangle size={13} /> {blocked.size} item{blocked.size === 1 ? '' : 's'} can’t print (see the red note under {blocked.size === 1 ? 'it' : 'each'}); the others print.</div>}
             {check && (
               <CheckCard inline title={check === 'thanks' ? 'Label printer is set up' : 'Quick check, only once for this label size'} onClose={() => setCheck('')}>
                 {check === 'ask' && <><p className="small" style={{ margin: '6px 0 10px' }}>How did the labels come out of the printer?</p>
