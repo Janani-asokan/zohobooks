@@ -66,8 +66,9 @@ try {
   await p2.getByRole('button', { name: /^Test print/ }).click();
   await p2.waitForFunction(() => window.__printed.length > 0, null, { timeout: 10000 });
   ok(!/size/.test(pageRule(await p2.evaluate(() => window.__printed[0]))), 'the 104 × 100 mm page (100 × 100 label with the roll margins) is not sent as landscape either');
-  const fills = await p2.evaluate(() => { const r = document.querySelector('.ls-sheets .lb-slot'); const bar = r?.querySelector('svg, canvas, img'); return r && bar ? bar.getBoundingClientRect().width / r.getBoundingClientRect().width : 0; });
-  ok(fills > 0.6, `the design fills the big label (barcode ${Math.round(fills * 100)}% of its width)`);
+  const fill = await p2.evaluate(() => { const r = document.querySelector('.ls-sheets .lb-slot'); const bar = r?.querySelector('.lv-barcode svg'); return r && bar ? { share: bar.getBoundingClientRect().width / r.getBoundingClientRect().width, mm: Number(bar.dataset.moduleMm) } : { share: 0, mm: 0 }; });
+  // Filled = the barcode spans most of the label, or it is already at the widest bars (0.5 mm) for a short code.
+  ok(fill.share > 0.6 || (fill.mm >= 0.5 && fill.share > 0.45), `the design fills the big label (barcode ${Math.round(fill.share * 100)}% of its width, ${fill.mm} mm bars)`);
   await p2.screenshot({ path: `${out}/workbench-100x100.png` });
 
   /* The turn saved for the shop applies on a new computer */

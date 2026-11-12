@@ -342,6 +342,18 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
   const jobIssues = issues.filter((x) => x.scope === 'job');
   const lineIssue = (i: number) => issues.find((x) => x.line === i && x.severity === 'blocker') ?? issues.find((x) => x.line === i);
   const noBarcode = lines.filter((_, i) => issues.some((x) => x.line === i && x.code === 'no-barcode'));
+  // Codes too long for the label (e.g. T488805-0001 needs 41 mm; a 38 mm label has 36): a short in-store barcode fits,
+  // and the old code stays on the item as an alias, so labels already on the shelf keep scanning at the counter.
+  const tooLong = lines.filter((_, i) => issues.some((x) => x.line === i && x.code === 'no-fit'));
+  const genShort = async () => {
+    const n = tooLong.length;
+    if (!window.confirm(`Give ${n} item${n === 1 ? '' : 's'} a new short barcode that fits these labels?\n\nThe current code${n === 1 ? '' : 's'} keep${n === 1 ? 's' : ''} scanning at the counter, so labels already printed still work.`)) return;
+    try {
+      const r = await api.post<{ generated: number }>('/shop/label/barcodes/bulk-generate', { ids: tooLong.map((l) => l.itemId), overwrite: true });
+      await qc.invalidateQueries({ queryKey: ['items'] });
+      toast('success', `${r.generated} item${r.generated === 1 ? '' : 's'} now ha${r.generated === 1 ? 's' : 've'} a short barcode`, 'The old codes still scan at the counter.');
+    } catch (e) { toast('error', 'Could not make short barcodes', (e as Error).message); }
+  };
   const genMissing = async () => {
     try { await api.post('/shop/label/barcodes/bulk-generate', { ids: noBarcode.map((l) => l.itemId) }); await qc.invalidateQueries({ queryKey: ['items'] }); toast('success', 'Barcodes made for the items without one'); } catch (e) { toast('error', 'Could not make barcodes', (e as Error).message); }
   };
@@ -358,6 +370,8 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
       fix: jobBlocker.code === 'head' && fitPrinter ? { label: `Use the ${fitPrinter.name.split(' · ')[0]}`, run: () => { setPrinterId(fitPrinter.id); setDevice({ printerId: fitPrinter.id }); } }
         : jobBlocker.code === 'size' ? { label: 'Use the automatic layout', run: () => { setTemplateId(''); setDevice({ templateId: '' }); } } : undefined,
     }
+    : !metrics.labels && tooLong.length && me.can('items.write')
+      ? { msg: `The barcode is too long for ${stock.w} mm labels.`, fix: { label: tooLong.length === 1 ? 'Give it a short barcode that fits' : `Give ${tooLong.length} items short barcodes that fit`, run: () => void genShort() } }
     : !metrics.labels ? (noBarcode.length && me.can('items.write')
       ? { msg: `${noBarcode.length === lines.length ? 'These items have' : 'Some items have'} no barcode, so there is nothing to print.`, fix: { label: 'Make barcodes for them', run: () => void genMissing() } }
       : { msg: `Can’t print: ${(issues.find((x) => x.scope === 'line' && x.severity === 'blocker')?.message ?? 'see the red note under each item.').replace(/^[^:]+: /, '')}` })
@@ -402,6 +416,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
               );
             })}
           </ul>
+          {tooLong.length > 0 && me.can('items.write') && <button type="button" className="btn btn-soft btn-sm" style={{ marginTop: 8 }} onClick={() => void genShort()}>Give {tooLong.length === 1 ? 'it' : `${tooLong.length} items`} a short barcode that fits</button>}
           {noBarcode.length > 0 && me.can('items.write') && <button type="button" className="btn btn-soft btn-sm" style={{ marginTop: 8 }} onClick={() => void genMissing()}>Make barcodes for {noBarcode.length} item{noBarcode.length === 1 ? '' : 's'} without one</button>}
         </>}
         {!lines.length && <p className="small ls-start">Tap an item below to add it. Each tap adds one row of labels; change the number later.</p>}

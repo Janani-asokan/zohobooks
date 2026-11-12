@@ -430,7 +430,7 @@ export function validateJob(lines: JobLine[], tpl: LabelTemplateBody, stock: Sto
         const bad = badChar(code, sym);
         if (bad) { add('blocker', 'bad-char', `${l.data.name}: “${bad}” can’t go in a barcode. Use QR, or English letters and digits in the barcode or SKU.`); continue; }
         const fit = fitBarcode(code, sym, sym === 'QR' ? Math.min(el.w, el.h) : el.w, printer.dpi);
-        if (!fit.ok) add('blocker', 'no-fit', `${l.data.name}: the barcode ${fit.reason}. Switch to QR, choose larger stock, or shorten the value.`);
+        if (!fit.ok) add('blocker', 'no-fit', `${l.data.name}: the barcode ${code} is too long for this label (it needs ${r1(fit.widthMm)} mm, the label has ${r1(sym === 'QR' ? Math.min(el.w, el.h) : el.w)} mm).`);
         else if (fit.small) add('warning', 'small-bars', `${l.data.name}: thin barcode bars to fit the label (scanners read them; check one).`);
         else if (sym === 'EAN13' || sym === 'UPC') {
           // Standard EAN-13 height is 69.24 modules (22.85 mm at 0.33 mm); a label too short for it truncates the bars (ML-09).
