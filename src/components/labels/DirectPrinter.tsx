@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Bluetooth, Loader2, Printer, Wifi } from 'lucide-react';
+import { Bluetooth, Check, Download, Loader2, Monitor, Printer, RefreshCw, Wifi } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { listBtDevices, type BtDevice } from '@/lib/btPrinter';
 import { btLabelSupported, directConn, directSupported, setDirectConn, type DirectConn } from '@/lib/labelDirect';
+import { HELPER_DOWNLOAD, helperStatus, likelyLabelPrinter, type HelperStatus } from '@/lib/pcHelper';
 
 /** The direct connection chosen on this phone, kept in step across screens. */
 export function useDirectConn() {
@@ -19,7 +20,7 @@ export function useDirectConn() {
 export function DirectPrinterPicker() {
   const toast = useToast();
   const conn = useDirectConn();
-  const [mode, setMode] = useState<'screen' | 'bt' | 'net'>(conn?.kind ?? 'screen');
+  const [mode, setMode] = useState<'screen' | 'bt' | 'net'>(conn?.kind === 'bt' || conn?.kind === 'net' ? conn.kind : 'screen');
   const [devices, setDevices] = useState<BtDevice[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [host, setHost] = useState(conn?.kind === 'net' ? conn.host : '');
@@ -74,6 +75,70 @@ export function DirectPrinterPicker() {
           <input className="input" style={{ width: 80 }} inputMode="numeric" aria-label="Port" value={port} onChange={(e) => setPort(e.target.value)} />
           <button type="button" className="btn btn-secondary btn-sm" onClick={saveNet}>Use</button>
           {conn?.kind === 'net' && <p className="small muted" style={{ width: '100%', margin: 0 }}>Sending to {conn.host}:{conn.port}. The IP is on the printer’s self-test page (hold the feed button while switching it on).</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Website on a Windows PC: print through the Print window (needs the printer's paper size set in Windows), or
+ * straight to the label printer through the Corpus360 Print Helper (exact label size, nothing to set in Windows).
+ */
+export function PcHelperPicker() {
+  const toast = useToast();
+  const conn = useDirectConn();
+  const pc = conn?.kind === 'pc' ? conn : null;
+  const [mode, setMode] = useState<'screen' | 'pc'>(pc ? 'pc' : 'screen');
+  const [status, setStatus] = useState<HelperStatus | null | 'checking'>(null);
+  const [pick, setPick] = useState(pc?.printer ?? '');
+  const isWindows = /Windows/i.test(navigator.userAgent);
+  const check = async () => {
+    setStatus('checking');
+    const s = await helperStatus();
+    setStatus(s);
+    if (s && !pick) setPick(likelyLabelPrinter(s.printers));
+  };
+  useEffect(() => { if (mode === 'pc') void check(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [mode]);
+  const choose = (m: 'screen' | 'pc') => { setMode(m); if (m === 'screen') setDirectConn(null); };
+  const use = () => { if (!pick) return; setDirectConn({ kind: 'pc', printer: pick }); toast('success', `Labels go straight to ${pick}`); };
+
+  return (
+    <div className="field" data-testid="label-direct">
+      <label>Send labels</label>
+      <div className="ls-chips" role="radiogroup" aria-label="Send labels">
+        <button type="button" role="radio" aria-checked={mode === 'screen'} className={mode === 'screen' ? 'on' : ''} onClick={() => choose('screen')}><Printer size={13} /> Print window</button>
+        <button type="button" role="radio" aria-checked={mode === 'pc'} className={mode === 'pc' ? 'on' : ''} onClick={() => choose('pc')}><Monitor size={13} /> Straight to the printer</button>
+      </div>
+      {mode === 'screen' && <p className="small muted" style={{ marginTop: 4 }}>Labels on A4 or sideways? Choose <b>Straight to the printer</b>: the printer is told the exact label size, with nothing to set in Windows.</p>}
+      {mode === 'pc' && status === 'checking' && <p className="small muted" style={{ marginTop: 6 }}><Loader2 size={13} className="spin" /> Looking for the Corpus360 Print Helper on this computer…</p>}
+      {mode === 'pc' && status === null && (
+        <div className="lp-card" data-testid="helper-install">
+          <div className="lp-head">
+            <span className="lp-icon" aria-hidden="true"><Download size={18} /></span>
+            <div className="lp-title"><strong>Install the print helper once</strong><span>A small free program for {isWindows ? 'this Windows PC' : 'Windows PCs'}. It sends labels straight to the label printer.</span></div>
+          </div>
+          <ol className="lp-steps">
+            <li><span className="lp-n">1</span><div><strong>Download and open it</strong>
+              <span><a className="btn btn-primary btn-sm" href={HELPER_DOWNLOAD} download style={{ margin: '4px 0' }}><Download size={14} /> Download Corpus360PrintHelper.exe</a><br />If Windows says <i>“Windows protected your PC”</i>, click <b>More info → Run anyway</b>.</span></div></li>
+            <li><span className="lp-n">2</span><div><strong>It says “The print helper is running”</strong>
+              <span>Click OK. It starts by itself with Windows from now on; nothing else to install.</span></div></li>
+            <li><span className="lp-n">3</span><div><strong>Come back here</strong>
+              <span><button type="button" className="btn btn-secondary btn-sm" onClick={() => void check()} style={{ margin: '4px 0' }}><RefreshCw size={14} /> Check again</button><br />If Chrome asks to let this site use <i>apps on this device</i>, click <b>Allow</b>.</span></div></li>
+          </ol>
+        </div>
+      )}
+      {mode === 'pc' && status && status !== 'checking' && (
+        <div style={{ marginTop: 6 }} data-testid="helper-ready">
+          {status.printers.length === 0 ? <p className="small">The print helper is running, but Windows has no printers. Connect the label printer and install its driver, then <button type="button" className="lb-linkname" onClick={() => void check()}>check again</button>.</p> : <>
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              <select className="select" style={{ flex: '1 1 180px' }} aria-label="Label printer" value={pick} onChange={(e) => setPick(e.target.value)}>
+                {status.printers.map((p) => <option key={p.name} value={p.name}>{p.name}{p.default ? ' (default)' : ''}</option>)}
+              </select>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={use} disabled={!pick || pc?.printer === pick}>{pc?.printer === pick ? <><Check size={14} /> In use</> : 'Use this printer'}</button>
+            </div>
+            <p className="small muted" style={{ marginTop: 4 }}>{pc ? <>Labels go straight to <b>{pc.printer}</b> at the exact label size. Press <b>Test print</b> to check.</> : 'Pick the label printer, then Use this printer.'}</p>
+          </>}
         </div>
       )}
     </div>

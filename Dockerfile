@@ -1,3 +1,9 @@
+# ---- Windows print helper (Go, cross-compiled; offered on the label screen as a download) ----
+FROM golang:1.24-bookworm AS helper
+WORKDIR /src
+COPY tools/print-helper/ ./
+RUN go test ./... && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H=windowsgui" -o /out/Corpus360PrintHelper.exe .
+
 # ---- build ----
 FROM node:20-bookworm-slim AS build
 WORKDIR /app
@@ -22,6 +28,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 ENV CHROMIUM_PATH=/usr/bin/chromium
 COPY --from=build /app/dist ./dist
+COPY --from=helper /out/Corpus360PrintHelper.exe ./dist/downloads/Corpus360PrintHelper.exe
 COPY --from=build /app/server/package.json ./server/package.json
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/server/migrations ./server/migrations

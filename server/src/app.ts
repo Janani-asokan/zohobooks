@@ -49,7 +49,8 @@ export function createApp() {
           fontSrc: ["'self'", 'https://fonts.gstatic.com'],
           // Map tiles for the field staff map (OpenStreetMap).
           imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.de'],
-          connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com'],
+          // The Corpus360 Print Helper on the shop's own PC (label printing straight to the printer).
+          connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com', 'http://127.0.0.1:17361'],
           frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
           mediaSrc: ["'self'", 'blob:'],
         },
@@ -101,6 +102,8 @@ export function createApp() {
       maxAge: '1h',
       setHeaders: (res, p) => {
         if (p.endsWith('sw.js')) res.setHeader('Cache-Control', 'no-cache');
+        // The print helper for Windows: always a download, always the latest build.
+        else if (p.includes(`${path.sep}downloads${path.sep}`)) { res.setHeader('Cache-Control', 'no-cache'); res.setHeader('Content-Disposition', `attachment; filename="${path.basename(p)}"`); }
         // Vite names these by content hash, so a changed file always gets a new name: cache for a year.
         else if (p.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       },

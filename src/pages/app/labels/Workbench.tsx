@@ -20,7 +20,7 @@ import {
   type ImposeOptions, type Issue, type JobLine, type LabelTemplateBody, type StockGeometry,
 } from '../../../../shared/labelEngine';
 import { LabelView } from '@/components/labels/LabelView';
-import { DirectPrinterPicker, useDirectConn } from '@/components/labels/DirectPrinter';
+import { DirectPrinterPicker, PcHelperPicker, useDirectConn } from '@/components/labels/DirectPrinter';
 import { directSupported, printRowsDirect, rowBitmap } from '@/lib/labelDirect';
 import { isNativeApp } from '@/lib/native';
 import {
@@ -196,7 +196,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
       if (conn && stock.sheet === 'roll') {
         setSending(true);
         printRowsDirect(document.querySelector('.lb-print') ?? document, stock, printer, conn, turn)
-          .then((n) => { toast('success', `${n} row${n === 1 ? '' : 's'} sent to ${conn.kind === 'bt' ? conn.name : conn.host}`); after?.(); })
+          .then((n) => { toast('success', `${n} row${n === 1 ? '' : 's'} sent to ${conn.kind === 'bt' ? conn.name : conn.kind === 'pc' ? conn.printer : conn.host}`); after?.(); })
           .catch((e) => toast('error', 'Printer', (e as Error).message))
           .finally(() => { setPrintRange(null); setSending(false); });
         return;
@@ -575,7 +575,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           </div>
           <p className="small muted" style={{ marginTop: 4 }}>Measure one label: across the roll × along it. If the labels are bigger than the size chosen, each small label prints alone in the middle or at the top of a big one.</p>
         </div>
-        {stock.sheet === 'roll' && <DirectPrinterPicker />}
+        {stock.sheet === 'roll' && (isNativeApp() ? <DirectPrinterPicker /> : <PcHelperPicker />)}
         <div className="lb-actions">
           <button type="button" className="btn btn-secondary" onClick={testPrint} disabled={!metrics.labels || jobBlocked(issues) || sending} title="Prints only the first row or sheet, to check alignment"><Printer size={15} /> Test print</button>
           <button type="button" className="btn btn-primary" onClick={() => void print()} disabled={!metrics.labels || jobBlocked(issues) || sending}>{sending ? <Loader2 size={15} className="spin" /> : <Printer size={15} />} {chunks > 1 ? `Print labels (part ${Math.min(chunk, chunks - 1) + 1} of ${chunks})` : 'Print labels'}</button>

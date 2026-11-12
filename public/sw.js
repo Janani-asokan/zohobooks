@@ -3,7 +3,7 @@
  * - GET /api/shop/* : network-first, falling back to the last cached response when offline.
  * - Auth, platform, public links and all writes: never cached.
  */
-const VERSION = 'v57';
+const VERSION = 'v58';
 const SHELL = `ledgerly-shell-${VERSION}`;
 const DATA = `ledgerly-data-${VERSION}`;
 
@@ -27,6 +27,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
 
+  // Downloads (the Windows print helper) go straight to the network and are never kept as the offline page.
+  if (url.pathname.startsWith('/downloads/')) return;
   if (url.pathname.startsWith('/api/')) {
     // Downloads (PDFs, attachments, exports) always go straight to the network and are never stored.
     if (!url.pathname.startsWith('/api/shop/') || /\/(pdf|download|export|attachments)\b/.test(url.pathname) || url.search.includes('download=') || url.pathname.endsWith('.csv') || url.pathname.endsWith('.json')) return;

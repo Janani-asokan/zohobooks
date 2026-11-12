@@ -7,22 +7,25 @@
  */
 import { btSupported } from './btPrinter';
 import { isNativeApp, native } from './native';
+import { helperPrint } from './pcHelper';
 import { toMono } from './btPrinter';
 import { dotsPerMm, rowWidthMm, type PrinterSettings, type StockGeometry } from '../../shared/labelEngine';
 
-export type DirectConn = { kind: 'bt'; address: string; name: string } | { kind: 'net'; host: string; port: number };
+export type DirectConn = { kind: 'bt'; address: string; name: string } | { kind: 'net'; host: string; port: number } | { kind: 'pc'; printer: string };
 const KEY = 'c360.labels.direct';
 
-/** Direct printing is for the phone app (browsers can't reach a printer without its driver). */
+/** Phone app: Bluetooth / Wi-Fi straight from the phone. Website: through the Corpus360 Print Helper on this PC. */
 export const directSupported = () => isNativeApp();
+export const pcHelperSupported = () => !isNativeApp();
 export const btLabelSupported = () => btSupported();
 
 export function directConn(): DirectConn | null {
-  if (!directSupported()) return null;
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as DirectConn | null;
-    if (v?.kind === 'bt' && v.address && btSupported()) return v;
-    if (v?.kind === 'net' && v.host) return { ...v, port: v.port || 9100 };
+    if (directSupported()) {
+      if (v?.kind === 'bt' && v.address && btSupported()) return v;
+      if (v?.kind === 'net' && v.host) return { ...v, port: v.port || 9100 };
+    } else if (v?.kind === 'pc' && v.printer) return v;
     return null;
   } catch { return null; }
 }
@@ -137,7 +140,8 @@ export function labelJobBytes(rows: RowBitmap[], stock: StockGeometry, printer: 
 const b64 = (bytes: Uint8Array) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
 
 export async function sendDirect(conn: DirectConn, bytes: Uint8Array) {
-  if (conn.kind === 'bt') await native('btPrint', { address: conn.address, data: b64(bytes) });
+  if (conn.kind === 'pc') await helperPrint(conn.printer, bytes);
+  else if (conn.kind === 'bt') await native('btPrint', { address: conn.address, data: b64(bytes) });
   else await native('netPrint', { host: conn.host, port: conn.port || 9100, data: b64(bytes) });
 }
 
