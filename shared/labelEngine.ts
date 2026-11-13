@@ -47,6 +47,7 @@ export const STOCK_PRESETS: Array<{ id: string; name: string; fits: string; stoc
   { id: '3in-75x25', name: '3-inch, single · 75 × 25', fits: '3-inch, 4-inch', stock: roll(75, 25, 1, 1.5, 0) },
   { id: '3in-75x38', name: '3-inch, single · 75 × 38', fits: '3-inch, 4-inch', stock: roll(75, 38, 1, 1.5, 0) },
   { id: '3in-75x50', name: '3-inch, single · 75 × 50', fits: '3-inch, 4-inch', stock: roll(75, 50, 1, 1.5, 0) },
+  { id: '3in-50x75', name: '3-inch, tall · 50 × 75', fits: '3-inch, 4-inch', stock: roll(50, 75, 1, 1, 0) },
   { id: '3in-cont', name: '3-inch continuous · 72 wide', fits: '3-inch, 4-inch', stock: roll(72, 40, 1, 0, 0, 'continuous') },
   { id: '2in-cont', name: '2-inch continuous (POS-58) · 48 wide', fits: '2-inch, 3-inch, 4-inch', stock: roll(48, 30, 1, 0, 0, 'continuous') },
   { id: 'a4-65', name: 'A4 · 65 per sheet (38.1 × 21.2)', fits: 'A4 printer', stock: sheet('a4', 38.1, 21.2, 5, 13, 4.7, 10.7, 2.5, 0) },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tsplJob, zplJob, type RowBitmap } from './labelDirect';
+import { rotateBitmap, tsplJob, zplJob, type RowBitmap } from './labelDirect';
 import { STOCK_PRESETS, PRINTER_PRESETS } from '../../shared/labelEngine';
 
 const stock = STOCK_PRESETS.find((p) => p.id === '4in-50x25x2')!.stock;      // 2-up 50 × 25 on a 4-inch roll
@@ -40,5 +40,21 @@ describe('ZPL for Zebra', () => {
     expect(z).toContain('^PW832^LL200');
     expect(z).toContain('^GFA,20800,20800,104,80');
     expect(z.trim().endsWith('^XZ')).toBe(true);
+  });
+});
+
+describe('a design that reads along the roll (Turn 90° / 270°)', () => {
+  const at = (b: RowBitmap, x: number, y: number) => !!(b.mono[y * Math.ceil(b.width / 8) + (x >> 3)]! & (0x80 >> (x & 7)));
+  it('turns the row a quarter: the top-left dot goes to the top-right (90°) or bottom-left (270°)', () => {
+    const r90 = rotateBitmap(row(), 90), r270 = rotateBitmap(row(), 270);
+    expect([r90.width, r90.height]).toEqual([200, 832]);
+    expect(at(r90, 199, 0)).toBe(true);
+    expect(at(r270, 0, 831)).toBe(true);
+    expect(rotateBitmap(rotateBitmap(row(), 90), 270).mono).toEqual(row().mono);
+  });
+  it('tells the printer the turned size: 25 mm across, 104 mm along', () => {
+    const t = text(tsplJob([rotateBitmap(row(), 90)], stock, printer, 90));
+    expect(t.startsWith('SIZE 25 mm,104 mm\r\n')).toBe(true);
+    expect(t).toContain('BITMAP 0,0,25,832,0,');
   });
 });

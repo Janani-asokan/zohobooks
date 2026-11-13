@@ -41,6 +41,7 @@ const IN_PRINTER = [
   { roll: 3, id: 'preset:3in-75x25', label: '75 × 25', across: 1, w: 78, h: 25 },
   { roll: 3, id: 'preset:3in-75x38', label: '75 × 38', across: 1, w: 78, h: 38 },
   { roll: 3, id: 'preset:3in-75x50', label: '75 × 50', across: 1, w: 78, h: 50 },
+  { roll: 3, id: 'preset:3in-50x75', label: '50 × 75 (tall)', across: 1, w: 52, h: 75 },
   { roll: 4, id: 'preset:4in-50x25x2', label: '50 × 25, 2 across', across: 2, w: 104, h: 25 },
   { roll: 4, id: 'preset:4in-100x50', label: '100 × 50', across: 1, w: 104, h: 50 },
   { roll: 4, id: 'preset:4in-100x75', label: '100 × 75', across: 1, w: 104, h: 75 },
@@ -362,9 +363,12 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
   const focusItems = () => { setSrcTab('items'); setTimeout(() => { const el = document.querySelector<HTMLInputElement>('.ls-pick input'); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus(); }, 0); };
   const fitPrinter = printers.find((p) => p.preset && p.settings.language !== 'browser' && p.settings.headMm >= rowWidthMm(stock) - 2);
   const jobBlocker = issues.find((x) => x.scope === 'job' && x.severity === 'blocker');
+  // Straight to the printer with a quarter turn: the label's height goes across the printer's head.
+  const turnTooWide = !!conn && stock.sheet === 'roll' && (turn === 90 || turn === 270) && stock.h > printer.headMm + 0.5;
   const why: null | { msg: string; fix?: { label: string; run: () => void } } = sending ? null
     : !lines.length ? { msg: 'Nothing to print yet. Tap the items you want labels for.', fix: { label: 'Choose items', run: focusItems } }
     : lines.every((l) => l.qty <= 0) ? { msg: 'Every item is set to 0 labels.', fix: { label: 'Print 1 label each', run: () => setLines((ls) => ls.map((l) => ({ ...l, qty: 1 }))) } }
+    : turnTooWide ? { msg: `Turned ${turn}°, these ${stock.w} × ${stock.h} mm labels would be ${stock.h} mm across the printer, wider than it prints (${printer.headMm} mm).`, fix: { label: 'Use “As shown”', run: () => rememberTurn({ turn: 0, ok: mem?.ok }) } }
     : jobBlocker ? {
       msg: jobBlocker.message,
       fix: jobBlocker.code === 'head' && fitPrinter ? { label: `Use the ${fitPrinter.name.split(' · ')[0]}`, run: () => { setPrinterId(fitPrinter.id); setDevice({ printerId: fitPrinter.id }); } }
@@ -592,8 +596,8 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
         </div>
         {stock.sheet === 'roll' && (isNativeApp() ? <DirectPrinterPicker /> : <PcHelperPicker />)}
         <div className="lb-actions">
-          <button type="button" className="btn btn-secondary" onClick={testPrint} disabled={!metrics.labels || jobBlocked(issues) || sending} title="Prints only the first row or sheet, to check alignment"><Printer size={15} /> Test print</button>
-          <button type="button" className="btn btn-primary" onClick={() => void print()} disabled={!metrics.labels || jobBlocked(issues) || sending}>{sending ? <Loader2 size={15} className="spin" /> : <Printer size={15} />} {chunks > 1 ? `Print labels (part ${Math.min(chunk, chunks - 1) + 1} of ${chunks})` : 'Print labels'}</button>
+          <button type="button" className="btn btn-secondary" onClick={testPrint} disabled={!metrics.labels || jobBlocked(issues) || turnTooWide || sending} title="Prints only the first row or sheet, to check alignment"><Printer size={15} /> Test print</button>
+          <button type="button" className="btn btn-primary" onClick={() => void print()} disabled={!metrics.labels || jobBlocked(issues) || turnTooWide || sending}>{sending ? <Loader2 size={15} className="spin" /> : <Printer size={15} />} {chunks > 1 ? `Print labels (part ${Math.min(chunk, chunks - 1) + 1} of ${chunks})` : 'Print labels'}</button>
         </div>
         {why && <div className="ls-why" role="status" data-testid="why-no-print">
           <AlertTriangle size={14} /> <span>{why.msg}</span>

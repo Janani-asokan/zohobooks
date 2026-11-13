@@ -39,8 +39,18 @@ export function setDirectConn(c: DirectConn | null) {
 export interface RowBitmap { width: number; height: number; mono: Uint8Array }
 
 /** Draws a printed row (the `.label-row` element) at the printer's dots: exactly rowWidth × label height. */
+// The label font (Inter, bundled with the app) as embeddable CSS, made once. Without it the picture for the printer
+// fell back to another font: text came out about 11% narrower than the preview and the print window.
+let fontCss: Promise<string> | null = null;
+async function labelFontCss(el: HTMLElement): Promise<string> {
+  const { getFontEmbedCSS } = await import('html-to-image');
+  fontCss ??= getFontEmbedCSS(el, { preferredFontFormat: 'woff2' }).catch(() => { fontCss = null; return ''; });
+  return fontCss;
+}
+
 export async function rowBitmap(el: HTMLElement, stock: StockGeometry, dpi: number): Promise<RowBitmap> {
   const { toCanvas } = await import('html-to-image');
+  const fontEmbedCSS = await labelFontCss(el);
   const dpm = dotsPerMm(dpi);
   const width = Math.round(rowWidthMm(stock) * dpm);
   const height = Math.round(stock.h * dpm);
@@ -49,7 +59,7 @@ export async function rowBitmap(el: HTMLElement, stock: StockGeometry, dpi: numb
   // along a barcode, so 2-dot EAN bars came out 1 and 3 dots wide and stopped scanning.)
   const pxW = (rowWidthMm(stock) * 96) / 25.4, pxH = (stock.h * 96) / 25.4;
   const canvas = await toCanvas(el, {
-    width: pxW, height: pxH, canvasWidth: width, canvasHeight: height, pixelRatio: 1, backgroundColor: '#ffffff', cacheBust: false,
+    width: pxW, height: pxH, canvasWidth: width, canvasHeight: height, pixelRatio: 1, backgroundColor: '#ffffff', cacheBust: false, fontEmbedCSS,
     style: { margin: '0', boxShadow: 'none', position: 'static', left: 'auto', top: 'auto', transform: 'none', outline: 'none', width: `${pxW}px`, height: `${pxH}px` },
   });
   const out = document.createElement('canvas');
@@ -58,6 +68,22 @@ export async function rowBitmap(el: HTMLElement, stock: StockGeometry, dpi: numb
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height);
   ctx.drawImage(canvas, 0, 0, width, height);
   return { width, height, mono: toMono(ctx.getImageData(0, 0, width, height).data, width, height) };
+}
+
+/**
+ * Turns a row bitmap a quarter turn: 90 = clockwise, 270 = anticlockwise (as the print window's Turn 90° / 270°).
+ * Used when the design reads along the roll ("vertical"): the printer is then told the turned size.
+ */
+export function rotateBitmap(b: RowBitmap, turn: 90 | 270): RowBitmap {
+  const W = b.width, H = b.height, nw = H, nh = W;
+  const sbpr = Math.ceil(W / 8), dbpr = Math.ceil(nw / 8);
+  const out = new Uint8Array(dbpr * nh);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!(b.mono[y * sbpr + (x >> 3)]! & (0x80 >> (x & 7)))) continue;
+    const nx = turn === 90 ? H - 1 - y : y, ny = turn === 90 ? x : W - 1 - x;
+    out[ny * dbpr + (nx >> 3)]! |= 0x80 >> (nx & 7);
+  }
+  return { width: nw, height: nh, mono: out };
 }
 
 /** Moves a bitmap by the printer's calibrated offset (dots), cropping what falls off. */
@@ -88,7 +114,10 @@ const mm = (v: number) => String(Math.round(v * 10) / 10);
  */
 export function tsplJob(rows: RowBitmap[], stock: StockGeometry, printer: PrinterSettings, turn = 0): Uint8Array {
   const gap = stock.media === 'continuous' ? 'GAP 0 mm,0 mm' : stock.media === 'black-mark' ? `BLINE ${mm(stock.rowGap)} mm,0 mm` : `GAP ${mm(stock.rowGap)} mm,0 mm`;
-  const head = [`SIZE ${mm(rowWidthMm(stock))} mm,${mm(stock.h)} mm`, gap, `DIRECTION ${turn === 180 ? 0 : 1},0`, 'REFERENCE 0,0', 'OFFSET 0 mm', 'SET TEAR ON',
+  // The label as it goes through the printer: the row as designed, or turned a quarter (then the bitmap is turned).
+  const dpm0 = dotsPerMm(printer.dpi);
+  const across = rows[0] ? rows[0].width / dpm0 : rowWidthMm(stock), along = rows[0] ? rows[0].height / dpm0 : stock.h;
+  const head = [`SIZE ${mm(across)} mm,${mm(along)} mm`, gap, `DIRECTION ${turn === 180 ? 0 : 1},0`, 'REFERENCE 0,0', 'OFFSET 0 mm', 'SET TEAR ON',
     `DENSITY ${Math.max(0, Math.min(15, Math.round(printer.darkness)))}`, `SPEED ${Math.max(1, Math.min(6, Math.round(printer.speed)))}`, ''].join('\r\n');
   const dpm = dotsPerMm(printer.dpi);
   const parts: Uint8Array[] = [ascii(head)];
@@ -153,7 +182,12 @@ export async function printRowsDirect(container: ParentNode, stock: StockGeometr
   let sent = 0;
   for (let i = 0; i < els.length; i += PER_SEND) {
     const rows: RowBitmap[] = [];
-    for (const el of els.slice(i, i + PER_SEND)) rows.push(await rowBitmap(el, stock, printer.dpi));
+    for (const el of els.slice(i, i + PER_SEND)) {
+      const r = await rowBitmap(el, stock, printer.dpi);
+      rows.push(turn === 90 || turn === 270 ? rotateBitmap(r, turn) : r);
+    }
+    const acrossMm = rows[0]!.width / dotsPerMm(printer.dpi);
+    if (acrossMm > printer.headMm + 0.5) throw new Error(`Turned ${turn}°, these labels are ${mm(acrossMm)} mm across the printer, wider than it prints (${printer.headMm} mm). Choose “As shown”.`);
     await sendDirect(conn, labelJobBytes(rows, stock, printer, turn));
     sent += rows.length;
   }
