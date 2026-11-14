@@ -505,7 +505,14 @@
 .lp-toggle { margin: 8px 0 0 44px; padding: 0; border: 0; background: none; color: var(--brand-600, #a9475a); font-weight: 600; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .lp-steps { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
 .lp-steps li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; border-radius: 10px; background: #fff; border: 1px solid var(--line, #eee6e3); }
-.lp-steps li > div { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.45; }
+.lp-steps li > div { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.45; min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+/* Keep the set-up card inside narrow panels (the label screen's side panel): one column that can shrink, and buttons
+   that wrap instead of pushing the card wider. Scoped under .lp-card so the landing page's 3-column .lp-steps never applies. */
+.lp-card { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.lp-card .lp-steps { grid-template-columns: minmax(0, 1fr); margin-top: 10px; gap: 8px; position: static; }
+.lp-card .lp-steps .btn { white-space: normal; max-width: 100%; height: auto; min-height: 32px; text-align: left; }
+.lp-card .lp-head { min-width: 0; }
+.lp-card .lp-title { min-width: 0; }
 .lp-steps li strong { font-size: 13.5px; }
 .lp-steps li > div > span { color: var(--ink-700, #44403c); }
 .lp-n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--brand-600, #a9475a); color: #fff; font-weight: 700; font-size: 12.5px; flex: 0 0 auto; }

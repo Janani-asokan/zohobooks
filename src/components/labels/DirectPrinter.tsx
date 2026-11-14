@@ -120,7 +120,7 @@ export function PcHelperPicker() {
           </div>
           <ol className="lp-steps">
             <li><span className="lp-n">1</span><div><strong>Download and open it</strong>
-              <span><a className="btn btn-primary btn-sm" href={HELPER_DOWNLOAD} download style={{ margin: '4px 0' }}><Download size={14} /> Download Corpus360PrintHelper.exe</a><br />If Windows says <i>“Windows protected your PC”</i>, click <b>More info → Run anyway</b>.</span></div></li>
+              <span><a className="btn btn-primary btn-sm" href={HELPER_DOWNLOAD} download style={{ margin: '4px 0' }}><Download size={14} /> Download the print helper</a><br />If Windows says <i>“Windows protected your PC”</i>, click <b>More info → Run anyway</b>.</span></div></li>
             <li><span className="lp-n">2</span><div><strong>It says “The print helper is running”</strong>
               <span>Click OK. It starts by itself with Windows from now on; nothing else to install.</span></div></li>
             <li><span className="lp-n">3</span><div><strong>Come back here</strong>
