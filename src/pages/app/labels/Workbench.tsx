@@ -82,10 +82,15 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
   const saved = useMemo(() => stockFromSettings(settings), [ps.data]);
   useEffect(() => {
     if (geom || !ps.data || !setup.data) return;
-    // A computer with no printer chosen starts with the shop's default printer, and the stock saved on it.
+    // Every print starts from the shop's default stock (Print settings → Label stock), the same on every computer.
+    // Only a printer profile with its own roll saved overrides it. A size picked on this screen is for this print only:
+    // remembering it per computer made one stray click (say 50 × 25 on a 38 × 25 roll) stick for good.
     const startP = printers.find((p) => p.id === startPrinterId(setup.data));
     if (startP && !printerId) setPrinterId(startP.id);
-    const d = stocks.find((s) => s.id === dev.stockId) ?? (dev.stockId ? undefined : stocks.find((s) => s.id === startP?.settings.stockId));
+    if (dev.stockId) setDevice({ stockId: undefined });
+    // A link can name a stock for this print: ?stock=3in-38x25x2 (a built-in) or a saved stock's id.
+    const want = params.get('stock');
+    const d = (want ? stocks.find((s) => s.id === want || s.id === `preset:${want}`) : undefined) ?? stocks.find((s) => s.id === startP?.settings.stockId);
     const g = d?.geometry ?? saved;
     setGeom(g); setStockId(d?.id ?? stocks.find((s) => sameGeom(s.geometry, g))?.id ?? '');
   }, [ps.data, setup.data]);
@@ -117,7 +122,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
     setPrinterId(p.id); setDevice({ printerId: p.id });
     const st = stocks.find((x) => x.id === p.settings.stockId);
     const g = st?.geometry ?? stock;
-    if (st) { setStockId(st.id); setGeom(st.geometry); setDevice({ stockId: st.id }); setView(0); setChunk(0); }
+    if (st) { setStockId(st.id); setGeom(st.geometry); setView(0); setChunk(0); }
     if (p.settings.turn != null && g.sheet === 'roll') { rememberLabel(g.w, g.h, { turn: p.settings.turn, ok: labelMemory(g.w, g.h)?.ok }); setTick((n) => n + 1); }
   };
 
@@ -590,7 +595,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
               const s = stocks.find((y) => y.id === x.id)!;
               const on = sameGeom(s.geometry, stock);
               return <button key={x.id} type="button" role="radio" aria-checked={on} className={on ? 'on' : ''} title={s.name}
-                onClick={() => { setStockId(s.id); setGeom(s.geometry); setDevice({ stockId: s.id }); setView(0); setChunk(0); }}>
+                onClick={() => { setStockId(s.id); setGeom(s.geometry); setView(0); setChunk(0); }}>
                 <span className="ls-measure-pic" style={{ width: `${Math.round(x.pw)}px`, height: `${Math.round(x.ph)}px` }}>{x.across > 1 && <i />}</span>{x.label}
               </button>;
             })}
@@ -620,7 +625,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
         <div className="ls-more" data-testid="more-settings" hidden={!more}>
         <div className="field">
           <label htmlFor="ls-preset">Label stock</label>
-          <select id="ls-preset" className="select" value={stockId} onChange={(e) => { const s = stocks.find((x) => x.id === e.target.value); if (s) { setStockId(s.id); setGeom(s.geometry); setDevice({ stockId: s.id }); setView(0); setChunk(0); } }}>
+          <select id="ls-preset" className="select" value={stockId} onChange={(e) => { const s = stocks.find((x) => x.id === e.target.value); if (s) { setStockId(s.id); setGeom(s.geometry); setView(0); setChunk(0); } }}>
             {!stockId && <option value="">Saved size: {stock.w} × {stock.h} mm, {stock.across} across</option>}
             <optgroup label="Rolls">{stocks.filter((s) => s.geometry.sheet === 'roll').map((s) => <option key={s.id} value={s.id}>{s.name}{s.preset ? '' : ' (yours)'}</option>)}</optgroup>
             <optgroup label="Sheets">{stocks.filter((s) => s.geometry.sheet !== 'roll').map((s) => <option key={s.id} value={s.id}>{s.name}{s.preset ? '' : ' (yours)'}</option>)}</optgroup>
@@ -670,6 +675,12 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           </div>
         </details>
         </div>
+        {!sameGeom(stock, saved) && (
+          <p className="small ls-why" data-testid="not-default-stock" style={{ marginTop: 8 }}>
+            <AlertTriangle size={14} /> <span>For this print only. The shop’s label stock is <strong>{saved.w} × {saved.h} mm, {saved.across} across</strong>{saved.sheet === 'roll' ? ` (${rowWidthMm(saved)} mm row)` : ''}; the next print starts with it again.</span>
+            <button type="button" className="btn btn-soft btn-sm" onClick={() => { const st = stocks.find((x) => sameGeom(x.geometry, saved)); setGeom(saved); setStockId(st?.id ?? ''); setView(0); setChunk(0); }}>Use it</button>
+          </p>
+        )}
         {me.can('admin') && stock.sheet !== 'letter' && (!sameGeom(stock, saved) || turn !== turnFromSettings(settings)) && (
           <button type="button" className="btn btn-ghost btn-sm btn-block" onClick={() => saveDefault.mutate(settingsWithStock(settings, stock, turn))} title="Every computer and phone of this shop starts with this stock and turn">
             <Save size={14} /> Save as this shop’s default stock

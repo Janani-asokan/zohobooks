@@ -38,7 +38,7 @@ try {
     return (await (await fetch('/api/shop/items')).json()).find((i) => i.type === 'Goods' && /^\d{13}$/.test(i.barcode ?? '') && good(i.barcode));
   });
   await p.evaluate(() => localStorage.setItem('c360.labels.device', JSON.stringify({ stockId: 'preset:3in-38x25x2' })));
-  await p.goto(B + `/app/items/labels?ids=${ean.id}&qty=2`); await p.waitForSelector('#ls-preset', { state: 'attached' }); await p.waitForTimeout(1200);
+  await p.goto(B + `/app/items/labels?ids=${ean.id}&qty=2&stock=3in-38x25x2`); await p.waitForSelector('#ls-preset', { state: 'attached' }); await p.waitForTimeout(1200);
 
   /* No helper yet */
   await p.getByRole('radio', { name: /Straight to the printer/ }).click();

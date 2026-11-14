@@ -118,7 +118,7 @@ try {
       // This computer's turn for the label size (as the Turn buttons save it).
       const k = 'c360.printer'; const m = JSON.parse(localStorage.getItem(k) ?? '{}'); m.labels = { ...m.labels, [`${w}x${h}`]: { turn: t, ok: true } }; localStorage.setItem(k, JSON.stringify(m));
     }, [stockId[0], direct, turn, stockId[1], stockId[2]]);
-    await p.goto(B + `/app/items/labels?ids=${it.id}&qty=${stockId[3]}`); await p.waitForSelector('.lb-lines li'); await p.waitForTimeout(500);
+    await p.goto(B + `/app/items/labels?ids=${it.id}&qty=${stockId[3]}&stock=${stockId[0]}`); await p.waitForSelector('.lb-lines li'); await p.waitForTimeout(500);
   };
   for (const st of STOCKS) {
     const [id, w, h, across, mL, gut, kind] = st;

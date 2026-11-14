@@ -52,7 +52,7 @@ try {
       const cur = await p.evaluate(async (iid) => (await (await fetch('/api/shop/items')).json()).find((i) => i.id === iid), it.id);
       const want = cur.barcode || cur.sku;
       await p.evaluate((sid) => { localStorage.setItem('c360.labels.device', JSON.stringify({ stockId: `preset:${sid}` })); localStorage.removeItem('c360.labels.direct'); }, id);
-      await p.goto(B + `/app/items/labels?ids=${it.id}&qty=${across}`); await p.waitForSelector('.lb-lines li', { timeout: 15000 }).catch(async (e) => { await p.screenshot({ path: `${out}/stuck-${id}.png`, fullPage: true }); throw e; }); await p.waitForTimeout(400);
+      await p.goto(B + `/app/items/labels?ids=${it.id}&qty=${across}&stock=${id}`); await p.waitForSelector('.lb-lines li', { timeout: 15000 }).catch(async (e) => { await p.screenshot({ path: `${out}/stuck-${id}.png`, fullPage: true }); throw e; }); await p.waitForTimeout(400);
       let want2 = want;
       if (await p.getByRole('button', { name: /^Print labels/ }).isDisabled()) {
         const why = await p.getByTestId('why-no-print').innerText().catch(() => '');
