@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Download, FileX, Loader2, Printer } from 'lucide-react';
 import { api, download } from '@/api/client';
@@ -92,6 +92,7 @@ export default function PrintInvoice() {
   const label = inv ? `${inv.number ?? 'Draft'} · ${data!.org.companyName}` : '';
   const thermalMm = rollPageMm(roll, receiptWidth(roll, data?.settings.thermal.pageWidth));
 
+  const fitPage = useRef<() => void>(() => {});
   useEffect(() => {
     if (!inv) return;
     document.title = `${inv.number ?? 'Draft invoice'} · ${data!.org.companyName}`;
@@ -101,9 +102,10 @@ export default function PrintInvoice() {
     document.head.appendChild(style);
     // A receipt's page is as long as the receipt: measure once drawn, and again just before printing.
     const fit = () => { if (paper === 'thermal') style.textContent = `@page { ${rollPageSize(thermalMm, document.querySelector('.print-doc .receipt'))} }`; };
+    fitPage.current = fit;
     const t = window.setTimeout(fit, 50);
     window.addEventListener('beforeprint', fit);
-    return () => { window.clearTimeout(t); window.removeEventListener('beforeprint', fit); style.remove(); };
+    return () => { window.clearTimeout(t); window.removeEventListener('beforeprint', fit); style.remove(); fitPage.current = () => {}; };
   }, [inv?.id, paper, label, thermalMm]);
 
   const onDocReady = useCallback(() => setReadyFor(paper), [paper]);
@@ -116,6 +118,7 @@ export default function PrintInvoice() {
     const imgs = [...document.querySelectorAll<HTMLImageElement>('.print-doc img')];
     Promise.all([document.fonts?.ready, ...imgs.map((i) => (i.complete ? null : i.decode().catch(() => null)))]).then(() => {
       if (!alive) return;
+      fitPage.current(); // the receipt's page length, measured now that it is drawn
       window.__PRINT_READY = true;
       if (embedded && !rt) window.parent?.postMessage({ type: 'corpus360:print-ready' }, location.origin);
       if (params.get('autoprint') === '1') setTimeout(() => window.print(), 50);

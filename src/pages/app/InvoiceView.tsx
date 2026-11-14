@@ -1,10 +1,10 @@
 import { PUBLIC_ORIGIN } from '@/lib/platform';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy, Check } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBankAccounts, useBranches, useInvoice, useMut, useOrg, usePrintSettings } from '@/api/hooks';
-import { preparePrint, printInvoice, printRoute, type PrintPaper, type Roll } from '@/lib/printInvoice';
+import { billPrint, billPrintName, preparePrint, printInvoice, printRoute, setBillPrinter, type BillPrinter, type PrintPaper, type Roll } from '@/lib/printInvoice';
 import { withPrintDefaults } from '../../../shared/printSettings';
 import type { InvoiceDetail, Organization } from '@/api/types';
 import { downloadInvoicePdf } from '@/lib/report';
@@ -110,7 +110,7 @@ export default function InvoiceView() {
   useEffect(() => {
     if (!inv) return;
     if (params.get('pay') && inv.status === 'Issued' && inv.balance > 0) { openPay(); params.delete('pay'); setParams(params, { replace: true }); }
-    if (params.get('print')) { params.delete('print'); setParams(params, { replace: true }); doPrint('a4'); }
+    if (params.get('print')) { params.delete('print'); setParams(params, { replace: true }); const b = billPrint(printCfg.invoice.paper); doPrint(b.paper, b.roll); }
   }, [inv?.id]);
 
   if (q.isError) return <div className="page"><div className="card"><EmptyState icon={FileX} title="Invoice not found" text={q.error.message} action={<Link to="/app/sales/invoices" className="btn btn-primary">Back to invoices</Link>} /></div></div>;
@@ -208,6 +208,15 @@ export default function InvoiceView() {
                 {rolls.map((r) => (
                   <button key={r} className="dropdown-item" onClick={() => { close(); doPrint('thermal', r); }}><Receipt size={16} /> Print receipt {r === '2in' ? '58mm (2″)' : '80mm (3″)'}</button>
                 ))}
+                <div className="dropdown-sep" />
+                <div className="dropdown-label small muted" style={{ padding: '4px 12px' }}>Print buttons on this computer print:</div>
+                {([{ paper: 'a4' }, { paper: 'a5' }, { paper: 'thermal', roll: '2in' }, { paper: 'thermal', roll: '3in' }] as BillPrinter[]).map((b) => {
+                  const cur = billPrint(printCfg.invoice.paper);
+                  const on = cur.paper === b.paper && (b.paper !== 'thermal' || cur.roll === b.roll);
+                  return <button key={billPrintName(b)} className="dropdown-item" role="menuitemradio" aria-checked={on} onClick={() => { close(); setBillPrinter(b.paper === printCfg.invoice.paper ? null : b); toast('success', `Print buttons on this computer now print ${billPrintName(b)}`); }}>
+                    <Check size={16} style={{ visibility: on ? 'visible' : 'hidden' }} /> {billPrintName(b)}{b.paper === printCfg.invoice.paper ? ' (shop default)' : ''}
+                  </button>;
+                })}
                 <div className="dropdown-sep" />
                 <button className="dropdown-item" disabled={pdfBusy} onClick={() => { close(); downloadPdf(printCfg.invoice.paper); }}><Download size={16} /> Download PDF</button>
                 <Link className="dropdown-item" to={printRoute(inv.id, printCfg.invoice.paper)} onClick={close}><ExternalLink size={16} /> Open print view</Link>

@@ -92,3 +92,28 @@ export async function printInvoice(id: string, paper: PrintPaper, roll?: Roll): 
   printWindow(w);
   if (paper === 'thermal' && roll) announceReceipt({ paper: roll, reprint: () => void printInvoice(id, paper, roll) });
 }
+
+/* ---------- What the Print button prints on this computer ---------- */
+/**
+ * Each counter has its own printer: the billing PC with a POS-58 prints bills as 58 mm receipts, the office PC on A4.
+ * Kept on this computer. Unset = the shop's invoice paper (Print settings → Invoice).
+ */
+export interface BillPrinter { paper: PrintPaper; roll?: Roll }
+const BILL_KEY = 'c360.billPrinter';
+export const BILL_EVENT = 'c360:bill-printer';
+export function billPrinter(): BillPrinter | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(BILL_KEY) ?? 'null') as BillPrinter | null;
+    return v && ['a4', 'a5', 'thermal'].includes(v.paper) ? { paper: v.paper, ...(v.paper === 'thermal' ? { roll: v.roll === '2in' ? '2in' : '3in' } : {}) } : null;
+  } catch { return null; }
+}
+export function setBillPrinter(v: BillPrinter | null) {
+  try { if (v) localStorage.setItem(BILL_KEY, JSON.stringify(v)); else localStorage.removeItem(BILL_KEY); } catch { /* private mode */ }
+  window.dispatchEvent(new Event(BILL_EVENT));
+}
+/** The bill print for this computer, else the shop's invoice paper. */
+export const billPrint = (shopPaper: PrintPaper = 'a4'): BillPrinter => billPrinter() ?? { paper: shopPaper };
+export const billPrintName = (b: BillPrinter) => (b.paper === 'thermal' ? (b.roll === '2in' ? '58 mm receipt' : '80 mm receipt') : b.paper.toUpperCase());
+/** The quick Print buttons (invoice list, side panel, ?print=1): what this computer prints bills on. */
+export function printBill(id: string, shopPaper: PrintPaper = 'a4') { const b = billPrint(shopPaper); return printInvoice(id, b.paper, b.roll); }
+export function prepareBill(id: string, shopPaper: PrintPaper = 'a4') { const b = billPrint(shopPaper); preparePrint(id, b.paper, b.roll); }

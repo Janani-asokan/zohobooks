@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, FileText, Printer, Send, X, MessageCircle } from 'lucide-react';
 import { api } from '@/api/client';
-import { useBranches, useInvoices, useOrg } from '@/api/hooks';
+import { useBranches, useInvoices, useOrg, usePrintSettings } from '@/api/hooks';
+import { billPrint, billPrintName, printBill } from '@/lib/printInvoice';
 import type { Invoice, InvoiceStatus } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -18,7 +19,6 @@ import type { ReportTable } from '@/lib/report';
 import { waLink } from './InvoiceView';
 import { Hint } from '@/components/kit';
 import { InvoicePanel } from '@/components/InvoicePanel';
-import { printInvoice } from '@/lib/printInvoice';
 
 const TABS: Array<'All' | InvoiceStatus> = ['All', 'Draft', 'Sent', 'Partially Paid', 'Overdue', 'Paid', 'Void'];
 
@@ -38,6 +38,7 @@ export default function Invoices() {
   const me = useShopUser();
   const { t } = usePrefs();
   const toast = useToast();
+  const shopPaper = usePrintSettings().data?.invoice?.paper ?? 'a4';
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { data: invoices = [], isLoading } = useInvoices();
@@ -174,7 +175,7 @@ export default function Invoices() {
                         {inv.status === 'Issued' && inv.balance > 0 && org && inv.customer.phone && (
                           <a className="icon-btn" title="WhatsApp reminder" target="_blank" rel="noreferrer" href={waLink(inv.customer.phone, `Dear ${inv.customer.companyName || inv.customer.name}, a gentle reminder that invoice ${inv.number} has ${money(inv.balance)} due. ${inv.publicToken ? `${PUBLIC_ORIGIN}/share/${inv.publicToken}` : ''} — ${org.companyName}`)}><MessageCircle size={15} /></a>
                         )}
-                        <button className="icon-btn" title="Print" onClick={() => printInvoice(inv.id, 'a4').catch((e) => toast('error', 'Could not print', e.message))}><Printer size={15} /></button>
+                        <button className="icon-btn" title={`Print (${billPrintName(billPrint(shopPaper))})`} aria-label={`Print ${inv.number ?? 'invoice'}`} onClick={() => printBill(inv.id, shopPaper).catch((e) => toast('error', 'Could not print', e.message))}><Printer size={15} /></button>
                       </td>
                     </tr>
                   );
