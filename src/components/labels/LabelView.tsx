@@ -39,6 +39,37 @@ function Bars({ code, sym, el, dpi, showQuiet }: { code: string; sym: Exclude<Sy
   );
 }
 
+/**
+ * A text field that always stays inside its box. The engine's estimate picks the starting size; then the real text is
+ * measured and shrunk in 0.1 mm steps (down to the field's smallest size) until it fits its lines and its box. Text
+ * that still does not fit at the smallest size is cut with an ellipsis, never drawn over the next label.
+ */
+function FitField({ el, text, cls, box, pick }: { el: LabelElement; text: string; cls: string; box: React.CSSProperties; pick: Record<string, unknown> }) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLSpanElement>(null);
+  const f = fitText(text, el);
+  const lines = Math.max(1, el.maxLines ?? 1);
+  const min = Math.min(f.size, el.minSize ?? 1.4);
+  useLayoutEffect(() => {
+    const o = outer.current, i = inner.current; if (!o || !i) return;
+    let size = f.size;
+    const fits = () => i.scrollWidth <= o.clientWidth + 0.5 && i.scrollHeight <= o.clientHeight + 0.5;
+    i.style.fontSize = `${size}mm`; o.dataset.overflow = '';
+    for (let n = 0; n < 60 && !fits() && size - 0.1 >= min - 1e-9; n++) { size = Math.round((size - 0.1) * 10) / 10; i.style.fontSize = `${size}mm`; }
+    if (!fits()) o.dataset.overflow = 'true'; else delete o.dataset.overflow;
+  }, [text, f.size, min, el.w, el.h, lines, el.bold]);
+  const one = lines === 1;
+  return (
+    <div className={cls} ref={outer} {...pick} data-el={el.id}
+      style={{ ...box, fontWeight: el.bold ? 800 : 500, justifyContent: el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center', alignItems: 'center', overflow: 'hidden' }}>
+      <span ref={inner} className="lv-fit" style={{ fontSize: `${f.size}mm`, textAlign: el.align ?? 'left', lineHeight: 1.15, maxWidth: '100%', maxHeight: '100%',
+        ...(one ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' } : { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: lines, overflow: 'hidden', overflowWrap: 'anywhere' }) }}>
+        {el.overflow === 'truncate' ? f.text : text}
+      </span>
+    </div>
+  );
+}
+
 /** A QR code drawn as squares on whole dots. */
 function Qr({ code, el, dpi }: { code: string; el: LabelElement; dpi: number }) {
   const side = Math.min(el.w, el.h);
@@ -83,13 +114,7 @@ export const LabelView = memo(function LabelView({ tpl, data, dpi = 203, design 
         if (el.type === 'line') return <div key={el.id} className={cls} style={{ ...box, height: el.h ? `${el.h}mm` : `${el.stroke ?? 0.3}mm`, width: el.w ? `${el.w}mm` : `${el.stroke ?? 0.3}mm`, background: '#000' }} {...pick} data-el={el.id} />;
         if (el.type === 'box') return <div key={el.id} className={cls} style={{ ...box, border: `${el.stroke ?? 0.3}mm solid #000` }} {...pick} data-el={el.id} />;
         const text = elementText(el, data);
-        const f = fitText(text, el);
-        return (
-          <div key={el.id} className={cls} {...pick} data-el={el.id} data-overflow={f.overflow || undefined}
-            style={{ ...box, fontSize: `${f.size}mm`, fontWeight: el.bold ? 800 : 500, textAlign: el.align ?? 'left', WebkitLineClamp: el.maxLines ?? 1, lineHeight: 1.15 }}>
-            {el.overflow === 'truncate' ? f.text : text}
-          </div>
-        );
+        return <FitField key={el.id} el={el} text={text} cls={cls} box={box} pick={pick} />;
       })}
     </div>
   );

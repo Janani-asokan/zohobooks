@@ -457,7 +457,8 @@
 .lv { position: relative; overflow: hidden; background: #fff; color: #000; box-sizing: border-box;
   font-family: 'Inter', system-ui, 'Nirmala UI', 'Noto Sans', 'Noto Sans Tamil', 'Noto Sans Devanagari', 'Noto Sans Telugu', 'Noto Sans Kannada', 'Noto Sans Malayalam', 'Noto Sans Bengali', 'Noto Sans Gujarati', 'Latha', 'Mangal', sans-serif; }
 .lv-el { position: absolute; box-sizing: border-box; display: flex; align-items: flex-start; }
-.lv-field, .lv-text { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; white-space: normal; }
+.lv-field, .lv-text { display: flex; overflow: hidden; }
+.lv-fit { min-width: 0; }
 .lv-barcode, .lv-qr { align-items: flex-start; }
 .lv-bars { display: flex; flex-direction: column; width: 100%; }
 .lv-bars svg { display: block; flex: 0 0 auto; shape-rendering: crispEdges; }
@@ -525,3 +526,5 @@
 .ls-driver { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; padding: 8px 10px; border-radius: var(--radius-sm, 8px); background: var(--blue-50, #eef5ff); border: 1px solid var(--blue-200, #c7dbff); line-height: 1.45; }
 .ls-driver > svg { flex: none; margin-top: 2px; }
 .ls-diagram { display: block; max-width: 100%; height: auto; margin: 6px 0; border-radius: 4px; }
+
+.ps-label-frame { display: inline-block; outline: 1px dashed #b9b2ad; outline-offset: 0; background: #fff; }

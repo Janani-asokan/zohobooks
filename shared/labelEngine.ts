@@ -269,35 +269,74 @@ const eid = () => `e${Date.now().toString(36)}${(seq++).toString(36)}`;
  * barcode, its value, the name, then prices. Used when a shop has no template yet, and as "Auto layout" in the designer.
  */
 export function autoTemplate(w: number, h: number, show: Partial<Record<'company' | 'sku' | 'name' | 'mrp' | 'price' | 'category' | 'brand' | 'unit', { size: number; bold: boolean }>> = { company: { size: 22, bold: true }, name: { size: 22, bold: false }, mrp: { size: 22, bold: false }, price: { size: 22, bold: false } }, barcodeShare = 40): LabelTemplateBody {
-  const inset = 1; const iw = w - inset * 2;
+  const inset = 1; const iw = w - inset * 2; const avail = h - inset * 2;
   // Settings size → mm (22 ≈ 2.9 mm on a 50 × 25 label). Bigger labels get bigger text, so a design fills a 100 × 100
   // label instead of printing as a small label in the middle of it.
   const grow = Math.max(1, Math.min(w / 50, h / 25, 3));
-  const tmm = (s: number) => Math.round(s * 0.13 * grow * 100) / 100;
+  const tmm = (s: number) => Math.min(s * 0.13 * grow, h / 6);
+  const LINE = 1.2;             // line height as a share of the text size
+  const MIN_TEXT = 1.4;         // smallest text printed (≈ 4 pt, still readable on a 203 dpi head)
+  const GAP = 0.4;              // space under the barcode
+  const narrow = w < 30;        // 4-up and narrower: QR (spec 5)
+  // The barcode never goes below this: bars shorter than ~5 mm (or a QR under 11 mm) stop scanning reliably.
+  const barMin = narrow ? Math.min(11, iw) : Math.max(4, Math.min(8, avail * 0.3)) + (show.sku ? 2.2 : 0);
+
+  type Row = { key: 'company' | 'name' | 'category' | 'brand' | 'unit' | 'price'; size: number; bold: boolean; lines: number };
+  const rows: Row[] = [];
+  const add = (key: Row['key'], o?: { size: number; bold: boolean }) => { if (o) rows.push({ key, size: tmm(o.size), bold: o.bold, lines: 1 }); };
+  add('company', show.company); add('name', show.name);
+  add('category', show.category); add('brand', show.brand); add('unit', show.unit);
+  if (show.mrp || show.price) rows.push({ key: 'price', size: tmm((show.mrp ?? show.price)!.size), bold: !!(show.mrp ?? show.price)!.bold, lines: 1 });
+  const textH = () => rows.reduce((t, r) => t + r.size * LINE * r.lines, 0);
+
+  // Fit everything in the label height, in this order: (1) the barcode gives up the height asked for in settings, down
+  // to its minimum; (2) all text shrinks evenly, down to the smallest readable size; (3) optional lines are left out
+  // (unit, brand, category, then the business name). The item name, the prices and the barcode always stay.
+  let bh = Math.max(barMin, (h * barcodeShare) / 100);
+  const room = () => avail - textH() - GAP;
+  if (room() < bh) bh = Math.max(barMin, room());
+  if (room() < bh) {
+    const k = Math.max(0, (avail - GAP - bh) / Math.max(0.01, textH()));
+    for (const r of rows) r.size = Math.max(MIN_TEXT, r.size * k);
+  }
+  for (const drop of ['unit', 'brand', 'category', 'company'] as const) {
+    if (room() >= bh - 0.01) break;
+    const i = rows.findIndex((r) => r.key === drop); if (i >= 0) rows.splice(i, 1);
+  }
+  if (room() < bh) bh = Math.max(narrow ? 6 : 3, room());
+  // A long item name takes a second line when there is room for it (else it shrinks to fit one line).
+  const nameRow = rows.find((r) => r.key === 'name');
+  if (nameRow && room() - bh >= nameRow.size * LINE) nameRow.lines = 2;
+  // Spare height goes to the barcode, up to the share asked for.
+  bh = Math.max(bh, Math.min((h * barcodeShare) / 100, room()));
+
+  const r1v = (n: number) => Math.round(n * 100) / 100;
   const els: LabelElement[] = [];
   let y = inset;
-  const line = (field: LabelField, o: { size: number; bold: boolean }, prefix = '') => {
-    const size = Math.round(Math.min(tmm(o.size), h / 6) * 10) / 10; els.push({ id: eid(), type: 'field', field, text: prefix, x: inset, y: Math.round(y * 10) / 10, w: iw, h: Math.round(size * 12) / 10, size, bold: o.bold, align: 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 }); y += size * 1.2;
-  };
-  if (show.company) line('company', show.company);
-  const bh = Math.round(Math.max(4, (h * barcodeShare) / 100) * 10) / 10;
-  const narrow = w < 30; // 4-up and narrower: QR (spec 5)
-  if (narrow) { const q = Math.min(iw, h - y - inset - 3); els.push({ id: eid(), type: 'qr', field: 'barcode', x: (w - q) / 2, y, w: q, h: q }); y += q + 0.3; }
-  else { els.push({ id: eid(), type: 'barcode', field: 'barcode', x: inset, y: Math.round(y * 10) / 10, w: iw, h: bh, symbology: 'auto', showValue: !!show.sku }); y += bh + (show.sku ? 3 : 0.4); }
-  if (show.name) line('name', show.name);
-  for (const k of ['category', 'brand', 'unit'] as const) if (show[k]) line(k, show[k]!);
-  if (show.mrp || show.price) {
-    const size = Math.round(Math.min(tmm((show.mrp ?? show.price)!.size), h / 6) * 10) / 10; y = Math.round(y * 10) / 10;
-    const half = iw / (show.mrp && show.price ? 2 : 1);
-    if (show.mrp) els.push({ id: eid(), type: 'field', field: 'mrp', text: 'MRP ', x: inset, y, w: half, h: Math.round(size * 12) / 10, size, bold: show.mrp.bold, align: show.price ? 'left' : 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 });
-    if (show.price) els.push({ id: eid(), type: 'field', field: 'price', text: show.mrp ? '' : 'Price ', x: inset + (show.mrp ? half : 0), y, w: half, h: Math.round(size * 12) / 10, size, bold: true, align: show.mrp ? 'right' : 'center', maxLines: 1, overflow: 'shrink', minSize: 1.4 });
+  const fieldEl = (field: LabelField, r: Row, extra: Partial<LabelElement> = {}): LabelElement => ({
+    id: eid(), type: 'field', field, text: '', x: inset, y: r1v(y), w: iw, h: r1v(r.size * LINE * r.lines), size: r1v(r.size), bold: r.bold,
+    align: 'center', maxLines: r.lines, overflow: 'shrink', minSize: Math.min(MIN_TEXT, r1v(r.size)), ...extra,
+  });
+  const company = rows.find((r) => r.key === 'company');
+  if (company) { els.push(fieldEl('company', company)); y += company.size * LINE; }
+  if (narrow) { const q = Math.min(iw, bh); els.push({ id: eid(), type: 'qr', field: 'barcode', x: r1v((w - q) / 2), y: r1v(y), w: r1v(q), h: r1v(q) }); y += q + GAP; }
+  else { els.push({ id: eid(), type: 'barcode', field: 'barcode', x: inset, y: r1v(y), w: iw, h: r1v(bh), symbology: 'auto', showValue: !!show.sku }); y += bh + GAP; }
+  for (const r of rows) {
+    if (r.key === 'company') continue;
+    if (r.key === 'price') {
+      const half = iw / (show.mrp && show.price ? 2 : 1);
+      const hh = r1v(r.size * LINE);
+      if (show.mrp) els.push({ ...fieldEl('mrp', r), text: 'MRP ', w: r1v(half), h: hh, bold: !!show.mrp.bold, align: show.price ? 'left' : 'center' });
+      if (show.price) els.push({ ...fieldEl('price', r), text: show.mrp ? '' : 'Price ', x: r1v(inset + (show.mrp ? half : 0)), w: r1v(half), h: hh, bold: true, align: show.mrp ? 'right' : 'center' });
+    } else els.push(fieldEl(r.key, r));
+    y += r.size * LINE * r.lines;
   }
-  const fitted = fitInside({ w, h, elements: els }, inset);
   // Big labels: put the design in the middle instead of leaving the bottom empty.
-  const spare = h - inset - Math.max(...fitted.elements.map((e) => e.y + e.h));
-  if (spare < 1.5) return fitted;
-  const dy = Math.round((spare / 2) * 10) / 10;
-  return { ...fitted, elements: fitted.elements.map((e) => ({ ...e, y: Math.round((e.y + dy) * 10) / 10 })) };
+  const used = Math.max(...els.map((e) => e.y + e.h));
+  const spare = h - inset - used;
+  if (spare < 1.5) return { w, h, elements: els };
+  const dy = spare / 2;
+  return { w, h, elements: els.map((e) => ({ ...e, y: r1v(e.y + dy) })) };
 }
 
 /**
@@ -314,37 +353,6 @@ export function withLonePrices(t: LabelTemplateBody, d: LabelData): LabelElement
   return t.elements.filter((e) => e !== gone).map((e) => (e === keep ? { ...e, x, w, align: 'center' as const } : e));
 }
 
-/**
- * Keeps a stacked layout inside the safe area: if it runs past the bottom, the barcode gets shorter first (down to
- * 4 mm), then every text line shrinks together. Elements keep their order and stay a whole layout.
- */
-function fitInside(t: LabelTemplateBody, inset: number): LabelTemplateBody {
-  const bottom = () => Math.max(...t.elements.map((e) => e.y + e.h));
-  let over = bottom() - (t.h - inset);
-  if (over <= 0.01) return t;
-  const els = t.elements.map((e) => ({ ...e }));
-  const bar = els.find((e) => e.type === 'barcode' || e.type === 'qr');
-  if (bar) {
-    // A QR code stays square and at least 11 mm (version 1 at 3 dots per module, spec ML-10).
-    const cut = Math.min(over, Math.max(0, bar.h - (bar.type === 'qr' ? 11 : 4)));
-    bar.h = Math.round((bar.h - cut) * 10) / 10;
-    if (bar.type === 'qr') { bar.w = bar.h; bar.x = Math.round(((t.w - bar.w) / 2) * 10) / 10; }
-    for (const e of els) if (e.y > bar.y) e.y = Math.round((e.y - cut) * 10) / 10;
-    over -= cut;
-  }
-  if (over > 0.01) {
-    const texts = els.filter((e) => e.type === 'field' || e.type === 'text');
-    const total = texts.reduce((a, e) => a + e.h, 0);
-    const k = Math.max(0.5, (total - over) / total);
-    let shift = 0; let lastY = -1;
-    for (const e of [...els].sort((a, b) => a.y - b.y)) {
-      if (e.y !== lastY) lastY = e.y;
-      e.y = Math.round((e.y - shift) * 10) / 10;
-      if (e.type === 'field' || e.type === 'text') { const nh = e.h * k; const d = e.h - nh; e.h = Math.round(nh * 10) / 10; e.size = Math.round((e.size ?? 2.6) * k * 10) / 10; if (!els.some((o) => o !== e && o.y === e.y && o.id < e.id)) shift += d; }
-    }
-  }
-  return { ...t, elements: els };
-}
 
 /* ============================== Jobs and imposition (spec 3, 5) ============================== */
 export interface JobLine { key: string; itemId: string | null; batch: string; qty: number; data: LabelData; location?: string; expiry?: string }

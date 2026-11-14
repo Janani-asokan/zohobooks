@@ -11,10 +11,11 @@ import { readLogo } from '@/lib/image';
 import { PhonePrinterCard } from '@/components/PhonePrinter';
 import { isNativeApp } from '@/lib/native';
 import { LabelPaperSteps } from '@/components/PrintCheck';
-import { allStocks, sameGeom, setDevice, settingsWithStock, stockFromSettings, useLabelSetup } from '@/components/labels/labelsApi';
+import { allStocks, autoFromSettings, labelDataFor, sameGeom, setDevice, settingsWithStock, stockFromSettings, useLabelSetup } from '@/components/labels/labelsApi';
+import { LabelView } from '@/components/labels/LabelView';
 import { rowWidthMm } from '../../../shared/labelEngine';
 import { SALES_KEYS } from '@/api/hooks';
-import { BarcodeLabel, SAMPLE_LABEL_ITEM, SAMPLE_RECEIPT, ThermalReceipt, printReceipt } from '@/components/printing';
+import { SAMPLE_LABEL_ITEM, SAMPLE_RECEIPT, ThermalReceipt, printReceipt } from '@/components/printing';
 import {
   BARCODE_FIELD_LABEL, INVOICE_FIELDS, INVOICE_FIELD_LABEL, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, withPrintDefaults,
   type BarcodeSettings, type InvoicePrintSettings, type InvoiceTemplate, type PrintSettings as PS, type ThermalSettings, type ThermalTheme,
@@ -22,6 +23,8 @@ import {
 import { resolveLayout, rowWidth, type Turn } from '../../../shared/labelLayout';
 import { Segmented } from '@/components/ui';
 
+/** A long item name, to check the label still fits. */
+const LONG_NAME = 'Hard Disk Western Digital 8TB My Book Desktop External USB 3.0 Drive';
 const INVOICE_TEMPLATES: Array<{ id: InvoiceTemplate; label: string; tip: string }> = [
   { id: 'standard', label: 'Standard', tip: 'Ruled header, light table head.' },
   { id: 'modern', label: 'Modern', tip: 'Table head in your colour.' },
@@ -67,6 +70,7 @@ export default function PrintSettings() {
   const [draft, setDraft] = useState<PS | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({ details: true });
   const [hoverTheme, setHoverTheme] = useState<ThermalTheme | null>(null);
+  const [longName, setLongName] = useState(false);
   const canEdit = me.can('admin');
   const labelSetup = useLabelSetup();
 
@@ -134,10 +138,12 @@ export default function PrintSettings() {
                 <div className="w"><span>{lay.w}mm</span></div>
                 {/* Shown enlarged for readability; prints at the real label size. */}
                 <div style={{ zoom: Math.min(3, 320 / (lay.w * 3.78)) } as React.CSSProperties}>
-                  <BarcodeLabel item={previewItem} shop={org.companyName} s={bc} w={lay.w} h={lay.h} preview />
+                  {/* The same layout and renderer the label screen prints with, so what you see here is what prints. */}
+                  <div className="ps-label-frame"><LabelView tpl={autoFromSettings(lay.w, lay.h, bc)} data={labelDataFor({ ...previewItem, unit: previewItem.unit ?? '', brand: previewItem.brand ?? '', category: previewItem.category ?? '', mrp: previewItem.mrp ?? null, sp1: previewItem.sp1 ?? 0, ...(longName ? { name: LONG_NAME } : {}) }, org.companyName)} /></div>
                 </div>
                 <div className="h"><span>{lay.h}mm</span></div>
               </div>
+              <label className="small row" style={{ gap: 6, justifyContent: 'center', marginTop: 8 }}><input type="checkbox" checked={longName} onChange={(e) => setLongName(e.target.checked)} /> Preview with a long item name</label>
               <div className="ps-paper-tag" style={{ marginTop: 10 }}>{lay.stock === 'a4' ? `${lay.across * lay.rows} labels per A4 sheet` : `${lay.across} label${lay.across === 1 ? '' : 's'} across a ${lay.rollMm} mm roll`}</div>
               <div className="ps-help" style={{ marginTop: 40, textAlign: 'center' }}>
                 <Tag size={14} style={{ verticalAlign: -2, marginRight: 6 }} />Print from <Link to="/app/items/labels">Barcode labels</Link>, or select items on the <Link to="/app/items">Items</Link> page and choose <strong>Print barcode labels</strong>.
