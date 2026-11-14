@@ -92,13 +92,20 @@ export interface InvoicePrintSettings {
   signatureImage: string;
   /** A promotional line printed on every invoice (FUN-09), e.g. a festival offer. */
   promo: string;
+  /**
+   * What the Print button prints for a bill: the A4 / A5 tax invoice, or a 58 mm / 80 mm receipt. Each computer can
+   * choose its own (Print settings → Thermal receipts → Bills on this computer). PDFs and emails stay A4 / A5.
+   */
+  printAs: BillPrintAs;
 }
+export type BillPrintAs = 'a4' | 'a5' | '2in' | '3in';
+export const BILL_PRINT_AS: readonly BillPrintAs[] = ['a4', 'a5', '2in', '3in'];
 
 export interface PrintSettings { thermal: ThermalSettings; barcode: BarcodeSettings; invoice: InvoicePrintSettings }
 
 export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   thermal: {
-    theme: 'compact', paper: '3in', showLogo: true, showPartyBalance: false, showItemDescription: true, showTime: false,
+    theme: 'compact', paper: '2in', showLogo: true, showPartyBalance: false, showItemDescription: true, showTime: false,
     showGstin: true, showHsn: false, showTaxBreakup: true, showSavings: true, showUpiQr: false, footer: '', promo: '', pageWidth: 'roll',
   },
   barcode: {
@@ -123,6 +130,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
     signatoryLabel: 'Authorised Signatory',
     signatureImage: '',
     promo: '',
+    printAs: '2in',   // bills print as 58 mm receipts unless the shop or the computer chooses otherwise
   },
 };
 

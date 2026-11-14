@@ -10,12 +10,13 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { fmtDate, money, num2 } from '@/lib/format';
 import { billPrint, billPrintName, prepareBill, printBill } from '@/lib/printInvoice';
 import { usePrintSettings } from '@/api/hooks';
+import { withPrintDefaults } from '../../shared/printSettings';
 
 /** Quick look at an invoice beside the list: totals, lines, payments and the common actions. */
 export function InvoicePanel({ id, onClose }: { id: string; onClose: () => void }) {
   const me = useShopUser();
   const toast = useToast();
-  const shopPaper = usePrintSettings().data?.invoice?.paper ?? 'a4';
+  const shopPaper = withPrintDefaults(usePrintSettings().data).invoice.printAs;
   const q = useInvoice(id);
   const inv = q.data;
   useEffect(() => {

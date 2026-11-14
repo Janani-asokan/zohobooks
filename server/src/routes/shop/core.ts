@@ -172,6 +172,7 @@ const printSchema = z.object({
       signatoryLabel: z.string().trim().min(1).max(60),
       signatureImage: z.string().max(400_000).refine((v) => v === '' || /^data:image\/(png|jpeg|webp);base64,/.test(v), 'Upload a PNG, JPG or WebP image'),
       promo: z.string().trim().max(140).optional(),
+      printAs: z.enum(['a4', 'a5', '2in', '3in']).optional(),
     })
     .optional(),
 });
@@ -187,7 +188,7 @@ coreRouter.put(
     const saved = savedAll.invoice;
     // Fields GST law requires stay on whatever is sent (CMP-14); fields a client doesn't know yet keep their saved value.
     const invoice = parsed.invoice
-      ? { ...parsed.invoice, promo: parsed.invoice.promo ?? saved.promo, fields: { ...saved.fields, ...parsed.invoice.fields, ...Object.fromEntries(MANDATORY_INVOICE_FIELDS.map((k) => [k, true])) } }
+      ? { ...parsed.invoice, promo: parsed.invoice.promo ?? saved.promo, printAs: parsed.invoice.printAs ?? saved.printAs, fields: { ...saved.fields, ...parsed.invoice.fields, ...Object.fromEntries(MANDATORY_INVOICE_FIELDS.map((k) => [k, true])) } }
       : saved;
     const b = {
       ...parsed,

@@ -5,6 +5,7 @@ import { Plus, FileText, Printer, Send, X, MessageCircle } from 'lucide-react';
 import { api } from '@/api/client';
 import { useBranches, useInvoices, useOrg, usePrintSettings } from '@/api/hooks';
 import { billPrint, billPrintName, printBill } from '@/lib/printInvoice';
+import { withPrintDefaults } from '../../../shared/printSettings';
 import type { Invoice, InvoiceStatus } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -38,7 +39,7 @@ export default function Invoices() {
   const me = useShopUser();
   const { t } = usePrefs();
   const toast = useToast();
-  const shopPaper = usePrintSettings().data?.invoice?.paper ?? 'a4';
+  const shopPaper = withPrintDefaults(usePrintSettings().data).invoice.printAs;
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const { data: invoices = [], isLoading } = useInvoices();

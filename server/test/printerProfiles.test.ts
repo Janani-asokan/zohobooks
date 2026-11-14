@@ -37,3 +37,15 @@ describe('printer profiles', () => {
     expect((await owner.get('/api/shop/print-settings')).body.barcode.layout).toMatchObject({ gapX: 0, gapY: 0, media: 'continuous' });
   });
 });
+
+describe('what the Print button prints for a bill', () => {
+  it('is a 58 mm receipt by default, can be changed, and is kept when an older client leaves it out', async () => {
+    const cur = (await owner.get('/api/shop/print-settings')).body;
+    expect(cur.invoice.printAs).toBe('2in');
+    expect((await owner.put('/api/shop/print-settings').send({ ...cur, invoice: { ...cur.invoice, printAs: 'a4' } })).status).toBe(200);
+    const { printAs: _drop, ...older } = (await owner.get('/api/shop/print-settings')).body.invoice;
+    expect((await owner.put('/api/shop/print-settings').send({ ...cur, invoice: older })).status).toBe(200);
+    expect((await owner.get('/api/shop/print-settings')).body.invoice.printAs).toBe('a4');
+    expect((await owner.put('/api/shop/print-settings').send({ ...cur, invoice: { ...cur.invoice, printAs: 'a3' } })).status).toBe(400);
+  });
+});

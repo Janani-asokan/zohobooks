@@ -13,7 +13,8 @@ import { isNativeApp } from '@/lib/native';
 import { LabelPaperSteps } from '@/components/PrintCheck';
 import { allStocks, autoFromSettings, labelDataFor, sameGeom, setDevice, settingsWithStock, stockFromSettings, useLabelSetup } from '@/components/labels/labelsApi';
 import { LabelView } from '@/components/labels/LabelView';
-import { billPrint, billPrintName, setBillPrinter, type BillPrinter } from '@/lib/printInvoice';
+import { billPrint, billPrintName, billPrinter, sameBill, setBillPrinter, shopBill, type BillPrinter } from '@/lib/printInvoice';
+import { BILL_PRINT_AS } from '../../../shared/printSettings';
 import { rowWidthMm } from '../../../shared/labelEngine';
 import { SALES_KEYS } from '@/api/hooks';
 import { SAMPLE_LABEL_ITEM, SAMPLE_RECEIPT, ThermalReceipt, printReceipt } from '@/components/printing';
@@ -72,8 +73,8 @@ export default function PrintSettings() {
   const [open, setOpen] = useState<Record<string, boolean>>({ details: true });
   const [hoverTheme, setHoverTheme] = useState<ThermalTheme | null>(null);
   const [longName, setLongName] = useState(false);
-  const [bill, setBill] = useState<BillPrinter>(() => billPrint(withPrintDefaults(q.data).invoice.paper));
-  useEffect(() => { if (q.data) setBill(billPrint(withPrintDefaults(q.data).invoice.paper)); }, [q.data]);
+  const [bill, setBill] = useState<BillPrinter>(() => billPrint(withPrintDefaults(q.data).invoice.printAs));
+  useEffect(() => { if (q.data) setBill(billPrint(withPrintDefaults(q.data).invoice.printAs)); }, [q.data]);
   const canEdit = me.can('admin');
   const labelSetup = useLabelSetup();
 
@@ -257,13 +258,23 @@ export default function PrintSettings() {
                 </div>
               </div>
               <div className="ps-sec" data-testid="bill-printer">
-                <h3>Bills on this computer</h3>
-                <div className="small muted" style={{ marginBottom: 6 }}>What the Print button prints here (invoice list, invoice page). Saved on this computer only, so the counter PC with a receipt printer can print receipts while the office prints A4.</div>
+                <h3>Printing bills</h3>
+                <div className="small muted" style={{ marginBottom: 6 }}>What the Print button prints for a bill (invoice list, invoice page). Downloaded PDFs and emailed invoices stay A4.</div>
+                <div className="small" style={{ margin: '8px 0 4px' }}><strong>Shop default</strong></div>
                 <div className="ps-radios">
+                  {BILL_PRINT_AS.map((v) => (
+                    <label key={v} className={`ps-radio ${iv.printAs === v ? 'active' : ''}`}>{billPrintName(shopBill(v))}
+                      <input type="radio" name="billShop" disabled={!canEdit} checked={iv.printAs === v} onChange={() => setI({ printAs: v })} /></label>
+                  ))}
+                </div>
+                <div className="small" style={{ margin: '12px 0 4px' }}><strong>This computer</strong> <span className="muted">(saved here only, for a counter with a different printer)</span></div>
+                <div className="ps-radios">
+                  <label className={`ps-radio ${!billPrinter() ? 'active' : ''}`}>Same as the shop ({billPrintName(shopBill(iv.printAs))})
+                    <input type="radio" name="billPrinter" checked={!billPrinter()} onChange={() => { setBillPrinter(null); setBill(billPrint(iv.printAs)); }} /></label>
                   {([{ paper: 'a4' }, { paper: 'a5' }, { paper: 'thermal', roll: '2in' }, { paper: 'thermal', roll: '3in' }] as BillPrinter[]).map((b) => {
-                    const on = bill.paper === b.paper && (b.paper !== 'thermal' || bill.roll === b.roll);
-                    return <label key={billPrintName(b)} className={`ps-radio ${on ? 'active' : ''}`}>{billPrintName(b)}{b.paper === iv.paper ? ' · shop default' : ''}
-                      <input type="radio" name="billPrinter" checked={on} onChange={() => { const v = b.paper === iv.paper ? null : b; setBillPrinter(v); setBill(billPrint(iv.paper)); }} /></label>;
+                    const on = !!billPrinter() && sameBill(bill, b);
+                    return <label key={billPrintName(b)} className={`ps-radio ${on ? 'active' : ''}`}>{billPrintName(b)}
+                      <input type="radio" name="billPrinter" checked={on} onChange={() => { setBillPrinter(b); setBill(b); }} /></label>;
                   })}
                 </div>
               </div>

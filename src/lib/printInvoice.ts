@@ -1,5 +1,5 @@
 import { API_BASE } from '@/lib/platform';
-import type { PaperSize } from '../../shared/printSettings';
+import type { BillPrintAs, PaperSize } from '../../shared/printSettings';
 import { announceReceipt } from './printerMemory';
 import { printWindow } from './native';
 import { btPrinter, btPrintReceipt } from './btPrinter';
@@ -111,9 +111,12 @@ export function setBillPrinter(v: BillPrinter | null) {
   try { if (v) localStorage.setItem(BILL_KEY, JSON.stringify(v)); else localStorage.removeItem(BILL_KEY); } catch { /* private mode */ }
   window.dispatchEvent(new Event(BILL_EVENT));
 }
-/** The bill print for this computer, else the shop's invoice paper. */
-export const billPrint = (shopPaper: PrintPaper = 'a4'): BillPrinter => billPrinter() ?? { paper: shopPaper };
+/** The shop's "Print button prints" setting as a print. */
+export const shopBill = (printAs: BillPrintAs = '2in'): BillPrinter => (printAs === 'a4' || printAs === 'a5' ? { paper: printAs } : { paper: 'thermal', roll: printAs });
+export const sameBill = (a: BillPrinter, b: BillPrinter) => a.paper === b.paper && (a.paper !== 'thermal' || a.roll === b.roll);
+/** The bill print for this computer, else the shop's setting (58 mm receipt unless changed). */
+export const billPrint = (shop: BillPrintAs = '2in'): BillPrinter => billPrinter() ?? shopBill(shop);
 export const billPrintName = (b: BillPrinter) => (b.paper === 'thermal' ? (b.roll === '2in' ? '58 mm receipt' : '80 mm receipt') : b.paper.toUpperCase());
 /** The quick Print buttons (invoice list, side panel, ?print=1): what this computer prints bills on. */
-export function printBill(id: string, shopPaper: PrintPaper = 'a4') { const b = billPrint(shopPaper); return printInvoice(id, b.paper, b.roll); }
-export function prepareBill(id: string, shopPaper: PrintPaper = 'a4') { const b = billPrint(shopPaper); preparePrint(id, b.paper, b.roll); }
+export function printBill(id: string, shop: BillPrintAs = '2in') { const b = billPrint(shop); return printInvoice(id, b.paper, b.roll); }
+export function prepareBill(id: string, shop: BillPrintAs = '2in') { const b = billPrint(shop); preparePrint(id, b.paper, b.roll); }
