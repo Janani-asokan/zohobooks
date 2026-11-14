@@ -513,3 +513,8 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lp-card { background: #2a2224; border-color: #4a3a3e; } :root:not([data-theme="light"]) .lp-steps li, :root:not([data-theme="light"]) .lp-size { background: #1f1a1b; border-color: #4a3a3e; } }
 :root[data-theme="dark"] .lp-card { background: #2a2224; border-color: #4a3a3e; } :root[data-theme="dark"] .lp-steps li, :root[data-theme="dark"] .lp-size { background: #1f1a1b; border-color: #4a3a3e; }
 .lp-check { margin: 8px 0 0; padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px dashed var(--brand-200, #f3d3da); font-size: 12.5px; line-height: 1.45; }
+
+/* Printer driver paper size helper and the roll spacing diagram (Stock & Printers, label screen). */
+.ls-driver { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; padding: 8px 10px; border-radius: var(--radius-sm, 8px); background: var(--blue-50, #eef5ff); border: 1px solid var(--blue-200, #c7dbff); line-height: 1.45; }
+.ls-driver > svg { flex: none; margin-top: 2px; }
+.ls-diagram { display: block; max-width: 100%; height: auto; margin: 6px 0; border-radius: 4px; }

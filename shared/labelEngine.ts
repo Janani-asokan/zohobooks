@@ -43,6 +43,7 @@ export const STOCK_PRESETS: Array<{ id: string; name: string; fits: string; stoc
   { id: '4in-33x25x3', name: '3-up · 33 × 25', fits: '4-inch', stock: roll(33, 25, 3, 0.5, 2) },
   { id: '4in-25x25x4', name: '4-up · 25 × 25', fits: '4-inch', stock: roll(25, 25, 4, 0.5, 1) },
   { id: '3in-38x25x2', name: '3-inch, 2-up · 38 × 25', fits: '3-inch, 4-inch', stock: roll(38, 25, 2, 1, 2) },
+  { id: '3in-38x25x2-nogap', name: '3-inch, 2-up · 38 × 25, no gap between', fits: '3-inch, 4-inch', stock: roll(38, 25, 2, 1, 0) },
   { id: '50x25x1', name: '1-up standard · 50 × 25', fits: '3-inch, 4-inch', stock: roll(50, 25, 1, 1, 0) },
   { id: '3in-75x25', name: '3-inch, single · 75 × 25', fits: '3-inch, 4-inch', stock: roll(75, 25, 1, 1.5, 0) },
   { id: '3in-75x38', name: '3-inch, single · 75 × 38', fits: '3-inch, 4-inch', stock: roll(75, 38, 1, 1.5, 0) },
@@ -62,6 +63,26 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
 export const rowWidthMm = (s: StockGeometry) => r1(s.marginL + s.marginR + s.across * s.w + (s.across - 1) * s.gutter);
 /** Row pitch along the feed: label height plus row gap (ML-06). */
 export const rowPitchMm = (s: StockGeometry) => r1(s.h + s.rowGap);
+/**
+ * The paper the printer driver must be set to for this stock, as width × height in mm (turned when the printer takes
+ * labels the other way round). Roll: one row of labels. Sheet: the whole sheet.
+ */
+export function driverPaperMm(s: StockGeometry, turn: 0 | 90 | 180 | 270 = 0): { w: number; h: number; gap: number } {
+  if (s.sheet !== 'roll') return { w: SHEET_MM[s.sheet].w, h: SHEET_MM[s.sheet].h, gap: 0 };
+  const side = turn === 90 || turn === 270;
+  return { w: side ? s.h : rowWidthMm(s), h: side ? rowWidthMm(s) : s.h, gap: s.media === 'continuous' ? 0 : s.rowGap };
+}
+/**
+ * The CSS @page rule for browser printing. "exact" (the default) always names the row's size, so the print preview
+ * shows label-sized pages instead of A4 and nothing is scaled. "driver" leaves wide rows to the driver's paper, for a
+ * Windows driver that turns a wide page sideways. Sheets go by name (drivers map "A4" / "letter" exactly).
+ */
+export function labelPageCss(s: StockGeometry, turn: 0 | 90 | 180 | 270 = 0, mode: 'exact' | 'driver' = 'exact'): string {
+  if (s.sheet !== 'roll') return `size: ${s.sheet === 'a4' ? 'A4' : 'letter'} portrait; margin: 0;`;
+  const { w, h } = driverPaperMm(s, turn);
+  if (mode === 'driver' && w > h) return 'margin: 0;';
+  return `size: ${w}mm ${h}mm; margin: 0;`;
+}
 
 /* ============================== Printers (spec 6.4) ============================== */
 export type PrinterLanguage = 'browser' | 'tspl' | 'zpl' | 'escpos';
@@ -74,10 +95,21 @@ export interface PrinterSettings {
   /** Calibrated shift of everything, mm, in 0.1 mm steps (TP-12). */
   offsetX: number; offsetY: number;
   darkness: number; speed: number;  // darkness 0–15, speed in inches per second
+  /** The label stock this printer is loaded with: choosing the printer loads it (a saved stock id or "preset:…"). */
+  stockId?: string;
+  /** Turn the label for this printer (when its driver feeds the labels the other way round). */
+  turn?: 0 | 90 | 180 | 270;
+  /**
+   * Browser printing: "exact" sends the label row's exact size as the page (Chrome's preview shows label-sized pages,
+   * never A4); "driver" sends no size for wide rows and leaves the paper to the printer driver's Page Setup.
+   */
+  pageSize?: 'exact' | 'driver';
 }
 export const PRINTER_PRESETS: Array<{ id: string; name: string; settings: PrinterSettings }> = [
   // The shop's own printer first. Its head prints 104 mm (4.25 in), so it takes 3-inch and 4-inch rolls.
   { id: 'tvs-lp46-lite', name: 'TVS LP 46 Lite · 3-inch and 4-inch rolls (TSPL)', settings: { language: 'tspl', dpi: 203, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
+  { id: 'tsc-te244', name: 'TSC TE244 / TTP-244 Pro · 4-inch (TSPL)', settings: { language: 'tspl', dpi: 203, headMm: 108, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
+  { id: 'zebra-zd220', name: 'Zebra ZD220 / ZD230 · 4-inch (ZPL)', settings: { language: 'zpl', dpi: 203, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 15, speed: 4 } },
   { id: 'label-4in-tspl', name: '4-inch label printer (TSC, Xprinter, TVS, Honeywell…) · TSPL', settings: { language: 'tspl', dpi: 203, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 4 } },
   { id: 'label-4in-zpl', name: '4-inch label printer (Zebra) · ZPL', settings: { language: 'zpl', dpi: 203, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 15, speed: 4 } },
   { id: 'label-4in-300', name: '4-inch label printer, 300 dpi', settings: { language: 'tspl', dpi: 300, headMm: 104, media: 'die-cut', offsetX: 0, offsetY: 0, darkness: 8, speed: 3 } },

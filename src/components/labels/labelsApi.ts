@@ -10,7 +10,7 @@ import { legacySizeFor, resolveLayout, type LabelLayout, type Turn } from '../..
 import { rowWidthMm } from '../../../shared/labelEngine';
 
 export interface LabelStockRow { id: string; name: string; geometry: StockGeometry; preset?: boolean }
-export interface PrinterRow { id: string; name: string; settings: PrinterSettings; branchId: string | null; branchName?: string | null; canRestore: boolean; preset?: boolean }
+export interface PrinterRow { id: string; name: string; settings: PrinterSettings; branchId: string | null; branchName?: string | null; canRestore: boolean; preset?: boolean; isDefault?: boolean }
 export interface TemplateRow { id: string; name: string; draft: LabelTemplateBody; version: number; isDefault: boolean; categories: string[]; published: LabelTemplateBody | null; dirty: boolean; updatedAt: string }
 export interface LabelSetup { stocks: LabelStockRow[]; printers: PrinterRow[]; templates: TemplateRow[]; generator: GeneratorSettings; can: { manage: boolean; admin: boolean } }
 export interface JobRow {
@@ -44,8 +44,10 @@ export function stockFromSettings(ps: PrintSettings): StockGeometry {
     if (p) return { ...p.stock };
   }
   if (l.stock === 'a4') return { w: l.w, h: l.h, across: l.across, gutter: l.gapX, marginL: l.marginX, marginR: l.marginX, rowGap: l.gapY, media: 'die-cut', sheet: 'a4', rows: l.rows, marginTop: l.marginY, safeInset: 1 };
-  // Rolls: gapY is the gap between labels along the roll (older layouts left it 0: the usual 3 mm).
-  return { w: l.w, h: l.h, across: l.across, gutter: l.gapX, marginL: l.marginX, marginR: l.marginX, rowGap: l.gapY > 0 ? l.gapY : 3, media: 'die-cut', sheet: 'roll', rows: 0, marginTop: 0, safeInset: 1 };
+  // Rolls: gapY is the gap between labels along the roll. Older layouts (no media saved) left it 0: the usual 3 mm.
+  // A layout that names its media keeps the gap as saved, so a no-gap roll stays at 0.
+  const rowGap = l.media ? (l.media === 'continuous' ? 0 : l.gapY) : (l.gapY > 0 ? l.gapY : 3);
+  return { w: l.w, h: l.h, across: l.across, gutter: l.gapX, marginL: l.marginX, marginR: l.marginX, rowGap, media: l.media ?? 'die-cut', sheet: 'roll', rows: 0, marginTop: 0, safeInset: 1 };
 }
 /** The turn saved with the shop's default stock (for a printer that takes labels the other way round). */
 export const turnFromSettings = (ps: PrintSettings): Turn => resolveLayout(ps.barcode).rotate;
@@ -56,10 +58,13 @@ export function settingsWithStock(ps: PrintSettings, g: StockGeometry, rotate: T
   const layout: LabelLayout = {
     stock: roll ? 'roll' : 'a4', w: g.w, h: g.h, across: g.across, rows: roll ? 0 : g.rows, gapX: g.gutter, gapY: g.rowGap,
     marginX: g.marginL, marginY: roll ? 0 : g.marginTop, rollMm: roll ? (rw > 80 ? 104 : rw > 58 ? 80 : 58) : 210, rotate: roll ? rotate : 0,
+    ...(roll ? { media: g.media } : {}),
   };
   return { ...ps, barcode: { ...ps.barcode, ...legacySizeFor(layout), layout } };
 }
 export const sameGeom = (a: StockGeometry, b: StockGeometry) => (['w', 'h', 'across', 'gutter', 'marginL', 'marginR', 'sheet', 'rows', 'marginTop'] as const).every((k) => a[k] === b[k]);
+/** The printer a computer starts with: the one it chose, else the shop's default printer. */
+export const startPrinterId = (setup?: LabelSetup) => device().printerId || setup?.printers.find((p) => p.isDefault)?.id || '';
 
 /* ---------- This computer (spec: printer profiles are per workstation) ---------- */
 const DEV = 'c360.labels.device';

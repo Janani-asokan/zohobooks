@@ -152,6 +152,7 @@ const printSchema = z.object({
         gapX: z.number().finite(), gapY: z.number().finite(), marginX: z.number().finite(), marginY: z.number().finite(),
         rollMm: z.number().finite().min(20).max(220),
         rotate: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]),
+        media: z.enum(['die-cut', 'black-mark', 'continuous']).optional(),
       }).nullable().optional(),
     })
     .superRefine((b, ctx) => {

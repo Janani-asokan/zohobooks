@@ -32,6 +32,8 @@ const geometrySchema = z.object({
 const printerSchema = z.object({
   language: z.enum(['browser', 'tspl', 'zpl', 'escpos']), dpi: z.union([z.literal(203), z.literal(300), z.literal(600)]), headMm: mm(20, 220),
   media: z.enum(['die-cut', 'black-mark', 'continuous']), offsetX: mm(-20, 20), offsetY: mm(-20, 20), darkness: z.number().int().min(0).max(15), speed: z.number().min(1).max(14),
+  stockId: z.string().max(80).optional(), turn: z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]).optional(),
+  pageSize: z.enum(['exact', 'driver']).optional(),
 });
 const elementSchema = z.object({
   id: z.string().min(1).max(40), type: z.enum(['barcode', 'qr', 'field', 'text', 'line', 'box']),
@@ -64,7 +66,7 @@ labelsRouter.get('/label/setup', T(async (db, _req, c) => {
   const ls = org?.label_settings ?? {};
   return {
     stocks: stocks.map((s) => ({ id: s.id, name: s.name, geometry: s.geometry })),
-    printers: printers.map((p) => ({ id: p.id, name: p.name, settings: p.settings, branchId: p.branch_id, branchName: p.branch_name ?? null, canRestore: !!p.last_good })),
+    printers: printers.map((p) => ({ id: p.id, name: p.name, settings: p.settings, branchId: p.branch_id, branchName: p.branch_name ?? null, canRestore: !!p.last_good, isDefault: !!p.is_default })),
     templates: templates.map(serializeTemplate),
     generator: { ...DEFAULT_GENERATOR, ...(ls.generator ?? {}) } as GeneratorSettings,
     can: { manage: allowed(c, 'items.write'), admin: allowed(c, 'admin') },
@@ -117,6 +119,15 @@ labelsRouter.post('/label/printers/:id/restore', T(async (db, req, c) => {
   const p = await one(db, 'UPDATE printer_profiles SET settings = last_good, last_good = settings, updated_at = now() WHERE shop_id = $1 AND id = $2 AND last_good IS NOT NULL RETURNING *', [c.shopId, req.params.id]);
   if (!p) throw badRequest('Nothing to restore');
   return { id: p.id, name: p.name, settings: p.settings, branchId: p.branch_id, canRestore: true };
+}));
+/** The shop's default printer: computers that have not chosen one start with it (and its stock). */
+labelsRouter.post('/label/printers/:id/default', perm('items.write'), T(async (db, req, c) => {
+  const cur = await one(db, 'SELECT id, name FROM printer_profiles WHERE shop_id = $1 AND id = $2', [c.shopId, req.params.id]);
+  if (!cur) throw notFound('Printer');
+  await db.query('UPDATE printer_profiles SET is_default = false WHERE shop_id = $1 AND is_default AND id <> $2', [c.shopId, cur.id]);
+  await db.query('UPDATE printer_profiles SET is_default = true, updated_at = now() WHERE shop_id = $1 AND id = $2', [c.shopId, cur.id]);
+  await audit(db, req, c.shopId, 'update', 'printer_profile', cur.id, { isDefault: true });
+  return { ok: true };
 }));
 labelsRouter.delete('/label/printers/:id', perm('items.write'), T(async (db, req, c) => {
   await db.query('DELETE FROM printer_profiles WHERE shop_id = $1 AND id = $2', [c.shopId, req.params.id]);

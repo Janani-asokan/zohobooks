@@ -335,6 +335,23 @@ export default function PrintSettings() {
                       <span className="field-hint">Every computer and phone of the shop starts with this stock. Save to keep it.</span>
                     </div>
                     {roll && (
+                      <div className="field" data-testid="ps-gaps">
+                        <label>Spacing between stickers</label>
+                        <Segmented value={cur.media === 'continuous' ? 'none' : cur.gutter === 0 && cur.across > 1 ? 'rows' : 'gap'}
+                          onChange={(v: string) => canEdit && setDraft(settingsWithStock(draft, v === 'none' ? { ...cur, gutter: 0, rowGap: 0, media: 'continuous' } : v === 'rows' ? { ...cur, gutter: 0, rowGap: cur.rowGap || 3, media: 'die-cut' } : { ...cur, gutter: cur.across > 1 ? (cur.gutter || 2) : 0, rowGap: cur.rowGap || 3, media: 'die-cut' }, lay.rotate))}
+                          options={[{ value: 'gap', label: 'Gapped roll' }, ...(cur.across > 1 ? [{ value: 'rows', label: 'No gap across' }] : []), { value: 'none', label: 'No gap at all' }]} />
+                        <div className="ls-two" style={{ marginTop: 6 }}>
+                          {cur.across > 1 && <label className="small">Gap between labels across (mm)
+                            <input className="input" type="number" step={0.1} min={0} max={30} disabled={!canEdit} value={cur.gutter}
+                              onChange={(e) => { const n = Math.max(0, Math.min(30, Math.round(Number(e.target.value) * 10) / 10 || 0)); setDraft(settingsWithStock(draft, { ...cur, gutter: n }, lay.rotate)); }} /></label>}
+                          <label className="small">Gap between rows (mm)
+                            <input className="input" type="number" step={0.1} min={0} max={20} disabled={!canEdit} value={cur.rowGap}
+                              onChange={(e) => { const n = Math.max(0, Math.min(20, Math.round(Number(e.target.value) * 10) / 10 || 0)); setDraft(settingsWithStock(draft, { ...cur, rowGap: n, media: n === 0 ? 'continuous' : 'die-cut' }, lay.rotate)); }} /></label>
+                        </div>
+                        <span className="field-hint">Gapped rolls show backing paper between stickers. Measure across: row width is now <strong>{rw} mm</strong>.</span>
+                      </div>
+                    )}
+                    {roll && (
                       <div className="field">
                         <label>Labels come out of the printer</label>
                         <Segmented value={String(lay.rotate) as '0' | '90' | '180' | '270'} onChange={(v: string) => canEdit && setDraft(settingsWithStock(draft, cur, Number(v) as Turn))}

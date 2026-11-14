@@ -16,7 +16,7 @@ import { findByCode } from '../../../../shared/barcode';
 import { type Turn } from '../../../../shared/labelLayout';
 import { withPrintDefaults, type PrintSettings } from '../../../../shared/printSettings';
 import {
-  DEFAULT_IMPOSE, JOB_CONFIRM_ABOVE, JOB_MAX, SHEET_MM, blockedLines, impose, jobBlocked, jobMetrics, rowPitchMm, rowWidthMm, validateJob,
+  DEFAULT_IMPOSE, JOB_CONFIRM_ABOVE, JOB_MAX, SHEET_MM, blockedLines, driverPaperMm, impose, jobBlocked, jobMetrics, labelPageCss, rowPitchMm, rowWidthMm, validateJob,
   type ImposeOptions, type Issue, type JobLine, type LabelTemplateBody, type StockGeometry,
 } from '../../../../shared/labelEngine';
 import { LabelView } from '@/components/labels/LabelView';
@@ -24,7 +24,7 @@ import { DirectPrinterPicker, PcHelperPicker, useDirectConn } from '@/components
 import { directSupported, printRowsDirect, rowBitmap } from '@/lib/labelDirect';
 import { isNativeApp } from '@/lib/native';
 import {
-  LABEL_KEYS, allPrinters, allStocks, autoFromSettings, device, labelDataFor, newKey, sameGeom, setDevice, settingsWithStock, stockFromSettings, templateFor, turnFromSettings, useLabelSetup, type JobRow,
+  LABEL_KEYS, allPrinters, allStocks, autoFromSettings, device, labelDataFor, newKey, sameGeom, setDevice, settingsWithStock, startPrinterId, stockFromSettings, templateFor, turnFromSettings, useLabelSetup, type JobRow, type PrinterRow,
 } from '@/components/labels/labelsApi';
 
 type Src = 'items' | 'purchase_order' | 'bill' | 'batches' | 'csv' | 'scan';
@@ -50,19 +50,11 @@ const IN_PRINTER = [
 ].map((x) => ({ ...x, pw: x.w / 4, ph: x.h / 4 }));
 const sideways = (t: Turn) => t === 90 || t === 270;
 /**
- * The page for one printed row. A row wider than it is tall (80 × 25 mm, 104 × 25 mm…) is NOT given a page size on
- * the website: Chrome treats a wide page size as "landscape", and the Windows label printer driver then turns the
- * whole page 90° onto its paper and shrinks it (labels come out sideways, small, spread over two labels). Without a
- * size, Chrome prints portrait onto the paper chosen for the printer (its Page Setup stock), at 100 %. Tall labels and
- * sheets keep their size; the phone app always gets it (the phone's print screen needs it and has no driver).
+ * The page for one printed row: always the row's exact size (Chrome's preview then shows label-sized pages, never A4,
+ * and nothing is scaled). A printer profile set to "driver" leaves wide rows to the driver's own paper instead, for a
+ * Windows driver that turns a wide page sideways. The phone app always gets the size (its print screen has no driver).
  */
-const pageCss = (s: StockGeometry, turn: Turn, app = isNativeApp()) => {
-  // Sheets by name: printer drivers map "A4" / "letter" to their own paper exactly.
-  if (s.sheet !== 'roll') return `size: ${s.sheet === 'a4' ? 'A4' : 'letter'} portrait; margin: 0;`;
-  const [w, h] = sideways(turn) ? [s.h, rowWidthMm(s)] : [rowWidthMm(s), s.h];
-  if (w > h && !app) return 'margin: 0;';
-  return `size: ${w}mm ${h}mm; margin: 0;`;
-};
+const pageCss = (s: StockGeometry, turn: Turn, mode: 'exact' | 'driver' = 'exact', app = isNativeApp()) => labelPageCss(s, turn, app ? 'exact' : mode);
 
 /** Print Workbench (spec 2.1): build a job from any source, check it, preview it at real size, print it. */
 export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow | null; onOpenTab: (t: string) => void }) {
@@ -90,7 +82,10 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
   const saved = useMemo(() => stockFromSettings(settings), [ps.data]);
   useEffect(() => {
     if (geom || !ps.data || !setup.data) return;
-    const d = stocks.find((s) => s.id === dev.stockId);
+    // A computer with no printer chosen starts with the shop's default printer, and the stock saved on it.
+    const startP = printers.find((p) => p.id === startPrinterId(setup.data));
+    if (startP && !printerId) setPrinterId(startP.id);
+    const d = stocks.find((s) => s.id === dev.stockId) ?? (dev.stockId ? undefined : stocks.find((s) => s.id === startP?.settings.stockId));
     const g = d?.geometry ?? saved;
     setGeom(g); setStockId(d?.id ?? stocks.find((s) => sameGeom(s.geometry, g))?.id ?? '');
   }, [ps.data, setup.data]);
@@ -117,6 +112,14 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
   const conn = useDirectConn();
   const [sending, setSending] = useState(false);
   const rememberTurn = (v: { turn: Turn; ok?: boolean }) => { rememberLabel(stock.w, stock.h, v); setTick((n) => n + 1); };
+  /** Choosing a printer profile loads what is saved on it: its label stock and its turn. */
+  const choosePrinter = (p: PrinterRow) => {
+    setPrinterId(p.id); setDevice({ printerId: p.id });
+    const st = stocks.find((x) => x.id === p.settings.stockId);
+    const g = st?.geometry ?? stock;
+    if (st) { setStockId(st.id); setGeom(st.geometry); setDevice({ stockId: st.id }); setView(0); setChunk(0); }
+    if (p.settings.turn != null && g.sheet === 'roll') { rememberLabel(g.w, g.h, { turn: p.settings.turn, ok: labelMemory(g.w, g.h)?.ok }); setTick((n) => n + 1); }
+  };
 
   /* ---------- Lines ---------- */
   const [lines, setLines] = useState<Line[]>([]);
@@ -202,7 +205,7 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           .finally(() => { setPrintRange(null); setSending(false); });
         return;
       }
-      printWithPage(pageCss(stock, turn), 'print-labels');
+      printWithPage(pageCss(stock, turn, printer.pageSize), 'print-labels');
       setPrintRange(null);
       after?.();
     }));
@@ -603,6 +606,12 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
           <AlertTriangle size={14} /> <span>{why.msg}</span>
           {why.fix && <button type="button" className="btn btn-soft btn-sm" onClick={why.fix.run}>{why.fix.label}</button>}
         </div>}
+        {stock.sheet === 'roll' && !conn && !isNativeApp() && (() => {
+          const d = driverPaperMm(stock, turn);
+          return <div className="ls-driver small" data-testid="driver-paper">
+            <Printer size={14} aria-hidden="true" /> <span>Printer driver paper (Printing preferences → Page Setup): width <strong>{d.w} mm</strong> × height <strong>{d.h} mm</strong>, {d.gap > 0 ? <>gap <strong>{d.gap} mm</strong></> : <strong>no gap (continuous)</strong>}. In Chrome: Margins <b>None</b>, Scale <b>Default</b>.</span>
+          </div>;
+        })()}
         {chunks > 1 && <p className="small muted">Big jobs go to the printer {CHUNK_ROWS} rows at a time, so a jam never wastes the whole roll.</p>}
         <p className="small ls-setup-line">
           Printer: <strong>{printerRow.name.split(' · ')[0]}</strong> · {chosenTpl ? chosenTpl.name : 'automatic layout'}{turn ? ` · turned ${turn}°` : ''}.{' '}
@@ -620,11 +629,11 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
         </div>
         <div className="field">
           <label htmlFor="lb-printer">Printer</label>
-          <select id="lb-printer" className="select" value={printerRow.id} onChange={(e) => { setPrinterId(e.target.value); setDevice({ printerId: e.target.value }); }}>
-            {printers.filter((p) => !p.preset).length > 0 && <optgroup label="Your printers">{printers.filter((p) => !p.preset).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>}
+          <select id="lb-printer" className="select" value={printerRow.id} onChange={(e) => { const p = printers.find((x) => x.id === e.target.value); if (p) choosePrinter(p); }}>
+            {printers.filter((p) => !p.preset).length > 0 && <optgroup label="Your printers">{printers.filter((p) => !p.preset).map((p) => <option key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (default)' : ''}</option>)}</optgroup>}
             <optgroup label="Printer types">{printers.filter((p) => p.preset).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
           </select>
-          <p className="small muted" style={{ marginTop: 4 }}>{printer.headMm} mm head · {printer.dpi} dpi. Remembered on this computer.</p>
+          <p className="small muted" style={{ marginTop: 4 }}>{printer.headMm} mm head · {printer.dpi} dpi{printer.stockId ? ' · loads its own label stock' : ''}. Remembered on this computer. <button type="button" className="lb-linkname" onClick={() => onOpenTab('stock')}>Edit printers</button></p>
         </div>
         <div className="field">
           <label htmlFor="lb-template">Template</label>

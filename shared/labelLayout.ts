@@ -30,6 +30,8 @@ export interface LabelLayout {
   rollMm: number;
   /** Turn the printed label: 90° / 270° when it comes out sideways, 180° when upside down; 0 = as designed. */
   rotate: Turn;
+  /** Roll only: labels with gaps (die-cut), black mark, or no gap at all (continuous). Older layouts leave it out. */
+  media?: 'die-cut' | 'black-mark' | 'continuous';
 }
 
 export const ROLLS = [

@@ -29,3 +29,18 @@ describe('the shop’s default label stock', () => {
     expect(sameGeom(stockFromSettings(old), STOCK_PRESETS.find((x) => x.id === '4in-50x25x2')!.stock)).toBe(true);
   });
 });
+
+describe('label gaps survive being saved as the shop’s stock', () => {
+  const ps = withPrintDefaults(undefined);
+  const base = STOCK_PRESETS.find((x) => x.id === '3in-38x25x2')!.stock;
+  it('keeps a no-gap roll at 0 mm between rows (older layouts without media still read as 3 mm)', () => {
+    const back = stockFromSettings(settingsWithStock(ps, { ...base, gutter: 0, rowGap: 0, media: 'continuous' }));
+    expect(back.rowGap).toBe(0); expect(back.gutter).toBe(0); expect(back.media).toBe('continuous');
+    const old = settingsWithStock(ps, { ...base, rowGap: 0 }); delete old.barcode.layout!.media;
+    expect(stockFromSettings(old).rowGap).toBe(3);
+  });
+  it('keeps a custom gap between labels across and between rows', () => {
+    const back = stockFromSettings(settingsWithStock(ps, { ...base, gutter: 1.5, rowGap: 2.5 }));
+    expect([back.gutter, back.rowGap, back.media]).toEqual([1.5, 2.5, 'die-cut']);
+  });
+});

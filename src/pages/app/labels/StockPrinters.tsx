@@ -7,7 +7,7 @@ import { useToast } from '@/context/ToastContext';
 import { Modal } from '@/components/ui';
 import { printWithPage } from '@/components/printing';
 import {
-  SHEET_MM, calibrationRuler, rowPitchMm, rowWidthMm, type PrinterSettings, type StockGeometry,
+  SHEET_MM, calibrationRuler, driverPaperMm, rowPitchMm, rowWidthMm, type PrinterSettings, type StockGeometry,
 } from '../../../../shared/labelEngine';
 import { LabelView } from '@/components/labels/LabelView';
 import { LABEL_KEYS, SAMPLE_DATA, allPrinters, allStocks, device, sameGeom, setDevice, settingsWithStock, stockFromSettings, turnFromSettings, useLabelSetup, type LabelStockRow, type PrinterRow } from '@/components/labels/labelsApi';
@@ -57,6 +57,10 @@ export default function StockPrinters() {
   const saveStock = async () => {
     if (!editStock) return;
     try { await (editStock.id ? api.put(`/shop/label/stocks/${editStock.id}`, { name: editStock.name, geometry: editStock.g }) : api.post('/shop/label/stocks', { name: editStock.name, geometry: editStock.g })); toast('success', 'Label stock saved'); setEditStock(null); refresh(); }
+    catch (e) { toast('error', 'Could not save', (e as Error).message); }
+  };
+  const makeDefaultPrinter = async (p: PrinterRow) => {
+    try { await api.post(`/shop/label/printers/${p.id}/default`); toast('success', `${p.name} is now the shop’s default printer`); refresh(); }
     catch (e) { toast('error', 'Could not save', (e as Error).message); }
   };
   const savePrinter = async () => {
@@ -117,8 +121,9 @@ export default function StockPrinters() {
           </select>
         </div>
         <ul className="lb-plist">{printers.filter((p) => !p.preset).map((p) => (
-          <li key={p.id}><div><strong>{p.name}</strong><div className="small muted">{p.settings.language.toUpperCase()} · {p.settings.dpi} dpi · {p.settings.headMm} mm head · offset {p.settings.offsetX}/{p.settings.offsetY} mm{p.branchName ? ` · ${p.branchName}` : ''}</div></div>
+          <li key={p.id}><div><strong>{p.name}</strong>{p.isDefault && <span className="badge badge-green" style={{ marginLeft: 6 }}>Default</span>}<div className="small muted">{p.settings.language.toUpperCase()} · {p.settings.dpi} dpi · {p.settings.headMm} mm head{p.settings.stockId ? ` · ${stocks.find((x) => x.id === p.settings.stockId)?.name ?? 'stock removed'}` : ''}{p.settings.turn ? ` · turned ${p.settings.turn}°` : ''} · offset {p.settings.offsetX}/{p.settings.offsetY} mm{p.branchName ? ` · ${p.branchName}` : ''}</div></div>
             <span className="row" style={{ gap: 4 }}>
+              {manage && !p.isDefault && <button className="icon-btn sm" title="Make this the shop’s default printer" aria-label={`Make ${p.name} the default printer`} onClick={() => void makeDefaultPrinter(p)}><Star size={14} /></button>}
               {manage && <button className="icon-btn sm" aria-label={`Edit ${p.name}`} onClick={() => setEditPrinter({ id: p.id, name: p.name, s: { ...p.settings } })}><Pencil size={14} /></button>}
               {p.canRestore && <button className="icon-btn sm" title="Back to the last good settings" aria-label={`Restore ${p.name}`} onClick={() => void api.post(`/shop/label/printers/${p.id}/restore`).then(() => { toast('success', 'Last good settings restored'); refresh(); })}><RotateCcw size={14} /></button>}
               {manage && <button className="icon-btn sm danger" aria-label={`Delete ${p.name}`} onClick={() => void api.del(`/shop/label/printers/${p.id}`).then(refresh)}><Trash2 size={14} /></button>}
@@ -141,21 +146,39 @@ export default function StockPrinters() {
             <Mm id="st-w" label="Label width" value={editStock.g.w} onChange={(w) => setEditStock({ ...editStock, g: { ...editStock.g, w } })} min={10} max={200} inches={inches} />
             <Mm id="st-h" label="Label height" value={editStock.g.h} onChange={(h) => setEditStock({ ...editStock, g: { ...editStock.g, h } })} min={8} max={300} inches={inches} />
             <div className="field"><label htmlFor="st-n">Labels across</label><input id="st-n" className="input" type="number" min={1} max={editStock.g.sheet === 'roll' ? 4 : 8} value={editStock.g.across} onChange={(e) => setEditStock({ ...editStock, g: { ...editStock.g, across: Math.max(1, Math.min(8, Number(e.target.value) || 1)) } })} /></div>
-            <Mm id="st-g" label="Gutter between" value={editStock.g.gutter} onChange={(gutter) => setEditStock({ ...editStock, g: { ...editStock.g, gutter } })} max={30} inches={inches} />
+            <Mm id="st-g" label="Gap between labels across" value={editStock.g.gutter} onChange={(gutter) => setEditStock({ ...editStock, g: { ...editStock.g, gutter } })} max={30} inches={inches} />
             <Mm id="st-ml" label="Left margin" value={editStock.g.marginL} onChange={(marginL) => setEditStock({ ...editStock, g: { ...editStock.g, marginL } })} max={40} inches={inches} />
             <Mm id="st-mr" label="Right margin" value={editStock.g.marginR} onChange={(marginR) => setEditStock({ ...editStock, g: { ...editStock.g, marginR } })} max={40} inches={inches} />
-            <Mm id="st-rg" label="Row gap" value={editStock.g.rowGap} onChange={(rowGap) => setEditStock({ ...editStock, g: { ...editStock.g, rowGap } })} max={20} inches={inches} />
+            <Mm id="st-rg" label="Gap between rows (along the roll)" value={editStock.g.rowGap} onChange={(rowGap) => setEditStock({ ...editStock, g: { ...editStock.g, rowGap } })} max={20} inches={inches} />
             <Mm id="st-safe" label="Safe area inset" value={editStock.g.safeInset} onChange={(safeInset) => setEditStock({ ...editStock, g: { ...editStock.g, safeInset } })} max={5} inches={inches} />
           </div>
+          {editStock.g.sheet === 'roll' && (
+            <div className="field" data-testid="gap-presets">
+              <label>Spacing on the roll</label>
+              <div className="ls-chips" role="radiogroup" aria-label="Spacing on the roll">
+                {([
+                  { k: 'none', label: 'No gap (labels touch)', g: { gutter: 0, rowGap: 0, media: 'continuous' as const } },
+                  { k: 'across0', label: 'No gap across, gap between rows', g: { gutter: 0, rowGap: editStock.g.rowGap || 3, media: 'die-cut' as const } },
+                  { k: 'g2', label: '2 mm gaps', g: { gutter: editStock.g.across > 1 ? 2 : 0, rowGap: 2, media: 'die-cut' as const } },
+                  { k: 'g3', label: '3 mm gaps', g: { gutter: editStock.g.across > 1 ? 3 : 0, rowGap: 3, media: 'die-cut' as const } },
+                ]).map((o) => {
+                  const on = editStock.g.gutter === o.g.gutter && editStock.g.rowGap === o.g.rowGap && editStock.g.media === o.g.media;
+                  return <button key={o.k} type="button" role="radio" aria-checked={on} className={on ? 'on' : ''} onClick={() => setEditStock({ ...editStock, g: { ...editStock.g, ...o.g } })}>{o.label}</button>;
+                })}
+              </div>
+              <span className="field-hint">Gapped (die-cut) rolls have backing paper showing between stickers; the printer’s gap sensor finds each row. No-gap rolls are continuous: rows are cut by length.</span>
+            </div>
+          )}
           {editStock.g.sheet === 'roll' ? (
-            <div className="field"><label>Media</label><select className="select" value={editStock.g.media} onChange={(e) => setEditStock({ ...editStock, g: { ...editStock.g, media: e.target.value as StockGeometry['media'] } })}><option value="die-cut">Die-cut labels with gaps</option><option value="black-mark">Black mark</option><option value="continuous">Continuous (receipt paper)</option></select></div>
+            <div className="field"><label>Media</label><select className="select" value={editStock.g.media} onChange={(e) => setEditStock({ ...editStock, g: { ...editStock.g, media: e.target.value as StockGeometry['media'] } })}><option value="die-cut">Die-cut labels with gaps</option><option value="black-mark">Black mark</option><option value="continuous">No gap / continuous</option></select></div>
           ) : (
             <div className="ls-two">
               <div className="field"><label htmlFor="st-rows">Rows per sheet</label><input id="st-rows" className="input" type="number" min={1} max={60} value={editStock.g.rows} onChange={(e) => setEditStock({ ...editStock, g: { ...editStock.g, rows: Math.max(1, Math.min(60, Number(e.target.value) || 1)) } })} /></div>
               <Mm id="st-mt" label="Top margin" value={editStock.g.marginTop} onChange={(marginTop) => setEditStock({ ...editStock, g: { ...editStock.g, marginTop } })} max={60} inches={inches} />
             </div>
           )}
-          <p className="small muted">Row width: <strong>{rowWidthMm(editStock.g)} mm</strong>{editStock.g.sheet === 'roll' ? ` · fits a ${rowWidthMm(editStock.g) - editStock.g.marginL - editStock.g.marginR - 2 * editStock.g.safeInset <= 48 ? '2' : rowWidthMm(editStock.g) - editStock.g.marginL - editStock.g.marginR - 2 * editStock.g.safeInset <= 72 ? '3' : '4'}-inch head or wider` : ''}</p>
+          {editStock.g.sheet === 'roll' && <StockDiagram g={editStock.g} />}
+          <p className="small muted">Row width: <strong>{rowWidthMm(editStock.g)} mm</strong> = {editStock.g.marginL} + {editStock.g.across} × {editStock.g.w}{editStock.g.across > 1 ? ` + ${editStock.g.across - 1} × ${editStock.g.gutter}` : ''} + {editStock.g.marginR}{editStock.g.sheet === 'roll' ? ` · fits a ${rowWidthMm(editStock.g) - editStock.g.marginL - editStock.g.marginR - 2 * editStock.g.safeInset <= 48 ? '2' : rowWidthMm(editStock.g) - editStock.g.marginL - editStock.g.marginR - 2 * editStock.g.safeInset <= 72 ? '3' : '4'}-inch head or wider` : ''}</p>
         </div>}
       </Modal>
 
@@ -169,6 +192,31 @@ export default function StockPrinters() {
             <Mm id="pr-head" label="Head width" value={editPrinter.s.headMm} onChange={(headMm) => setEditPrinter({ ...editPrinter, s: { ...editPrinter.s, headMm } })} min={20} max={220} inches={false} />
             <div className="field"><label>Media</label><select className="select" value={editPrinter.s.media} onChange={(e) => setEditPrinter({ ...editPrinter, s: { ...editPrinter.s, media: e.target.value as PrinterSettings['media'] } })}><option value="die-cut">Labels with gaps</option><option value="black-mark">Black mark</option><option value="continuous">Continuous</option></select></div>
           </div>
+          <div className="field">
+            <label htmlFor="pr-stock">Label roll loaded in this printer</label>
+            <select id="pr-stock" className="select" value={editPrinter.s.stockId ?? ''} onChange={(e) => setEditPrinter({ ...editPrinter, s: { ...editPrinter.s, stockId: e.target.value || undefined } })}>
+              <option value="">Not set (keep the label screen’s choice)</option>
+              <optgroup label="Rolls">{stocks.filter((x) => x.geometry.sheet === 'roll').map((x) => <option key={x.id} value={x.id}>{x.name}{x.preset ? '' : ' (yours)'}</option>)}</optgroup>
+              <optgroup label="Sheets">{stocks.filter((x) => x.geometry.sheet !== 'roll').map((x) => <option key={x.id} value={x.id}>{x.name}{x.preset ? '' : ' (yours)'}</option>)}</optgroup>
+            </select>
+            <span className="field-hint">Choosing this printer on the label screen loads this roll and its preview. Need another size or gap? Add it under Label stock.</span>
+          </div>
+          <div className="ls-two">
+            <div className="field"><label>Turn labels</label><select className="select" value={editPrinter.s.turn ?? 0} onChange={(e) => setEditPrinter({ ...editPrinter, s: { ...editPrinter.s, turn: Number(e.target.value) as 0 | 90 | 180 | 270 } })}><option value={0}>As designed (0°)</option><option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option></select></div>
+            <div className="field"><label>Browser page size</label><select className="select" value={editPrinter.s.pageSize ?? 'exact'} onChange={(e) => setEditPrinter({ ...editPrinter, s: { ...editPrinter.s, pageSize: e.target.value as 'exact' | 'driver' } })}><option value="exact">Exact label size (recommended)</option><option value="driver">Use the driver’s paper</option></select></div>
+          </div>
+          {(() => {
+            const st = stocks.find((x) => x.id === editPrinter.s.stockId)?.geometry;
+            if (!st) return null;
+            const d = driverPaperMm(st, editPrinter.s.turn ?? 0);
+            const tooWide = st.sheet === 'roll' && rowWidthMm(st) > editPrinter.s.headMm + 0.05;
+            return <div className="ls-driver small" data-testid="printer-driver-help">
+              <Printer size={14} aria-hidden="true" /> <span>{st.sheet === 'roll'
+                ? <>Set the printer driver (Windows: Printing preferences → Page Setup → New; macOS: Paper Size → Manage Custom Sizes) to stock width <strong>{d.w} mm</strong> × height <strong>{d.h} mm</strong>, {d.gap > 0 ? <>gap <strong>{d.gap} mm</strong></> : <strong>continuous (no gap)</strong>}, orientation Portrait.</>
+                : <>Choose paper <strong>{SHEET_MM[st.sheet].label}</strong>, Scale 100 %, Margins None.</>}
+                {tooWide && <><br /><strong>The row ({rowWidthMm(st)} mm) is wider than this printer’s head ({editPrinter.s.headMm} mm).</strong></>}</span>
+            </div>;
+          })()}
         </div>}
       </Modal>
 
@@ -225,5 +273,25 @@ export function CalibrationPage({ stock }: { stock: StockGeometry }) {
         <LabelView tpl={{ w: stock.w, h: stock.h, elements: [{ id: 't', type: 'barcode', field: 'barcode', x: 1, y: Math.min(stock.h * 0.62, stock.h - 7), w: stock.w - 2, h: Math.max(4, Math.min(8, stock.h * 0.3)), symbology: 'CODE128' }] }} data={{ ...SAMPLE_DATA, barcode: 'TEST-1234' }} />
       </div>
     </div>
+  );
+}
+
+/** A to-scale drawing of the roll: margins, labels (dashed) and the gaps, so a no-gap roll is obvious at a glance. */
+function StockDiagram({ g }: { g: StockGeometry }) {
+  const W = rowWidthMm(g);
+  const peek = Math.min(g.h, 8);                       // the top of the next row
+  const H = g.rowGap + g.h + g.rowGap + peek;
+  const k = Math.min(3, 280 / W);
+  const row = (y: number, h: number, r: number) => Array.from({ length: g.across }, (_, i) => (
+    <rect key={`${r}-${i}`} x={g.marginL + i * (g.w + g.gutter)} y={y} width={g.w} height={h} fill="#fff" stroke="#888" strokeWidth={0.3} strokeDasharray="1 0.8" rx={0.8} />
+  ));
+  return (
+    <svg className="ls-diagram" viewBox={`0 0 ${W} ${H}`} style={{ width: W * k, height: H * k }} role="img"
+      aria-label={`${g.across} across, ${g.gutter} mm between labels, ${g.rowGap} mm between rows`}>
+      <rect x={0} y={0} width={W} height={H} fill="#e6e9ee" />
+      {row(g.rowGap, g.h, 0)}
+      {row(g.rowGap * 2 + g.h, peek, 1)}
+      <text x={g.marginL + g.w / 2} y={g.rowGap + g.h / 2} fontSize={Math.min(4, g.h / 4)} textAnchor="middle" dominantBaseline="middle" fill="#555">{g.w} × {g.h}</text>
+    </svg>
   );
 }
