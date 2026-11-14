@@ -25,4 +25,12 @@ describe('auto layout always fits the label', () => {
     const t = autoTemplate(38, 25, { company: big, name: big, mrp: big, price: big }, 80);
     expect(t.elements.find((e) => e.type === 'barcode')!.h).toBeLessThan(20);
   });
+  it('gives the item name two lines on a 38 × 25 label, at default and at the largest settings', () => {
+    for (const [share, size] of [[40, 22], [80, 40]]) {
+      const o = { size, bold: false };
+      const name = autoTemplate(38, 25, { company: { size, bold: true }, sku: o, name: o, mrp: o, price: o }, share).elements.find((e) => e.field === 'name')!;
+      expect(name.maxLines).toBe(2);
+      expect(name.h).toBeGreaterThanOrEqual(name.size! * 2.2);
+    }
+  });
 });

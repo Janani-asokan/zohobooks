@@ -285,6 +285,10 @@ export function autoTemplate(w: number, h: number, show: Partial<Record<'company
   const rows: Row[] = [];
   const add = (key: Row['key'], o?: { size: number; bold: boolean }) => { if (o) rows.push({ key, size: tmm(o.size), bold: o.bold, lines: 1 }); };
   add('company', show.company); add('name', show.name);
+  // The item name gets two lines, so a long name wraps instead of shrinking to a tiny size or ending in "…". It
+  // goes back to one line only when the label is too small to hold the rest otherwise.
+  const nameRow = rows.find((r) => r.key === 'name');
+  if (nameRow) nameRow.lines = 2;
   add('category', show.category); add('brand', show.brand); add('unit', show.unit);
   if (show.mrp || show.price) rows.push({ key: 'price', size: tmm((show.mrp ?? show.price)!.size), bold: !!(show.mrp ?? show.price)!.bold, lines: 1 });
   const textH = () => rows.reduce((t, r) => t + r.size * LINE * r.lines, 0);
@@ -299,14 +303,17 @@ export function autoTemplate(w: number, h: number, show: Partial<Record<'company
     const k = Math.max(0, (avail - GAP - bh) / Math.max(0.01, textH()));
     for (const r of rows) r.size = Math.max(MIN_TEXT, r.size * k);
   }
+  if (nameRow && room() < bh - 0.01) {
+    // Two lines of name do not fit even at the smallest text: one line, at the size the space allows.
+    nameRow.lines = 1;
+    const k = Math.min(1, Math.max(0, (avail - GAP - bh) / Math.max(0.01, textH())));
+    if (k < 1) for (const r of rows) r.size = Math.max(MIN_TEXT, r.size * k);
+  }
   for (const drop of ['unit', 'brand', 'category', 'company'] as const) {
     if (room() >= bh - 0.01) break;
     const i = rows.findIndex((r) => r.key === drop); if (i >= 0) rows.splice(i, 1);
   }
   if (room() < bh) bh = Math.max(narrow ? 6 : 3, room());
-  // A long item name takes a second line when there is room for it (else it shrinks to fit one line).
-  const nameRow = rows.find((r) => r.key === 'name');
-  if (nameRow && room() - bh >= nameRow.size * LINE) nameRow.lines = 2;
   // Spare height goes to the barcode, up to the share asked for.
   bh = Math.max(bh, Math.min((h * barcodeShare) / 100, room()));
 

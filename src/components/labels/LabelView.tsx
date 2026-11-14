@@ -50,20 +50,33 @@ function FitField({ el, text, cls, box, pick }: { el: LabelElement; text: string
   const f = fitText(text, el);
   const lines = Math.max(1, el.maxLines ?? 1);
   const min = Math.min(f.size, el.minSize ?? 1.4);
+  const one = lines === 1;
   useLayoutEffect(() => {
     const o = outer.current, i = inner.current; if (!o || !i) return;
     let size = f.size;
-    const fits = () => i.scrollWidth <= o.clientWidth + 0.5 && i.scrollHeight <= o.clientHeight + 0.5;
-    i.style.fontSize = `${size}mm`; o.dataset.overflow = '';
-    for (let n = 0; n < 60 && !fits() && size - 0.1 >= min - 1e-9; n++) { size = Math.round((size - 0.1) * 10) / 10; i.style.fontSize = `${size}mm`; }
-    if (!fits()) o.dataset.overflow = 'true'; else delete o.dataset.overflow;
+    // Measure the text unclipped (no ellipsis, no line clamp: they hide what does not fit from the measurement),
+    // then put the clip back as a last resort for text that is still too long at the smallest size.
+    const saved = { width: i.style.width, display: i.style.display, clamp: i.style.webkitLineClamp, maxH: i.style.maxHeight, overflow: i.style.overflow, ws: i.style.whiteSpace };
+    // Measured against 96 % of the width: text is drawn a little wider at print and high screen resolutions than it
+    // measures here, and a name that only just fits would lose its last word there.
+    const SAFE = 0.96;
+    i.style.overflow = 'visible'; i.style.maxHeight = 'none'; i.style.webkitLineClamp = 'unset';
+    if (one) i.style.display = 'inline-block'; else i.style.width = `${SAFE * 100}%`;
+    const fits = () => {
+      const lineH = parseFloat(getComputedStyle(i).fontSize) * 1.15;
+      return (one ? i.scrollWidth <= o.clientWidth * SAFE : i.scrollWidth <= i.clientWidth + 0.5) && i.getBoundingClientRect().height <= Math.min(o.getBoundingClientRect().height, lineH * lines) + 0.25;
+    };
+    i.style.fontSize = `${size}mm`;
+    for (let n = 0; n < 80 && !fits() && size - 0.1 >= min - 1e-9; n++) { size = Math.round((size - 0.1) * 10) / 10; i.style.fontSize = `${size}mm`; }
+    const ok = fits();
+    Object.assign(i.style, { width: saved.width, display: saved.display, maxHeight: saved.maxH, overflow: saved.overflow, whiteSpace: saved.ws }); i.style.webkitLineClamp = saved.clamp;
+    if (!ok) o.dataset.overflow = 'true'; else delete o.dataset.overflow;
   }, [text, f.size, min, el.w, el.h, lines, el.bold]);
-  const one = lines === 1;
   return (
     <div className={cls} ref={outer} {...pick} data-el={el.id}
       style={{ ...box, fontWeight: el.bold ? 800 : 500, justifyContent: el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center', alignItems: 'center', overflow: 'hidden' }}>
       <span ref={inner} className="lv-fit" style={{ fontSize: `${f.size}mm`, textAlign: el.align ?? 'left', lineHeight: 1.15, maxWidth: '100%', maxHeight: '100%',
-        ...(one ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' } : { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: lines, overflow: 'hidden', overflowWrap: 'anywhere' }) }}>
+        ...(one ? { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' } : { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: lines, overflow: 'hidden', overflowWrap: 'anywhere', width: '100%' }) }}>
         {el.overflow === 'truncate' ? f.text : text}
       </span>
     </div>
