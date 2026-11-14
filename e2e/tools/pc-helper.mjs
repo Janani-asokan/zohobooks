@@ -45,7 +45,7 @@ try {
   await p.getByTestId('helper-install').waitFor({ timeout: 8000 });
   ok(true, 'without the helper: “Straight to the printer” shows how to install it');
   const dl = p.waitForEvent('download');
-  await p.getByRole('link', { name: /Download Corpus360PrintHelper\.exe/ }).click();
+  await p.getByRole('link', { name: /Download the print helper/ }).click();
   const file = await (await dl).path();
   const head = fs.readFileSync(file).subarray(0, 2).toString('latin1');
   ok(head === 'MZ' && fs.statSync(file).size > 1e6, `the download is the Windows program (${(fs.statSync(file).size / 1e6).toFixed(1)} MB, starts “MZ”)`);
