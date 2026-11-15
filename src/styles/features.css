@@ -532,3 +532,31 @@
 /* POS: the line's details box (serial no., warranty…) */
 .pos-note { height: 28px; font-size: 12.5px; margin: 4px 0 2px; padding: 2px 8px; width: 100%; }
 .pos-line > .pos-note { grid-column: 1 / -1; margin: 0; }
+
+/* New item: compact quick-start block (fill from file, goods / service, opening stock, live preview). */
+.item-top { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: var(--sp-4); padding: 16px 20px; border-bottom: 1px solid var(--border); align-items: start; }
+.item-top-main { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.item-top-main .smart-upload { padding: 10px 14px; }
+.item-top-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-3); align-items: end; }
+.item-top-row .field > label { font-size: var(--fs-13); font-weight: 500; color: var(--ink-700); }
+.type-cards.compact { gap: 6px; }
+.type-cards.compact .type-card { padding: 6px 10px; gap: 8px; height: 40px; min-width: 0; }
+.type-cards.compact .type-card > div { display: flex; gap: 6px; align-items: baseline; min-width: 0; white-space: nowrap; }
+.type-cards.compact .stat-icon { width: 26px; height: 26px; }
+.type-cards.compact .type-card span:not(.stat-icon) { font-size: 11px; }
+.item-top-preview { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.ipv-head { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500); }
+.ipv-row { display: flex; gap: 10px; align-items: center; }
+.ipv-row .pv-name { margin: 0; font-size: var(--fs-14); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ipv-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-top-preview .pv-price { margin: 0; padding: 6px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.item-top-preview .pv-amount { font-size: var(--fs-18, 18px); }
+.item-top-preview .pv-stats { margin: 0; }
+@media (max-width: 1100px) { .item-top { grid-template-columns: 1fr; } .item-top-row { grid-template-columns: 1fr 1fr; } .item-top-row > :first-child { grid-column: 1 / -1; } }
+
+/* Form fields line up: inputs and their side buttons share one height; the hint never pushes a neighbour. */
+.input-with-btn { align-items: stretch; }
+.input-with-btn > .btn { height: auto; min-height: 0; align-self: stretch; white-space: nowrap; }
+.form-grid { align-items: start; }
+.form-grid > .suggest { margin-top: -6px; }
+.item-top .su-note { display: none; }

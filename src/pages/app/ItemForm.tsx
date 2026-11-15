@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Camera, Package, Wrench, Trash2, Wand2, Sparkles, Loader2, CheckCircle2, Circle, Percent, Info, Boxes, Tag, IndianRupee, ScanBarcode } from 'lucide-react';
+import { ArrowLeft, Camera, Package, Wrench, Trash2, Wand2, Sparkles, Loader2, CheckCircle2, Circle, Percent, Info, Boxes, Tag, ScanBarcode } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
 import { useBranches, useItemFacets, useItems, useMut, useOrg, useTaxSlabs } from '@/api/hooks';
 import { templateByKey } from '../../../shared/templates';
@@ -29,11 +29,6 @@ interface Draft {
 
 const GOODS_UNITS = ['pcs', 'nos', 'box', 'pack', 'kg', 'g', 'ltr', 'ml', 'mtr', 'ream', 'dozen', 'set', 'pair'];
 const SERVICE_UNITS = ['job', 'hour', 'day', 'visit', 'month', 'year'];
-const TIERS = [
-  { k: 'sp1', label: 'SP1 · Standard', hint: 'Walk-in & regular customers', color: '#c75f71' },
-  { k: 'sp2', label: 'SP2 · Loyal', hint: 'Repeat & loyal customers', color: '#7d8c77' },
-  { k: 'sp3', label: 'SP3 · New', hint: 'First-time / promotional', color: '#c98a3c' },
-] as const;
 
 /** Internal EAN-13 (prefix 2 = in-store use) with a valid check digit, not used by another item here. */
 export function generateEan13(existing: Array<{ barcode: string }> = []) {
@@ -144,7 +139,7 @@ export default function ItemForm() {
 
   const checklist = useMemo(() => [
     { label: 'Name', done: !!draft.name.trim() },
-    { label: 'Selling prices', done: num(draft.sp1) > 0 },
+    { label: 'Selling price', done: num(draft.sp1) > 0 },
     { label: 'Cost price', done: cost >= 0 },
     { label: draft.type === 'Goods' ? 'HSN code (for GST returns)' : 'SAC code (for GST returns)', done: /^\d{2,8}$/.test(draft.hsn) },
     { label: 'Photo', done: !!draft.image, optional: true },
@@ -248,7 +243,7 @@ export default function ItemForm() {
     const m = Number(marginPct);
     if (!(cost > 0) || !(m >= 0 && m < 95)) return toast('info', 'Enter the cost price first', 'Prices are calculated from cost + margin.');
     const sp = (pct: number) => String(Math.ceil(cost / (1 - pct / 100)));
-    setDraft((d) => ({ ...d, sp1: sp(m), sp2: sp(Math.max(0, m - 5)), sp3: sp(Math.max(0, m - 2)) }));
+    setDraft((d) => ({ ...d, sp1: sp(m), sp2: sp(m), sp3: sp(m) }));
   };
 
   const save = (next: 'list' | 'another' | 'view') => {
@@ -261,7 +256,7 @@ export default function ItemForm() {
     }
     const body: Record<string, unknown> = {
       type: draft.type, name: draft.name.trim(), sku: draft.sku.trim(), barcode: draft.barcode, unit: draft.unit, hsn: draft.hsn, cost,
-      sp1: num(draft.sp1), sp2: draft.sp2.trim() === '' ? num(draft.sp1) : num(draft.sp2), sp3: draft.sp3.trim() === '' ? num(draft.sp1) : num(draft.sp3), taxSlabId: draft.taxSlabId, reorderLevel: Number(draft.reorderLevel || 0),
+      sp1: num(draft.sp1), sp2: num(draft.sp1), sp3: num(draft.sp1), taxSlabId: draft.taxSlabId, reorderLevel: Number(draft.reorderLevel || 0),
       trackBatches: draft.type === 'Goods' && draft.trackBatches, trackSerials: draft.type === 'Goods' && draft.trackSerials, description: draft.description, category: draft.category.trim(), brand: draft.brand.trim(),
       image: draft.image, mrp: draft.mrp.trim() === '' ? null : num(draft.mrp),
       extra: Object.fromEntries(tradeFields.filter((f) => (draft.extra[f.key] ?? '').trim() !== '').map((f) => [f.key, f.type === 'number' ? Number(draft.extra[f.key]) : draft.extra[f.key]!.trim()])),
@@ -323,24 +318,60 @@ export default function ItemForm() {
 
       <div className="form-layout">
         <div className="card">
-          <div style={{ padding: '16px 20px 0' }}>
-            <SmartUpload kind="item" toRows={fillRows} onApply={applyFill}
-              title="Fill from a PDF or photo"
-              hint="Product sheet, price list, supplier invoice or a photo of the box or label. A photo also becomes the product picture." />
-            {keepFile && <div className="small muted" style={{ marginTop: 6 }}>{keepFile.file.name} will be attached to the item when you save. <button className="btn btn-ghost btn-sm" onClick={() => setKeepFile(null)}>Don’t attach</button></div>}
-          </div>
-          <Section n={1} title="What are you adding?" sub="Goods have stock. Services (repairs, installation, AMC) don’t.">
-            <div className="type-cards">
-              {([['Goods', Package, 'Products you buy & sell', 'Tracks stock, batches & barcodes'], ['Services', Wrench, 'Work you charge for', 'No stock — billed per job, hour…']] as const).map(([t, Icon, title, sub]) => (
-                <button key={t} type="button" className={`type-card ${draft.type === t ? 'active' : ''}`} onClick={() => setDraft((d) => ({ ...d, type: t, unit: t === 'Goods' ? (GOODS_UNITS.includes(d.unit) ? d.unit : 'pcs') : SERVICE_UNITS.includes(d.unit) ? d.unit : 'job' }))}>
-                  <span className={`stat-icon ${t === 'Goods' ? 'tone-blue' : 'tone-violet'}`}><Icon size={19} /></span>
-                  <div><strong>{t === 'Goods' ? 'Goods' : 'Service'} · {title}</strong><span>{sub}</span></div>
-                </button>
-              ))}
+          {/* Quick start: fill from a file, goods or service, opening stock and the live preview, in one compact block. */}
+          <div className="item-top">
+            <div className="item-top-main">
+              <SmartUpload kind="item" toRows={fillRows} onApply={applyFill}
+                title="Fill from a PDF or photo"
+                hint="Product sheet, supplier invoice or a photo of the box (the photo becomes the product picture)." />
+              {keepFile && <div className="small muted" style={{ marginTop: 6 }}>{keepFile.file.name} will be attached to the item when you save. <button className="btn btn-ghost btn-sm" onClick={() => setKeepFile(null)}>Don’t attach</button></div>}
             </div>
-          </Section>
+            <div className="item-top-preview" aria-label="Live preview">
+              <div className="ipv-head">Live preview</div>
+              <div className="ipv-row">
+                <Thumb name={draft.name || 'New item'} image={draft.image} size={52} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="pv-name">{draft.name || <span className="muted">Item name</span>}</div>
+                  <div className="small muted ipv-sub">{[draft.category, draft.brand, draft.sku].filter(Boolean).join(' · ') || (draft.type === 'Goods' ? 'Goods' : 'Service')}</div>
+                </div>
+              </div>
+              <div className="pv-price">
+                <div><span className="pv-amount">{sp1 > 0 ? money(sp1) : '₹ —'}</span><span className="small muted"> / {draft.unit}</span></div>
+                {Number.isFinite(inclusive) && <div className="small muted">{money(inclusive)} incl. {slab?.rate}% GST</div>}
+                {draft.mrp && num(draft.mrp) > sp1 && sp1 > 0 && <div className="small" style={{ color: 'var(--green-700)', fontWeight: 600 }}>{Math.round(((num(draft.mrp) - sp1) / num(draft.mrp)) * 100)}% off MRP {money(num(draft.mrp))}</div>}
+              </div>
+              <div className="pv-stats">
+                <div><span>Margin</span><strong className={marginOf(sp1) !== null && marginOf(sp1)! < 0 ? 'neg' : ''}>{marginOf(sp1) ?? '—'}{marginOf(sp1) !== null && '%'}</strong></div>
+                {draft.type === 'Goods' && <div><span>{editing ? 'In stock' : 'Opening'}</span><strong>{editing ? items.find((i) => i.id === id)?.stock ?? 0 : Number(draft.openingStock || 0)} {draft.unit}</strong></div>}
+                <div><span>GST</span><strong>{slab ? `${slab.rate}%` : '—'}</strong></div>
+              </div>
+            </div>
+            <div className="item-top-row">
+              <div className="field">
+                <label>What are you adding?</label>
+                <div className="type-cards compact" role="radiogroup" aria-label="Goods or service">
+                  {([['Goods', Package, 'Goods · has stock'], ['Services', Wrench, 'Service · no stock']] as const).map(([t, Icon, title]) => (
+                    <button key={t} type="button" role="radio" aria-checked={draft.type === t} className={`type-card ${draft.type === t ? 'active' : ''}`} onClick={() => setDraft((d) => ({ ...d, type: t, unit: t === 'Goods' ? (GOODS_UNITS.includes(d.unit) ? d.unit : 'pcs') : SERVICE_UNITS.includes(d.unit) ? d.unit : 'job' }))}>
+                      <span className={`stat-icon ${t === 'Goods' ? 'tone-blue' : 'tone-violet'}`}><Icon size={16} /></span>
+                      <div><strong>{title}</strong></div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {draft.type === 'Goods' && !editing && (
+                <>
+                  <Field label="Opening stock">
+                    <div className="input-addon"><span>{draft.unit}</span><input className="input" type="number" min={0} value={draft.openingStock} onChange={(ev) => set('openingStock', ev.target.value)} placeholder="0" aria-label="Opening stock" /></div>
+                  </Field>
+                  <Field label="Stored at">
+                    <select className="select" value={draft.branchId} onChange={(ev) => set('branchId', ev.target.value)} aria-label="Stored at">{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+                  </Field>
+                </>
+              )}
+            </div>
+          </div>
 
-          <Section n={2} title="Basic details" sub="How the item appears on invoices, search and the POS screen.">
+          <Section n={1} title="Basic details" sub="How the item appears on invoices, search and the POS screen.">
             <div className="item-basic">
               <div
                 className={`img-drop ${dragOver ? 'over' : ''}`}
@@ -370,15 +401,15 @@ export default function ItemForm() {
                     {aiOn && <button type="button" className="btn btn-soft btn-sm addon-btn ai-suggest" onClick={aiFill} disabled={aiBusy} title="Suggest HSN, GST rate, category and description">{aiBusy ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />} Fill with AI</button>}
                   </div>
                 </Field>
-                <Field label="Category" hint={!draft.category && facets?.categories.length ? undefined : 'Group similar items for filters & reports'}>
+                <Field label="Category" hint="Group similar items for filters & reports">
                   <input className="input" list="dl-categories" value={draft.category} onChange={(ev) => set('category', ev.target.value)} placeholder="e.g. Accessories" />
                   <datalist id="dl-categories">{facets?.categories.map((c) => <option key={c.name} value={c.name} />)}</datalist>
-                  {!draft.category && !!facets?.categories.length && <div className="suggest">{facets.categories.slice(0, 6).map((c) => <button key={c.name} type="button" onClick={() => set('category', c.name)}>{c.name}</button>)}</div>}
                 </Field>
-                <Field label="Brand">
+                <Field label="Brand" hint="Shown on labels and in search">
                   <input className="input" list="dl-brands" value={draft.brand} onChange={(ev) => set('brand', ev.target.value)} placeholder="e.g. Logitech" />
                   <datalist id="dl-brands">{facets?.brands.map((c) => <option key={c.name} value={c.name} />)}</datalist>
                 </Field>
+                {!draft.category && !!facets?.categories.length && <div className="suggest span-all" aria-label="Pick a category">{facets.categories.slice(0, 8).map((c) => <button key={c.name} type="button" onClick={() => set('category', c.name)}>{c.name}</button>)}</div>}
               </div>
             </div>
 
@@ -423,9 +454,9 @@ export default function ItemForm() {
             </div>
           </Section>
 
-          <Section n={3} title="Pricing" sub="Three price levels let you charge regulars, loyal customers and new customers differently."
+          <Section n={2} title="Pricing" sub="What you pay, what you sell for, and the GST rate."
             right={(
-              <div className="quickfill" title="Fill all three prices from cost + margin">
+              <div className="quickfill" title="Selling price from cost + margin">
                 <Sparkles size={14} />
                 <span className="small">Margin</span>
                 <input className="input" value={marginPct} onChange={(ev) => setMarginPct(ev.target.value.replace(/[^\d.]/g, ''))} aria-label="Target margin %" />
@@ -433,12 +464,16 @@ export default function ItemForm() {
                 <button type="button" className="btn btn-soft btn-sm" onClick={fillFromMargin}>Auto-fill</button>
               </div>
             )}>
-            <div className="form-grid cols-3">
+            <div className="form-grid">
               <Field label="Cost price" required error={e('cost')} hint="What you pay per unit">
-                <div className="input-addon"><span>₹</span><input className={`input ${e('cost') ? 'invalid' : ''}`} type="number" min={0} value={draft.cost} onChange={(ev) => set('cost', ev.target.value)} placeholder="0.00" /></div>
+                <div className="input-addon"><span>₹</span><input className={`input ${e('cost') ? 'invalid' : ''}`} type="number" min={0} value={draft.cost} onChange={(ev) => set('cost', ev.target.value)} placeholder="0.00" aria-label="Cost price" /></div>
+              </Field>
+              <Field label="Selling price" required error={e('sp1')} hint={marginOf(sp1) !== null ? <span className={`margin-chip ${marginOf(sp1)! < 0 ? 'bad' : marginOf(sp1)! < 10 ? 'low' : 'good'}`}>{marginOf(sp1)! < 0 ? 'Loss' : 'Margin'} {marginOf(sp1)}% · {money(sp1 - cost)}/unit</span> : 'What the customer pays per unit'}>
+                {/* One price: the SP2 / SP3 levels are kept equal to it. */}
+                <div className="input-addon"><span>₹</span><input className={`input ${e('sp1') ? 'invalid' : ''}`} type="number" min={0} value={draft.sp1} onChange={(ev) => setDraft((d) => ({ ...d, sp1: ev.target.value, sp2: ev.target.value, sp3: ev.target.value }))} placeholder="0.00" aria-label="Selling price" /></div>
               </Field>
               <Field label="MRP" error={e('mrp')} hint="Printed max retail price (optional)">
-                <div className="input-addon"><span>₹</span><input className="input" type="number" min={0} value={draft.mrp} onChange={(ev) => set('mrp', ev.target.value)} placeholder="—" /></div>
+                <div className="input-addon"><span>₹</span><input className="input" type="number" min={0} value={draft.mrp} onChange={(ev) => set('mrp', ev.target.value)} placeholder="—" aria-label="MRP" /></div>
               </Field>
               <Field label="GST rate" required error={e('taxSlabId')} hint={draft.type === 'Goods' ? 'Rates come from the platform Tax Lab' : 'Most services are 18%'}>
                 <div className="rate-pills">
@@ -446,42 +481,14 @@ export default function ItemForm() {
                 </div>
               </Field>
             </div>
-            <div className="tier-grid">
-              {TIERS.map((t) => {
-                const v = num(draft[t.k]);
-                const m = marginOf(v);
-                return (
-                  <div key={t.k} className="price-tier" style={{ borderTop: `3px solid ${t.color}` }}>
-                    <div className="pt-label"><span className="pt-dot" style={{ background: t.color }} />{t.label}{t.k === 'sp1' && <span className="req">*</span>}</div>
-                    <div className="input-addon"><span>₹</span><input className={`input ${e(t.k) ? 'invalid' : ''}`} type="number" min={0} value={draft[t.k]} onChange={(ev) => set(t.k, ev.target.value)} placeholder={t.k === 'sp1' ? '0.00' : sp1 > 0 ? `${sp1} (same as SP1)` : 'Same as SP1'} aria-label={t.label} /></div>
-                    <div className="small muted" style={{ marginTop: 6 }}>{t.hint}</div>
-                    {m !== null && <span className={`margin-chip ${m < 0 ? 'bad' : m < 10 ? 'low' : 'good'}`}>{m < 0 ? 'Loss' : 'Margin'} {m}% · {money(v - cost)}/unit</span>}
-                    {e(t.k) && <div className="field-error" style={{ marginTop: 6 }}>{e(t.k)}</div>}
-                  </div>
-                );
-              })}
-            </div>
-            {sp1 > 0 && !draft.sp2 && !draft.sp3 && (
-              <button type="button" className="link-btn" style={{ marginTop: 10 }} onClick={() => setDraft((d) => ({ ...d, sp2: d.sp1, sp3: d.sp1 }))}>Use {money(sp1)} for all three levels</button>
-            )}
             <Field label={draft.type === 'Goods' ? 'HSN code' : 'SAC code'} error={e('hsn')} hint="Needed for the GSTR-1 HSN summary. Find it on your purchase bill." className="mt-16" >
               <input className={`input ${e('hsn') ? 'invalid' : ''}`} style={{ maxWidth: 260 }} value={draft.hsn} onChange={(ev) => set('hsn', ev.target.value.replace(/\D/g, ''))} placeholder={draft.type === 'Goods' ? 'e.g. 8471' : 'e.g. 9987'} maxLength={8} inputMode="numeric" />
             </Field>
           </Section>
 
           {draft.type === 'Goods' && (
-            <Section n={4} title="Inventory" sub="Opening stock, low-stock alerts and batch / expiry tracking.">
+            <Section n={3} title="Inventory" sub="Low-stock alerts, batch / expiry and serial number tracking.">
               <div className="form-grid">
-                {!editing && (
-                  <>
-                    <Field label="Opening stock" hint="How many you have right now">
-                      <div className="input-addon"><span>{draft.unit}</span><input className="input" type="number" min={0} value={draft.openingStock} onChange={(ev) => set('openingStock', ev.target.value)} placeholder="0" /></div>
-                    </Field>
-                    <Field label="Stored at">
-                      <select className="select" value={draft.branchId} onChange={(ev) => set('branchId', ev.target.value)}>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
-                    </Field>
-                  </>
-                )}
                 <Field label="Low-stock alert at" hint="We’ll remind you to reorder at this level">
                   <div className="input-addon"><span>{draft.unit}</span><input className="input" type="number" min={0} value={draft.reorderLevel} onChange={(ev) => set('reorderLevel', ev.target.value)} /></div>
                 </Field>
@@ -505,31 +512,14 @@ export default function ItemForm() {
           )}
 
           {editing && current && current.type === 'Goods' && !current.parentId && (
-            <Section n={5} title="Variants" sub="Sizes, colours or other options, each with its own stock, SKU and price.">
+            <Section n={4} title="Variants" sub="Sizes, colours or other options, each with its own stock, SKU and price.">
               <VariantsSection item={current} items={items} />
             </Section>
           )}
         </div>
 
         <aside className="sticky-side">
-          <div className="card preview-card">
-            <div className="small muted strong" style={{ textTransform: 'uppercase', letterSpacing: '.08em', fontSize: 11, marginBottom: 10 }}>Live preview</div>
-            <Thumb large name={draft.name || 'New item'} image={draft.image} />
-            <div className="pv-name">{draft.name || <span className="muted">Item name</span>}</div>
-            <div className="small muted">{[draft.category, draft.brand, draft.sku].filter(Boolean).join(' · ') || (draft.type === 'Goods' ? 'Goods' : 'Service')}</div>
-            <div className="pv-price">
-              <div><span className="pv-amount">{sp1 > 0 ? money(sp1) : '₹ —'}</span><span className="small muted"> / {draft.unit}</span></div>
-              {Number.isFinite(inclusive) && <div className="small muted">{money(inclusive)} incl. {slab?.rate}% GST</div>}
-              {draft.mrp && num(draft.mrp) > sp1 && sp1 > 0 && <div className="small" style={{ color: 'var(--green-700)', fontWeight: 600 }}>{Math.round(((num(draft.mrp) - sp1) / num(draft.mrp)) * 100)}% off MRP {money(num(draft.mrp))}</div>}
-            </div>
-            <div className="pv-stats">
-              <div><span>Margin</span><strong className={marginOf(sp1) !== null && marginOf(sp1)! < 0 ? 'neg' : ''}>{marginOf(sp1) ?? '—'}{marginOf(sp1) !== null && '%'}</strong></div>
-              {draft.type === 'Goods' && <div><span>{editing ? 'In stock' : 'Opening'}</span><strong>{editing ? items.find((i) => i.id === id)?.stock ?? 0 : Number(draft.openingStock || 0)} {draft.unit}</strong></div>}
-              <div><span>GST</span><strong>{slab ? `${slab.rate}%` : '—'}</strong></div>
-            </div>
-          </div>
-
-          <div className="card" style={{ marginTop: 16, padding: 18 }}>
+          <div className="card" style={{ padding: 18 }}>
             <div className="row between" style={{ marginBottom: 10 }}>
               <strong style={{ color: 'var(--ink-900)', fontSize: 14 }}>Item completeness</strong>
               <span className="strong" style={{ color: completeness === 100 ? 'var(--green-700)' : 'var(--brand-700)' }}>{completeness}%</span>
@@ -551,7 +541,6 @@ export default function ItemForm() {
           <div className="card tip-card" style={{ marginTop: 16 }}>
             <div className="row" style={{ gap: 8, marginBottom: 6 }}>{draft.type === 'Goods' ? <Boxes size={16} /> : <Tag size={16} />}<strong>Good to know</strong></div>
             <ul>
-              <li><IndianRupee size={12} /> The customer’s price level (SP1/2/3) is picked automatically on invoices.</li>
               <li><ScanBarcode size={12} /> After saving, select items on the list to print barcode labels.</li>
               <li><Boxes size={12} /> Stock goes down on each invoice and up when you receive a purchase order.</li>
             </ul>
