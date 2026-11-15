@@ -1,0 +1,47 @@
+# Corpus360 on one DigitalOcean Droplet: the app (built from the repo's Dockerfile) and PostgreSQL.
+# Settings and secrets come from /opt/corpus360/.env, written once by setup.sh. Never commit that file.
+name: corpus360
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ledgerly
+      POSTGRES_USER: ledgerly
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledgerly -d ledgerly"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    shm_size: 128mb
+
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: corpus360-app:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: /opt/corpus360/.env
+    environment:
+      DATABASE_URL: postgres://ledgerly:${POSTGRES_PASSWORD}@db:5432/ledgerly
+      NODE_ENV: production
+      PORT: "10000"
+      # The database is backed up nightly by the host (see update.sh / setup.sh), not inside the container.
+      BACKUPS_ENABLED: "0"
+    ports:
+      - "80:10000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:10000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+volumes:
+  pgdata:
