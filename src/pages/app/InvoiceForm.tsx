@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle } from 'lucide-react';
+import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle, Wand2, Mic, FileUp } from 'lucide-react';
 import { api, ApiError, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useInvoice, useItems, useMut, useNextInvoiceNumber, useOrg, useSalesOrders, pickable } from '@/api/hooks';
 import { type Customer, type Invoice } from '@/api/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { ConfirmModal, Field, PageHeader, Toggle } from '@/components/ui';
+import { ConfirmModal, Field, Modal, PageHeader, Toggle } from '@/components/ui';
+import { Menu } from '@/components/Menu';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { BillOptionsCard, convertRates, LineItemsEditor, priceFor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type BillOptions, type DraftLine } from '@/components/LineItems';
 import { useShortcuts } from '@/components/useShortcuts';
@@ -165,6 +166,7 @@ function Form({ existing }: { existing?: Invoice }) {
     if (b.notes) setNotes((n) => [n, b.notes].filter(Boolean).join('\n'));
   };
   const [newCust, setNewCust] = useState(false);
+  const [quick, setQuick] = useState<null | 'speak' | 'file'>(null);
   const [creditPrompt, setCreditPrompt] = useState<{ mode: 'issue' | 'issue-pay'; message: string } | null>(null);
   const save = (mode: 'draft' | 'issue' | 'issue-pay', overrideCreditLimit = false) => {
     setTouched(true);
@@ -197,6 +199,17 @@ function Form({ existing }: { existing?: Invoice }) {
         crumbs={<><Link to="/app/sales/invoices">Invoices</Link> / {existing ? existing.number ?? 'Draft' : 'New'}</>}
         title={existing ? `Edit ${existing.number ?? 'draft'}` : 'New Invoice'}
         subtitle={fromSO ? `Converting ${fromSO.kind === 'quote' ? 'quote' : 'sales order'} ${fromSO.number}` : `Financial year ${fyLabel(date, me.platform.fyStartMonth)}`}
+        actions={!existing ? (
+          // "Type or speak the bill" and "Fill from a PO or enquiry" live here, out of the way of the form.
+          <Menu label="Quick fill" icon={Wand2} align="right">
+            {(close) => (
+              <>
+                {aiOn && <button type="button" className="dropdown-item" role="menuitem" onClick={() => { close(); setQuick('speak'); }}><Mic size={16} /> Type or speak the bill</button>}
+                <button type="button" className="dropdown-item" role="menuitem" onClick={() => { close(); setQuick('file'); }}><FileUp size={16} /> Fill from a PO or enquiry (PDF / photo)</button>
+              </>
+            )}
+          </Menu>
+        ) : undefined}
       />
 
       {isIssued && (
@@ -207,14 +220,7 @@ function Form({ existing }: { existing?: Invoice }) {
 
       <div className="card">
         <div className="card-body">
-          {!existing && aiOn && <div style={{ marginBottom: 14 }}><QuickBill context="invoice" onApply={applyQuick} /></div>}
-          {!existing && (
-            <div style={{ marginBottom: 16 }}>
-              <SmartUpload kind="invoice" toRows={fillRows} onApply={(k, r, f) => void applyFill(k, r, f)} extra={docLines.extra}
-                title="Fill from a purchase order or enquiry" hint="Upload the customer’s PO, enquiry or a photo of their list. The customer and items are filled in; the file is kept with the invoice." />
-              {invFile && <div className="small muted" style={{ marginTop: 6 }}>{invFile.file.name} will be attached to this invoice.</div>}
-            </div>
-          )}
+          {invFile && <div className="small muted" style={{ marginBottom: 12 }}><FileUp size={13} style={{ verticalAlign: -2 }} /> {invFile.file.name} will be attached to this invoice.</div>}
           <div className="form-grid">
             <Field label="Customer" required error={(touched ? errs.customer : '') || serverErr.customerId}>
               <div className="row" style={{ gap: 8 }}>
@@ -338,6 +344,13 @@ function Form({ existing }: { existing?: Invoice }) {
       <ConfirmModal open={!!creditPrompt} onClose={() => setCreditPrompt(null)} title="Over the credit limit" confirmLabel="Issue anyway"
         text={<>{creditPrompt?.message} Issue the invoice anyway? This is recorded in the audit log.</>}
         onConfirm={() => { const m = creditPrompt!.mode; setCreditPrompt(null); save(m, true); }} />
+      <Modal open={quick === 'speak'} onClose={() => setQuick(null)} size="lg" title="Type or speak the bill" subtitle="Say or type the items, customer, discount and payment. The invoice is filled in for you to check.">
+        {quick === 'speak' && <QuickBill context="invoice" onApply={(b) => { applyQuick(b); setQuick(null); }} />}
+      </Modal>
+      <Modal open={quick === 'file'} onClose={() => setQuick(null)} size="lg" title="Fill from a purchase order or enquiry" subtitle="Upload the customer’s PO, enquiry or a photo of their list. The customer and items are filled in; the file is kept with the invoice.">
+        {quick === 'file' && <SmartUpload kind="invoice" toRows={fillRows} onApply={(k, r, f) => { void applyFill(k, r, f); setQuick(null); }} extra={docLines.extra}
+          title="Choose a file" hint="PDF, photo or screenshot. You check what was read before it fills the invoice." />}
+      </Modal>
       <QuickCustomerModal open={newCust} onClose={() => setNewCust(false)} defaultState={org?.state ?? ''}
         onCreated={(c) => { qc.setQueryData<Customer[]>(['customers'], (list) => (list ? [...list.filter((x) => x.id !== c.id), c] : [c])); selectCustomer(c.id, c); }} />
     </div>

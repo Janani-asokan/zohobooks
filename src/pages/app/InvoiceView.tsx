@@ -1,7 +1,7 @@
 import { PUBLIC_ORIGIN } from '@/lib/platform';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, ChevronDown, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy, Check } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBankAccounts, useBranches, useInvoice, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { billPrint, billPrintName, sameBill, shopBill, preparePrint, printInvoice, printRoute, setBillPrinter, type BillPrinter, type PrintPaper, type Roll } from '@/lib/printInvoice';
@@ -14,7 +14,7 @@ import { ConfirmModal, EmptyState, Field, Modal, Segmented } from '@/components/
 import { StatusBadge } from '@/components/StatusBadge';
 import { TaxInvoice, printOrgFrom, type PrintBundle } from '@/components/TaxInvoice';
 import { Attachments } from '@/components/Attachments';
-import { useClickOutside } from '@/components/useClickOutside';
+import { Menu } from '@/components/Menu';
 import { fmtDate, money, todayISO } from '@/lib/format';
 import { useQuery } from '@tanstack/react-query';
 import { useAiEnabled, useAiStatus } from '@/components/Assistant';
@@ -37,18 +37,6 @@ export const waLink = (phone: string, text: string) => {
   const digits = phone.replace(/\D/g, '').slice(-10);
   return `https://wa.me/${digits.length === 10 ? '91' + digits : ''}?text=${encodeURIComponent(text)}`;
 };
-
-function Menu({ label, icon: Icon, children, primary, onOpen }: { label: string; icon: typeof Share2; children: (close: () => void) => React.ReactNode; primary?: boolean; onOpen?: () => void }) {
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
-  const ref = useClickOutside<HTMLDivElement>(close, open);
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button className={`btn ${primary ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { if (!open) onOpen?.(); setOpen((o) => !o); }} aria-haspopup="menu" aria-expanded={open}><Icon size={15} /> {label} <ChevronDown size={14} /></button>
-      {open && <div className="dropdown" role="menu">{children(close)}</div>}
-    </div>
-  );
-}
 
 export default function InvoiceView() {
   const { id } = useParams();
