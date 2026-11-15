@@ -2,7 +2,7 @@
 # One-time setup of a fresh Ubuntu 24.04 Droplet for Corpus360. Run as root in the Droplet Console:
 #   curl -fsSL https://raw.githubusercontent.com/Janani-asokan/zohobooks/claude/blissful-hamilton-n7kcit/deploy/digitalocean/setup.sh | bash
 # Safe to run again: it keeps the existing secrets and data.
-set -euo pipefail
+set -uo pipefail
 REPO=https://github.com/Janani-asokan/zohobooks.git
 BRANCH=claude/blissful-hamilton-n7kcit
 ROOT=/opt/corpus360
@@ -10,7 +10,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 echo "==> 1/6 Swap (the build needs more than 1 GB of memory)"
 if ! swapon --show | grep -q /swapfile; then
-  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
+  fallocate -l 3G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
   grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
 fi
 
@@ -52,36 +52,20 @@ fi
 install -m 755 "$ROOT/src/deploy/digitalocean/update.sh" /usr/local/bin/corpus360-update
 install -m 755 "$ROOT/src/deploy/digitalocean/backup.sh" /usr/local/bin/corpus360-backup
 
-echo "==> 6/6 Build and start (10-20 minutes the first time)"
-cd "$ROOT/src/deploy/digitalocean"
-docker compose --env-file "$ROOT/.env" build app
-# Optional one-time import: $ROOT/restore-from holds a database URL (e.g. Render's external URL). Its data is copied
-# into the new, empty database before the app starts for the first time; then the file is removed.
-if [ -s "$ROOT/restore-from" ]; then
-  echo "==> Copying the existing database"
-  docker compose --env-file "$ROOT/.env" up -d --wait db
-  mkdir -p "$ROOT/backups"
-  docker compose --env-file "$ROOT/.env" exec -T -e SRC="$(cat "$ROOT/restore-from")" db \
-    sh -c 'pg_dump "$SRC" -Fc --no-owner --no-acl' > "$ROOT/backups/imported-$(date +%F).dump"
-  docker compose --env-file "$ROOT/.env" exec -T db pg_restore -U ledgerly -d ledgerly --no-owner --no-acl --exit-on-error < "$ROOT/backups/imported-$(date +%F).dump"
-  shred -u "$ROOT/restore-from" 2>/dev/null || rm -f "$ROOT/restore-from"
-  echo "    copied ($(du -h "$ROOT/backups/imported-$(date +%F).dump" | cut -f1)); a copy is kept in $ROOT/backups"
-fi
-docker compose --env-file "$ROOT/.env" up -d
-
-# Auto-update every 5 minutes, nightly backup at 02:30.
+echo "==> 6/6 Auto-update (heals and deploys every 5 minutes), nightly backup, then build and start"
+install -m 755 "$ROOT/src/deploy/digitalocean/restore.sh" /usr/local/bin/corpus360-restore
 cat > /etc/systemd/system/corpus360-update.service <<UNIT
 [Unit]
-Description=Corpus360: deploy new commits from GitHub
+Description=Corpus360: deploy new commits from GitHub, heal the app
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/corpus360-update
 UNIT
 cat > /etc/systemd/system/corpus360-update.timer <<UNIT
 [Unit]
-Description=Corpus360: check GitHub for new commits every 5 minutes
+Description=Corpus360: check every 5 minutes
 [Timer]
-OnBootSec=2min
+OnBootSec=5min
 OnUnitActiveSec=5min
 [Install]
 WantedBy=timers.target
@@ -90,6 +74,11 @@ cat > /etc/cron.d/corpus360-backup <<CRON
 30 2 * * * root /usr/local/bin/corpus360-backup >> /var/log/corpus360-backup.log 2>&1
 CRON
 systemctl daemon-reload
+# The timer starts after the first build, so the two never run at once.
+cd "$ROOT/src/deploy/digitalocean"
+docker compose --env-file "$ROOT/.env" build app || echo "first build failed; the 5-minute timer retries"
+/usr/local/bin/corpus360-restore || echo "database copy not done; the 5-minute timer retries"
+docker compose --env-file "$ROOT/.env" up -d || true
 systemctl enable --now corpus360-update.timer >/dev/null
 
 echo "==> Waiting for the app to answer"
