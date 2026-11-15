@@ -344,8 +344,8 @@ function Form({ existing }: { existing?: Invoice }) {
       <ConfirmModal open={!!creditPrompt} onClose={() => setCreditPrompt(null)} title="Over the credit limit" confirmLabel="Issue anyway"
         text={<>{creditPrompt?.message} Issue the invoice anyway? This is recorded in the audit log.</>}
         onConfirm={() => { const m = creditPrompt!.mode; setCreditPrompt(null); save(m, true); }} />
-      <Modal open={quick === 'speak'} onClose={() => setQuick(null)} size="lg" title="Type or speak the bill" subtitle="Say or type the items, customer, discount and payment. The invoice is filled in for you to check.">
-        {quick === 'speak' && <QuickBill context="invoice" onApply={(b) => { applyQuick(b); setQuick(null); }} />}
+      <Modal open={quick === 'speak'} onClose={() => setQuick(null)} size="lg" title="Type or speak the bill" subtitle="Say or type the items, customer, discount and payment. AI finds your items and customer and fills the invoice for you to check.">
+        {quick === 'speak' && <QuickBill context="invoice" bare onApply={(b) => { applyQuick(b); setQuick(null); }} />}
       </Modal>
       <Modal open={quick === 'file'} onClose={() => setQuick(null)} size="lg" title="Fill from a purchase order or enquiry" subtitle="Upload the customer’s PO, enquiry or a photo of their list. The customer and items are filled in; the file is kept with the invoice.">
         {quick === 'file' && <SmartUpload kind="invoice" toRows={fillRows} onApply={(k, r, f) => { void applyFill(k, r, f); setQuick(null); }} extra={docLines.extra}

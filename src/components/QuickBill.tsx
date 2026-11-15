@@ -20,7 +20,8 @@ const SpeechRecognition = (typeof window !== 'undefined' && ((window as any).Spe
 const LANGS = [['en-IN', 'English'], ['hi-IN', 'हिन्दी'], ['ta-IN', 'தமிழ்'], ['te-IN', 'తెలుగు'], ['kn-IN', 'ಕನ್ನಡ'], ['ml-IN', 'മലയാളം'], ['mr-IN', 'मराठी'], ['gu-IN', 'ગુજરાતી'], ['bn-IN', 'বাংলা']] as const;
 
 /** Type or say the bill in plain words ("3 Logitech mouse and a Dell monitor for Nila Textiles, 5% off, UPI"); AI fills the form. */
-export function QuickBill({ context, onApply, compact }: { context: 'invoice' | 'pos'; onApply: (b: ParsedBill) => void; compact?: boolean }) {
+/** `bare`: inside a popup that already shows the title, so no title, icon or frame of its own. */
+export function QuickBill({ context, onApply, compact, bare }: { context: 'invoice' | 'pos'; onApply: (b: ParsedBill) => void; compact?: boolean; bare?: boolean }) {
   const toast = useToast();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -62,12 +63,12 @@ export function QuickBill({ context, onApply, compact }: { context: 'invoice' | 
   };
 
   return (
-    <div className={`quick-bill ${compact ? 'compact' : ''}`}>
+    <div className={`quick-bill ${compact ? 'compact' : ''} ${bare ? 'bare' : ''}`}>
       <div className="qb-head">
-        <span className="qb-icon"><Wand2 size={16} /></span>
+        {!bare && <span className="qb-icon"><Wand2 size={16} /></span>}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <strong>Type or speak the bill</strong>
-          {!compact && <div className="small muted">e.g. “3 Logitech mouse aur ek Dell monitor for Nila Textiles, 5% off, UPI”. AI finds your items and customer.</div>}
+          {!bare && <strong>Type or speak the bill</strong>}
+          {!compact && <div className="small muted">e.g. “3 Logitech mouse aur ek Dell monitor for Nila Textiles, 5% off, UPI”.{!bare && ' AI finds your items and customer.'}</div>}
         </div>
         {SpeechRecognition && (
           <select className="select qb-lang" value={lang} aria-label="Voice language" onChange={(e) => { setLang(e.target.value); try { localStorage.setItem('c360.voice.lang', e.target.value); } catch { /* private mode */ } }}>
