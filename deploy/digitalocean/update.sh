@@ -10,6 +10,8 @@ healthy() { curl -fsS -m 5 http://127.0.0.1/api/health >/dev/null 2>&1; }
 if [ "$LOCAL" = "$REMOTE" ] && [ "${1:-}" != "--force" ] && healthy && [ ! -s "$ROOT/restore-from" ]; then exit 0; fi
 echo "$(date -Is) updating $LOCAL -> $REMOTE"
 git reset -q --hard "$REMOTE"
+# The app runs as an unprivileged user in the container: the code must be world-readable.
+chmod -R a+rX "$ROOT/src"
 install -m 755 deploy/digitalocean/update.sh /usr/local/bin/corpus360-update
 install -m 755 deploy/digitalocean/backup.sh /usr/local/bin/corpus360-backup
 install -m 755 deploy/digitalocean/restore.sh /usr/local/bin/corpus360-restore

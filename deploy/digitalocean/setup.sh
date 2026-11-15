@@ -3,6 +3,8 @@
 #   curl -fsSL https://raw.githubusercontent.com/Janani-asokan/zohobooks/claude/blissful-hamilton-n7kcit/deploy/digitalocean/setup.sh | bash
 # Safe to run again: it keeps the existing secrets and data.
 set -uo pipefail
+# Files must be readable by the app's own user inside the container (a 077 umask broke the first installs).
+umask 022
 REPO=https://github.com/Janani-asokan/zohobooks.git
 BRANCH=claude/blissful-hamilton-n7kcit
 ROOT=/opt/corpus360
@@ -26,6 +28,7 @@ ufw allow OpenSSH >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/d
 echo "==> 4/6 Code"
 mkdir -p "$ROOT"
 if [ ! -d "$ROOT/src/.git" ]; then git clone -q --branch "$BRANCH" "$REPO" "$ROOT/src"; else git -C "$ROOT/src" pull -q; fi
+chmod -R a+rX "$ROOT/src"
 
 echo "==> 5/6 Settings and secrets (kept in $ROOT/.env)"
 IP=$(curl -fsS http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address || hostname -I | awk '{print $1}')
