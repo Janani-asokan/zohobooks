@@ -87,7 +87,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
   const applySo = async (keys: Set<string>, r: ExtractResult, file: PendingFile) => {
     const c = keys.has('customer') ? matchParty(customerList, r.data.party) : null;
     if (c) setCustomerId(c.id);
-    const tier = (c ?? customer)?.tier ?? 'SP1';
+    const tier = 'SP1' as const; // one selling price for every customer
     if (keys.has('expiry') && r.data.dueDate && r.data.dueDate >= todayISO()) setExpiry(r.data.dueDate);
     if (keys.has('ref') && r.data.documentNumber) setNotes((n) => [n, `Your ref: ${r.data.documentNumber}`].filter(Boolean).join('\n'));
     if (keys.has('lines')) {
@@ -306,7 +306,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
         <div style={{ margin: '18px 0 14px' }}>
           <TaxModeToggle withGst={withGst} onChange={setWithGst} disabled={org?.compositionScheme ? 'Composition scheme' : org && !org.gstin ? 'Add GSTIN in Organization profile' : undefined} />
         </div>
-        <LineItemsEditor lines={lines} onChange={setLines} defaultTier={customer?.tier ?? 'SP1'} withGst={withGst} />
+        <LineItemsEditor lines={lines} onChange={setLines} defaultTier="SP1" withGst={withGst} />
         {touched && errs.lines && <div className="field-error" style={{ marginTop: 8 }}>{errs.lines}</div>}
         <div className="grid-2 mt-16" style={{ alignItems: 'start' }}>
           <Field label="Notes"><textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle } from 'lucide-react';
 import { api, ApiError, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useInvoice, useItems, useMut, useNextInvoiceNumber, useOrg, useSalesOrders, pickable } from '@/api/hooks';
-import { TIER_LABEL, type Customer, type Invoice } from '@/api/types';
+import { type Customer, type Invoice } from '@/api/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -107,11 +107,7 @@ function Form({ existing }: { existing?: Invoice }) {
     setCustomerId(cid);
     const c = fresh ?? customers.find((x) => x.id === cid);
     if (!c) return;
-    // Re-price lines to the customer's default tier.
-    setLines((ls) => ls.map((l) => {
-      const it = items.find((i) => i.id === l.itemId);
-      return { ...l, tier: c.tier, rate: it ? priceFor(it, c.tier, withGst && billOpts.pricesIncludeTax) : l.rate };
-    }));
+    // One selling price for every customer (price tiers are not used): lines keep their rates.
     if (c.type === 'Business' && !gstBlocked) setWithGst(true);
   };
 
@@ -141,7 +137,7 @@ function Form({ existing }: { existing?: Invoice }) {
   };
   const applyFill = async (keys: Set<string>, r: ExtractResult, file: PendingFile) => {
     const c = keys.has('customer') ? matchParty(customers, r.data.party) : null;
-    const tier = (c ?? customer)?.tier ?? 'SP1';
+    const tier = 'SP1' as const; // one selling price for every customer
     if (c) selectCustomer(c.id);
     if (keys.has('ref') && r.data.documentNumber) setNotes((n) => [n, `Your ref: ${r.data.documentNumber}`].filter(Boolean).join('\n'));
     if (keys.has('lines')) {
@@ -156,7 +152,7 @@ function Form({ existing }: { existing?: Invoice }) {
   const applyQuick = (b: ParsedBill) => {
     const c = b.customer ? customers.find((x) => x.id === b.customer!.id) : undefined;
     if (c) selectCustomer(c.id);
-    const tier = (c ?? customer)?.tier ?? 'SP1';
+    const tier = 'SP1' as const; // one selling price for every customer
     const inclusive = b.pricesIncludeTax ?? billOpts.pricesIncludeTax;
     if (b.lines.length) {
       const fresh = b.lines.map((l) => {
@@ -237,7 +233,7 @@ function Form({ existing }: { existing?: Invoice }) {
                     {customer.type === 'Business' ? <Building2 size={18} style={{ color: 'var(--violet-600)' }} /> : <UserRound size={18} className="muted" />}
                     <div className="small" style={{ lineHeight: 1.5 }}>
                       <strong style={{ color: 'var(--ink-900)' }}>{customer.companyName || customer.name}</strong> <span className="chip mono">{customer.customId}</span>
-                      <div className="muted">{customer.type === 'Business' ? `GSTIN ${customer.gstin}` : 'Individual (B2C)'} · {customer.state} · Tier {customer.tier} ({TIER_LABEL[customer.tier]}){customer.due > 0 ? ` · ₹${customer.due.toLocaleString('en-IN')} outstanding` : ''}</div>
+                      <div className="muted">{customer.type === 'Business' ? `GSTIN ${customer.gstin}` : 'Individual (B2C)'} · {customer.state}{customer.due > 0 ? ` · ₹${customer.due.toLocaleString('en-IN')} outstanding` : ''}</div>
                     </div>
                   </div>
                 </div>
@@ -267,7 +263,7 @@ function Form({ existing }: { existing?: Invoice }) {
               {gstBlocked ?? (withGst ? (interState ? 'Inter-state supply → IGST' : 'Intra-state supply → CGST + SGST') : 'Totals shown without any tax')}
             </span>
           </div>
-          <LineItemsEditor lines={lines} onChange={setLines} defaultTier={customer?.tier ?? 'SP1'} withGst={withGst} invalidKeys={touched ? invalidLines : undefined} branchId={branchId} inclusive={withGst && billOpts.pricesIncludeTax} />
+          <LineItemsEditor lines={lines} onChange={setLines} defaultTier="SP1" withGst={withGst} invalidKeys={touched ? invalidLines : undefined} branchId={branchId} inclusive={withGst && billOpts.pricesIncludeTax} />
           {touched && errs.lines && <div className="field-error" style={{ marginTop: 8 }}>{errs.lines}</div>}
 
           <div className="grid-2 mt-24" style={{ alignItems: 'start' }}>

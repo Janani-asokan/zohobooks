@@ -98,7 +98,7 @@ export default function Recurring() {
           <Field label="When generated"><label className="row" style={{ gap: 10, height: 40 }}><Toggle checked={f.autoIssue} onChange={(v) => setF({ ...f, autoIssue: v })} label={<span className="small">{f.autoIssue ? 'Issue automatically' : 'Save as draft for review'}</span>} /></label></Field>
         </div>
         <div style={{ margin: '18px 0 14px' }}><TaxModeToggle withGst={f.withGst} onChange={(v) => setF({ ...f, withGst: v })} disabled={org?.compositionScheme ? 'Composition scheme' : org && !org.gstin ? 'Add GSTIN first' : undefined} /></div>
-        <LineItemsEditor lines={lines} onChange={setLines} defaultTier={customer?.tier ?? 'SP1'} withGst={f.withGst} />
+        <LineItemsEditor lines={lines} onChange={setLines} defaultTier="SP1" withGst={f.withGst} />
         <div className="grid-2 mt-16" style={{ alignItems: 'start' }}>
           <Field label="Notes on each invoice"><textarea className="textarea" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
           <TotalsPanel lines={calc} withGst={f.withGst} interState={!!org && !!customer && isInterState(org.state, customer.state || org.state)} />

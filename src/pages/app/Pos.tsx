@@ -13,7 +13,6 @@ import { useOnline } from '@/components/useOnline';
 import { OfflineBillsModal, useOfflineBills } from '@/components/OfflineBills';
 import { withPrintDefaults, type PaperSize } from '../../../shared/printSettings';
 import type { Invoice, Item, PriceTier } from '@/api/types';
-import { TIER_LABEL } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Field, Modal, Segmented, Toggle } from '@/components/ui';
@@ -107,7 +106,7 @@ export default function Pos() {
   useEffect(() => { setUsePoints({ on: false, points: 0 }); }, [customerId]);
 
   const customer = customers.find((c) => c.id === customerId);
-  const tier: PriceTier = customer?.tier ?? 'SP1';
+  const tier: PriceTier = 'SP1'; // one selling price for every customer (price tiers are not used)
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const lines = cart.map((l) => ({ ...l, it: byId.get(l.itemId)! })).filter((l) => l.it);
   const inclusive = withGst && mrp;
@@ -583,7 +582,7 @@ export default function Pos() {
             {branches.length > 1 && <select className="select" style={{ width: 160 }} value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Branch">{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
           </div>
           <div className="row between small muted">
-            <span>Price tier: <strong style={{ color: 'var(--ink-800)' }}>{tier} · {TIER_LABEL[tier]}</strong></span>
+            <span />
             <span className="row" style={{ gap: 14 }}>
               {withGst && <Toggle size="sm" checked={mrp} onChange={setMrp} label={<span className="small">MRP (incl. GST)</span>} />}
               <Toggle size="sm" checked={withGst} disabled={!!org && (org.compositionScheme || !org.gstin)} onChange={setWithGst} label={<span className="small">{withGst ? 'GST applied' : 'Net price (no tax)'}</span>} />

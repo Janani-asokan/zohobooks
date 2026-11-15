@@ -4,7 +4,7 @@ import { useItems } from '@/api/hooks';
 import { useToast } from '@/context/ToastContext';
 import { applyBillAdjustments, computeTotals, lineAmount, type BillDiscount } from '@/lib/calc';
 import { money, uid } from '@/lib/format';
-import { TIER_LABEL, type Item, type LineInput, type PriceTier } from '@/api/types';
+import { type Item, type LineInput, type PriceTier } from '@/api/types';
 import { ItemPicker } from './ItemPicker';
 import { SerialField } from './SerialField';
 import { findByCode } from '../../shared/barcode';
@@ -87,7 +87,6 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
             <tr>
               <th style={{ minWidth: 260 }}>Item details</th>
               <th style={{ width: 90 }} className="num">Qty</th>
-              <th style={{ width: 170 }}>Price tier</th>
               <th style={{ width: 130 }} className="num">{inclusive ? "Rate incl. GST" : "Rate (₹)"}</th>
               <th style={{ width: 90 }} className="num">Disc %</th>
               <th style={{ width: 80 }} className="num">Tax</th>
@@ -122,11 +121,6 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
                       placeholder={it.trackSerials ? 'Warranty or other details (prints on the bill)' : 'Serial no., warranty or other details (prints on the bill)'} aria-label={`Details for ${it.name}`} />}
                   </td>
                   <td><input className="input" style={{ textAlign: 'right' }} type="number" min={1} value={l.qty} onChange={(e) => set(l.key, { qty: Math.max(0, Number(e.target.value)) })} aria-label="Quantity" /></td>
-                  <td>
-                    <select className="select" value={l.tier} onChange={(e) => { const tier = e.target.value as PriceTier; set(l.key, { tier, rate: it ? priceFor(it, tier, inclusive) : l.rate }); }} aria-label="Price tier">
-                      {(Object.keys(TIER_LABEL) as PriceTier[]).map((t) => <option key={t} value={t}>{t} · {TIER_LABEL[t]}</option>)}
-                    </select>
-                  </td>
                   <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} value={rate} onChange={(e) => set(l.key, { rate: Math.max(0, Number(e.target.value)) })} aria-label="Rate" /></td>
                   <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} max={100} value={l.discount} onChange={(e) => set(l.key, { discount: Math.min(100, Math.max(0, Number(e.target.value))) })} aria-label="Discount" /></td>
                   <td className="num">{withGst && it ? <span className="chip">{it.taxRate}%</span> : <span className="muted small">—</span>}</td>
