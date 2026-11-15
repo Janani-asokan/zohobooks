@@ -49,7 +49,7 @@ export const beepOn = () => { try { return localStorage.getItem('c360.pos.beep')
 export const setBeepOn = (on: boolean) => { try { localStorage.setItem('c360.pos.beep', on ? '1' : '0'); } catch { /* private mode */ } };
 
 /* ---------- The bill being made, and held bills (this counter only) ---------- */
-export interface CounterLine { itemId: string; qty: number; serials?: string[] }
+export interface CounterLine { itemId: string; qty: number; serials?: string[]; /** Serial no., warranty… typed for this line; prints on the bill. */ note?: string }
 export interface CounterBill {
   cart: CounterLine[];
   customerId: string;

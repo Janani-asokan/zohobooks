@@ -152,6 +152,8 @@ export default function Pos() {
       ? c.map((l) => (l.itemId === it.id ? { ...l, serials: [...(l.serials ?? []), serial], qty: (l.serials?.length ?? 0) + 1 } : l))
       : [...c, { itemId: it.id, qty: 1, serials: [serial] }]));
   };
+  /** The line's details box (serial no., warranty…): undefined = closed, '' = open and empty. */
+  const setNote = (id: string, note: string | undefined) => setCart((c) => c.map((l) => (l.itemId === id ? { ...l, note } : l)));
   const setQty = (id: string, qty: number) => setCart((c) => (qty <= 0 ? c.filter((l) => l.itemId !== id) : c.map((l) => (l.itemId === id ? (l.serials ? { ...l, serials: l.serials.slice(0, Math.max(0, qty)), qty: Math.min(qty, l.serials.length) } : { ...l, qty }) : l))));
   const lastLine = () => cart.find((l) => l.itemId === lastId) ?? cart[cart.length - 1];
   /** + / − on the last item (serial items: + scans another unit, − drops the last number). */
@@ -373,7 +375,7 @@ export default function Pos() {
     const body = { customerId: customerId || null, branchId: branchId || null, withGst, mode: mode === 'Split' ? 'Cash' : mode, reference, tendered: mode === 'Cash' && tendered ? Number(tendered) : undefined,
       ...(mode === 'Split' ? { split: parts } : {}), pricesIncludeTax: inclusive, billDiscount,
       ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
-      lines: lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier, discount: 0, rate: unit(l.it), ...(l.serials?.length ? { serials: l.serials } : {}) })) };
+      lines: lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier, discount: 0, rate: unit(l.it), ...(l.serials?.length ? { serials: l.serials } : {}), ...(l.note?.trim() ? { note: l.note.trim().slice(0, 300) } : {}) })) };
     // Every bill has its own ID, sent with it: a retry after a dropped reply can never save it twice.
     const clientRef = newClientRef();
     // CorpusLite: the bill takes the next number in this phone's own GST series (final, even offline).
@@ -397,7 +399,7 @@ export default function Pos() {
     const receipt: ReceiptData = {
       number: dn ? dn.number : offlineRef(clientRef), date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
       customer: { name: customer ? customer.companyName || customer.name : 'Walk-in customer', phone: customer?.phone, gstin: customer?.gstin },
-      lines: lines.map((l, i) => ({ name: l.it.name, description: l.it.description, hsn: l.it.hsn, qty: l.qty, unit: l.it.unit, rate: unit(l.it), mrp: l.it.mrp ?? null, taxRate: l.it.taxRate, amount: lineAmount(fl[i] ?? calc[i]!) })),
+      lines: lines.map((l, i) => ({ name: l.it.name, description: l.it.description, detail: l.note?.trim() || undefined, hsn: l.it.hsn, qty: l.qty, unit: l.it.unit, rate: unit(l.it), mrp: l.it.mrp ?? null, taxRate: l.it.taxRate, amount: lineAmount(fl[i] ?? calc[i]!) })),
       withGst, interState: inter, subTotal: totals.subTotal, discount: totals.discount, cgst: totals.cgst, sgst: totals.sgst, igst: totals.igst, roundOff: totals.roundOff,
       total: totals.total, amountPaid: totals.total, paymentMode: mode, offers: promo.on ? priced.applied : [],
       note: dn ? 'Saved on this phone. It goes to the server by itself when the internet is back.' : 'Saved offline. The GST invoice number is given when this bill is sent.',
@@ -603,7 +605,9 @@ export default function Pos() {
                     <span key={sn} className="serial-chip mono">{sn}<button type="button" aria-label={`Remove ${sn}`} tabIndex={-1} onClick={() => { setCart((c) => c.map((x) => (x.itemId === l.itemId ? { ...x, serials: x.serials!.filter((y) => y !== sn), qty: x.serials!.length - 1 } : x)).filter((x) => x.qty > 0)); focusScan(); }}>×</button></span>
                   ))}</div>
                 ) : null}
-                <div className="small muted">{money(unit(l.it))}{withGst ? ` · GST ${l.it.taxRate}%${inclusive ? ' incl.' : ''}` : ''}</div>
+                <div className="small muted">{money(unit(l.it))}{withGst ? ` · GST ${l.it.taxRate}%${inclusive ? ' incl.' : ''}` : ''}
+                  {l.note === undefined && <> · <button type="button" className="lb-linkname pos-note-add" tabIndex={-1} onClick={() => { setNote(l.itemId, ''); requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-note="${l.itemId}"]`)?.focus()); }}>+ Details</button></>}
+                </div>
                 {lo && <div className="offer-tags"><span className="offer-tag"><Gift size={11} /> {lo.name} −{lo.value}%</span></div>}
                 {l.qty > have && <div className="small" style={{ color: 'var(--amber-700, #a15c07)' }} role="status"><AlertTriangle size={12} style={{ verticalAlign: -2 }} /> Only {Math.max(have, 0)} {l.it.unit} in stock</div>}
               </div>
@@ -625,6 +629,12 @@ export default function Pos() {
                 </strong>
                 <button className="icon-btn sm danger" tabIndex={-1} onClick={() => { setQty(l.itemId, 0); focusScan(); }} aria-label="Remove"><Trash2 size={13} /></button>
               </div>
+              {l.note !== undefined && (
+                  <input className="input pos-note" data-note={l.itemId} maxLength={300} value={l.note} placeholder="Serial no., warranty… (prints on the bill)" aria-label={`Details for ${l.it.name}`}
+                    onChange={(e) => setNote(l.itemId, e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); focusScan(); } }}
+                    onBlur={(e) => { if (!e.target.value.trim()) setNote(l.itemId, undefined); }} />
+                )}
             </div>
             );
           })}

@@ -528,3 +528,8 @@
 .ls-diagram { display: block; max-width: 100%; height: auto; margin: 6px 0; border-radius: 4px; }
 
 .ps-label-frame { display: inline-block; outline: 1px dashed #b9b2ad; outline-offset: 0; background: #fff; }
+
+/* POS: the line's details box (serial no., warranty…) */
+.pos-note { height: 28px; font-size: 12.5px; margin: 4px 0 2px; padding: 2px 8px; width: 100%; }
+.pos-note-add { font-size: 12px; }
+.pos-line > .pos-note { grid-column: 1 / -1; margin: 0; }
