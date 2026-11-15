@@ -28,9 +28,9 @@ export const convertRates = (lines: DraftLine[], items: Item[], toInclusive: boo
   return { ...l, rate: Math.round((toInclusive ? l.rate * f : l.rate / f) * 100) / 100 };
 });
 export const emptyLine = (tier: PriceTier): DraftLine => ({ key: uid('ln_'), itemId: '', qty: 1, rate: 0, tier, discount: 0 });
-export const toDraft = (l: { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number; serials?: string[]; enteredRate?: number; enteredDiscount?: number }): DraftLine =>
-  ({ key: uid('ln_'), itemId: l.itemId, qty: l.qty, tier: l.tier, rate: l.enteredRate ?? l.rate, discount: l.enteredDiscount ?? l.discount, serials: l.serials });
-export const toInput = (lines: DraftLine[]): LineInput[] => lines.filter((l) => l.itemId).map(({ itemId, qty, tier, rate, discount, serials }) => ({ itemId, qty, tier, rate, discount, ...(serials?.length ? { serials } : {}) }));
+export const toDraft = (l: { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number; serials?: string[]; note?: string; enteredRate?: number; enteredDiscount?: number }): DraftLine =>
+  ({ key: uid('ln_'), itemId: l.itemId, qty: l.qty, tier: l.tier, rate: l.enteredRate ?? l.rate, discount: l.enteredDiscount ?? l.discount, serials: l.serials, note: l.note });
+export const toInput = (lines: DraftLine[]): LineInput[] => lines.filter((l) => l.itemId).map(({ itemId, qty, tier, rate, discount, serials, note }) => ({ itemId, qty, tier, rate, discount, ...(serials?.length ? { serials } : {}), ...(note?.trim() ? { note: note.trim() } : {}) }));
 
 /** Lines enriched with item tax rate for live totals (server recomputes authoritatively). */
 export function useCalcLines(lines: DraftLine[]) {
@@ -118,6 +118,8 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
                       </div>
                     )}
                     {it?.trackSerials && <SerialField itemId={it.id} branchId={branchId} qty={l.qty} value={l.serials ?? []} onChange={(serials) => set(l.key, { serials })} />}
+                    {it && <input className="input input-sm line-note" style={{ marginTop: 6 }} maxLength={300} value={l.note ?? ''} onChange={(e) => set(l.key, { note: e.target.value })}
+                      placeholder={it.trackSerials ? 'Warranty or other details (prints on the bill)' : 'Serial no., warranty or other details (prints on the bill)'} aria-label={`Details for ${it.name}`} />}
                   </td>
                   <td><input className="input" style={{ textAlign: 'right' }} type="number" min={1} value={l.qty} onChange={(e) => set(l.key, { qty: Math.max(0, Number(e.target.value)) })} aria-label="Quantity" /></td>
                   <td>

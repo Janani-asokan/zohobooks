@@ -49,3 +49,17 @@ describe('what the Print button prints for a bill', () => {
     expect((await owner.put('/api/shop/print-settings').send({ ...cur, invoice: { ...cur.invoice, printAs: 'a3' } })).status).toBe(400);
   });
 });
+
+describe('a note on an invoice line', () => {
+  it('is saved with the line (serial no., warranty …) and trimmed; over 300 characters is refused', async () => {
+    const items = (await owner.get('/api/shop/items')).body;
+    const cust = (await owner.get('/api/shop/customers')).body[0].id;
+    const it = items.find((i: any) => i.type === 'Goods' && !i.trackSerials && !i.trackBatches && !i.isGroup && i.stock > 1);
+    const r = await owner.post('/api/shop/invoices').send({ customerId: cust, date: '2026-11-15', dueDate: '2026-11-30', lines: [{ itemId: it.id, qty: 1, tier: 'SP1', discount: 0, note: '  SN: WX12AB34 · 2 years warranty  ' }], withGst: true });
+    expect(r.status, JSON.stringify(r.body)).toBeLessThan(300);
+    const inv = (await owner.get(`/api/shop/invoices/${r.body.id}`)).body;
+    expect(inv.lines[0].note).toBe('SN: WX12AB34 · 2 years warranty');
+    const long = await owner.post('/api/shop/invoices').send({ customerId: cust, date: '2026-11-15', dueDate: '2026-11-30', lines: [{ itemId: it.id, qty: 1, tier: 'SP1', discount: 0, note: 'x'.repeat(301) }], withGst: true });
+    expect(long.status).toBe(400);
+  });
+});

@@ -69,13 +69,13 @@ export interface Customer {
 
 export interface Line {
   id: string; itemId: string; name: string; type: 'Goods' | 'Services'; hsn: string; unit: string; qty: number; rate: number; tier: PriceTier;
-  taxRate: number; discount: number; amount: number; batchNo?: string; serials?: string[]; batches?: Array<{ batchNo: string; qty: number; expiryDate: string | null }>;
+  taxRate: number; discount: number; amount: number; batchNo?: string; serials?: string[]; note?: string; batches?: Array<{ batchNo: string; qty: number; expiryDate: string | null }>;
   /** What was typed, when MRP billing or a bill discount changed the effective rate/discount. */
   enteredRate?: number; enteredDiscount?: number;
   /** The item's trade field values and MRP when the line was saved (printed with the item). */
   extra?: Record<string, string | number>; mrp?: number;
 }
-export interface LineInput { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number; serials?: string[] }
+export interface LineInput { itemId: string; qty: number; tier: PriceTier; rate?: number; discount: number; serials?: string[]; note?: string }
 
 export interface CustomerSnapshot { customId: string; type: string; name: string; companyName: string; gstin: string; email: string; phone: string; state: string; address: string }
 

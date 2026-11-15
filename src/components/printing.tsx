@@ -75,7 +75,7 @@ export function printReceipt(s: ThermalSettings) {
 
 /* ---------------- Thermal receipt ---------------- */
 
-export interface ReceiptLine { name: string; description?: string; hsn?: string; qty: number; unit?: string; rate: number; mrp?: number | null; taxRate: number; amount: number }
+export interface ReceiptLine { name: string; description?: string; /** Serial numbers and the line's note: always printed. */ detail?: string; hsn?: string; qty: number; unit?: string; rate: number; mrp?: number | null; taxRate: number; amount: number }
 export interface ReceiptData {
   number: string; date: string; time?: string;
   customer: { name: string; phone?: string; gstin?: string };
@@ -96,7 +96,7 @@ export function receiptFromInvoice(inv: Invoice, items: Item[] = [], partyBalanc
     customer: { name: inv.customer.companyName || inv.customer.name, phone: inv.customer.phone, gstin: inv.customer.gstin },
     lines: inv.lines.map((l) => {
       const it = items.find((i) => i.id === l.itemId);
-      return { name: l.name, description: [it?.description, l.serials?.length ? `IMEI/SN: ${l.serials.join(', ')}` : ''].filter(Boolean).join(' · ') || undefined, hsn: l.hsn, qty: l.qty, unit: l.unit, rate: l.rate, mrp: it?.mrp ?? null, taxRate: l.taxRate, amount: l.amount };
+      return { name: l.name, description: it?.description || undefined, detail: [l.serials?.length ? `IMEI/SN: ${l.serials.join(', ')}` : '', l.note ?? ''].filter(Boolean).join(' · ') || undefined, hsn: l.hsn, qty: l.qty, unit: l.unit, rate: l.rate, mrp: it?.mrp ?? null, taxRate: l.taxRate, amount: l.amount };
     }),
     withGst: inv.withGst, interState: inv.interState, subTotal: inv.subTotal, discount: inv.discount, cgst: inv.cgst, sgst: inv.sgst, igst: inv.igst, roundOff: inv.roundOff,
     total: inv.total, amountPaid: inv.amountPaid, paymentMode, partyBalance,
@@ -146,6 +146,7 @@ export function ThermalReceipt({ data, org, s }: { data: ReceiptData; org: Recei
     <div key={i} className="rc-line">
       <div className="b">{l.name}</div>
       {s.showItemDescription && l.description && <div className="rc-desc">{l.description}</div>}
+      {l.detail && <div className="rc-desc">{l.detail}</div>}
       {s.showHsn && l.hsn && <div className="rc-desc">HSN {l.hsn}{data.withGst ? ` · GST ${l.taxRate}%` : ''}</div>}
       <div className="rr"><span>{l.qty} × {n2(l.rate)}</span><span>{n2(l.amount)}</span></div>
     </div>
@@ -160,6 +161,7 @@ export function ThermalReceipt({ data, org, s }: { data: ReceiptData; org: Recei
             <td>
               <div className="b">{l.name}</div>
               {s.showItemDescription && l.description && <div className="rc-desc">{l.description}</div>}
+              {l.detail && <div className="rc-desc">{l.detail}</div>}
               {(s.showHsn && l.hsn) || (t === 'advanced' && data.withGst) ? <div className="rc-desc">{[s.showHsn && l.hsn ? `HSN ${l.hsn}` : '', data.withGst ? `GST ${l.taxRate}%` : ''].filter(Boolean).join(' · ')}</div> : null}
               {t === 'advanced' && l.mrp && l.mrp > l.rate ? <div className="rc-desc">MRP {n2(l.mrp)}</div> : null}
             </td>

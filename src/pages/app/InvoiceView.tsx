@@ -173,7 +173,7 @@ export default function InvoiceView() {
         </div>
         <div className="row" style={{ flexWrap: 'wrap' }}>
           {inv.status === 'Draft' && canSell && (
-            <button className="btn btn-primary" disabled={issueMut.isPending} onClick={() => issueMut.mutate({ customerId: inv.customerId, date: inv.date, dueDate: inv.dueDate, branchId: inv.branchId, lines: inv.lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier: l.tier, rate: l.rate, discount: l.discount })), withGst: inv.withGst, reverseCharge: inv.reverseCharge, tcsRate: inv.tcsRate, notes: inv.notes, issue: true })}>
+            <button className="btn btn-primary" disabled={issueMut.isPending} onClick={() => issueMut.mutate({ customerId: inv.customerId, date: inv.date, dueDate: inv.dueDate, branchId: inv.branchId, lines: inv.lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier: l.tier, rate: l.rate, discount: l.discount, ...(l.serials?.length ? { serials: l.serials } : {}), ...(l.note ? { note: l.note } : {}) })), withGst: inv.withGst, reverseCharge: inv.reverseCharge, tcsRate: inv.tcsRate, notes: inv.notes, issue: true })}>
               <Send size={15} /> Issue invoice
             </button>
           )}

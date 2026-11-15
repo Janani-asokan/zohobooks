@@ -227,6 +227,7 @@ export function TaxInvoice({ inv, org, branch, s, paper, onReady, extras = {} }:
                 {f.mrp && l.mrp ? <div className="ti-muted">MRP {money(l.mrp)}</div> : null}
                 {l.batches?.length ? <div className="ti-muted">Batch {l.batches.map((b) => `${b.batchNo}${b.expiryDate ? ` · exp ${fmtDate(b.expiryDate)}` : ''}`).join(', ')}</div> : null}
                 {l.serials?.length ? <div className="ti-muted">S/N {l.serials.join(", ")}</div> : null}
+                {l.note ? <div className="ti-muted ti-note">{l.note}</div> : null}
               </td>
               {f.hsn && <td>{l.hsn || '—'}</td>}
               <td className="r">{l.qty}{!f.unit && l.unit ? ` ${l.unit}` : ''}</td>

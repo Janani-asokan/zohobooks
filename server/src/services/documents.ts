@@ -26,6 +26,8 @@ export const lineInput = z.object({
   batchNo: z.string().max(60).optional(),
   /** Serial numbers sold on this line (serial-tracked items need one per unit). */
   serials: z.array(z.string().trim().min(1).max(60)).max(1000).optional(),
+  /** Free text for this line, printed under the item: serial numbers, warranty, colour… */
+  note: z.string().trim().max(300).optional(),
 });
 export type LineInput = z.infer<typeof lineInput>;
 
@@ -44,6 +46,8 @@ export interface StoredLine {
   amount: number;
   batchNo?: string;
   serials?: string[];
+  /** What was typed in the line's note box (serial no., warranty …), printed under the item. */
+  note?: string;
   batches?: Array<{ batchNo: string; qty: number; expiryDate: string | null }>;
   /** Item cost when the line was saved, for bill-wise profit. */
   cost?: number;
@@ -81,6 +85,7 @@ export async function buildLines(db: Db, shopId: string, input: LineInput[]): Pr
       amount: 0,
       cost: Number(it.cost ?? 0),
       ...(l.batchNo ? { batchNo: l.batchNo } : {}),
+      ...(l.note ? { note: l.note } : {}),
       ...(it.track_serials && l.serials?.length ? { serials: [...new Set(l.serials.map((x) => x.trim()))] } : {}),
       ...(it.extra && Object.keys(it.extra).length ? { extra: it.extra } : {}),
       ...(it.mrp != null && Number(it.mrp) > 0 ? { mrp: Number(it.mrp) } : {}),
