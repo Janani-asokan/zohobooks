@@ -40,7 +40,7 @@ ok(items.length >= 5 && items.some((i) => i.name.includes('Remote control car') 
 const EAN = '8901058000016';
 await p.goto(B + '/app/items/new?type=Goods'); await p.waitForLoadState('networkidle');
 await p.locator('#item-name').fill('Musical keyboard toy');
-await p.getByLabel('SP1 · Standard').fill('999');
+await p.getByLabel('Selling price').fill('999');
 await p.locator('.field:has(label:text("Cost price")) input').fill('600');
 await p.locator('.field:has(label:text("HSN code")) input').fill('9503');
 await p.getByRole('button', { name: '18%', exact: true }).click();

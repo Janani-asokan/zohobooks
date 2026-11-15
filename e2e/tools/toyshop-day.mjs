@@ -111,7 +111,7 @@ try {
     await o.locator('input[placeholder^="Scan or type barcode"]').fill(t.barcode);
     await o.locator('.field:has(label:text("Category")) input').first().fill(t.cat);
     await o.locator('.field:has(label:text("Cost price")) input').fill(t.cost);
-    await o.getByLabel('SP1 · Standard').fill(t.sp1);
+    await o.getByLabel('Selling price').fill(t.sp1);
     await o.locator('.field:has(label:text("HSN code")) input').fill('9503');
     await o.getByRole('button', { name: t.elec === 'Yes' ? '18%' : '5%', exact: true }).click();
     const age = o.locator('.field:has(label:text("Age group")) select'); if (await age.count()) await age.selectOption(t.age);
