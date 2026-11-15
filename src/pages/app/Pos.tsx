@@ -152,8 +152,8 @@ export default function Pos() {
       ? c.map((l) => (l.itemId === it.id ? { ...l, serials: [...(l.serials ?? []), serial], qty: (l.serials?.length ?? 0) + 1 } : l))
       : [...c, { itemId: it.id, qty: 1, serials: [serial] }]));
   };
-  /** The line's details box (serial no., warranty…): undefined = closed, '' = open and empty. */
-  const setNote = (id: string, note: string | undefined) => setCart((c) => c.map((l) => (l.itemId === id ? { ...l, note } : l)));
+  /** The line's details box (serial no., warranty…). */
+  const setNote = (id: string, note: string) => setCart((c) => c.map((l) => (l.itemId === id ? { ...l, note } : l)));
   const setQty = (id: string, qty: number) => setCart((c) => (qty <= 0 ? c.filter((l) => l.itemId !== id) : c.map((l) => (l.itemId === id ? (l.serials ? { ...l, serials: l.serials.slice(0, Math.max(0, qty)), qty: Math.min(qty, l.serials.length) } : { ...l, qty }) : l))));
   const lastLine = () => cart.find((l) => l.itemId === lastId) ?? cart[cart.length - 1];
   /** + / − on the last item (serial items: + scans another unit, − drops the last number). */
@@ -606,7 +606,6 @@ export default function Pos() {
                   ))}</div>
                 ) : null}
                 <div className="small muted">{money(unit(l.it))}{withGst ? ` · GST ${l.it.taxRate}%${inclusive ? ' incl.' : ''}` : ''}
-                  {l.note === undefined && <> · <button type="button" className="lb-linkname pos-note-add" tabIndex={-1} onClick={() => { setNote(l.itemId, ''); requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-note="${l.itemId}"]`)?.focus()); }}>+ Details</button></>}
                 </div>
                 {lo && <div className="offer-tags"><span className="offer-tag"><Gift size={11} /> {lo.name} −{lo.value}%</span></div>}
                 {l.qty > have && <div className="small" style={{ color: 'var(--amber-700, #a15c07)' }} role="status"><AlertTriangle size={12} style={{ verticalAlign: -2 }} /> Only {Math.max(have, 0)} {l.it.unit} in stock</div>}
@@ -629,12 +628,10 @@ export default function Pos() {
                 </strong>
                 <button className="icon-btn sm danger" tabIndex={-1} onClick={() => { setQty(l.itemId, 0); focusScan(); }} aria-label="Remove"><Trash2 size={13} /></button>
               </div>
-              {l.note !== undefined && (
-                  <input className="input pos-note" data-note={l.itemId} maxLength={300} value={l.note} placeholder="Serial no., warranty… (prints on the bill)" aria-label={`Details for ${l.it.name}`}
-                    onChange={(e) => setNote(l.itemId, e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); focusScan(); } }}
-                    onBlur={(e) => { if (!e.target.value.trim()) setNote(l.itemId, undefined); }} />
-                )}
+              {/* Always open: serial no., warranty… for this line, printed on the bill. Scanning keeps the cursor in the scan box. */}
+              <input className="input pos-note" data-note={l.itemId} maxLength={300} value={l.note ?? ''} placeholder="Serial no., warranty… (prints on the bill)" aria-label={`Details for ${l.it.name}`}
+                onChange={(e) => setNote(l.itemId, e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); focusScan(); } }} />
             </div>
             );
           })}
