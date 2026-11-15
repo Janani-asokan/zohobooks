@@ -23,7 +23,7 @@ to `/opt/corpus360/backups` (14 days).
 ```bash
 cd /opt/corpus360/src/deploy/digitalocean
 docker compose --env-file /opt/corpus360/.env stop app
-docker run --rm postgres:16-alpine pg_dump "RENDER_EXTERNAL_DATABASE_URL" -Fc > /opt/corpus360/render.dump
+docker run --rm postgres:18-alpine pg_dump "RENDER_EXTERNAL_DATABASE_URL" -Fc > /opt/corpus360/render.dump
 docker compose --env-file /opt/corpus360/.env exec -T db pg_restore -U ledgerly -d ledgerly --clean --if-exists --no-owner < /opt/corpus360/render.dump
 docker compose --env-file /opt/corpus360/.env up -d
 ```

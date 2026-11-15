@@ -55,6 +55,18 @@ install -m 755 "$ROOT/src/deploy/digitalocean/backup.sh" /usr/local/bin/corpus36
 echo "==> 6/6 Build and start (10-20 minutes the first time)"
 cd "$ROOT/src/deploy/digitalocean"
 docker compose --env-file "$ROOT/.env" build app
+# Optional one-time import: $ROOT/restore-from holds a database URL (e.g. Render's external URL). Its data is copied
+# into the new, empty database before the app starts for the first time; then the file is removed.
+if [ -s "$ROOT/restore-from" ]; then
+  echo "==> Copying the existing database"
+  docker compose --env-file "$ROOT/.env" up -d --wait db
+  mkdir -p "$ROOT/backups"
+  docker compose --env-file "$ROOT/.env" exec -T -e SRC="$(cat "$ROOT/restore-from")" db \
+    sh -c 'pg_dump "$SRC" -Fc --no-owner --no-acl' > "$ROOT/backups/imported-$(date +%F).dump"
+  docker compose --env-file "$ROOT/.env" exec -T db pg_restore -U ledgerly -d ledgerly --no-owner --no-acl --exit-on-error < "$ROOT/backups/imported-$(date +%F).dump"
+  shred -u "$ROOT/restore-from" 2>/dev/null || rm -f "$ROOT/restore-from"
+  echo "    copied ($(du -h "$ROOT/backups/imported-$(date +%F).dump" | cut -f1)); a copy is kept in $ROOT/backups"
+fi
 docker compose --env-file "$ROOT/.env" up -d
 
 # Auto-update every 5 minutes, nightly backup at 02:30.

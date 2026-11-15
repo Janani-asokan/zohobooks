@@ -1,16 +1,17 @@
-# Corpus360 on one DigitalOcean Droplet: the app (built from the repo's Dockerfile) and PostgreSQL.
+# Corpus360 on one DigitalOcean Droplet: the app (built from the repo's Dockerfile) and PostgreSQL 18 (as on Render).
 # Settings and secrets come from /opt/corpus360/.env, written once by setup.sh. Never commit that file.
 name: corpus360
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ledgerly
       POSTGRES_USER: ledgerly
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PostgreSQL 18 images keep their data under /var/lib/postgresql/18/… (mount the parent).
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ledgerly -d ledgerly"]
       interval: 5s
