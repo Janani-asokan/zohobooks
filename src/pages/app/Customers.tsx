@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Users, Building2, UserRound, Pencil, Trash2, Lock, Mail, Phone, FileText, Upload, Loader2, Archive, ArchiveRestore } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
 import { useCustomers, useMut, useNextCustomerId, useOrg } from '@/api/hooks';
-import { TIER_LABEL, type Customer, type PriceTier } from '@/api/types';
+import { type Customer } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, Pagination, SearchInput, usePagination } from '@/components/ui';
@@ -155,7 +155,6 @@ export default function Customers() {
                   <th className="hide-split">Customer ID</th>
                   <th className="hide-split">Type</th>
                   <th className="hide-split">Contact</th>
-                  <th className="hide-split">Price tier</th>
                   <th className="num">Receivables</th>
                   <th />
                 </tr>
@@ -179,7 +178,6 @@ export default function Customers() {
                         <div className="small row" style={{ gap: 6 }}><Phone size={12} className="muted" /> {c.phone}</div>
                         {c.email && <div className="small row muted" style={{ gap: 6 }}><Mail size={12} /> {c.email}</div>}
                       </td>
-                      <td className="hide-split"><span className="chip">{c.tier} · {TIER_LABEL[c.tier]}</span></td>
                       <td className="num">
                         <div className="strong">{money(c.due)}</div>
                         <div className="muted">{c.creditLimit > 0 && c.due > c.creditLimit ? <span style={{ color: 'var(--red-600)' }}>Over limit</span> : `${c.invoiceCount} invoices`}</div>
@@ -232,11 +230,6 @@ export default function Customers() {
               <span className="lead"><Lock size={14} /></span>
               <input className="input" readOnly value={modal?.mode === 'edit' ? modal.c!.customId : nextId.data?.customId ?? '…'} style={{ fontWeight: 600, fontFamily: 'ui-monospace, Menlo, monospace' }} />
             </div>
-          </Field>
-          <Field label="Default price tier" hint="Applied automatically on invoices">
-            <select className="select" value={draft.tier} onChange={(ev) => setDraft({ ...draft, tier: ev.target.value as PriceTier })}>
-              {(Object.keys(TIER_LABEL) as PriceTier[]).map((t) => <option key={t} value={t}>{t} — {TIER_LABEL[t]}</option>)}
-            </select>
           </Field>
           <Field label="Customer type" className="span-all">
             <div className="radio-cards">

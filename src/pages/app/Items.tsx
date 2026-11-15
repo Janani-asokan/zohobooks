@@ -149,7 +149,7 @@ export default function Items() {
     <div className="page">
       <PageHeader
         title="Items"
-        subtitle="Goods and services you sell, with tiered pricing and branch-wise stock."
+        subtitle="Goods and services you sell, with prices and branch-wise stock."
         actions={
           <>
             <div className="input-group" style={{ width: 280 }}>
@@ -181,7 +181,7 @@ export default function Items() {
       )}
 
       <Hint id="items" title="Your product & service catalogue">
-        <p>Add everything you sell once — it then appears on invoices, POS and purchase orders. Each item has <strong>three price levels</strong> (SP1 Standard, SP2 Loyal, SP3 New) that are picked automatically from the customer’s tier. Click any price or name in the list to edit it in place, or click the picture to see stock, batches and history.</p>
+        <p>Add everything you sell once — it then appears on invoices, POS and purchase orders. Each item has one <strong>selling price</strong> used on invoices and POS. Click any price or name in the list to edit it in place, or click the picture to see stock, batches and history.</p>
       </Hint>
 
       <div className="card">

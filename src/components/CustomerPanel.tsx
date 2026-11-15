@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X, FileText, Pencil, Phone, Mail, MapPin, StickyNote, PhoneCall, MessageCircle, Users as Meeting, Receipt, IndianRupee, Bell, Trash2, Loader2 } from 'lucide-react';
 import { api } from '@/api/client';
 import { useMut } from '@/api/hooks';
-import { TIER_LABEL, type Customer } from '@/api/types';
+import { type Customer } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { EmptyState } from '@/components/ui';
 import { PartyStatement } from '@/components/PartyStatement';
@@ -73,7 +73,6 @@ export function CustomerPanel({ customer: c, onClose, onEdit }: { customer: Cust
               <dt><Mail size={14} /></dt><dd>{c.email || '—'}</dd>
               <dt><MapPin size={14} /></dt><dd style={{ whiteSpace: 'pre-line' }}>{[c.address, c.state].filter(Boolean).join('\n') || '—'}</dd>
             </dl>
-            <div className="small muted">Price level {c.tier} · {TIER_LABEL[c.tier]}</div>
             <Link className="small" to={`/app/sales/invoices?q=${encodeURIComponent(c.companyName || c.name)}`}>See all invoices →</Link>
             <Attachments entity="customer" entityId={c.id} canWrite={me.can('customers.write')} title="Documents" />
           </div>
