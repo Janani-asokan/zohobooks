@@ -2,6 +2,9 @@
 # One-time copy of an existing database into this server. /opt/corpus360/restore-from holds its URL (Render's
 # external URL). The local database is emptied first, so it can be run again safely. The file is removed once the
 # copy succeeds; the dump is kept in /opt/corpus360/backups.
+# The tables use forced row-level security: like the app's own backup job, the dump switches on the read-only
+# backup_read policy for its session (app.backup_read=on) and dumps with --enable-row-security, so every shop's rows
+# are included. Writing here needs no such setting: the container's database user is a superuser.
 set -uo pipefail
 ROOT=/opt/corpus360
 [ -s "$ROOT/restore-from" ] || exit 0
@@ -12,7 +15,7 @@ DUMP="$ROOT/backups/imported-$(date +%F-%H%M).dump"
 echo "==> Copying the existing database"
 $DC stop app >/dev/null 2>&1 || true
 $DC up -d --wait db || { echo "database did not start"; exit 1; }
-if ! $DC exec -T -e SRC="$(cat "$ROOT/restore-from")" db sh -c 'pg_dump "$SRC" -Fc --no-owner --no-acl' > "$DUMP" || [ ! -s "$DUMP" ]; then
+if ! $DC exec -T -e SRC="$(cat "$ROOT/restore-from")" db sh -c 'PGOPTIONS="-c app.backup_read=on" pg_dump "$SRC" --enable-row-security -Fc --no-owner --no-acl' > "$DUMP" || [ ! -s "$DUMP" ]; then
   echo "could not read the source database (it stays in $ROOT/restore-from; retried on the next update)"; rm -f "$DUMP"; exit 1
 fi
 $DC exec -T db psql -q -U ledgerly -d ledgerly -c 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;'
