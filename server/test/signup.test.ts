@@ -35,4 +35,13 @@ describe('self-service signup', () => {
     expect((await send({ ...good, email: 'weak@example.com', password: 'abc' })).status).toBe(400);
     expect((await send({ ...good, email: 'bot@example.com', website: 'http://spam' })).status).toBe(400);
   });
+
+  it('works from the CorpusLite phone app (its own origin, no cookies) and returns a login token', async () => {
+    const r = await request(app).post('/api/auth/signup').set('Origin', 'https://localhost').set('X-Client', 'corpuslite').set('X-Requested-With', 'ledgerly')
+      .send({ ...good, email: 'phone@example.com', shopName: 'Phone Shop' });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(typeof r.body.token).toBe('string');
+    const org = await request(app).get('/api/shop/organization').set('Origin', 'https://localhost').set('Authorization', `Bearer ${r.body.token}`).set('X-Requested-With', 'ledgerly');
+    expect(org.body.companyName).toBe('Phone Shop');
+  });
 });

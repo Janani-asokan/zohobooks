@@ -12,6 +12,7 @@ import { PasswordInput } from '@/components/PasswordInput';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { isStrongPassword, PASSWORD_RULE } from '../../shared/permissions';
 import { AuthShell } from './AuthShell';
+import { IS_APP, cacheClear, setAppToken } from '@/lib/platform';
 
 interface SignupInfo { enabled: boolean; businessTypes: Array<{ key: string; name: string }> }
 const blank = { shopName: '', ownerName: '', email: '', phone: '', city: '', businessType: 'general', password: '', website: '' };
@@ -49,10 +50,12 @@ export default function Signup() {
     if (Object.values(errs).some(Boolean)) return;
     setBusy(true);
     try {
-      const m = await api.post<Me>('/auth/signup', { ...f, shopName: f.shopName.trim(), ownerName: f.ownerName.trim(), email: f.email.trim() });
-      await refresh(); // the session cookie is set: load who we are
+      const { token, ...m } = await api.post<Me & { token?: string }>('/auth/signup', { ...f, shopName: f.shopName.trim(), ownerName: f.ownerName.trim(), email: f.email.trim() });
+      // Phone app: the session is a bearer token kept on the phone (no cookies); on the web the cookie is already set.
+      if (IS_APP) { setAppToken(token ?? null); await cacheClear(); }
+      await refresh(); // load who we are
       toast('success', 'Your shop is ready', 'Free trial of every feature. Add your first item or invoice.');
-      navigate(homeFor(m), { replace: true });
+      navigate(homeFor(m as Me), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create the account. Please try again.');
     } finally {

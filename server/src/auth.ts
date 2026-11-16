@@ -126,7 +126,7 @@ export function csrfGuard(req: Request, _res: Response, next: NextFunction) {
   if (req.headers['x-requested-with'] !== 'ledgerly') return next(new HttpError(403, 'Missing CSRF header', 'csrf'));
   const origin = req.headers.origin;
   // The phone app's origin may only act with its bearer token: a cookie session never works from there.
-  if (origin && config.appOrigins.includes(origin)) return /^Bearer /.test(String(req.headers.authorization ?? '')) || /^\/auth\/(login|forgot|reset)/.test(req.path) ? next() : next(new HttpError(403, 'Origin not allowed', 'csrf'));
+  if (origin && config.appOrigins.includes(origin)) return /^Bearer /.test(String(req.headers.authorization ?? '')) || /^\/auth\/(login|signup|forgot|reset)/.test(req.path) ? next() : next(new HttpError(403, 'Origin not allowed', 'csrf'));
   if (origin && !config.allowedOrigins.includes(origin)) return next(new HttpError(403, 'Origin not allowed', 'csrf'));
   next();
 }
