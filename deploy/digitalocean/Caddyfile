@@ -1,0 +1,17 @@
+# Caddy: HTTPS in front of the app. SITE_ADDRESS comes from site.env, e.g. "corpus360.com, www.corpus360.com".
+# With a domain set (and its DNS pointing here), Caddy gets free Let's Encrypt certificates, renews them, and
+# redirects http to https. Until then this block only answers "localhost" (never used from outside), and the
+# server's IP address is served by the plain-http block below.
+
+{$SITE_ADDRESS:http://localhost} {
+	encode gzip
+	# Send www to the main address.
+	@www host www.{$PRIMARY_HOST:localhost}
+	redir @www https://{$PRIMARY_HOST:localhost}{uri} permanent
+	reverse_proxy app:10000
+}
+
+# The server's own IP address keeps working over plain http (handy while DNS changes spread).
+:80 {
+	reverse_proxy app:10000
+}

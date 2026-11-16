@@ -28,15 +28,18 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    env_file: /opt/corpus360/.env
+    env_file:
+      - /opt/corpus360/.env
+      - site.env
     environment:
       DATABASE_URL: postgres://ledgerly:${POSTGRES_PASSWORD}@db:5432/ledgerly
       NODE_ENV: production
       PORT: "10000"
       # The database is backed up nightly by the host (see update.sh / setup.sh), not inside the container.
       BACKUPS_ENABLED: "0"
-    ports:
-      - "80:10000"
+    # Reached only through Caddy (below), on the private network.
+    expose:
+      - "10000"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:10000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
@@ -44,5 +47,22 @@ services:
       retries: 5
       start_period: 120s
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    env_file: site.env
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
