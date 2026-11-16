@@ -39,6 +39,8 @@ export function createApp() {
   app.disable('x-powered-by');
   // Gzip JSON, HTML, JS and CSS: about a quarter of the bytes on slow mobile connections.
   app.use(compression({ threshold: 1024 }));
+  /** Served over HTTPS (Render, or a server with its own domain and certificate): judged from APP_URL. */
+  const siteIsHttps = config.appUrl.startsWith('https://');
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -53,8 +55,12 @@ export function createApp() {
           connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com', 'http://127.0.0.1:17361'],
           frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
           mediaSrc: ["'self'", 'blob:'],
+          // Only on HTTPS: on a plain-http address (a new server before its domain and certificate) the browser
+          // would rewrite every script and style request to https, nothing answers there, and the page stays blank.
+          ...(siteIsHttps ? {} : { upgradeInsecureRequests: null }),
         },
       },
+      hsts: siteIsHttps,
       crossOriginEmbedderPolicy: false,
       // Map tile servers (OpenStreetMap) refuse requests without a referrer; send only our origin, never the path.
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
