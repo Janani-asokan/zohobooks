@@ -4,7 +4,7 @@ import { X, ExternalLink, Printer, Download, Wallet, Pencil } from 'lucide-react
 
 import { useInvoice } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
-import { downloadInvoicePdf } from '@/lib/report';
+import { downloadInvoicePdf, lastPdfFailure } from '@/lib/report';
 import { useToast } from '@/context/ToastContext';
 import { StatusBadge } from '@/components/StatusBadge';
 import { fmtDate, money, num2 } from '@/lib/format';
@@ -47,7 +47,7 @@ export function InvoicePanel({ id, onClose }: { id: string; onClose: () => void 
               {inv.status === 'Issued' && inv.balance > 0 && me.can('payments.write') && <Link className="btn btn-primary btn-sm" to={`/app/sales/invoices/${id}?pay=1`}><Wallet size={14} /> Record payment</Link>}
               {me.can('sales.write') && (inv.status === 'Draft' || (inv.status === 'Issued' && inv.amountPaid === 0 && inv.amountCredited === 0)) && <Link className="btn btn-secondary btn-sm" to={`/app/sales/invoices/${id}/edit`}><Pencil size={14} /> Edit</Link>}
               <button className="btn btn-secondary btn-sm" title={`Prints ${billPrintName(billPrint(shopPaper))} on this computer`} onPointerEnter={() => prepareBill(id, shopPaper)} onFocus={() => prepareBill(id, shopPaper)} onClick={() => printBill(id, shopPaper).catch((e) => toast('error', 'Could not print', e.message))}><Printer size={14} /> Print</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => downloadInvoicePdf(id, `${inv.number ?? 'draft-invoice'}.pdf`).then((how) => how === 'print' && toast('info', 'Print window opened', 'Choose “Save as PDF” as the printer to keep a copy.')).catch((e) => toast('error', 'PDF not ready', e.message))}><Download size={14} /> PDF</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => downloadInvoicePdf(id, `${inv.number ?? 'draft-invoice'}.pdf`).then((how) => how === 'print' && toast('info', 'Print window opened (the server could not make the PDF)', `Choose “Save as PDF” to keep a copy. Reason: ${lastPdfFailure}`)).catch((e) => toast('error', 'PDF not ready', e.message))}><Download size={14} /> PDF</button>
             </div>
             <div className="kpi-row">
               <div><div className="k">Total</div><div className="v">{money(inv.total)}</div></div>

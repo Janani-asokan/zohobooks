@@ -579,7 +579,10 @@ export async function renderPdfOr503(shopId: string, invoiceId: string, paper: P
     return await invoicePdf(shopId, invoiceId, paper, roll, copy);
   } catch (e) {
     console.error('[pdf]', (e as Error).message);
-    throw new HttpError(503, 'Could not create the PDF right now. Use Print → Save as PDF instead.', 'pdf_unavailable');
+    // The first line of the cause (e.g. "PDF renderer not available: …", a timeout) helps find the problem without
+    // server access. It holds no secrets: browser paths and timings only.
+    const reason = (e as Error).message.split('\n')[0]!.slice(0, 240);
+    throw new HttpError(503, 'Could not create the PDF right now. Use Print → Save as PDF instead.', 'pdf_unavailable', { reason });
   }
 }
 

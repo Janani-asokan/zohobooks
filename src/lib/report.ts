@@ -106,12 +106,16 @@ export function printPage(url: string) {
 }
 
 /** Server PDF for an invoice, falling back to the browser's print window when the PDF service is unavailable. */
+/** Why the last invoice PDF fell back to the print window (shown in the message, to help find the cause). */
+export let lastPdfFailure = '';
 export async function downloadInvoicePdf(id: string, filename: string, paper = 'a4'): Promise<'pdf' | 'print'> {
   try {
     await download(`/shop/invoices/${id}/pdf?paper=${paper}`, filename);
+    lastPdfFailure = '';
     return 'pdf';
   } catch (e) {
     if (e instanceof ApiError && (e.status === 401 || e.status === 403 || e.status === 404)) throw e;
+    lastPdfFailure = e instanceof ApiError ? (e.details?.reason ?? e.message) : (e as Error).message;
     printPage(`/invoices/${id}/print?paper=${paper}`);
     return 'print';
   }
