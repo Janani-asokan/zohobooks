@@ -58,7 +58,9 @@ export async function createSession(res: Response, req: Request, principalType: 
     'Set-Cookie',
     serialize(SESSION_COOKIE, token, {
       httpOnly: true,
-      secure: config.cookieSecure,
+      // Secure (sent only over https) when the shop requires it, and always when this request came over https.
+      // A plain-http address of the same server (its IP, before or besides the domain) keeps logins working.
+      secure: config.cookieSecure || req.secure,
       sameSite: 'lax',
       path: '/',
       ...(remember ? { expires } : {}), // session cookie when not remembered
@@ -68,7 +70,7 @@ export async function createSession(res: Response, req: Request, principalType: 
 }
 
 export function clearSessionCookie(res: Response) {
-  res.setHeader('Set-Cookie', serialize(SESSION_COOKIE, '', { httpOnly: true, secure: config.cookieSecure, sameSite: 'lax', path: '/', maxAge: 0 }));
+  res.setHeader('Set-Cookie', serialize(SESSION_COOKIE, '', { httpOnly: true, secure: config.cookieSecure || !!res.req?.secure, sameSite: 'lax', path: '/', maxAge: 0 }));
 }
 
 /** A role's permissions in one shop, honouring the shop's own roles matrix. */

@@ -39,33 +39,34 @@ export function createApp() {
   app.disable('x-powered-by');
   // Gzip JSON, HTML, JS and CSS: about a quarter of the bytes on slow mobile connections.
   app.use(compression({ threshold: 1024 }));
-  /** Served over HTTPS (Render, or a server with its own domain and certificate): judged from APP_URL. */
-  const siteIsHttps = config.appUrl.startsWith('https://');
-  app.use(
-    helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-          fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-          // Map tiles for the field staff map (OpenStreetMap).
-          imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.de'],
-          // The Corpus360 Print Helper on the shop's own PC (label printing straight to the printer).
-          connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com', 'http://127.0.0.1:17361'],
-          frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
-          mediaSrc: ["'self'", 'blob:'],
-          // Only on HTTPS: on a plain-http address (a new server before its domain and certificate) the browser
-          // would rewrite every script and style request to https, nothing answers there, and the page stays blank.
-          ...(siteIsHttps ? {} : { upgradeInsecureRequests: null }),
-        },
+  // Security headers. Requests that arrived over https (behind Render's or Caddy's proxy, which says so in
+  // X-Forwarded-Proto; "trust proxy" above makes req.secure read it) get HSTS and upgrade-insecure-requests. Plain-http
+  // requests (the server's IP address, the PDF renderer on 127.0.0.1) don't: there the browser would rewrite every
+  // script request to https, nothing answers, and the page stays blank.
+  const securityHeaders = (https: boolean) => helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        // Map tiles for the field staff map (OpenStreetMap).
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.de'],
+        // The Corpus360 Print Helper on the shop's own PC (label printing straight to the printer).
+        connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com', 'http://127.0.0.1:17361'],
+        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
+        mediaSrc: ["'self'", 'blob:'],
+        ...(https ? {} : { upgradeInsecureRequests: null }),
       },
-      hsts: siteIsHttps,
-      crossOriginEmbedderPolicy: false,
-      // Map tile servers (OpenStreetMap) refuse requests without a referrer; send only our origin, never the path.
-      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-    }),
-  );
+    },
+    hsts: https,
+    crossOriginEmbedderPolicy: false,
+    // Map tile servers (OpenStreetMap) refuse requests without a referrer; send only our origin, never the path.
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  });
+  const httpsHeaders = securityHeaders(true);
+  const httpHeaders = securityHeaders(false);
+  app.use((req, res, next) => (req.secure ? httpsHeaders : httpHeaders)(req, res, next));
   // Uploads (files sent as base64) get a larger body limit than everything else.
   const smallJson = express.json({ limit: '3mb' });
   const uploadJson = express.json({ limit: '15mb' });
