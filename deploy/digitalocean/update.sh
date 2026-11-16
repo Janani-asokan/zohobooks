@@ -3,6 +3,9 @@
 # answering, or a database copy is still pending, it rebuilds and restarts.
 set -uo pipefail
 ROOT=/opt/corpus360
+# One run at a time: a timer run starting the app while a manual run was copying the database broke the schema.
+exec 9>/run/corpus360.lock
+flock -n 9 || { echo "$(date -Is) another update or restore is running; skipped"; exit 0; }
 cd "$ROOT/src" || exit 1
 git fetch -q origin || true
 LOCAL=$(git rev-parse HEAD); REMOTE=$(git rev-parse '@{u}' 2>/dev/null || echo "$LOCAL")
@@ -15,6 +18,7 @@ chmod -R a+rX "$ROOT/src"
 install -m 755 deploy/digitalocean/update.sh /usr/local/bin/corpus360-update
 install -m 755 deploy/digitalocean/backup.sh /usr/local/bin/corpus360-backup
 install -m 755 deploy/digitalocean/restore.sh /usr/local/bin/corpus360-restore
+install -m 755 deploy/digitalocean/reimport.sh /usr/local/bin/corpus360-reimport
 cd deploy/digitalocean
 DC="docker compose --env-file $ROOT/.env"
 $DC build app || { echo "build failed"; exit 1; }
