@@ -7,6 +7,8 @@ import { config } from '../config';
 import { query, tx, withTenant } from '../db';
 import { h, HttpError, parse } from '../http';
 import { sendMail } from '../mailer';
+import { provisionShop } from '../services/provision';
+import { BUSINESS_TEMPLATES } from '../../../shared/templates';
 import { isStrongPassword, PASSWORD_RULE, type UserRole } from '../../../shared/permissions';
 
 export const authRouter = Router();
@@ -111,6 +113,59 @@ authRouter.post(
     else await tx((db) => audit(db, req, null, 'login', 'super_admin', r.id));
     // The CorpusLite phone app keeps the session as a bearer token (it can't rely on cookies).
     res.json({ ...(await mePayload(req)), ...(req.headers['x-client'] === 'corpuslite' ? { token } : {}) });
+  }),
+);
+
+/* ---------- Self-service signup (landing page) ---------- */
+authRouter.get('/signup', h(async (_req, res) => {
+  res.json({ enabled: config.publicSignup, businessTypes: BUSINESS_TEMPLATES.map((t) => ({ key: t.key, name: t.name })) });
+}));
+
+const signupBody = z.object({
+  shopName: z.string().trim().min(2, 'Enter your business name').max(120),
+  ownerName: z.string().trim().min(2, 'Enter your name').max(120),
+  email: z.string().trim().email('Enter a valid email address').max(160),
+  phone: z.string().trim().refine((v) => v.replace(/\D/g, '').length >= 10, 'Enter a valid 10-digit mobile number'),
+  city: z.string().trim().max(80).default(''),
+  businessType: z.string().max(40).optional(),
+  password: z.string().refine(isStrongPassword, PASSWORD_RULE),
+  /** Hidden field people never see: bots fill it in. */
+  website: z.string().max(200).optional(),
+});
+
+/**
+ * A business owner creates their own shop on the free trial plan and is signed in straight away. The same
+ * provisioning as a shop the super admin creates (branch, cash account, trial of every add-on), with the password the
+ * owner chose, so no forced change. Limited to a few sign-ups per address per hour; PUBLIC_SIGNUP=0 turns it off.
+ */
+authRouter.post(
+  '/signup',
+  rateLimit('signup', 5, 60 * 60_000),
+  h(async (req, res) => {
+    if (!config.publicSignup) throw new HttpError(403, 'Sign-up is closed. Contact us to get an account.', 'signup_closed');
+    const b = parse(signupBody, req.body);
+    if (b.website) throw new HttpError(400, 'Could not create the account', 'rejected');
+    const email = b.email.toLowerCase();
+    const [dup] = await query('SELECT 1 FROM users WHERE lower(email) = $1 UNION SELECT 1 FROM super_admins WHERE lower(email) = $1', [email]);
+    if (dup) throw new HttpError(409, 'An account with this email already exists. Sign in, or use “Forgot password”.', 'email_taken');
+    if (b.businessType && !BUSINESS_TEMPLATES.some((t) => t.key === b.businessType)) throw new HttpError(400, 'Choose a business type from the list', 'bad_request');
+    const shop = await provisionShop(req, {
+      shopName: b.shopName, ownerName: b.ownerName, email, phone: b.phone, city: b.city, planId: 'trial', years: 1,
+      password: b.password, mustChangePassword: false, licenseStart: todayISO(), features: 'trial', businessType: b.businessType || undefined,
+    });
+    const [u] = await query("SELECT id, name, email, role, branch_id FROM users WHERE shop_id = $1 AND role = 'Owner' LIMIT 1", [shop.id]);
+    const token = await createSession(res, req, 'user', u.id, true);
+    req.ctx = {
+      kind: 'user', id: u.id, name: u.name, email: u.email, role: u.role as UserRole, shopId: shop.id, branchId: u.branch_id, mustChangePassword: false,
+      permissions: await permissionsFor(shop.id, u.role as UserRole), homeShopId: shop.id,
+    };
+    await withTenant(shop.id, (db) => audit(db, req, shop.id, 'signup', 'shop', shop.id, { email }));
+    sendMail({
+      to: email,
+      subject: 'Welcome to Corpus360',
+      text: `Hi ${b.ownerName},\n\nYour workspace "${b.shopName}" is ready, with a free trial of every feature.\nSign in any time at ${config.appUrl}/login with ${email}.`,
+    }).catch((e) => console.error(`[mail] Welcome email to ${email} failed: ${(e as Error).message}`));
+    res.status(201).json({ ...(await mePayload(req)), ...(req.headers['x-client'] === 'corpuslite' ? { token } : {}) });
   }),
 );
 

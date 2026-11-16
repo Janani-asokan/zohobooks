@@ -125,7 +125,7 @@ export default function Landing() {
         <nav className="lp-links"><a href="#features">Features</a><a href="#counter">Counter</a><a href="#trades">Your trade</a><a href="#screens">See it</a><a href="#compare">Why us</a><a href="#faq">FAQ</a></nav>
         <div className="lp-nav-cta">
           <Link to="/login" className="lp-pill lp-pill-light"><LogIn size={15} /> Login</Link>
-          <Link to="/login" className="lp-pill lp-pill-rose">Try the demo</Link>
+          <Link to="/signup" className="lp-pill lp-pill-rose">Sign up free</Link>
         </div>
       </header>
 
@@ -135,7 +135,7 @@ export default function Landing() {
           <h1>Billing &amp; stock is now <span className="lp-hl">much easier</span></h1>
           <p className="lp-sub">Corpus360 is a simple app for GST invoices, stock and accounts. Make a bill in seconds, even when the internet drops, upload a photo of a purchase bill to fill it in, and always know what is in your shop.</p>
           <div className="lp-cta">
-            <Link to="/login" className="lp-pill lp-pill-rose lg">Get started <ArrowRight size={18} /></Link>
+            <Link to="/signup" className="lp-pill lp-pill-rose lg">Start free trial <ArrowRight size={18} /></Link>
             <a href="#how" className="lp-play"><span><Zap size={16} /></span> See how it works</a>
           </div>
           <ul className="lp-facts">
@@ -274,15 +274,18 @@ export default function Landing() {
       <section className="lp-band reveal">
         <div>
           <h2>Ready to make billing easy?</h2>
-          <p>Sign in with the demo account and try every feature — no setup needed.</p>
+          <p>Create your shop in a minute and try every feature free. No card needed.</p>
         </div>
-        <Link to="/login" className="lp-pill lp-pill-light lg">Open the demo <ArrowRight size={18} /></Link>
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+          <Link to="/signup" className="lp-pill lp-pill-light lg">Create your shop <ArrowRight size={18} /></Link>
+          <Link to="/login" className="lp-pill lp-pill-rose lg">Open the demo</Link>
+        </div>
       </section>
 
       <footer className="lp-foot">
         <BrandLogo height={18} />
         <span>© {new Date().getFullYear()} Corpus360 · Billing and stock, made easy.</span>
-        <span className="lp-foot-links"><a href="#features">Features</a><a href="#faq">FAQ</a><Link to="/login"><Users size={13} /> Login</Link></span>
+        <span className="lp-foot-links"><a href="#features">Features</a><a href="#faq">FAQ</a><Link to="/signup">Sign up</Link><Link to="/login"><Users size={13} /> Login</Link></span>
       </footer>
     </div>
   );

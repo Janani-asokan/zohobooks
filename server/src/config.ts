@@ -18,6 +18,8 @@ export const config = {
   /** The CorpusLite phone app's web view origins (iOS, Android). They call the API with a bearer token, no cookies. */
   appOrigins: (env.APP_ORIGINS ?? 'capacitor://localhost,https://localhost,ionic://localhost').split(',').map((s) => s.trim()).filter(Boolean),
   cookieSecure: bool(env.COOKIE_SECURE, env.NODE_ENV === 'production'),
+  /** Self-service signup from the landing page: a new shop on the free trial plan. PUBLIC_SIGNUP=0 turns it off. */
+  publicSignup: bool(env.PUBLIC_SIGNUP, true),
   sessionDays: Number(env.SESSION_DAYS ?? 7),
   /** In development, password-reset links are returned in the API response so the flow is testable without SMTP. */
   exposeDevResetLinks: bool(env.EXPOSE_DEV_RESET_LINKS, env.NODE_ENV !== 'production'),

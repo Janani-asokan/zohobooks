@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { FullPageSpinner, ProtectedRoute } from './components/ProtectedRoute';
 import { homeFor, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import ResetPassword from './pages/ResetPassword';
 import SuperAdminLayout from './layouts/SuperAdminLayout';
 import AppLayout from './layouts/AppLayout';
@@ -92,6 +93,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RootPage />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/share/:token" element={<PublicInvoice />} />
         <Route path="/invoices/:id/print" element={<PrintInvoice />} />
