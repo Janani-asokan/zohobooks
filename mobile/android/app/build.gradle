@@ -16,10 +16,32 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing (Google Play upload key). The key and its passwords live OUTSIDE Git, in
+    // mobile/android/keystore.properties (git-ignored) or in environment variables for CI:
+    //   storeFile=/path/to/corpuslite-upload.jks   storePassword=…   keyAlias=upload   keyPassword=…
+    // Without them, release builds are left unsigned instead of failing.
+    def keyProps = new Properties()
+    def keyPropsFile = rootProject.file('keystore.properties')
+    if (keyPropsFile.exists()) keyPropsFile.withInputStream { keyProps.load(it) }
+    def signingValue = { String name, String envName -> keyProps.getProperty(name) ?: System.getenv(envName) }
+    def releaseStoreFile = signingValue('storeFile', 'CORPUSLITE_KEYSTORE')
+    signingConfigs {
+        release {
+            if (releaseStoreFile) {
+                storeFile file(releaseStoreFile)
+                storePassword signingValue('storePassword', 'CORPUSLITE_KEYSTORE_PASSWORD')
+                keyAlias signingValue('keyAlias', 'CORPUSLITE_KEY_ALIAS') ?: 'upload'
+                keyPassword signingValue('keyPassword', 'CORPUSLITE_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            // Not shrunk: Capacitor plugins load classes by name, and shrinking can break them at run time.
             minifyEnabled false
+            debuggable false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseStoreFile) signingConfig signingConfigs.release
         }
     }
 }

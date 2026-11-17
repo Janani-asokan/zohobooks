@@ -46,3 +46,28 @@ npx cap open ios                        # on a Mac: build and run in Xcode
 Google Play needs a Play developer account, a signing key and a service-account key; the App Store needs an Apple
 Developer account and an App Store Connect API key. These go in the repository's GitHub secrets (never in the code),
 then the workflow can sign and upload (`bundleRelease` for Play, an archive to TestFlight for iOS).
+
+## Release build for Google Play
+
+Release builds are signed with the **upload key** (`corpuslite-upload.jks`, alias `upload`), which is kept outside
+Git. Give Gradle the key in one of two ways:
+
+- a file `mobile/android/keystore.properties` (git-ignored):
+  ```
+  storeFile=/full/path/to/corpuslite-upload.jks
+  storePassword=…
+  keyAlias=upload
+  keyPassword=…
+  ```
+- or environment variables (for CI): `CORPUSLITE_KEYSTORE`, `CORPUSLITE_KEYSTORE_PASSWORD`, `CORPUSLITE_KEY_ALIAS`,
+  `CORPUSLITE_KEY_PASSWORD`.
+
+Then:
+```bash
+npm run build:app && cd mobile && npx cap sync android && cd android && ./gradlew bundleRelease assembleRelease
+```
+- `app/build/outputs/bundle/release/app-release.aab`: upload this to Google Play.
+- `app/build/outputs/apk/release/app-release.apk`: the same build, for installing directly.
+
+Raise `versionCode` (and `versionName`) in `android/app/build.gradle` before every new Play upload. Without the key,
+release builds come out unsigned instead of failing.
