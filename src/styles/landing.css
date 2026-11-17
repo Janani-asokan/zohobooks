@@ -204,3 +204,7 @@
 /* Eight screen tabs: wrap as whole pills, never mid-label. */
 .lp-tabs { flex-wrap: wrap; justify-content: center; max-width: 100%; border-radius: 26px; }
 .lp-tabs button { white-space: nowrap; }
+
+/* The sign-up band opens the page, right under the menu bar. */
+.lp-band.lp-band-top { width: calc(100% - 12vw); margin: 16px auto 0; }
+@media (max-width: 640px) { .lp-band.lp-band-top { width: auto; margin: 12px 16px 0; } }

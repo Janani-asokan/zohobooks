@@ -129,6 +129,17 @@ export default function Landing() {
         </div>
       </header>
 
+      <section className="lp-band lp-band-top">
+        <div>
+          <h2>Ready to make billing easy?</h2>
+          <p>Create your shop in a minute and try every feature free. No card needed.</p>
+        </div>
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+          <Link to="/signup" className="lp-pill lp-pill-light lg">Create your shop <ArrowRight size={18} /></Link>
+          <Link to="/login" className="lp-pill lp-pill-rose lg">Open the demo</Link>
+        </div>
+      </section>
+
       <section className="lp-hero" id="home">
         <div className="lp-hero-text">
           <span className="lp-badge"><Sparkles size={14} /> Made for Indian shops &amp; distributors</span>
@@ -268,17 +279,6 @@ export default function Landing() {
               </div>
             </div>
           ))}
-        </div>
-      </section>
-
-      <section className="lp-band reveal">
-        <div>
-          <h2>Ready to make billing easy?</h2>
-          <p>Create your shop in a minute and try every feature free. No card needed.</p>
-        </div>
-        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-          <Link to="/signup" className="lp-pill lp-pill-light lg">Create your shop <ArrowRight size={18} /></Link>
-          <Link to="/login" className="lp-pill lp-pill-rose lg">Open the demo</Link>
         </div>
       </section>
 
