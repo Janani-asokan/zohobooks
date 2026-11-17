@@ -601,3 +601,8 @@
 .support-days.wrap { flex-wrap: wrap; }
 .support-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .support-actions .btn { white-space: nowrap; }
+
+/* Top bar: Help / book a call-back. */
+.topbar-help { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--ink-700); font-size: var(--fs-13); font-weight: 600; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+.topbar-help:hover { border-color: var(--brand-500); color: var(--brand-600); }
+@media (max-width: 640px) { .topbar-help { width: 34px; padding: 0; justify-content: center; } .topbar-help span { display: none; } }

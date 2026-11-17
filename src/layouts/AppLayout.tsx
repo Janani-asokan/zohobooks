@@ -3,7 +3,7 @@ import { templateByKey } from '../../shared/templates';
 import { featureForPage } from '../../shared/features';
 import { FeatureOff } from '@/components/FeatureOff';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, UserRound, LogOut, Lock, HandCoins, ReceiptIndianRupee, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Package, UserRound, LogOut, Lock, HandCoins, ReceiptIndianRupee, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2, Headset } from 'lucide-react';
 import { buildActions, buildCreate, buildNav, canOpen } from './nav';
 import { CommandPalette } from './CommandPalette';
 import { resetHints } from '@/components/kit';
@@ -263,6 +263,11 @@ export default function AppLayout() {
             <button className="icon-btn mobile-only" onClick={() => setPalette(true)} aria-label="Search"><Search size={18} /></button>
             <AssistantButton />
             <QuickCreate me={me} />
+            {me.can('admin') && (
+              <Link to="/app/support" className="topbar-help" title="Help: book a call-back from our support team" aria-label="Help: book a call-back">
+                <Headset size={17} /><span>Help</span>
+              </Link>
+            )}
             <NotificationBell />
             <ProfileMenu name={me.user.name} sub={`${me.user.role} · ${me.shop.name}`} email={me.user.email}>
               {(close) => (
