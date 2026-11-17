@@ -563,3 +563,41 @@
 
 /* Type or speak the bill inside a popup: no frame of its own. */
 .quick-bill.bare { border: 0; background: none; padding: 0; box-shadow: none; }
+
+/* Customer support: call-back booking (shop) and the customer care console (staff). */
+.support-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+@media (max-width: 900px) { .support-grid { grid-template-columns: minmax(0, 1fr); } }
+.support-grid > * { min-width: 0; }
+.support-booked { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.support-booked-icon { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: var(--brand-50, #eef2ff); color: var(--brand-600); flex-shrink: 0; }
+.support-when { font-size: 20px; font-weight: 700; margin: 4px 0; color: var(--ink-900); }
+.support-days, .support-times { display: flex; flex-wrap: wrap; gap: 8px; }
+.support-days { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 4px; }
+.support-chip { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 7px 12px; font: inherit; font-size: var(--fs-13); font-weight: 500; color: var(--ink-800); cursor: pointer; display: inline-flex; flex-direction: column; align-items: center; gap: 1px; min-width: 76px; flex-shrink: 0; }
+.support-chip span { font-size: 11px; font-weight: 400; color: var(--ink-500); }
+.support-chip:hover:not(:disabled) { border-color: var(--brand-600); }
+.support-chip.on { background: var(--brand-600); border-color: var(--brand-600); color: #fff; }
+.support-chip.on span { color: rgba(255, 255, 255, .85); }
+.support-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.support-list li { padding: 8px 0; border-bottom: 1px solid var(--border); line-height: 1.5; }
+.support-list li:last-child { border-bottom: 0; }
+.support-notes { display: flex; gap: 6px; align-items: flex-start; background: var(--ink-50, #f8fafc); border-radius: 6px; padding: 6px 8px; margin-top: 4px; }
+.support-notes svg { flex-shrink: 0; margin-top: 2px; color: var(--green-600, #16a34a); }
+.support-alert { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 8px; background: #fef3c7; color: #92400e; margin-bottom: var(--sp-3); font-size: var(--fs-13); }
+.support-console { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-4); }
+@media (max-width: 760px) { .support-console { grid-template-columns: 1fr; } }
+.support-callcard { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.support-tel { display: inline-flex; gap: 6px; align-items: center; font-size: 17px; font-weight: 600; margin-top: 4px; }
+.support-shop { background: var(--ink-50, #f8fafc); border-radius: 8px; padding: 12px; }
+.support-shop h4 { margin: 12px 0 6px; font-size: var(--fs-13); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-500); }
+.support-shop h4:first-child { margin-top: 0; }
+.support-dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0 0 10px; font-size: var(--fs-13); }
+.support-dl dt { color: var(--ink-500); }
+.support-dl dd { margin: 0; overflow-wrap: anywhere; }
+.support-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.support-stats div { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; }
+.support-stats b { font-size: 16px; }
+.support-stats span { font-size: 11px; color: var(--ink-500); }
+.support-days.wrap { flex-wrap: wrap; }
+.support-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.support-actions .btn { white-space: nowrap; }

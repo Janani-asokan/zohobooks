@@ -72,6 +72,8 @@ const Organization = lazy(() => import('./pages/app/Organization'));
 const Team = IS_APP ? WebOnly : lazy(() => import('./pages/app/Team'));
 const Billing = IS_APP ? WebOnly : lazy(() => import('./pages/app/Billing'));
 const PrintSettings = lazy(() => import('./pages/app/PrintSettings'));
+const Support = lazy(() => import('./pages/app/Support'));
+const SuperSupport = lazy(() => import('./pages/super/Support'));
 const BarcodeLabels = lazy(() => import('./pages/app/BarcodeLabels'));
 
 /** "/" shows the public landing page to visitors and sends signed-in users to their workspace. */
@@ -105,6 +107,7 @@ export default function App() {
             <Route path="plans" element={<Plans />} />
             <Route path="features" element={<SuperFeatures />} />
             <Route path="activity" element={<Activity />} />
+            <Route path="support" element={<SuperSupport />} />
           </Route>
         </Route>
 
@@ -164,6 +167,7 @@ export default function App() {
               <Route path="organization" element={<Organization />} />
               <Route path="team" element={<Team />} />
               <Route path="print-settings" element={<PrintSettings />} />
+            <Route path="support" element={<Support />} />
               <Route path="features" element={<Features />} />
               <Route path="billing" element={<Billing />} />
               <Route path="audit" element={<AuditLog />} />

@@ -14,6 +14,7 @@ import { FEATURES } from '../../../shared/features';
 import { BUSINESS_TEMPLATES } from '../../../shared/templates';
 import { EMAIL_RE } from '../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
+import { platformSupportRouter } from './platformSupport';
 
 /**
  * Super Admin API. Reads/writes only platform tables (shops, plans, config, tax slabs,
@@ -22,6 +23,8 @@ import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
  */
 export const platformRouter = Router();
 platformRouter.use(requireSuper);
+// Customer care console: call-back requests from every shop.
+platformRouter.use('/support', platformSupportRouter);
 
 const serializeShop = (s: any) => ({
   id: s.id,

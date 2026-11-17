@@ -1,7 +1,7 @@
 import { IS_APP } from '@/lib/platform';
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift, Tag } from 'lucide-react';
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift, Tag, Headset } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import { featureForPage } from '../../shared/features';
 import type { PaletteAction } from './CommandPalette';
@@ -199,6 +199,7 @@ export function buildActions(can: Can, flags: NavFlags = { lending: false }): Pa
   add(can('admin'), 'Settings', 'Organisation profile', Building2, '/app/organization', 'logo gstin upi address');
   add(can('admin'), 'Settings', 'Print settings', Printer, '/app/print-settings', 'invoice template thermal barcode label');
   add(can('admin'), 'Settings', 'Users & roles', Users, '/app/team', 'staff team branch warehouse');
+  add(can('admin'), 'Settings', 'Customer support', Headset, '/app/support', 'help call back callback support phone');
   add(can('admin'), 'Settings', 'Features & add-ons', Puzzle, '/app/features', 'plan price pricing add-on modules subscription turn on upgrade');
   return out;
 }
