@@ -732,7 +732,7 @@ salesRouter.post(
       db, req, c.shopId,
       { customerId: b.customerId, date: today, dueDate: today, branchId: b.branchId ?? c.branchId, lines: b.lines, withGst: b.withGst, reverseCharge: false, tcsRate: 0, notes: '',
         pricesIncludeTax: b.pricesIncludeTax, billDiscount: b.billDiscount, skipOffers: b.skipOffers, redeemPoints: b.redeemPoints },
-      { issue: true, source: 'pos', device },
+      { issue: true, source: 'pos', device, madeOffline: offline },
     );
     if (b.clientRef) await db.query('UPDATE invoices SET client_ref = $3, made_offline_at = $4 WHERE shop_id = $1 AND id = $2', [c.shopId, inv.id, b.clientRef, offline ? b.madeAt : null]);
     if (b.split) {

@@ -26,7 +26,8 @@ export async function invoicePrintBundle(db: Db, shopId: string, invoiceId: stri
   return {
     invoice: { ...inv, createdBy: undefined, recurringId: undefined, salesOrderId: undefined },
     branch: snap.branch,
-    org: { ...snap.org, tradeDetails },
+    // Warehouse licence numbers print with the trade registrations; a number already typed there isn't repeated.
+    org: { ...snap.org, tradeDetails: [...tradeDetails, ...(snap.licenses ?? []).filter((l) => !tradeDetails.some((t) => t.value === l.value))] },
     settings,
     itemFields: snap.itemFields ?? [],
     invoiceFields: snap.invoiceFields ?? [],

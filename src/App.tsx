@@ -73,6 +73,8 @@ const Team = IS_APP ? WebOnly : lazy(() => import('./pages/app/Team'));
 const Billing = IS_APP ? WebOnly : lazy(() => import('./pages/app/Billing'));
 const PrintSettings = lazy(() => import('./pages/app/PrintSettings'));
 const Support = lazy(() => import('./pages/app/Support'));
+const Licenses = lazy(() => import('./pages/app/Licenses'));
+const LicenseDetail = lazy(() => import('./pages/app/LicenseDetail'));
 const SuperSupport = lazy(() => import('./pages/super/Support'));
 const BarcodeLabels = lazy(() => import('./pages/app/BarcodeLabels'));
 
@@ -160,6 +162,8 @@ export default function App() {
             <Route path="microfinance/planner" element={<Planner />} />
             <Route path="microfinance/reports" element={<LendingReports />} />
             <Route path="microfinance/settings" element={<LendingSettings />} />
+            <Route path="licenses" element={<Licenses />} />
+            <Route path="licenses/:id" element={<LicenseDetail />} />
             <Route path="reports" element={<ReportsHome />} />
             <Route path="reports/gst" element={<Reports />} />
             <Route path="reports/:id" element={<ReportView />} />
@@ -167,7 +171,7 @@ export default function App() {
               <Route path="organization" element={<Organization />} />
               <Route path="team" element={<Team />} />
               <Route path="print-settings" element={<PrintSettings />} />
-            <Route path="support" element={<Support />} />
+              <Route path="support" element={<Support />} />
               <Route path="features" element={<Features />} />
               <Route path="billing" element={<Billing />} />
               <Route path="audit" element={<AuditLog />} />

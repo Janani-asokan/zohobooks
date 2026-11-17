@@ -1,6 +1,7 @@
 import type { Db } from '../db';
 import { one } from '../db';
 import { getOrg } from './common';
+import { printableLicenses } from './licenses';
 
 /**
  * What an issued invoice is printed with, frozen when it is issued (FUN-11 / TEC-05): the business details, the print
@@ -15,6 +16,8 @@ export interface PrintSnapshot {
   branch: { name: string; address: string; phone: string } | null;
   /** The customer's unpaid balance on other invoices when this one was issued (FUN-04); null for walk-in sales. */
   previousBalance?: number | null;
+  /** Valid regulatory licences of the dispatching warehouse (FSSAI, bonded warehouse …), printed under the GSTIN. */
+  licenses?: Array<{ label: string; value: string }>;
   takenAt: string;
   backfilled?: boolean;
 }
@@ -38,6 +41,7 @@ export async function takePrintSnapshot(db: Db, shopId: string, inv: { id: strin
     invoiceFields: org.invoice_fields ?? [],
     branch: branch ? { name: branch.name, address: branch.address, phone: branch.phone } : null,
     previousBalance: prev ? Math.round(Number(prev.open) * 100) / 100 : null,
+    licenses: await printableLicenses(db, shopId, inv.branch_id),
     takenAt: new Date().toISOString(),
   };
 }

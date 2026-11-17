@@ -10,6 +10,8 @@ const ROLE_HINT: Record<string, string> = {
   Accountant: 'Books, banking, GST and reports',
   'Sales Staff': 'Billing counter and customers',
   Warehouse: 'Items, stock and goods received',
+  Collector: 'Collects loan instalments',
+  'Compliance Manager': 'Warehouse licences, grace periods and overrides',
   Viewer: 'Read-only access to numbers',
 };
 

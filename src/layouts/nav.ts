@@ -1,7 +1,7 @@
 import { IS_APP } from '@/lib/platform';
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift, Tag, Headset } from 'lucide-react';
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift, Tag, Headset, ShieldCheck } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import { featureForPage } from '../../shared/features';
 import type { PaletteAction } from './CommandPalette';
@@ -12,7 +12,7 @@ type Can = (p: Permission) => boolean;
 const CHILD_ICONS: Record<string, LucideIcon> = {
   Customers: UserRound, Quotes: FileSignature, 'Sales Orders': ClipboardList, Invoices: FileText, 'Delivery Challans': Truck, 'Payments Received': IndianRupee,
   'Credit Notes': FileMinus, 'Offers & loyalty': Gift, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, 'My Day (field)': MapPin, 'Field Team': MapPinned, Vendors: Truck, 'Purchase Orders': ClipboardList,
-  Bills: Receipt, 'Barcode labels': Tag, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Stock Adjustments': SlidersHorizontal,
+  Bills: Receipt, 'Barcode labels': Tag, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Warehouse licences': ShieldCheck, 'Stock Adjustments': SlidersHorizontal,
   Transfers: ArrowLeftRight, 'Smart Reorder': BrainCircuit, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank, 'Tally & Import': RefreshCw,
   'Today’s rates': TrendingUp, 'Microfinance overview': LayoutDashboard, Borrowers: Users, 'Loan book': HandCoins, Collections: ReceiptIndianRupee, 'EMI planner': Calculator, 'Microfinance reports': FileBarChart2, 'Microfinance settings': Settings2,
 };
@@ -71,6 +71,7 @@ export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavIte
       ...(flags.dailyRates && can('items.write') ? [{ label: 'Today’s rates', to: '/app/items/rates' }] : []),
       ...(can('items.write') || can('purchases.read') || can('reports.read') ? [{ label: 'Smart Reorder', to: '/app/inventory/reorder' }] : []),
       { label: 'Warehouses', to: '/app/inventory/warehouses' },
+      ...(can('licenses.read') ? [{ label: 'Warehouse licences', to: '/app/licenses' }] : []),
       { label: 'Stock Adjustments', to: '/app/inventory/adjustments' },
       { label: 'Transfers', to: '/app/inventory/transfers' },
       { label: 'Stock Summary', to: '/app/inventory/stock-summary' },
@@ -170,6 +171,7 @@ export function buildActions(can: Can, flags: NavFlags = { lending: false }): Pa
   add(true, 'Go to', 'Barcode labels', Tag, '/app/items/labels', 'print barcode label sticker roll a4 price tag');
   add(can('items.write'), 'Go to', 'Today’s rates', TrendingUp, '/app/items/rates', 'daily price rate board update prices vegetable gold silver steel');
   add(true, 'Go to', 'Warehouses', Warehouse, '/app/inventory/warehouses', 'branches godown store locations');
+  add(can('licenses.read'), 'Go to', 'Warehouse licences', ShieldCheck, '/app/licenses', 'licence license fssai fire noc bond permit expiry renewal compliance capacity seats');
   add(true, 'Go to', 'Stock adjustments', SlidersHorizontal, '/app/inventory/adjustments', 'stock count damaged expired write off');
   add(true, 'Go to', 'Transfers', ArrowLeftRight, '/app/inventory/transfers', 'move stock between branches in transit');
   add(can('items.write') || can('purchases.read'), 'Go to', 'Smart Reorder', BrainCircuit, '/app/inventory/reorder', 'reorder low stock purchase suggestions dead stock expiry AI');
@@ -220,6 +222,7 @@ const ROUTE_RULES: Array<[RegExp, (can: Can) => boolean]> = [
   [/^\/app\/(pos|sales\/invoices\/new|sales\/invoices\/[^/]+\/edit)/, (can) => can('sales.write')],
   [/^\/app\/items\/(new|rates|[^/]+\/edit)/, (can) => can('items.write')],
   [/^\/app\/(sales\/recurring|organization|team|print-settings|billing|features)/, (can) => can('admin')],
+  [/^\/app\/licenses/, (can) => can('licenses.read')],
   [/^\/app\/audit/, (can) => can('audit.read') || can('admin')],
   [/^\/app\/microfinance\/(borrowers|reports)/, (can) => can('lending.read')],
   [/^\/app\/microfinance\/(loans\/new|settings)/, (can) => can('lending.write')],

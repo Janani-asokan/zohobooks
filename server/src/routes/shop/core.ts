@@ -16,6 +16,7 @@ import { isStrongPassword, PASSWORD_RULE, STAFF_ROLES } from '../../../../shared
 import { BARCODE_FIELDS, INVOICE_FIELDS, LABEL_SIZES, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
 import { layoutProblems } from '../../../../shared/labelLayout';
 import { T, allowed } from './ctx';
+import { licenseAttention } from '../../services/licenses';
 import { bankErrors, bankFromIfsc, cleanAccountNo, cleanIfsc, composeBankDetails, parseBankDetails, type BankFields } from '../../../../shared/bank';
 import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty, normalizeVendorPhone } from '../../../../shared/contact';
 
@@ -318,6 +319,13 @@ coreRouter.get(
     if (overdue.n) out.push({ kind: 'overdue', tone: 'red', text: `${overdue.n} overdue invoice${overdue.n > 1 ? 's' : ''} · ₹${Number(overdue.amt).toLocaleString('en-IN')}`, link: '/app/sales/invoices?status=Overdue' });
     if (low.n) out.push({ kind: 'stock', tone: 'amber', text: `${low.n} item${low.n > 1 ? 's' : ''} at or below reorder level`, link: '/app/items?stock=low' });
     if (exp.n) out.push({ kind: 'expiry', tone: 'amber', text: `${exp.n} batch${exp.n > 1 ? 'es' : ''} expiring within 30 days`, link: '/app/inventory' });
+    if (allowed(c, 'licenses.read')) {
+      const w = await licenseAttention(db, c.shopId);
+      const bad = w.expired! + w.suspended!;
+      if (bad) out.push({ kind: 'wh_license_blocked', tone: 'red', text: `${bad} warehouse licence${bad > 1 ? 's' : ''} expired or suspended · billing blocked`, link: '/app/licenses?status=expired' });
+      if (w.grace) out.push({ kind: 'wh_license_grace', tone: 'red', text: `${w.grace} warehouse licence${w.grace > 1 ? 's' : ''} in grace period`, link: '/app/licenses?status=grace' });
+      if (w.expiring_soon) out.push({ kind: 'wh_license_soon', tone: 'amber', text: `${w.expiring_soon} warehouse licence${w.expiring_soon > 1 ? 's' : ''} expiring within 30 days`, link: '/app/licenses?status=expiring_soon' });
+    }
     if (bills.n) out.push({ kind: 'bills', tone: 'blue', text: `${bills.n} vendor bill${bills.n > 1 ? 's' : ''} due soon`, link: '/app/purchases' });
     if (allowed(c, 'admin') && aiEnabled()) {
       const ai = await aiBalance(c.shopId);

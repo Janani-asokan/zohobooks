@@ -87,7 +87,11 @@ export interface ReceiptData {
   /** Printed under the bill number, e.g. for a bill made offline. */
   note?: string;
 }
-type ReceiptOrg = Pick<Organization, 'companyName' | 'address' | 'gstin' | 'phone' | 'logo' | 'invoiceFooter' | 'upiId'>;
+type ReceiptOrg = Pick<Organization, 'companyName' | 'address' | 'gstin' | 'phone' | 'logo' | 'invoiceFooter' | 'upiId'> & {
+  /** The print bundle sends trade registrations and warehouse licence numbers (FSSAI …) as a labelled list; the
+   * shop's own profile keeps them as a map, which the receipt leaves out. */
+  tradeDetails?: Array<{ label: string; value: string }> | Record<string, string>;
+};
 
 export function receiptFromInvoice(inv: Invoice, items: Item[] = [], partyBalance?: number, paymentMode?: string): ReceiptData {
   const at = inv.issuedAt ?? inv.createdAt;
@@ -129,6 +133,7 @@ export function ThermalReceipt({ data, org, s }: { data: ReceiptData; org: Recei
       {(t === 'simple' ? firstAddr.slice(0, 1) : firstAddr).map((a) => <div key={a} className="c">{a}</div>)}
       {org.phone && t !== 'simple' && <div className="c">Ph: {org.phone}</div>}
       {s.showGstin && org.gstin && data.withGst && <div className="c b">GSTIN: {org.gstin}</div>}
+      {Array.isArray(org.tradeDetails) && org.tradeDetails.map((d) => <div key={d.label + d.value} className="c">{d.label}: {d.value}</div>)}
       {t === 'classic' && <div className="rc-title">{data.withGst ? 'TAX INVOICE' : 'BILL OF SUPPLY'}</div>}
     </div>
   );

@@ -58,6 +58,7 @@ function uniqueMessage(constraint?: string) {
     print_jobs_idem_uq: 'This print job was already sent',
     items_sku_uq: 'SKU already exists',
     tax_slabs_rate_key: 'A slab with this rate already exists',
+    warehouse_licenses_number_key: 'A licence of this type with this number already exists',
   };
   return (constraint && map[constraint]) || 'Duplicate value';
 }

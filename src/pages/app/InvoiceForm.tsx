@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { LicenseGatePrompt, isLicenseBlock, type LicenseBlock, type LicenseChoice } from '@/components/LicenseGatePrompt';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle, Wand2, Mic, FileUp } from 'lucide-react';
 import { api, ApiError, fieldErrors } from '@/api/client';
@@ -167,21 +168,24 @@ function Form({ existing }: { existing?: Invoice }) {
   };
   const [newCust, setNewCust] = useState(false);
   const [quick, setQuick] = useState<null | 'speak' | 'file'>(null);
-  const [creditPrompt, setCreditPrompt] = useState<{ mode: 'issue' | 'issue-pay'; message: string } | null>(null);
-  const save = (mode: 'draft' | 'issue' | 'issue-pay', overrideCreditLimit = false) => {
+  const [creditPrompt, setCreditPrompt] = useState<{ mode: 'issue' | 'issue-pay'; message: string; lic: LicenseChoice } | null>(null);
+  const [licPrompt, setLicPrompt] = useState<{ mode: 'issue' | 'issue-pay'; block: LicenseBlock; credit: boolean; lic: LicenseChoice } | null>(null);
+  const save = (mode: 'draft' | 'issue' | 'issue-pay', overrideCreditLimit = false, lic: LicenseChoice = {}) => {
     setTouched(true);
     setServerErr({});
     if (Object.values(errs).some(Boolean)) return toast('error', 'Please fix the highlighted fields');
-    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount,
+    const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit, ...lic, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount,
       ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
       extra: Object.fromEntries(invFields.filter((x) => (invExtra[x.key] ?? '').trim()).map((x) => [x.key, invExtra[x.key]!.trim()])) };
-    const onSuccess = (inv: Invoice) => {
+    const onSuccess = (inv: Invoice & { licenseWarnings?: Array<{ label: string; licenseNumber: string; statusLabel: string; daysToExpiry: number }> }) => {
       toast('success', inv.status === 'Draft' ? 'Draft saved' : existing?.status === 'Issued' ? 'Invoice updated' : 'Invoice issued', inv.number ?? undefined);
+      for (const w of inv.licenseWarnings ?? []) toast('info', `${w.label} ${w.licenseNumber}: ${w.statusLabel.toLowerCase()}`, w.daysToExpiry >= 0 ? `Expires in ${w.daysToExpiry} days. Renew it to keep billing.` : 'Renew it before the grace period ends, or invoices will be blocked.');
       if (invFile) void attachFile('invoice', inv.id, invFile.file.name, invFile.dataUrl).catch(() => undefined);
       navigate(`/app/sales/invoices/${inv.id}${mode === 'issue-pay' ? '?pay=1' : ''}`);
     };
     const onError = (err: Error) => {
-      if (err instanceof ApiError && err.code === 'credit_limit' && mode !== 'draft') return setCreditPrompt({ mode, message: err.message });
+      if (err instanceof ApiError && err.code === 'credit_limit' && mode !== 'draft') return setCreditPrompt({ mode, message: err.message, lic });
+      if (err instanceof ApiError && isLicenseBlock(err.code) && mode !== 'draft') return setLicPrompt({ mode, block: { code: err.code, message: err.message, details: err.details ?? {} } as unknown as LicenseBlock, credit: overrideCreditLimit, lic });
       const f = fieldErrors(err); setServerErr(f); toast('error', err.message);
     };
     if (existing) update.mutate(body, { onSuccess, onError });
@@ -343,7 +347,8 @@ function Form({ existing }: { existing?: Invoice }) {
       </div>
       <ConfirmModal open={!!creditPrompt} onClose={() => setCreditPrompt(null)} title="Over the credit limit" confirmLabel="Issue anyway"
         text={<>{creditPrompt?.message} Issue the invoice anyway? This is recorded in the audit log.</>}
-        onConfirm={() => { const m = creditPrompt!.mode; setCreditPrompt(null); save(m, true); }} />
+        onConfirm={() => { const { mode: m, lic } = creditPrompt!; setCreditPrompt(null); save(m, true, lic); }} />
+      {licPrompt && <LicenseGatePrompt block={licPrompt.block} onClose={() => setLicPrompt(null)} onRetry={(c) => { const { mode: m, credit, lic } = licPrompt; setLicPrompt(null); save(m, credit, { ...lic, ...c }); }} />}
       <Modal open={quick === 'speak'} onClose={() => setQuick(null)} size="lg" title="Type or speak the bill" subtitle="Say or type the items, customer, discount and payment. AI finds your items and customer and fills the invoice for you to check.">
         {quick === 'speak' && <QuickBill context="invoice" bare onApply={(b) => { applyQuick(b); setQuick(null); }} />}
       </Modal>

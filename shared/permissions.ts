@@ -1,4 +1,4 @@
-export const STAFF_ROLES = ['Manager', 'Accountant', 'Sales Staff', 'Warehouse', 'Collector', 'Viewer'] as const;
+export const STAFF_ROLES = ['Manager', 'Accountant', 'Sales Staff', 'Warehouse', 'Collector', 'Compliance Manager', 'Viewer'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 export type UserRole = 'Owner' | StaffRole;
 
@@ -20,6 +20,9 @@ export const PERMISSIONS = {
   'lending.read': 'Microfinance: see borrowers, loans, dues and reports',
   'lending.write': 'Microfinance: register borrowers, give and close loans, late charges',
   'lending.collect': 'Microfinance: collect instalments (without “see” access, only loans assigned to them)',
+  'licenses.read': 'Warehouse licences: see licences, expiry and alerts',
+  'licenses.write': 'Warehouse licences: add, renew, suspend and change capacity',
+  'licenses.override': 'Warehouse licences: grant grace periods and issue invoices past a blocked licence (with a reason)',
   'admin': 'Organization profile, staff, branches, recurring & settings',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
@@ -29,11 +32,12 @@ const ALL = Object.keys(PERMISSIONS) as Permission[];
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   Owner: ALL,
   Manager: ALL.filter((p) => p !== 'admin'),
-  Accountant: ['sales.write', 'payments.write', 'customers.write', 'items.cost', 'purchases.read', 'purchases.write', 'banking.read', 'banking.write', 'accounting.read', 'accounting.write', 'reports.read', 'audit.read', 'lending.read'],
+  Accountant: ['sales.write', 'payments.write', 'customers.write', 'items.cost', 'purchases.read', 'purchases.write', 'banking.read', 'banking.write', 'accounting.read', 'accounting.write', 'reports.read', 'audit.read', 'lending.read', 'licenses.read'],
   'Sales Staff': ['sales.write', 'payments.write', 'customers.write'],
-  Warehouse: ['items.write', 'purchases.read'],
+  Warehouse: ['items.write', 'purchases.read', 'licenses.read'],
   Collector: ['lending.collect'],
-  Viewer: ['items.cost', 'purchases.read', 'banking.read', 'accounting.read', 'reports.read', 'lending.read'],
+  'Compliance Manager': ['licenses.read', 'licenses.write', 'licenses.override', 'audit.read', 'reports.read'],
+  Viewer: ['items.cost', 'purchases.read', 'banking.read', 'accounting.read', 'reports.read', 'lending.read', 'licenses.read'],
 };
 
 /** Permission groups for the roles matrix, in the order of the sidebar. */
@@ -43,6 +47,7 @@ export const PERMISSION_GROUPS: Array<{ module: string; permissions: Permission[
   { module: 'Purchases', permissions: ['purchases.read', 'purchases.write'] },
   { module: 'Accounting', permissions: ['banking.read', 'banking.write', 'accounting.read', 'accounting.write'] },
   { module: 'Reports', permissions: ['reports.read'] },
+  { module: 'Warehouse licences', permissions: ['licenses.read', 'licenses.write', 'licenses.override'] },
   { module: 'Microfinance management', permissions: ['lending.read', 'lending.write', 'lending.collect'] },
   { module: 'Administration', permissions: ['field.view', 'audit.read', 'admin'] },
 ];

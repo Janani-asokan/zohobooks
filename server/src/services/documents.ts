@@ -15,6 +15,7 @@ import { moveStock, releaseSerials, sellSerials } from './stock';
 import { audit } from '../audit';
 import { todayISO, type UserCtx } from '../auth';
 import { payable, priceBill, redeemablePoints, runningOn, type AppliedOffer } from '../../../shared/offers';
+import { licenseGate, recordLicenseGate, type LicenseGate } from './licenses';
 import { loyaltySettings, offersOn, pointsBalance, reversePointsForReturn, reverseInvoicePoints, settleInvoicePoints, shopHasOffers } from './offersLoyalty';
 
 export const lineInput = z.object({
@@ -139,6 +140,10 @@ export const invoiceInput = z.object({
   skipOffers: z.array(z.string().uuid()).max(50).optional(),
   /** Loyalty points the customer uses on this bill (whole points). */
   redeemPoints: z.number().int().min(0).max(1e8).optional(),
+  /** Issue past an expired or suspended warehouse licence (needs licenses.override); the reason is audited. */
+  licenseOverride: z.object({ reason: z.string().trim().max(500) }).nullable().optional(),
+  /** Usage above a capacity / seat licence: bill it at the overage rate, or let it through (needs licenses.override). */
+  licenseOverage: z.enum(['bill', 'allow']).nullable().optional(),
 });
 export type InvoiceInput = z.infer<typeof invoiceInput>;
 
@@ -263,8 +268,32 @@ async function restock(db: Db, req: Request | null, shopId: string, inv: any, re
   }
 }
 
-export async function createInvoice(db: Db, req: Request | null, shopId: string, input: InvoiceInput, opts: { issue: boolean; source?: 'app' | 'pos' | 'recurring'; recurringId?: string; device?: DeviceNumber }) {
+/**
+ * The warehouse licence check (services/licenses.ts), run before an invoice is issued. It may move usage above a
+ * licence onto an overage line. A recurring invoice that a licence blocks is saved as a draft instead of failing, and
+ * a bill made offline at the counter (already handed over) is kept, with the breach recorded.
+ */
+async function gateLicenses(db: Db, req: Request | null, shopId: string, input: InvoiceInput, source: string, madeOffline: boolean) {
+  const branchId = await primaryBranchId(db, shopId, input.branchId);
+  const gateIn = { branchId, customerId: input.customerId, date: input.date, lines: input.lines, override: input.licenseOverride, overage: input.licenseOverage };
+  try {
+    return { gate: await licenseGate(db, req, shopId, gateIn, { recordOnly: madeOffline }), held: null };
+  } catch (e) {
+    if (source === 'recurring' && e instanceof HttpError && e.code.startsWith('license_')) return { gate: null, held: e.message };
+    throw e;
+  }
+}
+
+export async function createInvoice(db: Db, req: Request | null, shopId: string, input: InvoiceInput, opts: { issue: boolean; source?: 'app' | 'pos' | 'recurring'; recurringId?: string; device?: DeviceNumber; madeOffline?: boolean }) {
   const source = opts.source ?? 'app';
+  let gate: LicenseGate | null = null;
+  if (opts.issue) {
+    const g = await gateLicenses(db, req, shopId, input, source, !!opts.madeOffline);
+    gate = g.gate;
+    if (g.held) opts = { ...opts, issue: false };
+    if (gate && gate.lines !== input.lines) input = { ...input, lines: gate.lines };
+    if (g.held) await audit(db, req, shopId, 'license_hold', 'recurring_profile', opts.recurringId ?? undefined, { reason: g.held });
+  }
   const f = await computeInvoiceFields(db, shopId, input, source);
   const cfg = await platformConfig(db);
   const row = await one(
@@ -285,8 +314,9 @@ export async function createInvoice(db: Db, req: Request | null, shopId: string,
   if (opts.issue && source === 'app') await checkCreditLimit(db, req, shopId, f.customerId, f.t.total, row.id, input.overrideCreditLimit);
   let number: string | null = null;
   if (opts.issue) number = await issue(db, req, shopId, row, opts.device);
+  if (opts.issue && gate) await recordLicenseGate(db, req, shopId, row.id, gate, { recordOnly: opts.madeOffline });
   await audit(db, req, shopId, opts.issue ? 'issue' : 'create_draft', 'invoice', row.id, { number, total: f.t.total, source });
-  return getInvoice(db, shopId, row.id);
+  return { ...(await getInvoice(db, shopId, row.id)), licenseWarnings: gate?.warnings ?? [] };
 }
 
 /**
@@ -331,6 +361,11 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
   if (inv.status === 'Cancelled') throw conflict('Cancelled invoices can’t be edited');
   if (inv.status === 'Issued' && (Number(inv.amount_paid) > 0 || Number(inv.amount_credited) > 0))
     throw conflict('This invoice has payments or credit notes. Issue a credit note instead of editing it.');
+  let gate: LicenseGate | null = null;
+  if (inv.status === 'Issued' || issueNow) {
+    gate = (await gateLicenses(db, req, shopId, input, 'app', false)).gate;
+    if (gate && gate.lines !== input.lines) input = { ...input, lines: gate.lines };
+  }
   const f = await computeInvoiceFields(db, shopId, input, inv.source, id);
   if (inv.status === 'Issued') {
     await reverseInvoicePoints(db, req, shopId, id, `Edit ${inv.number}`);
@@ -362,8 +397,9 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
     const fresh = await one(db, 'SELECT * FROM invoices WHERE shop_id = $1 AND id = $2', [shopId, id]);
     await issue(db, req, shopId, fresh);
   }
+  if (gate) await recordLicenseGate(db, req, shopId, id, gate);
   await audit(db, req, shopId, inv.status === 'Draft' && issueNow ? 'issue' : 'update', 'invoice', id, { total: f.t.total });
-  return getInvoice(db, shopId, id);
+  return { ...(await getInvoice(db, shopId, id)), licenseWarnings: gate?.warnings ?? [] };
 }
 
 export async function cancelInvoice(db: Db, req: Request, shopId: string, id: string, reason: string) {

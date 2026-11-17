@@ -6,6 +6,7 @@ import { createInvoice } from './services/documents';
 import { getOrg } from './services/common';
 import { emailReminder } from './routes/shop/sales';
 import { todayISO } from './auth';
+import { runLicenseJob } from './services/licenses';
 
 const addPeriod = (iso: string, f: string) => {
   const d = new Date(iso + 'T00:00:00');
@@ -111,6 +112,8 @@ export function startJobs() {
     safe('recurring', runRecurring)();
     safe('reminders', runReminders)();
     safe('license', runLicenseReminders)();
+    // Warehouse licences: statuses, 90/60/30/7/0-day reminders, renewal invoices. Idempotent, so hourly is safe.
+    safe('warehouse-licenses', () => runLicenseJob())();
     safe('sessions', () => query("DELETE FROM sessions WHERE expires_at < now(); DELETE FROM password_resets WHERE expires_at < now() - interval '7 days'"))();
   };
   setTimeout(hourly, 10_000);
