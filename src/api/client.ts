@@ -16,18 +16,25 @@ export const apiHeaders = (json: boolean): Record<string, string> => {
 
 async function request<T>(method: string, url: string, body?: Json): Promise<T> {
   let res: Response;
+  // A stalled connection (weak mobile data, a captive Wi-Fi page) would otherwise leave the screen spinning for ever:
+  // give up after 25 s (60 s for uploads and reads that build files) and treat it like being offline.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), /extract|attachments|import|export|pdf/.test(url) ? 60_000 : 25_000);
   try {
     res = await fetch(API_BASE + '/api' + url, {
       method,
       credentials: IS_APP ? 'omit' : 'same-origin',
       headers: apiHeaders(body !== undefined),
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
     });
   } catch {
+    clearTimeout(timer);
     // The phone app works offline: a screen opens with the last copy it saw (shop data, items, customers …).
     if (IS_APP && method === 'GET') { const c = await cacheGet<T>(url); if (c) return c.data; }
     throw new ApiError(0, navigator.onLine ? 'Can’t reach the server. Please try again.' : 'You’re offline. Changes can’t be saved until you reconnect.', 'network');
   }
+  clearTimeout(timer);
   const text = await res.text();
   const data = text ? safeJson(text) : null;
   if (!res.ok) {

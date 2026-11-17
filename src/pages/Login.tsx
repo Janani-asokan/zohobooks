@@ -128,7 +128,7 @@ export default function Login() {
         <button className="btn btn-primary btn-block login-btn" type="submit" disabled={loading}>
           {loading ? <><Loader2 size={18} className="spin" /> {t('login.signingIn')}</> : <>{t('login.submit')} <ArrowRight size={18} /></>}
         </button>
-        {slowLogin && <p className="small muted" role="status" style={{ textAlign: 'center', margin: 0 }}>Starting up the server after a quiet spell. This first sign-in can take up to a minute.</p>}
+        {slowLogin && <p className="small muted" role="status" style={{ textAlign: 'center', margin: 0 }}>Signing in is taking longer than usual. Check your internet connection.</p>}
         <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>New to Corpus360? <Link to="/signup" style={{ fontWeight: 600 }}>Create your shop, free</Link></p>
       </form>
 

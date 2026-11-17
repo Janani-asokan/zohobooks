@@ -12,6 +12,14 @@ LOCAL=$(git rev-parse HEAD); REMOTE=$(git rev-parse '@{u}' 2>/dev/null || echo "
 healthy() { curl -fsS -m 5 http://127.0.0.1/api/health >/dev/null 2>&1; }
 if [ "$LOCAL" = "$REMOTE" ] && [ "${1:-}" != "--force" ] && healthy && [ ! -s "$ROOT/restore-from" ]; then exit 0; fi
 echo "$(date -Is) updating $LOCAL -> $REMOTE"
+# Rebuilding takes 20+ minutes of the server's single CPU and slows the live site meanwhile: skip it when the new
+# commits only touch what the server doesn't run (the phone app, docs, CI). Settings and scripts still apply.
+CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" 2>/dev/null)
+NEEDS_BUILD=1
+if [ -n "$CHANGED" ] && [ "${1:-}" != "--force" ] && healthy && [ ! -s "$ROOT/restore-from" ] && \
+   ! echo "$CHANGED" | grep -qvE '^(mobile/|e2e/|docs/|\.github/|[^/]+\.md$|deploy/digitalocean/[^/]+\.md$|\.env\.app$)'; then
+  NEEDS_BUILD=0
+fi
 git reset -q --hard "$REMOTE"
 # The app runs as an unprivileged user in the container: the code must be world-readable.
 chmod -R a+rX "$ROOT/src"
@@ -21,7 +29,7 @@ install -m 755 deploy/digitalocean/restore.sh /usr/local/bin/corpus360-restore
 install -m 755 deploy/digitalocean/reimport.sh /usr/local/bin/corpus360-reimport
 cd deploy/digitalocean
 DC="docker compose --env-file $ROOT/.env"
-$DC build app || { echo "build failed"; exit 1; }
+if [ "$NEEDS_BUILD" = 1 ]; then $DC build app || { echo "build failed"; exit 1; }; else echo "only app/docs changes: no rebuild"; fi
 /usr/local/bin/corpus360-restore || echo "database copy not done yet"
 $DC up -d
 docker image prune -f >/dev/null
