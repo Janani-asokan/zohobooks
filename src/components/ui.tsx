@@ -312,6 +312,7 @@ export function ConfirmModal({
   confirmLabel = 'Delete',
   onConfirm,
   onClose,
+  tone = 'danger',
 }: {
   open: boolean;
   title: string;
@@ -319,6 +320,8 @@ export function ConfirmModal({
   confirmLabel?: string;
   onConfirm: () => void;
   onClose: () => void;
+  /** 'primary': a go-ahead (not a deletion); its button takes focus so Enter confirms. Danger buttons never do. */
+  tone?: 'danger' | 'primary';
 }) {
   return (
     <Modal
@@ -331,7 +334,8 @@ export function ConfirmModal({
             Cancel
           </button>
           <button
-            className="btn btn-danger"
+            className={tone === 'primary' ? 'btn btn-primary' : 'btn btn-danger'}
+            autoFocus={tone === 'primary'}
             onClick={() => {
               onConfirm();
               onClose();

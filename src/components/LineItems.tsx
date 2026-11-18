@@ -44,8 +44,10 @@ export function useCalcLines(lines: DraftLine[]) {
     });
 }
 
-export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalidKeys, branchId, inclusive = false }: {
+export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalidKeys, branchId, inclusive = false, onFinish }: {
   lines: DraftLine[]; onChange: (l: DraftLine[]) => void; defaultTier: PriceTier; withGst: boolean; invalidKeys?: Set<string>; branchId?: string | null; inclusive?: boolean;
+  /** Enter in the empty item box after the last item: the bill is complete (the form asks to save it). */
+  onFinish?: () => void;
 }) {
   const items = (useBranchItems(branchId).data ?? []).filter((i) => !i.isGroup);
   const toast = useToast();
@@ -108,7 +110,8 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
               return (
                 <tr key={l.key} data-line={l.key} className={blankRowClass(!l.itemId)}>
                   <td>
-                    <ItemPicker items={items} value={l.itemId} tier={l.tier} onPick={(id) => pickItem(l.key, id)} invalid={bad} branchId={branchId} />
+                    <ItemPicker items={items} value={l.itemId} tier={l.tier} onPick={(id) => pickItem(l.key, id)} invalid={bad} branchId={branchId}
+                      onEnterEmpty={onFinish && !l.itemId && lines.some((x) => x.itemId) ? onFinish : undefined} />
                     {it && (
                       <div className="small muted" style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
                         {it.type === 'Goods' ? (

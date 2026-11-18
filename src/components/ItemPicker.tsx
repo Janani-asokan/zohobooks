@@ -24,10 +24,12 @@ export function searchItems(items: Item[], query: string, limit = 50) {
 }
 
 /** Combobox for choosing an item on a document line. Type to search; ↑ ↓ to move, Enter to pick, Esc to close. */
-export function ItemPicker({ items, value, tier, onPick, invalid, autoFocus, branchId, price }: {
+export function ItemPicker({ items, value, tier, onPick, invalid, autoFocus, branchId, price, onEnterEmpty }: {
   items: Item[]; value: string; tier: PriceTier; onPick: (id: string) => void; invalid?: boolean; autoFocus?: boolean; branchId?: string | null;
   /** What price to show next to each item (purchases show the cost); the selling price by default. */
   price?: (it: Item) => number;
+  /** Enter in an empty box (no item, nothing typed): the bill is done. */
+  onEnterEmpty?: () => void;
 }) {
   const selected = items.find((i) => i.id === value);
   const [open, setOpen] = useState(false);
@@ -67,6 +69,7 @@ export function ItemPicker({ items, value, tier, onPick, invalid, autoFocus, bra
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); if (!open) setOpen(true); else setActive((a) => Math.min(results.length - 1, a + 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
+    else if (e.key === 'Enter' && onEnterEmpty && !value && !query.trim()) { e.preventDefault(); setOpen(false); onEnterEmpty(); }
     else if (e.key === 'Enter' && open) { e.preventDefault(); const it = results[active]; if (it) pick(it); }
     else if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); setQuery(''); }
   };

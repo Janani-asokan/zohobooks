@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LicenseGatePrompt, isLicenseBlock, type LicenseBlock, type LicenseChoice } from '@/components/LicenseGatePrompt';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle, Wand2, Mic, FileUp } from 'lucide-react';
+import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle, Wand2, Mic, FileUp, History } from 'lucide-react';
 import { api, ApiError, fieldErrors } from '@/api/client';
-import { SALES_KEYS, useBranches, useCustomers, useInvoice, useItems, useMut, useNextInvoiceNumber, useOrg, useSalesOrders, pickable } from '@/api/hooks';
+import { SALES_KEYS, useBranchItems, useBranches, useCustomers, useInvoice, useInvoices, useItems, useMut, useNextInvoiceNumber, useOrg, useSalesOrders, pickable } from '@/api/hooks';
 import { type Customer, type Invoice } from '@/api/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useShopUser } from '@/context/AuthContext';
@@ -21,7 +21,7 @@ import { useDocLines } from '@/lib/docLines';
 import { matchParty } from '@/lib/match';
 import { uid } from '@/lib/format';
 import type { ExtractResult } from '../../../shared/extract';
-import { addDays, todayISO } from '@/lib/format';
+import { addDays, fmtDate, todayISO } from '@/lib/format';
 import { fyLabel } from '@/lib/fy';
 import { INDIAN_STATES, isInterState } from '../../../shared/gst';
 import { OffersSummary, PointsBox, usePromo } from '@/components/OffersLoyalty';
@@ -54,12 +54,19 @@ function Form({ existing }: { existing?: Invoice }) {
   const fromSO = params.get('fromSO') ? [...(orders.data ?? []), ...(quotes.data ?? [])].find((s) => s.id === params.get('fromSO')) : undefined;
 
   const qc = useQueryClient();
-  const [customerId, setCustomerId] = useState(existing?.customerId ?? params.get('customer') ?? '');
+  // A new invoice starts with the customer and branch of this user's last bill on this device (shown, and easy to change).
+  const lastKey = `corpus.lastInvoice.${me.user.id}`;
+  const remembered = useMemo(() => {
+    if (existing || params.get('fromSO') || params.get('customer')) return null;
+    try { return JSON.parse(localStorage.getItem(lastKey) ?? 'null') as { customerId?: string; branchId?: string } | null; } catch { return null; }
+  }, []);
+  const [customerId, setCustomerId] = useState(existing?.customerId ?? params.get('customer') ?? remembered?.customerId ?? '');
+  const [fromLast, setFromLast] = useState(!!remembered?.customerId);
   const customer = customers.find((c) => c.id === customerId);
   const [date, setDate] = useState(existing?.date ?? todayISO());
   const [terms, setTerms] = useState(15);
   const [dueDate, setDueDate] = useState(existing?.dueDate ?? addDays(todayISO(), 15));
-  const [branchId, setBranchId] = useState(existing?.branchId ?? me.user.branchId ?? '');
+  const [branchId, setBranchId] = useState(existing?.branchId ?? remembered?.branchId ?? me.user.branchId ?? '');
   const [withGst, setWithGst] = useState(existing?.withGst ?? true);
   const [reverseCharge, setReverseCharge] = useState(existing?.reverseCharge ?? false);
   const [tcsRate, setTcsRate] = useState(existing?.tcsRate ?? 0);
@@ -74,8 +81,27 @@ function Form({ existing }: { existing?: Invoice }) {
   const [touched, setTouched] = useState(false);
   const [serverErr, setServerErr] = useState<Record<string, string>>({});
   const nextNo = useNextInvoiceNumber(date);
+  const [finishAsk, setFinishAsk] = useState(false);
+  // "Repeat last bill": the customer's latest issued invoice, refilled at today's prices for this branch.
+  const allInvoices = useInvoices();
+  const branchItems = useBranchItems(branchId).data ?? [];
+  const lastBill = !existing && customerId ? (allInvoices.data ?? []).find((i) => i.customerId === customerId && i.status === 'Issued') : undefined;
+  const noItemsYet = lines.every((l) => !l.itemId);
+  const repeatLast = () => {
+    if (!lastBill) return;
+    const again = lastBill.lines.flatMap((l) => {
+      const it = branchItems.find((i) => i.id === l.itemId);
+      return it ? [{ ...emptyLine('SP1'), itemId: it.id, qty: l.qty, rate: priceFor(it, 'SP1', withGst && billOpts.pricesIncludeTax), note: l.note }] : [];
+    });
+    if (!again.length) return toast('error', 'The items on that bill are no longer sold');
+    setLines([...again, emptyLine('SP1')]);
+    const dropped = lastBill.lines.length - again.length;
+    toast('success', `Filled from ${lastBill.number}`, `${again.length} item${again.length > 1 ? 's' : ''} at today’s prices${dropped ? ` · ${dropped} no longer sold` : ''}. Check the quantities.`);
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>('tr[data-line] input[aria-label="Quantity"]')?.select());
+  };
 
-  useEffect(() => { if (!branchId && branches.length) setBranchId(branches.find((b) => b.isPrimary)?.id ?? branches[0]!.id); }, [branches, branchId]);
+  useEffect(() => { if (branches.length && (!branchId || !branches.some((b) => b.id === branchId))) setBranchId(branches.find((b) => b.isPrimary)?.id ?? branches[0]!.id); }, [branches, branchId]);
+  useEffect(() => { if (fromLast && customers.length && !customers.some((c) => c.id === customerId && !c.archived)) { setCustomerId(''); setFromLast(false); } }, [customers]);
   useEffect(() => {
     if (fromSO && !existing) {
       setCustomerId(fromSO.customerId);
@@ -105,8 +131,11 @@ function Form({ existing }: { existing?: Invoice }) {
   const interState = !!org && !!customer && isInterState(org.state, customer.state || org.state);
   const gstBlocked = org?.compositionScheme ? 'Composition dealers issue a Bill of Supply without GST' : org && !org.gstin ? 'Add your GSTIN in Organization profile to charge GST' : undefined;
 
-  const selectCustomer = (cid: string, fresh?: Customer) => {
+  const selectCustomer = (cid: string, fresh?: Customer, focusItems = false) => {
     setCustomerId(cid);
+    setFromLast(false);
+    // Straight on to the items: the cursor goes to the first empty item box.
+    if (focusItems && cid) requestAnimationFrame(() => document.querySelector<HTMLInputElement>('tr.line-blank input')?.focus());
     const c = fresh ?? customers.find((x) => x.id === cid);
     if (!c) return;
     // One selling price for every customer (price tiers are not used): lines keep their rates.
@@ -177,7 +206,9 @@ function Form({ existing }: { existing?: Invoice }) {
     const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit, ...lic, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount,
       ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
       extra: Object.fromEntries(invFields.filter((x) => (invExtra[x.key] ?? '').trim()).map((x) => [x.key, invExtra[x.key]!.trim()])) };
+    const remember = () => { try { localStorage.setItem(lastKey, JSON.stringify({ customerId, branchId })); } catch { /* private window */ } };
     const onSuccess = (inv: Invoice & { licenseWarnings?: Array<{ label: string; licenseNumber: string; statusLabel: string; daysToExpiry: number }> }) => {
+      remember();
       toast('success', inv.status === 'Draft' ? 'Draft saved' : existing?.status === 'Issued' ? 'Invoice updated' : 'Invoice issued', inv.number ?? undefined);
       for (const w of inv.licenseWarnings ?? []) toast('info', `${w.label} ${w.licenseNumber}: ${w.statusLabel.toLowerCase()}`, w.daysToExpiry >= 0 ? `Expires in ${w.daysToExpiry} days. Renew it to keep billing.` : 'Renew it before the grace period ends, or invoices will be blocked.');
       if (invFile) void attachFile('invoice', inv.id, invFile.file.name, invFile.dataUrl).catch(() => undefined);
@@ -228,13 +259,19 @@ function Form({ existing }: { existing?: Invoice }) {
           <div className="form-grid">
             <Field label="Customer" required error={(touched ? errs.customer : '') || serverErr.customerId}>
               <div className="row" style={{ gap: 8 }}>
-                <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => selectCustomer(e.target.value)} autoFocus={!existing} aria-label="Customer">
+                <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => selectCustomer(e.target.value, undefined, true)} autoFocus={!existing && !remembered?.customerId} aria-label="Customer">
                   <option value="">Select a customer…</option>
                   <optgroup label="Business (B2B)">{pickable(customers, customerId).filter((c) => c.type === 'Business').map((c) => <option key={c.id} value={c.id}>{c.companyName} · {c.customId}</option>)}</optgroup>
                   <optgroup label="Individuals">{pickable(customers, customerId).filter((c) => c.type === 'Individual').map((c) => <option key={c.id} value={c.id}>{c.name} · {c.customId}</option>)}</optgroup>
                 </select>
                 {me.can('customers.write') && <button type="button" className="btn btn-secondary" title="New customer" aria-label="New customer" onClick={() => setNewCust(true)}><Plus size={15} /></button>}
               </div>
+              {fromLast && customer && <div className="small muted" style={{ marginTop: 4 }}>Same customer as your last bill · <button type="button" className="link-btn" onClick={() => { setCustomerId(''); setFromLast(false); document.querySelector<HTMLSelectElement>('select[aria-label="Customer"]')?.focus(); }}>Change</button></div>}
+              {lastBill && noItemsYet && (
+                <button type="button" className="btn btn-soft btn-sm" style={{ marginTop: 8 }} onClick={repeatLast}>
+                  <History size={14} /> Repeat last bill · {lastBill.number} ({lastBill.lines.length} item{lastBill.lines.length > 1 ? 's' : ''}, {fmtDate(lastBill.date)})
+                </button>
+              )}
             </Field>
             <div>
               {customer && (
@@ -273,7 +310,8 @@ function Form({ existing }: { existing?: Invoice }) {
               {gstBlocked ?? (withGst ? (interState ? 'Inter-state supply → IGST' : 'Intra-state supply → CGST + SGST') : 'Totals shown without any tax')}
             </span>
           </div>
-          <LineItemsEditor lines={lines} onChange={setLines} defaultTier="SP1" withGst={withGst} invalidKeys={touched ? invalidLines : undefined} branchId={branchId} inclusive={withGst && billOpts.pricesIncludeTax} />
+          <LineItemsEditor lines={lines} onChange={setLines} defaultTier="SP1" withGst={withGst} invalidKeys={touched ? invalidLines : undefined} branchId={branchId} inclusive={withGst && billOpts.pricesIncludeTax}
+            onFinish={busy ? undefined : () => setFinishAsk(true)} />
           {touched && errs.lines && <div className="field-error" style={{ marginTop: 8 }}>{errs.lines}</div>}
 
           <div className="grid-2 mt-24" style={{ alignItems: 'start' }}>
@@ -345,6 +383,9 @@ function Form({ existing }: { existing?: Invoice }) {
           </div>
         </div>
       </div>
+      <ConfirmModal open={finishAsk} onClose={() => setFinishAsk(false)} title="Issue this invoice now?" confirmLabel="Issue invoice" tone="primary"
+        text={<>{customer ? (customer.companyName || customer.name) : 'No customer chosen yet'} · {lines.filter((l) => l.itemId).length} item{lines.filter((l) => l.itemId).length === 1 ? '' : 's'}. Press Enter again to issue, or Esc to keep editing.</>}
+        onConfirm={() => { setFinishAsk(false); save('issue'); }} />
       <ConfirmModal open={!!creditPrompt} onClose={() => setCreditPrompt(null)} title="Over the credit limit" confirmLabel="Issue anyway"
         text={<>{creditPrompt?.message} Issue the invoice anyway? This is recorded in the audit log.</>}
         onConfirm={() => { const { mode: m, lic } = creditPrompt!; setCreditPrompt(null); save(m, true, lic); }} />
@@ -357,7 +398,7 @@ function Form({ existing }: { existing?: Invoice }) {
           title="Choose a file" hint="PDF, photo or screenshot. You check what was read before it fills the invoice." />}
       </Modal>
       <QuickCustomerModal open={newCust} onClose={() => setNewCust(false)} defaultState={org?.state ?? ''}
-        onCreated={(c) => { qc.setQueryData<Customer[]>(['customers'], (list) => (list ? [...list.filter((x) => x.id !== c.id), c] : [c])); selectCustomer(c.id, c); }} />
+        onCreated={(c) => { qc.setQueryData<Customer[]>(['customers'], (list) => (list ? [...list.filter((x) => x.id !== c.id), c] : [c])); selectCustomer(c.id, c, true); }} />
     </div>
   );
 }
