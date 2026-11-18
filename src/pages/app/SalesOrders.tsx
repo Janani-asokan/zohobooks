@@ -5,11 +5,12 @@ import { PdfButton } from '@/components/PdfButton';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ClipboardList, LayoutGrid, List, ArrowRight, FileText, Pencil, Trash2, Send, CheckCircle2, FilePen, FileSignature, XCircle, Truck } from 'lucide-react';
 import { api } from '@/api/client';
-import { useCustomers, useMut, useOrg, useSalesOrders, pickable } from '@/api/hooks';
+import { useCustomers, useItems, useMut, useOrg, useSalesOrders, pickable } from '@/api/hooks';
+import { RememberedNote, RepeatLastButton, focusFirstItem, latestFor, remembered } from '@/components/BillHelpers';
 import type { SalesOrder } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, SearchInput, Segmented } from '@/components/ui';
-import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, toDraft, toInput, useCalcLines, type DraftLine } from '@/components/LineItems';
+import { LineItemsEditor, TaxModeToggle, TotalsPanel, emptyLine, priceFor, toDraft, toInput, useCalcLines, type DraftLine } from '@/components/LineItems';
 import { addDays, fmtDate, money, todayISO } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
 import { Hint } from '@/components/kit';
@@ -64,6 +65,27 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
   const [notes, setNotes] = useState('');
   const [touched, setTouched] = useState(false);
   const customer = customerList.find((c) => c.id === customerId);
+  // Last customer on this screen (quotes and orders separately), the customer's last one to repeat, finish with Enter.
+  const memory = remembered<{ customerId: string }>(`corpus.last.${kind}.${me.user.id}`);
+  const [fromLast, setFromLast] = useState(false);
+  const [finishAsk, setFinishAsk] = useState(false);
+  const allItems = useItems().data ?? [];
+  const lastDoc = !modal?.id && customerId ? latestFor(orders, (o) => o.customerId === customerId && o.lines.length > 0) : undefined;
+  const repeatLast = () => {
+    if (!lastDoc) return;
+    const again = lastDoc.lines.flatMap((l) => { const it = allItems.find((i) => i.id === l.itemId); return it ? [{ ...emptyLine('SP1'), itemId: it.id, qty: l.qty, rate: priceFor(it, 'SP1'), note: l.note }] : []; });
+    if (!again.length) return;
+    setLines([...again, emptyLine('SP1')]);
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>('tr[data-line] input[aria-label="Quantity"]')?.select());
+  };
+  useEffect(() => { if (fromLast && customerList.length && !customerList.some((c) => c.id === customerId)) { setCustomerId(''); setFromLast(false); } }, [customerList, fromLast]);
+  const pickCustomer = (cid: string) => {
+    setCustomerId(cid);
+    setFromLast(false);
+    const c = customerList.find((x) => x.id === cid);
+    if (c?.type === 'Business' && org?.gstin && !org.compositionScheme) setWithGst(true);
+    if (cid) focusFirstItem();
+  };
   const calc = useCalcLines(lines);
   const keys = [['salesOrders']];
   const createSO = useMut((b: Record<string, unknown>) => api.post<SalesOrder>('/shop/sales-orders', { ...b, kind }), keys, { success: (r) => (r.status === 'Sent' ? `${r.number} saved as sent` : `${r.number} saved as draft`) });
@@ -99,7 +121,11 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
 
   const open = (so?: SalesOrder) => {
     setSoFile(null);
-    setCustomerId(so?.customerId ?? '');
+    const last = so ? null : memory.read();
+    // The list may still be loading when the form opens: keep the remembered customer, checked again below once it loads.
+    const lastOk = !!last?.customerId && (!customerList.length || customerList.some((c) => c.id === last.customerId));
+    setCustomerId(so?.customerId ?? (lastOk ? last!.customerId : ''));
+    setFromLast(!so && lastOk);
     setDate(so?.date ?? todayISO());
     setExpiry(so?.expiryDate ?? addDays(todayISO(), 30));
     setWithGst(so?.withGst ?? true);
@@ -113,7 +139,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
       open();
       // "Take order" from a field visit pre-picks the customer.
       const cust = params.get('customer');
-      if (cust) setCustomerId(cust);
+      if (cust) { setCustomerId(cust); setFromLast(false); }
       params.delete('new');
       params.delete('customer');
       setParams(params, { replace: true });
@@ -127,6 +153,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
     setTouched(true);
     if (errs.customer || errs.lines) return;
     const b = { customerId, date, expiryDate: expiry, withGst, lines: toInput(lines), notes, status };
+    memory.save({ customerId });
     if (modal?.id) updateSO.mutate({ id: modal.id, b }, { onSuccess: () => setModal(null) });
     else createSO.mutate(b, { onSuccess: (so) => { setModal(null); if (soFile) void attachFile('sales_order', so.id, soFile.file.name, soFile.dataUrl).catch(() => undefined); } });
   };
@@ -295,10 +322,12 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
         )}
         <div className="form-grid cols-3">
           <Field label="Customer" required error={touched ? errs.customer : ''}>
-            <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => { setCustomerId(e.target.value); const c = customerList.find((x) => x.id === e.target.value); if (c?.type === 'Business' && org?.gstin && !org.compositionScheme) setWithGst(true); }}>
+            <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => pickCustomer(e.target.value)} aria-label="Customer">
               <option value="">Select customer…</option>
               {pickable(customerList, customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.customId}</option>)}
             </select>
+            {fromLast && customer && <RememberedNote what="customer" onChange={() => { setCustomerId(''); setFromLast(false); document.querySelector<HTMLSelectElement>('select[aria-label="Customer"]')?.focus(); }} />}
+            {lastDoc && lines.every((l) => !l.itemId) && <RepeatLastButton doc={lastDoc} label={kind === 'quote' ? 'Repeat last quote' : 'Repeat last order'} onClick={repeatLast} />}
           </Field>
           <Field label={L.date}><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
           <Field label={kind === 'quote' ? 'Valid till' : 'Deliver by'}><input className="input" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></Field>
@@ -306,7 +335,7 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
         <div style={{ margin: '18px 0 14px' }}>
           <TaxModeToggle withGst={withGst} onChange={setWithGst} disabled={org?.compositionScheme ? 'Composition scheme' : org && !org.gstin ? 'Add GSTIN in Organization profile' : undefined} />
         </div>
-        <LineItemsEditor lines={lines} onChange={setLines} defaultTier="SP1" withGst={withGst} />
+        <LineItemsEditor lines={lines} onChange={setLines} defaultTier="SP1" withGst={withGst} onFinish={() => setFinishAsk(true)} />
         {touched && errs.lines && <div className="field-error" style={{ marginTop: 8 }}>{errs.lines}</div>}
         <div className="grid-2 mt-16" style={{ alignItems: 'start' }}>
           <Field label="Notes"><textarea className="textarea" value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
@@ -314,6 +343,9 @@ export default function SalesOrders({ kind = 'order' }: { kind?: 'quote' | 'orde
         </div>
       </Modal>
 
+      <ConfirmModal open={finishAsk} onClose={() => setFinishAsk(false)} tone="primary" title={`Save this ${L.one} now?`} confirmLabel="Save & mark Sent"
+        text={<>{customer ? customer.companyName || customer.name : 'No customer chosen yet'} · {lines.filter((l) => l.itemId).length} item{lines.filter((l) => l.itemId).length === 1 ? '' : 's'}. Press Enter again to save, or Esc to keep editing.</>}
+        onConfirm={() => save('Sent')} />
       <ConfirmModal
         open={!!del}
         onClose={() => setDel(null)}

@@ -47,7 +47,9 @@ export const toPurchaseInput = (lines: PLine[], opts: { serials?: boolean } = {}
  * withSerials: the bill adds stock now, so items that keep IMEI / serial numbers get a box under their line for one
  * number per unit (typed, pasted from a sheet, or scanned: a scanner's Enter starts the next one).
  */
-export function PurchaseLinesEditor({ lines, onChange, items, error, withSerials, showSerialErrors }: { lines: PLine[]; onChange: (l: PLine[]) => void; items: Item[]; error?: string; withSerials?: boolean; showSerialErrors?: boolean }) {
+export function PurchaseLinesEditor({ lines, onChange, items, error, withSerials, showSerialErrors, onFinish }: { lines: PLine[]; onChange: (l: PLine[]) => void; items: Item[]; error?: string; withSerials?: boolean; showSerialErrors?: boolean;
+  /** Enter in the empty item box after the last item: the bill is complete. */
+  onFinish?: () => void }) {
   const upd = (key: string, patch: Partial<PLine>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const pickable = items.filter((i) => !i.isGroup);
   useEffect(() => { if (lines.length && lines[lines.length - 1]!.itemId) onChange(withTrailingBlank(lines, (l) => !l.itemId, emptyPLine)); }, [lines]);
@@ -117,7 +119,7 @@ export function PurchaseLinesEditor({ lines, onChange, items, error, withSerials
                       {it && <Thumb name={it.name} image={it.image} size={32} />}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {/* Type to search; picking fills the cost and GST and opens the next line. */}
-                        <ItemPicker items={pickable} value={l.itemId} tier="SP1" price={(i) => i.cost ?? 0}
+                        <ItemPicker items={pickable} value={l.itemId} tier="SP1" price={(i) => i.cost ?? 0} onEnterEmpty={onFinish && !l.itemId && lines.some((x) => x.itemId) ? onFinish : undefined}
                           onPick={(id) => { const n = items.find((i) => i.id === id); if (!n) return; onChange(withTrailingBlank(lines.map((x) => (x.key === l.key ? { ...x, itemId: n.id, rate: String(n.cost ?? 0), taxRate: n.taxRate } : x)), (x) => !x.itemId, emptyPLine)); focusQty(l.key); }} />
                       </div>
                     </div>

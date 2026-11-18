@@ -2,9 +2,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { btPrinter, btSupported } from '@/lib/btPrinter';
-import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle, CloudOff, Camera, Mic } from 'lucide-react';
+import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle, CloudOff, Camera, Mic, History } from 'lucide-react';
 import { api } from '@/api/client';
-import { SALES_KEYS, useBranches, useCustomers, useBranchItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
+import { SALES_KEYS, useBranches, useCustomers, useBranchItems, useInvoices, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
+import { latestFor, remembered } from '@/components/BillHelpers';
 import { ThermalReceipt, printReceipt, receiptFromInvoice, type ReceiptData } from '@/components/printing';
 import { isNetworkError, newClientRef, offlineRef, saveBill } from '@/lib/offlineQueue';
 import { peekNumber, takeNumber } from '@/lib/deviceSeries';
@@ -45,7 +46,11 @@ export default function Pos() {
   const qc = useQueryClient();
   const me = useShopUser();
   const toast = useToast();
-  const [branchId, setBranchId] = useState(me.user.branchId ?? '');
+  // Last customer and branch at this counter (this user, this device). The bill still starts as walk-in: the last
+  // customer is offered as a one-click chip, never picked silently.
+  const memory = remembered<{ customerId: string; branchId: string }>(`corpus.last.pos.${me.user.id}`);
+  const [lastSaved, setLastSaved] = useState(() => memory.read());
+  const [branchId, setBranchId] = useState(me.user.branchId ?? lastSaved?.branchId ?? '');
   const items = (useBranchItems(branchId).data ?? []).filter((i) => !i.isGroup);
   const { data: customers = [] } = useCustomers();
   const branches = useBranches().data ?? [];
@@ -57,6 +62,7 @@ export default function Pos() {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState<'all' | 'Goods' | 'Services'>('all');
   const [cart, setCart] = useState<CartLine[]>([]);
+  const invoices = useInvoices().data ?? [];
   const [customerId, setCustomerId] = useState('');
   const [withGst, setWithGst] = useState(true);
   const [mode, setMode] = useState<'Cash' | 'UPI' | 'Card' | 'Split'>('Cash');
@@ -383,7 +389,7 @@ export default function Pos() {
     charging.current = true;
     if (!navigator.onLine) return void saveOffline(clientRef, body, dn).then((saved) => { if (!saved) charging.current = false; });
     sale.mutate({ ...body, clientRef }, {
-      onSuccess: (r) => { if (dn) takeNumber(me.shop.id, dn.seq); setDone(r); countSold(); },
+      onSuccess: (r) => { if (dn) takeNumber(me.shop.id, dn.seq); setDone(r); countSold(); const m = { customerId: r.invoice.customerId ?? '', branchId }; memory.save(m); setLastSaved(m); },
       onSettled: (_r, e) => { if (e && !isNetworkError(e)) charging.current = false; },
       // The internet dropped while charging: keep the bill on this device and carry on.
       onError: (e) => { if (isNetworkError(e)) void saveOffline(clientRef, body, dn).then((saved) => { if (!saved) charging.current = false; }); else toast('error', (e as Error).message); },
@@ -574,13 +580,33 @@ export default function Pos() {
         <div style={{ padding: 14, borderBottom: '1px solid var(--border)' }} className="stack">
           <div className="row" style={{ gap: 8 }}>
             <UserRound size={16} className="muted" />
-            <select className="select" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label="Customer">
+            <select className="select" value={customerId} onChange={(e) => { setCustomerId(e.target.value); if (e.target.value) focusScan(); }} aria-label="Customer">
               <option value="">Walk-in customer</option>
               {pickable(customers, customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.phone}</option>)}
             </select>
             {promo.loyaltyOn && !customerId && <div className="pos-phone-find"><CustomerByPhone customers={customers} onPick={setCustomerId} /></div>}
             {branches.length > 1 && <select className="select" style={{ width: 160 }} value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Branch">{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
           </div>
+          {(() => {
+            // One click for the regular who just came back, and their usual items.
+            const lastCust = !customerId && !cart.length && lastSaved?.customerId ? customers.find((c) => c.id === lastSaved.customerId) : undefined;
+            const prev = customerId && !cart.length ? latestFor(invoices, (i) => i.customerId === customerId && i.status === 'Issued') : undefined;
+            if (lastCust) return (
+              <div className="small muted">Last customer: <button type="button" className="link-btn" onClick={() => { setCustomerId(lastCust.id); focusScan(); }}>{lastCust.companyName || lastCust.name} · Use</button></div>
+            );
+            if (prev) return (
+              <button type="button" className="btn btn-soft btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => {
+                const again = prev.lines.filter((l) => byId.has(l.itemId) && !byId.get(l.itemId)!.trackSerials).map((l) => ({ itemId: l.itemId, qty: l.qty }));
+                const skipped = prev.lines.length - again.length;
+                if (!again.length) return toast('error', 'Nothing to repeat', 'The items on that bill need IMEI scans or are no longer sold.');
+                setCart(again); focusScan();
+                toast('success', `Added ${prev.number}’s items`, `${again.length} item${again.length > 1 ? 's' : ''} at today’s prices${skipped ? ` · ${skipped} skipped (scan IMEI items, or no longer sold)` : ''}.`);
+              }}>
+                <History size={14} /> Repeat last bill · {prev.number} ({prev.lines.length} item{prev.lines.length > 1 ? 's' : ''})
+              </button>
+            );
+            return null;
+          })()}
           <div className="row between small muted">
             <span />
             <span className="row" style={{ gap: 14 }}>
