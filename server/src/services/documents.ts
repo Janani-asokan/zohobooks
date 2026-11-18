@@ -152,6 +152,8 @@ export const invoiceInput = z.object({
   redeemPoints: z.number().int().min(0).max(1e8).optional(),
   /** Issue past an expired or suspended warehouse licence (needs licenses.override); the reason is audited. */
   licenseOverride: z.object({ reason: z.string().trim().max(500) }).nullable().optional(),
+  /** Owner only: issue even though the branch doesn't hold enough stock (stock goes negative). The reason is audited. */
+  stockOverride: z.object({ reason: z.string().trim().max(500) }).nullable().optional(),
   /** Usage above a capacity / seat licence: bill it at the overage rate, or let it through (needs licenses.override). */
   licenseOverage: z.enum(['bill', 'allow']).nullable().optional(),
 });
@@ -247,12 +249,25 @@ export async function stockShortages(db: Db, shopId: string, branchId: string, l
     .map(([id, n]) => ({ itemId: id, name: n.name, unit: n.unit, need: n.qty, have: Math.max(0, have.get(id) ?? 0) }));
 }
 
-async function assertStock(db: Db, shopId: string, branchId: string, lines: StoredLine[]) {
+/**
+ * Refuses a bill the branch can't cover. The owner may issue it anyway with a written reason (e.g. the purchase bill
+ * isn't entered yet): the stock then goes negative and the override is put in the audit trail with what was short.
+ */
+async function assertStock(db: Db, req: Request | null, shopId: string, branchId: string, lines: StoredLine[], override?: { reason: string } | null, invoiceId?: string) {
   const short = await stockShortages(db, shopId, branchId, lines);
   if (!short.length) return;
   const br = await one(db, 'SELECT name FROM branches WHERE id = $1', [branchId]);
+  const isOwner = req?.ctx?.kind === 'user' && req.ctx.role === 'Owner';
+  const details = { items: short, branch: br?.name, canOverride: isOwner };
+  if (override) {
+    if (!isOwner) throw new HttpError(403, 'Only the owner can bill more than the branch holds.', 'stock_override_forbidden', details);
+    const reason = override.reason.trim();
+    if (reason.length < 10) throw new HttpError(400, 'Write why this can be billed without the stock (at least 10 characters). It is kept in the audit trail.', 'stock_override_reason', details);
+    await audit(db, req, shopId, 'stock_override', 'invoice', invoiceId, { reason, branch: br?.name, items: short });
+    return;
+  }
   const list = short.map((x) => `${x.name}: ${x.have} ${x.unit} in stock, ${x.need} on the bill`).join('; ');
-  throw new HttpError(409, `Not enough stock at ${br?.name ?? 'this branch'}. ${list}. Record the purchase or transfer the stock here first.`, 'insufficient_stock', { items: short, branch: br?.name });
+  throw new HttpError(409, `Not enough stock at ${br?.name ?? 'this branch'}. ${list}. Record the purchase or transfer the stock here first${isOwner ? ', or sell anyway with a reason' : ''}.`, 'insufficient_stock', details);
 }
 
 /** Assigns the next number in the (FY-scoped) series and moves stock out. */
@@ -260,7 +275,7 @@ async function assertStock(db: Db, shopId: string, branchId: string, lines: Stor
 export interface DeviceNumber { deviceId: string; code: string; seq: number }
 export const deviceInvoiceNumber = (code: string, fy: string, seq: number) => `${code}/${fy}/${String(seq).padStart(4, '0')}`;
 
-async function issue(db: Db, req: Request | null, shopId: string, inv: any, device?: DeviceNumber, allowShort = false) {
+async function issue(db: Db, req: Request | null, shopId: string, inv: any, device?: DeviceNumber, allowShort = false, stockOverride?: { reason: string } | null) {
   const limits = await planLimits(db, shopId);
   if (limits.max_invoices_per_month) {
     const c = await one(db, "SELECT count(*)::int AS n FROM invoices WHERE shop_id = $1 AND status <> 'Draft' AND issued_at >= date_trunc('month', now())", [shopId]);
@@ -276,7 +291,7 @@ async function issue(db: Db, req: Request | null, shopId: string, inv: any, devi
     await db.query('UPDATE invoices SET device_id = $3 WHERE shop_id = $1 AND id = $2', [shopId, inv.id, device.deviceId]);
   }
   const lines: StoredLine[] = inv.lines;
-  if (!allowShort) await assertStock(db, shopId, inv.branch_id, lines);
+  if (!allowShort) await assertStock(db, req, shopId, inv.branch_id, lines, stockOverride, inv.id);
   for (const l of lines) {
     if (l.type !== 'Goods') continue;
     const used = await moveStock(db, { shopId, itemId: l.itemId, branchId: inv.branch_id, qty: -l.qty, reason: 'sale', refType: 'invoice', refId: inv.id, userId: req?.ctx?.id, batchNo: l.batchNo, note: number });
@@ -356,7 +371,7 @@ export async function createInvoice(db: Db, req: Request | null, shopId: string,
     const short = await stockShortages(db, shopId, row.branch_id, f.lines);
     if (short.length) await audit(db, req, shopId, 'stock_short_offline', 'invoice', row.id, { items: short });
   }
-  if (opts.issue) number = await issue(db, req, shopId, row, opts.device, !!opts.madeOffline);
+  if (opts.issue) number = await issue(db, req, shopId, row, opts.device, !!opts.madeOffline, input.stockOverride);
   if (opts.issue && gate) await recordLicenseGate(db, req, shopId, row.id, gate, { recordOnly: opts.madeOffline });
   await audit(db, req, shopId, opts.issue ? 'issue' : 'create_draft', 'invoice', row.id, { number, total: f.t.total, source });
   return { ...(await getInvoice(db, shopId, row.id)), licenseWarnings: gate?.warnings ?? [] };
@@ -416,7 +431,7 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
     const cfg = await platformConfig(db);
     if (fyLabel(input.date, cfg.fyStartMonth) !== inv.fy) throw badRequest('An issued invoice can’t be moved to a different financial year');
     await restock(db, req, shopId, inv, 'adjustment', `Edit ${inv.number}`);
-    await assertStock(db, shopId, f.branchId, f.lines);
+    await assertStock(db, req, shopId, f.branchId, f.lines, input.stockOverride, id);
     for (const l of f.lines)
       if (l.type === 'Goods') {
         const used = await moveStock(db, { shopId, itemId: l.itemId, branchId: f.branchId, qty: -l.qty, reason: 'sale', refType: 'invoice', refId: id, userId: req.ctx?.id, batchNo: l.batchNo, note: inv.number });
@@ -439,7 +454,7 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
   if ((inv.status === 'Draft' && issueNow) || inv.status === 'Issued') await checkCreditLimit(db, req, shopId, f.customerId, f.t.total, id, input.overrideCreditLimit);
   if (inv.status === 'Draft' && issueNow) {
     const fresh = await one(db, 'SELECT * FROM invoices WHERE shop_id = $1 AND id = $2', [shopId, id]);
-    await issue(db, req, shopId, fresh);
+    await issue(db, req, shopId, fresh, undefined, false, input.stockOverride);
   }
   if (gate) await recordLicenseGate(db, req, shopId, id, gate);
   await audit(db, req, shopId, inv.status === 'Draft' && issueNow ? 'issue' : 'update', 'invoice', id, { total: f.t.total });

@@ -14,7 +14,7 @@ export interface LicenseBlock {
     canBillOverage?: boolean;
   };
 }
-export type LicenseChoice = { licenseOverride?: { reason: string }; licenseOverage?: 'bill' | 'allow' };
+export type LicenseChoice = { licenseOverride?: { reason: string }; licenseOverage?: 'bill' | 'allow'; stockOverride?: { reason: string } };
 
 export const isLicenseBlock = (code: string) => code.startsWith('license_');
 

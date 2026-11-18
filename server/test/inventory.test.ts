@@ -139,5 +139,20 @@ describe('sales stay within branch stock', () => {
     expect((await inv(head, [{ qty: 6 }, { qty: 4 }])).status).toBe(200);
     expect((await stockOf(a.id)).stockByBranch[head]).toBe(0);
     expect((await stockOf(a.id)).stockByBranch[second] ?? 0).toBe(0);
+
+    // Only the owner can sell beyond the stock, with a reason; it is audited and the stock goes negative.
+    const sales = await login('sales@shop.com', 'sales123');
+    const over = (who: typeof owner, reason: string) => who.post('/api/shop/invoices').send({ customerId: cust.id, date: today(), dueDate: today(), withGst: true, issue: true, branchId: head,
+      lines: [{ itemId: a.id, qty: 2, tier: 'SP1' }], stockOverride: { reason } });
+    const plain = await inv(head, [{ qty: 2 }]);
+    expect(plain.body.details.canOverride).toBe(true);
+    expect((await over(sales, 'Customer is waiting at the counter')).status).toBe(403);
+    expect((await over(owner, 'short')).body.code).toBe('stock_override_reason');
+    const ok = await over(owner, 'Purchase bill from Redington not entered yet');
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect((await stockOf(a.id)).stockByBranch[head]).toBe(-2);
+    const log = (await owner.get('/api/shop/audit')).body;
+    const entry = (Array.isArray(log) ? log : log.entries ?? log.rows ?? []).find((e: any) => e.action === 'stock_override');
+    expect(entry?.details?.reason ?? entry?.details).toBeTruthy();
   });
 });

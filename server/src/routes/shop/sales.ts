@@ -693,6 +693,8 @@ salesRouter.post(
         billDiscount: z.object({ kind: z.enum(['percent', 'amount']), value: z.number().min(0).max(1e9) }).nullable().optional(),
         skipOffers: z.array(z.string().uuid()).max(50).optional(),
         redeemPoints: z.number().int().min(0).max(1e8).optional(),
+        /** Owner only: sell beyond the branch's stock, with a reason (audited). */
+        stockOverride: z.object({ reason: z.string().trim().max(500) }).nullable().optional(),
         /** Offline counter billing: the bill's own ID from the device, so a retried send never saves it twice. */
         clientRef: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, 'Invalid bill ID').optional(),
         /** When the bill was made at the counter (offline bills reach us later). */
@@ -731,7 +733,7 @@ salesRouter.post(
     const inv = await createInvoice(
       db, req, c.shopId,
       { customerId: b.customerId, date: today, dueDate: today, branchId: b.branchId ?? c.branchId, lines: b.lines, withGst: b.withGst, reverseCharge: false, tcsRate: 0, notes: '',
-        pricesIncludeTax: b.pricesIncludeTax, billDiscount: b.billDiscount, skipOffers: b.skipOffers, redeemPoints: b.redeemPoints },
+        pricesIncludeTax: b.pricesIncludeTax, billDiscount: b.billDiscount, skipOffers: b.skipOffers, redeemPoints: b.redeemPoints, stockOverride: b.stockOverride },
       { issue: true, source: 'pos', device, madeOffline: offline },
     );
     if (b.clientRef) await db.query('UPDATE invoices SET client_ref = $3, made_offline_at = $4 WHERE shop_id = $1 AND id = $2', [c.shopId, inv.id, b.clientRef, offline ? b.madeAt : null]);

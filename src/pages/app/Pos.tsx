@@ -3,9 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { btPrinter, btSupported } from '@/lib/btPrinter';
 import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle, CloudOff, Camera, Mic, History } from 'lucide-react';
-import { api } from '@/api/client';
+import { api, ApiError } from '@/api/client';
 import { SALES_KEYS, useBranches, useCustomers, useBranchItems, useInvoices, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
 import { latestFor, remembered } from '@/components/BillHelpers';
+import { StockOverridePrompt, type StockBlock } from '@/components/StockOverridePrompt';
 import { ThermalReceipt, printReceipt, receiptFromInvoice, type ReceiptData } from '@/components/printing';
 import { isNetworkError, newClientRef, offlineRef, saveBill } from '@/lib/offlineQueue';
 import { peekNumber, takeNumber } from '@/lib/deviceSeries';
@@ -62,6 +63,7 @@ export default function Pos() {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState<'all' | 'Goods' | 'Services'>('all');
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [stockBlock, setStockBlock] = useState<{ block: StockBlock; body: Record<string, unknown> } | null>(null);
   const invoices = useInvoices().data ?? [];
   const [customerId, setCustomerId] = useState('');
   const [withGst, setWithGst] = useState(true);
@@ -381,6 +383,10 @@ export default function Pos() {
       ...(mode === 'Split' ? { split: parts } : {}), pricesIncludeTax: inclusive, billDiscount,
       ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
       lines: lines.map((l) => ({ itemId: l.itemId, qty: l.qty, tier, discount: 0, rate: unit(l.it), ...(l.serials?.length ? { serials: l.serials } : {}), ...(l.note?.trim() ? { note: l.note.trim().slice(0, 300) } : {}) })) };
+    send(body);
+  };
+  /** Sends the bill (or keeps it on this device when offline). Also used to resend with the owner's stock override. */
+  const send = (body: Record<string, unknown>) => {
     // Every bill has its own ID, sent with it: a retry after a dropped reply can never save it twice.
     const clientRef = newClientRef();
     // CorpusLite: the bill takes the next number in this phone's own GST series (final, even offline).
@@ -392,7 +398,12 @@ export default function Pos() {
       onSuccess: (r) => { if (dn) takeNumber(me.shop.id, dn.seq); setDone(r); countSold(); const m = { customerId: r.invoice.customerId ?? '', branchId }; memory.save(m); setLastSaved(m); },
       onSettled: (_r, e) => { if (e && !isNetworkError(e)) charging.current = false; },
       // The internet dropped while charging: keep the bill on this device and carry on.
-      onError: (e) => { if (isNetworkError(e)) void saveOffline(clientRef, body, dn).then((saved) => { if (!saved) charging.current = false; }); else toast('error', (e as Error).message); },
+      onError: (e) => {
+        if (isNetworkError(e)) return void saveOffline(clientRef, body, dn).then((saved) => { if (!saved) charging.current = false; });
+        // Short at this branch: show what is short; the owner can sell anyway with a reason.
+        if (e instanceof ApiError && e.code === 'insufficient_stock') return setStockBlock({ block: { message: e.message, details: (e.details ?? {}) as StockBlock['details'] }, body: Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'deviceNumber')) });
+        toast('error', (e as Error).message);
+      },
     });
   };
   /** Keeps the bill on this device, prints its receipt, and lets the counter carry on. Sent automatically later. */
@@ -724,6 +735,8 @@ export default function Pos() {
         </div>
       </section>
 
+      {stockBlock && <StockOverridePrompt block={stockBlock.block} onClose={() => { setStockBlock(null); focusScan(); }}
+        onOverride={(reason) => { const b = stockBlock.body; setStockBlock(null); send({ ...b, stockOverride: { reason } }); }} />}
       <Modal open={!!done} onClose={reset} title="Sale complete" subtitle={done ? `${done.invoice.number} · ${done.invoice.paymentStatus}` : ''}
         footer={
           <>

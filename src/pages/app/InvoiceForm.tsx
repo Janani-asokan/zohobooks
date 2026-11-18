@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LicenseGatePrompt, isLicenseBlock, type LicenseBlock, type LicenseChoice } from '@/components/LicenseGatePrompt';
+import { StockOverridePrompt, type StockBlock } from '@/components/StockOverridePrompt';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Building2, UserRound, Info, Save, Send, Plus, Wallet, Loader2, AlertTriangle, Wand2, Mic, FileUp, History } from 'lucide-react';
 import { api, ApiError, fieldErrors } from '@/api/client';
@@ -198,6 +199,7 @@ function Form({ existing }: { existing?: Invoice }) {
   const [newCust, setNewCust] = useState(false);
   const [quick, setQuick] = useState<null | 'speak' | 'file'>(null);
   const [creditPrompt, setCreditPrompt] = useState<{ mode: 'issue' | 'issue-pay'; message: string; lic: LicenseChoice } | null>(null);
+  const [stockPrompt, setStockPrompt] = useState<{ mode: 'issue' | 'issue-pay'; block: StockBlock; credit: boolean; lic: LicenseChoice } | null>(null);
   const [licPrompt, setLicPrompt] = useState<{ mode: 'issue' | 'issue-pay'; block: LicenseBlock; credit: boolean; lic: LicenseChoice } | null>(null);
   const save = (mode: 'draft' | 'issue' | 'issue-pay', overrideCreditLimit = false, lic: LicenseChoice = {}) => {
     setTouched(true);
@@ -216,6 +218,7 @@ function Form({ existing }: { existing?: Invoice }) {
     };
     const onError = (err: Error) => {
       if (err instanceof ApiError && err.code === 'credit_limit' && mode !== 'draft') return setCreditPrompt({ mode, message: err.message, lic });
+      if (err instanceof ApiError && err.code === 'insufficient_stock' && mode !== 'draft') return setStockPrompt({ mode, block: { message: err.message, details: (err.details ?? {}) as StockBlock['details'] }, credit: overrideCreditLimit, lic });
       if (err instanceof ApiError && isLicenseBlock(err.code) && mode !== 'draft') return setLicPrompt({ mode, block: { code: err.code, message: err.message, details: err.details ?? {} } as unknown as LicenseBlock, credit: overrideCreditLimit, lic });
       const f = fieldErrors(err); setServerErr(f); toast('error', err.message);
     };
@@ -389,6 +392,8 @@ function Form({ existing }: { existing?: Invoice }) {
       <ConfirmModal open={!!creditPrompt} onClose={() => setCreditPrompt(null)} title="Over the credit limit" confirmLabel="Issue anyway"
         text={<>{creditPrompt?.message} Issue the invoice anyway? This is recorded in the audit log.</>}
         onConfirm={() => { const { mode: m, lic } = creditPrompt!; setCreditPrompt(null); save(m, true, lic); }} />
+      {stockPrompt && <StockOverridePrompt block={stockPrompt.block} onClose={() => setStockPrompt(null)}
+        onOverride={(reason) => { const { mode: m, credit, lic } = stockPrompt; setStockPrompt(null); save(m, credit, { ...lic, stockOverride: { reason } }); }} />}
       {licPrompt && <LicenseGatePrompt block={licPrompt.block} onClose={() => setLicPrompt(null)} onRetry={(c) => { const { mode: m, credit, lic } = licPrompt; setLicPrompt(null); save(m, credit, { ...lic, ...c }); }} />}
       <Modal open={quick === 'speak'} onClose={() => setQuick(null)} size="lg" title="Type or speak the bill" subtitle="Say or type the items, customer, discount and payment. AI finds your items and customer and fills the invoice for you to check.">
         {quick === 'speak' && <QuickBill context="invoice" bare onApply={(b) => { applyQuick(b); setQuick(null); }} />}
