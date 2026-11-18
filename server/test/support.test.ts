@@ -87,3 +87,46 @@ describe('customer support call-backs', () => {
     expect(c.body.status).toBe('cancelled');
   });
 });
+
+describe('help chat', () => {
+  const ask = (who: typeof owner, q: string) => who.post('/api/shop/support/chat').send({ messages: [{ role: 'user', content: q }] });
+
+  it('answers stock per branch, invoice status, dues, overdue and how-to from the shop’s data', async () => {
+    const stock = (await ask(owner, 'What is the stock of HP 680 ink?')).body;
+    expect(stock.text).toMatch(/HP 680/);
+    expect(stock.table.columns).toEqual(expect.arrayContaining(['Item', 'Head Office', 'Total']));
+    const inv = (await owner.get('/api/shop/invoices')).body.find((i: any) => i.status === 'Issued');
+    const status = (await ask(owner, `status of invoice ${inv.number}`)).body;
+    expect(status.text).toContain(inv.number);
+    expect(status.links[0].to).toBe(`/app/sales/invoices/${inv.id}`);
+    expect((await ask(owner, 'How much does Nila Textiles owe?')).body.text).toMatch(/Nila Textiles (owes|owes nothing)/);
+    expect((await ask(owner, 'which bills are overdue')).body.text).toMatch(/overdue/);
+    const how = (await ask(owner, 'How do I record a payment?')).body;
+    expect(how.links[0].to).toBe('/app/sales/payments');
+    expect((await ask(owner, 'what is low on stock')).body.by).toBe('bot');
+  });
+
+  it('keeps to the user’s role, and offers a person when it can’t help', async () => {
+    expect((await ask(sales, 'Stock of pen drive')).body.table).toBeTruthy();       // every role can see stock
+    const wh = await login('warehouse@shop.com', 'warehouse123');
+    expect((await ask(wh, 'which bills are overdue')).body).toMatchObject({ escalate: true });  // no access to money
+    expect((await ask(owner, 'I want to talk to a person')).body.escalate).toBe(true);
+    expect((await ask(owner, 'blorp zzz')).body).toMatchObject({ escalate: true, by: 'bot' });
+    const contact = (await sales.get('/api/shop/support/contact')).body;
+    expect(contact).toMatchObject({ canBook: false });
+    expect(typeof contact.openNow).toBe('boolean');
+  });
+
+  it('a call-back booked from the chat carries the conversation to the support agent', async () => {
+    const s = (await admin.get('/api/platform/support/settings')).body;
+    expect((await admin.put('/api/platform/support/settings').send({ ...s, phone: '+91 44 4000 1234', email: 'help@corpus360lite.com' })).status).toBe(200);
+    expect((await owner.get('/api/shop/support/contact')).body).toMatchObject({ phone: '+91 44 4000 1234', email: 'help@corpus360lite.com', canBook: true });
+    const slot = (await owner.get('/api/shop/support/slots')).body.days.flatMap((d: any) => d.slots).at(-1).start;
+    const chat = [{ role: 'user', text: 'Labels print sideways' }, { role: 'bot', text: 'Settings → Print settings…' }, { role: 'user', text: 'Talk to a person' }];
+    const b = await owner.post('/api/shop/support/callbacks').send({ slotStart: slot, topic: 'printing', contactName: 'Aravind', phone: '9840012345', message: 'From the help chat', chat });
+    expect(b.status, JSON.stringify(b.body)).toBe(201);
+    expect(b.body).toMatchObject({ source: 'chat', chat });
+    const staffView = (await admin.get('/api/platform/support/callbacks?view=upcoming')).body.callbacks.find((x: any) => x.id === b.body.id);
+    expect(staffView.chat).toEqual(chat);
+  });
+});

@@ -103,7 +103,8 @@ platformSupportRouter.get('/slots', h(async (_req, res) => {
   res.json(await tx(async (db) => { const s = await supportSettings(db); return { settings: s, days: supportSlots(s, await bookedPerSlot(db)) }; }));
 }));
 
-platformSupportRouter.get('/settings', h(async (_req, res) => { res.json(await tx((db) => supportSettings(db))); }));
+const contact = async (db: Db) => { const c = await one(db, 'SELECT support_phone, support_email FROM platform_config WHERE id = 1'); return { phone: c?.support_phone ?? '', email: c?.support_email ?? '' }; };
+platformSupportRouter.get('/settings', h(async (_req, res) => { res.json(await tx(async (db) => ({ ...(await supportSettings(db)), ...(await contact(db)) }))); }));
 platformSupportRouter.put('/settings', h(async (req, res) => {
   const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM, e.g. 10:00');
   const b = parse(z.object({
@@ -112,13 +113,16 @@ platformSupportRouter.put('/settings', h(async (req, res) => {
     slotMinutes: z.union([z.literal(15), z.literal(20), z.literal(30), z.literal(45), z.literal(60)]),
     capacity: z.number().int().min(1).max(50),
     bookingDays: z.number().int().min(1).max(60),
+    /** Shown in the shops' help chat when the bot can't help. */
+    phone: z.string().trim().max(30).default(''),
+    email: z.string().trim().max(120).refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Enter a valid email').default(''),
   }), req.body);
   if (b.start >= b.end) throw badRequest('Support must end after it starts');
   await tx(async (db) => {
     await db.query(`UPDATE platform_config SET support_days = $1, support_start = $2, support_end = $3, support_slot_minutes = $4,
-                    support_slot_capacity = $5, support_booking_days = $6, updated_at = now() WHERE id = 1`,
-    [[...new Set(b.days)].sort(), b.start, b.end, b.slotMinutes, b.capacity, b.bookingDays]);
+                    support_slot_capacity = $5, support_booking_days = $6, support_phone = $7, support_email = $8, updated_at = now() WHERE id = 1`,
+    [[...new Set(b.days)].sort(), b.start, b.end, b.slotMinutes, b.capacity, b.bookingDays, b.phone, b.email]);
     await audit(db, req, null, 'update', 'support_settings', undefined, b);
   });
-  res.json(await tx((db) => supportSettings(db)));
+  res.json(await tx(async (db) => ({ ...(await supportSettings(db)), ...(await contact(db)) })));
 }));

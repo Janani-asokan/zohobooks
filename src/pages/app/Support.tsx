@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import { useMut, useOrg } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
 import { Field, PageHeader } from '@/components/ui';
+import { HelpChat, type SupportContact } from '@/components/HelpChat';
 import { SUPPORT_TOPICS, istDay, istTime, topicLabel, type SlotDay, type SupportSettings } from '../../../shared/support';
 
 interface Callback { id: string; contactName: string; phone: string; topic: string; message: string; slotStart: string; status: 'scheduled' | 'completed' | 'missed' | 'cancelled'; staffNotes: string; assignedTo?: string | null }
@@ -19,8 +20,18 @@ const hours = (s: SupportSettings) => `${s.days.map((d) => DAYS[d]).join(', ')} 
 export default function Support() {
   const me = useShopUser();
   const org = useOrg().data;
-  const slots = useQuery({ queryKey: ['supportSlots'], queryFn: () => api.get<{ settings: SupportSettings; days: SlotDay[] }>('/shop/support/slots') });
-  const list = useQuery({ queryKey: ['supportCallbacks'], queryFn: () => api.get<Callback[]>('/shop/support/callbacks') });
+  const canBook = me.can('admin');
+  const contact = useQuery({ queryKey: ['supportContact'], queryFn: () => api.get<SupportContact>('/shop/support/contact') });
+  const slots = useQuery({ queryKey: ['supportSlots'], queryFn: () => api.get<{ settings: SupportSettings; days: SlotDay[] }>('/shop/support/slots'), enabled: canBook });
+  const list = useQuery({ queryKey: ['supportCallbacks'], queryFn: () => api.get<Callback[]>('/shop/support/callbacks'), enabled: canBook });
+  // The help chat this call-back is booked from: sent with it so the support agent sees what was asked.
+  const [chat, setChat] = useState<Array<{ role: 'user' | 'bot'; text: string }>>([]);
+  const fromChat = (c: Array<{ role: 'user' | 'bot'; text: string }>) => {
+    setChat(c);
+    const asked = c.filter((m) => m.role === 'user' && !/talk to a person/i.test(m.text)).map((m) => m.text);
+    if (asked.length) setF((x) => ({ ...x, message: x.message || `From the help chat: ${asked.join(' · ')}`.slice(0, 1000) }));
+    requestAnimationFrame(() => document.getElementById('support-book')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
   const upcoming = (list.data ?? []).find((c) => c.status === 'scheduled' && new Date(c.slotStart) > new Date());
   const [day, setDay] = useState('');
   const [slot, setSlot] = useState('');
@@ -36,8 +47,12 @@ export default function Support() {
 
   return (
     <div className="page">
-      <PageHeader title="Customer support" icon={Headset} subtitle="Book a call-back: our support team calls you at the time you choose." />
-      <div className="support-grid">
+      <PageHeader title="Help & support" icon={Headset} subtitle="Ask the help bot first. If it can’t solve it, call our support team or book a call-back: the chat goes with it." />
+      <section className="card card-body" style={{ marginBottom: 16 }}>
+        <h3 style={{ margin: '0 0 10px' }}>Help chat</h3>
+        <HelpChat contact={contact.data} onBook={fromChat} />
+      </section>
+      {canBook && <div className="support-grid" id="support-book">
         <section className="card card-body">
           {upcoming ? (
             <div className="support-booked" role="status">
@@ -92,8 +107,9 @@ export default function Support() {
                       <textarea className="textarea" rows={3} maxLength={1000} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} placeholder="e.g. Labels print sideways on the TVS printer" />
                     </Field>
                   </div>
+                  {chat.length > 0 && <div className="small muted" style={{ marginTop: 10 }}>The help chat ({chat.length} messages) goes with this call-back.</div>}
                   <button className="btn btn-primary" style={{ marginTop: 14 }} disabled={!slot || !phoneOk || contactName.trim().length < 2 || book.isPending}
-                    onClick={() => book.mutate({ slotStart: slot, topic: f.topic, message: f.message, contactName: contactName.trim(), phone })}>
+                    onClick={() => book.mutate({ slotStart: slot, topic: f.topic, message: f.message, contactName: contactName.trim(), phone, chat }, { onSuccess: () => setChat([]) })}>
                     {book.isPending ? <Loader2 size={15} className="spin" /> : <CalendarClock size={15} />}
                     {slot ? ` Book ${istDay(slot)}, ${istTime(slot)}` : ' Pick a time'}
                   </button>
@@ -117,7 +133,7 @@ export default function Support() {
             </ul>
           )}
         </aside>
-      </div>
+      </div>}
     </div>
   );
 }

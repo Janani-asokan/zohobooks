@@ -11,7 +11,7 @@ export default function SettingsLayout() {
       { to: '/app/print-settings', label: 'Print settings', icon: Printer },
       { to: '/app/team', label: 'Users, roles & branches', icon: Users },
       { to: '/app/features', label: 'Features & add-ons', icon: Puzzle },
-      { to: '/app/support', label: 'Customer support', icon: Headset },
+      { to: '/app/support', label: 'Help & support', icon: Headset },
     ] : []),
     ...(me.can('audit.read') ? [{ to: '/app/audit', label: 'Audit log', icon: History }] : []),
   ];

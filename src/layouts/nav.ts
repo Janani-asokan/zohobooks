@@ -201,7 +201,7 @@ export function buildActions(can: Can, flags: NavFlags = { lending: false }): Pa
   add(can('admin'), 'Settings', 'Organisation profile', Building2, '/app/organization', 'logo gstin upi address');
   add(can('admin'), 'Settings', 'Print settings', Printer, '/app/print-settings', 'invoice template thermal barcode label');
   add(can('admin'), 'Settings', 'Users & roles', Users, '/app/team', 'staff team branch warehouse');
-  add(can('admin'), 'Settings', 'Customer support', Headset, '/app/support', 'help call back callback support phone');
+  add(true, 'Settings', 'Help & support', Headset, '/app/support', 'help chat bot call back callback support phone agent');
   add(can('admin'), 'Settings', 'Features & add-ons', Puzzle, '/app/features', 'plan price pricing add-on modules subscription turn on upgrade');
   return out;
 }

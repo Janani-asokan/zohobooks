@@ -10,6 +10,8 @@ import { istDay, istTime, topicLabel, type SlotDay, type SupportSettings } from 
 type Status = 'scheduled' | 'completed' | 'missed' | 'cancelled';
 interface Cb {
   id: string; shopId: string; contactName: string; phone: string; topic: string; message: string; slotStart: string; status: Status; staffNotes: string; assignedTo: string | null;
+  /** The help chat it was booked from, if any. */
+  chat?: Array<{ role: 'user' | 'bot'; text: string }>; source?: 'form' | 'chat';
   shop: { name: string; ownerName: string; email: string; phone: string; city: string; planId: string; licenseEnd: string | null; active: boolean };
 }
 interface Summary {
@@ -100,6 +102,12 @@ function CallbackPanel({ cb, onClose }: { cb: Cb; onClose: () => void }) {
           </div>
           <p className="small" style={{ margin: '10px 0 4px' }}><strong>{topicLabel(cb.topic)}</strong></p>
           <p className="small muted" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{cb.message || 'No message.'}</p>
+          {!!cb.chat?.length && (
+            <details className="support-chatlog" open>
+              <summary className="small strong">Help chat before booking ({cb.chat.length} messages)</summary>
+              <ul>{cb.chat.map((m, i) => <li key={i} className={m.role}><span>{m.role === 'user' ? 'Shop' : 'Bot'}</span><div>{m.text}</div></li>)}</ul>
+            </details>
+          )}
           <p className="small muted" style={{ marginTop: 8 }}>Taken by: {cb.assignedTo ?? 'nobody yet'}</p>
 
           <Field label="Call notes (the shop sees these)">
@@ -164,12 +172,12 @@ function CallbackPanel({ cb, onClose }: { cb: Cb; onClose: () => void }) {
 }
 
 function SettingsModal({ onClose }: { onClose: () => void }) {
-  const cur = useQuery({ queryKey: ['platform', 'support', 'settings'], queryFn: () => api.get<SupportSettings>('/platform/support/settings') });
-  const [f, setF] = useState<SupportSettings | null>(null);
+  const cur = useQuery({ queryKey: ['platform', 'support', 'settings'], queryFn: () => api.get<SupportSettings & { phone: string; email: string }>('/platform/support/settings') });
+  const [f, setF] = useState<(SupportSettings & { phone: string; email: string }) | null>(null);
   const v = f ?? cur.data;
-  const save = useMut((b: SupportSettings) => api.put('/platform/support/settings', b), [['platform', 'support'], ['supportSlots']], { success: 'Support hours saved' });
+  const save = useMut((b: SupportSettings & { phone: string; email: string }) => api.put('/platform/support/settings', b), [['platform', 'support'], ['supportSlots']], { success: 'Support hours saved' });
   if (!v) return null;
-  const set = (p: Partial<SupportSettings>) => setF({ ...v, ...p });
+  const set = (p: Partial<SupportSettings & { phone: string; email: string }>) => setF({ ...v, ...p });
   return (
     <Modal open title="Support hours & call-back slots" onClose={onClose}
       footer={<><button className="btn btn-secondary" onClick={onClose}>Close</button><button className="btn btn-primary" disabled={save.isPending || v.days.length === 0} onClick={() => save.mutate(v, { onSuccess: onClose })}>Save</button></>}>
@@ -191,6 +199,8 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         </Field>
         <Field label="Calls per slot" hint="How many staff take calls at once"><input className="input" type="number" min={1} max={50} value={v.capacity} onChange={(e) => set({ capacity: Number(e.target.value) })} /></Field>
         <Field label="Book up to (days ahead)"><input className="input" type="number" min={1} max={60} value={v.bookingDays} onChange={(e) => set({ bookingDays: Number(e.target.value) })} /></Field>
+        <Field label="Support phone" hint="Shown in shops’ help chat (“Call now” during hours)"><input className="input" type="tel" value={v.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} placeholder="+91 44 4000 1234" /></Field>
+        <Field label="Support email"><input className="input" type="email" value={v.email ?? ''} onChange={(e) => set({ email: e.target.value })} placeholder="help@corpus360lite.com" /></Field>
       </div>
     </Modal>
   );
