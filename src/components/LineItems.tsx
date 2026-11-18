@@ -115,8 +115,8 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
                     {it && (
                       <div className="small muted" style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
                         {it.type === 'Goods' ? (
-                          <span style={short ? { color: 'var(--amber-700)', fontWeight: 600 } : undefined}>
-                            {short && <AlertTriangle size={12} style={{ verticalAlign: -2 }} />} {branchStock} {it.unit} in stock{branchId ? ' at this branch' : ''}
+                          <span style={short ? { color: 'var(--red-600)', fontWeight: 600 } : undefined}>
+                            {short && <AlertTriangle size={12} style={{ verticalAlign: -2 }} />} {Math.max(0, branchStock)} {it.unit} in stock{branchId ? ' at this branch' : ''}{short ? ': more can’t be billed here' : ''}
                           </span>
                         ) : `Service · per ${it.unit}`}
                         {it.hsn && <span>· {it.type === 'Goods' ? 'HSN' : 'SAC'} {it.hsn}</span>}

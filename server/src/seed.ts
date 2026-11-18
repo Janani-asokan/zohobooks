@@ -122,7 +122,9 @@ export async function seed({ quiet = false } = {}) {
       if (stock) {
         if (batches) {
           await moveStock(db, { shopId, itemId: r.rows[0].id, branchId: head, qty: 40, reason: 'opening', batchNo: 'B2401', expiryDate: day(20) });
-          await moveStock(db, { shopId, itemId: r.rows[0].id, branchId: head, qty: stock - 40, reason: 'opening', batchNo: 'B2407', expiryDate: day(300) });
+          await moveStock(db, { shopId, itemId: r.rows[0].id, branchId: head, qty: stock - 52, reason: 'opening', batchNo: 'B2407', expiryDate: day(300) });
+          // The Velachery branch sells this item too, so it holds some of its own (sales can't exceed branch stock).
+          await moveStock(db, { shopId, itemId: r.rows[0].id, branchId: vel, qty: 12, reason: 'opening', batchNo: 'B2407', expiryDate: day(300) });
         } else {
           await moveStock(db, { shopId, itemId: r.rows[0].id, branchId: head, qty: Math.ceil(stock * 0.7), reason: 'opening' });
           await moveStock(db, { shopId, itemId: r.rows[0].id, branchId: vel, qty: Math.floor(stock * 0.3), reason: 'opening' });

@@ -233,12 +233,34 @@ async function savePromo(db: Db, shopId: string, id: string, input: InvoiceInput
     [shopId, id, JSON.stringify(promo?.applied ?? []), JSON.stringify(input.skipOffers ?? []), promo?.points ?? 0, promo?.redeemValue ?? 0]);
 }
 
+/**
+ * A branch can only sell what it holds. Goods lines (the same item on several lines counted together) are checked
+ * against the branch's stock, with the stock rows locked so two counters can't both sell the last unit.
+ */
+export async function stockShortages(db: Db, shopId: string, branchId: string, lines: StoredLine[]) {
+  const need = new Map<string, { name: string; unit: string; qty: number }>();
+  for (const l of lines) if (l.type === 'Goods') { const n = need.get(l.itemId); need.set(l.itemId, { name: l.name, unit: l.unit, qty: Math.round(((n?.qty ?? 0) + l.qty) * 1000) / 1000 }); }
+  if (!need.size) return [];
+  const have = new Map((await many(db, 'SELECT item_id, qty FROM item_stock WHERE shop_id = $1 AND branch_id = $2 AND item_id = ANY($3::uuid[]) ORDER BY item_id FOR UPDATE',
+    [shopId, branchId, [...need.keys()]])).map((r) => [r.item_id, Number(r.qty)]));
+  return [...need.entries()].filter(([id, n]) => (have.get(id) ?? 0) < n.qty - 0.0005)
+    .map(([id, n]) => ({ itemId: id, name: n.name, unit: n.unit, need: n.qty, have: Math.max(0, have.get(id) ?? 0) }));
+}
+
+async function assertStock(db: Db, shopId: string, branchId: string, lines: StoredLine[]) {
+  const short = await stockShortages(db, shopId, branchId, lines);
+  if (!short.length) return;
+  const br = await one(db, 'SELECT name FROM branches WHERE id = $1', [branchId]);
+  const list = short.map((x) => `${x.name}: ${x.have} ${x.unit} in stock, ${x.need} on the bill`).join('; ');
+  throw new HttpError(409, `Not enough stock at ${br?.name ?? 'this branch'}. ${list}. Record the purchase or transfer the stock here first.`, 'insufficient_stock', { items: short, branch: br?.name });
+}
+
 /** Assigns the next number in the (FY-scoped) series and moves stock out. */
 /** A bill made on a registered phone (CorpusLite): numbered in that phone's own series, CODE/FY/0001. */
 export interface DeviceNumber { deviceId: string; code: string; seq: number }
 export const deviceInvoiceNumber = (code: string, fy: string, seq: number) => `${code}/${fy}/${String(seq).padStart(4, '0')}`;
 
-async function issue(db: Db, req: Request | null, shopId: string, inv: any, device?: DeviceNumber) {
+async function issue(db: Db, req: Request | null, shopId: string, inv: any, device?: DeviceNumber, allowShort = false) {
   const limits = await planLimits(db, shopId);
   if (limits.max_invoices_per_month) {
     const c = await one(db, "SELECT count(*)::int AS n FROM invoices WHERE shop_id = $1 AND status <> 'Draft' AND issued_at >= date_trunc('month', now())", [shopId]);
@@ -254,6 +276,7 @@ async function issue(db: Db, req: Request | null, shopId: string, inv: any, devi
     await db.query('UPDATE invoices SET device_id = $3 WHERE shop_id = $1 AND id = $2', [shopId, inv.id, device.deviceId]);
   }
   const lines: StoredLine[] = inv.lines;
+  if (!allowShort) await assertStock(db, shopId, inv.branch_id, lines);
   for (const l of lines) {
     if (l.type !== 'Goods') continue;
     const used = await moveStock(db, { shopId, itemId: l.itemId, branchId: inv.branch_id, qty: -l.qty, reason: 'sale', refType: 'invoice', refId: inv.id, userId: req?.ctx?.id, batchNo: l.batchNo, note: number });
@@ -323,7 +346,17 @@ export async function createInvoice(db: Db, req: Request | null, shopId: string,
   await savePromo(db, shopId, row.id, input, f.promo);
   if (opts.issue && source === 'app') await checkCreditLimit(db, req, shopId, f.customerId, f.t.total, row.id, input.overrideCreditLimit);
   let number: string | null = null;
-  if (opts.issue) number = await issue(db, req, shopId, row, opts.device);
+  // A recurring invoice the branch can't cover yet is kept as a draft (stock first), not dropped.
+  if (opts.issue && source === 'recurring' && (await stockShortages(db, shopId, row.branch_id, f.lines)).length) {
+    opts = { ...opts, issue: false };
+    await audit(db, req, shopId, 'stock_hold', 'invoice', row.id, { reason: 'Not enough stock at the branch' });
+  }
+  // A bill made offline at the counter was already handed over: it is kept, and any shortage goes on record.
+  if (opts.issue && opts.madeOffline) {
+    const short = await stockShortages(db, shopId, row.branch_id, f.lines);
+    if (short.length) await audit(db, req, shopId, 'stock_short_offline', 'invoice', row.id, { items: short });
+  }
+  if (opts.issue) number = await issue(db, req, shopId, row, opts.device, !!opts.madeOffline);
   if (opts.issue && gate) await recordLicenseGate(db, req, shopId, row.id, gate, { recordOnly: opts.madeOffline });
   await audit(db, req, shopId, opts.issue ? 'issue' : 'create_draft', 'invoice', row.id, { number, total: f.t.total, source });
   return { ...(await getInvoice(db, shopId, row.id)), licenseWarnings: gate?.warnings ?? [] };
@@ -383,6 +416,7 @@ export async function updateInvoice(db: Db, req: Request, shopId: string, id: st
     const cfg = await platformConfig(db);
     if (fyLabel(input.date, cfg.fyStartMonth) !== inv.fy) throw badRequest('An issued invoice can’t be moved to a different financial year');
     await restock(db, req, shopId, inv, 'adjustment', `Edit ${inv.number}`);
+    await assertStock(db, shopId, f.branchId, f.lines);
     for (const l of f.lines)
       if (l.type === 'Goods') {
         const used = await moveStock(db, { shopId, itemId: l.itemId, branchId: f.branchId, qty: -l.qty, reason: 'sale', refType: 'invoice', refId: id, userId: req.ctx?.id, batchNo: l.batchNo, note: inv.number });

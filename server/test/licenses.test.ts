@@ -106,6 +106,8 @@ describe('warehouse licences', () => {
   it('only gates the invoices in its scope: a service-only licence leaves goods sales alone', async () => {
     const r = await newLicense({ licenseType: 'regulatory', regulatoryKind: 'bonded_warehouse', licenseNumber: 'BOND/CHN/2026/88', expiryDate: addDays(today(), 200) });
     await query('UPDATE warehouse_licenses SET issue_date = $2, term_start = $2, expiry_date = $3 WHERE id = $1', [r.body.id, addDays(today(), -400), addDays(today(), -30)]);
+    // The new warehouse needs the goods in stock to sell them (sales can't exceed branch stock).
+    expect((await owner.post(`/api/shop/items/${goods.id}/adjust`).send({ branchId: wh, qty: 5, note: 'Opening at Cold Store' })).status).toBe(200);
     expect((await owner.post('/api/shop/invoices').send(bill({}, [{ itemId: goods.id, qty: 1 }]))).status).toBe(200);
     expect((await owner.post('/api/shop/invoices').send(bill())).body.code).toBe('license_blocked');
     // Another warehouse isn't affected.

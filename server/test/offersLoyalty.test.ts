@@ -15,7 +15,9 @@ const addDays = (d: string, n: number) => new Date(new Date(d + 'T00:00:00Z').ge
 beforeAll(async () => {
   await freshDb();
   owner = await login('owner@shop.com', 'owner123');
-  const items = (await owner.get('/api/shop/items')).body.filter((i: any) => i.type === 'Goods' && !i.isGroup && i.stock > 5 && !i.trackSerials && !i.trackBatches);
+  // Bills here are issued at the owner's branch and can't sell more than it holds: pick well-stocked items there.
+  const at = owner.me.user.branchId;
+  const items = (await owner.get('/api/shop/items')).body.filter((i: any) => i.type === 'Goods' && !i.isGroup && (i.stockByBranch[at] ?? 0) > 25 && !i.trackSerials && !i.trackBatches);
   item = items[0];
   other = items.find((i: any) => i.category !== item.category) ?? items[1];
   customerId = (await owner.get('/api/shop/customers')).body.find((c: any) => c.companyName === 'Nila Textiles').id;

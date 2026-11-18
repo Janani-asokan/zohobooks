@@ -90,10 +90,15 @@ describe('offline counter bills', () => {
     expect(await stockOf()).toBe(-5);
   });
 
-  it('an online bill can carry an ID too, and is dated today', async () => {
+  it('an online bill can’t sell more than the branch holds, and can carry an ID too, dated today', async () => {
+    // The offline bill above left the branch at −5: online bills are refused until stock is recorded.
+    const blocked = await sale({ clientRef: ref('short') });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body).toMatchObject({ code: 'insufficient_stock', details: { items: [{ need: 2, have: 0 }] } });
+    expect((await owner.post(`/api/shop/items/${item.id}/adjust`).send({ branchId: owner.me.user.branchId, qty: 20, note: 'Stock count' })).status).toBe(200);
     const clientRef = ref('online');
     const r = await sale({ clientRef });
-    expect(r.status).toBe(200);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
     expect(r.body.invoice.madeOfflineAt).toBeNull();
     expect(r.body.invoice.date).toBe(today());
   });

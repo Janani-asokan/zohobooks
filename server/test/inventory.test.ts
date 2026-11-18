@@ -123,3 +123,21 @@ describe('stock summary', () => {
     expect(s.byBranch.reduce((a: number, b: any) => a + b.value, 0)).toBeCloseTo(s.totals.value, 2);
   });
 });
+
+describe('sales stay within branch stock', () => {
+  it('a branch can’t bill what it doesn’t hold; lines of one item count together', async () => {
+    const a = await newGoods('Branch Stock Test Lamp'); // 10 at the head branch, none at the other
+    const cust = (await owner.get('/api/shop/customers')).body[0];
+    const inv = (branchId: string, lines: Array<{ qty: number }>) => owner.post('/api/shop/invoices').send({ customerId: cust.id, date: today(), dueDate: today(), withGst: true, issue: true, branchId,
+      lines: lines.map((l) => ({ itemId: a.id, qty: l.qty, tier: 'SP1' })) });
+    const none = await inv(second, [{ qty: 1 }]);
+    expect(none.status).toBe(409);
+    expect(none.body).toMatchObject({ code: 'insufficient_stock', details: { items: [{ name: 'Branch Stock Test Lamp', need: 1, have: 0 }] } });
+    expect((await inv(head, [{ qty: 6 }, { qty: 5 }])).body.code).toBe('insufficient_stock'); // 11 > 10
+    // A draft is fine (nothing leaves the shelf until it is issued).
+    expect((await owner.post('/api/shop/invoices').send({ customerId: cust.id, date: today(), dueDate: today(), withGst: true, issue: false, branchId: second, lines: [{ itemId: a.id, qty: 3, tier: 'SP1' }] })).status).toBe(200);
+    expect((await inv(head, [{ qty: 6 }, { qty: 4 }])).status).toBe(200);
+    expect((await stockOf(a.id)).stockByBranch[head]).toBe(0);
+    expect((await stockOf(a.id)).stockByBranch[second] ?? 0).toBe(0);
+  });
+});
