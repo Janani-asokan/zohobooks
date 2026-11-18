@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Item } from '@/api/types';
 import { ItemPicker } from '@/components/ItemPicker';
 import { uid } from '@/lib/format';
+import { blankRowClass, enterToNextLine, withTrailingBlank } from '@/lib/lines';
 
 export interface StockLine { key: string; itemId: string; qty: string; serials: string }
 export const emptyStockLine = (): StockLine => ({ key: uid('sl_'), itemId: '', qty: '', serials: '' });
@@ -19,6 +21,7 @@ export function StockLines({ lines, onChange, items, branchId, mode, error }: {
 }) {
   const goods = stockable(items);
   const upd = (key: string, p: Partial<StockLine>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...p } : l)));
+  useEffect(() => { if (lines.length && lines[lines.length - 1]!.itemId) onChange(withTrailingBlank(lines, (l) => !l.itemId, emptyStockLine)); }, [lines]);
   const qtyLabel = mode === 'count' ? 'Counted' : mode === 'move' ? 'Qty to send' : 'Change (+ / −)';
   return (
     <div className="stack" style={{ gap: 8 }}>
@@ -34,9 +37,10 @@ export function StockLines({ lines, onChange, items, branchId, mode, error }: {
               const short = onHand !== null && ((mode === 'move' && n > onHand) || (after !== null && after < 0));
               const serialList = splitSerials(l.serials);
               return (
-                <tr key={l.key}>
+                <tr key={l.key} data-line={l.key} className={blankRowClass(!l.itemId)}>
                   <td>
-                    <ItemPicker items={goods} value={l.itemId} tier="SP1" branchId={branchId} onPick={(id) => upd(l.key, { itemId: id })} />
+                    <ItemPicker items={goods} value={l.itemId} tier="SP1" branchId={branchId}
+                      onPick={(id) => { onChange(withTrailingBlank(lines.map((x) => (x.key === l.key ? { ...x, itemId: id } : x)), (x) => !x.itemId, emptyStockLine)); requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-line="${l.key}"] td:nth-child(3) input`)?.focus()); }} />
                     {it?.trackSerials && mode === 'move' && (
                       <div style={{ marginTop: 6 }}>
                         <input className={`input ${serialList.length && serialList.length !== n ? 'invalid' : ''}`} value={l.serials} onChange={(e) => upd(l.key, { serials: e.target.value })} placeholder="Serial numbers, separated by commas or spaces" aria-label="Serial numbers" />
@@ -45,7 +49,7 @@ export function StockLines({ lines, onChange, items, branchId, mode, error }: {
                     )}
                   </td>
                   <td className="num muted">{onHand === null ? '—' : `${onHand} ${it!.unit}`}</td>
-                  <td><input className={`input ${short ? 'invalid' : ''}`} style={{ textAlign: 'right' }} type="number" step="any" min={mode === 'change' ? undefined : 0} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} aria-label={qtyLabel} /></td>
+                  <td><input className={`input ${short ? 'invalid' : ''}`} style={{ textAlign: 'right' }} type="number" step="any" min={mode === 'change' ? undefined : 0} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} onKeyDown={enterToNextLine} aria-label={qtyLabel} /></td>
                   {mode !== 'move' && <td className="num" style={after !== null && after < 0 ? { color: 'var(--red-600)' } : undefined}>{after === null ? '—' : after}</td>}
                   <td><button type="button" className="icon-btn danger" aria-label="Remove line" onClick={() => onChange(lines.length > 1 ? lines.filter((x) => x.key !== l.key) : [emptyStockLine()])}><Trash2 size={15} /></button></td>
                 </tr>
@@ -55,7 +59,7 @@ export function StockLines({ lines, onChange, items, branchId, mode, error }: {
         </table>
       </div>
       {error && <div className="field-error">{error}</div>}
-      <div><button type="button" className="btn btn-soft btn-sm" onClick={() => onChange([...lines, emptyStockLine()])}><Plus size={14} /> Add line</button></div>
+      <div className="no-print"><button type="button" className="btn btn-soft btn-sm" onClick={() => onChange([...lines, emptyStockLine()])}><Plus size={14} /> Add line</button></div>
     </div>
   );
 }

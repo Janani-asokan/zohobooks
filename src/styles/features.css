@@ -631,3 +631,6 @@
 .tn .table-wrap, .tn { overflow-x: auto; }
 @media (max-width: 700px) { .tn-parties { grid-template-columns: 1fr; } }
 @media print { .tn { border: 0; padding: 0; max-width: none; } }
+
+/* Item tables: the empty line waiting for the next item, and the add-line buttons, never print. */
+@media print { tr.line-blank, tr.line-blank + tr.serials-row { display: none !important; } }

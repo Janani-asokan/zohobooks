@@ -24,8 +24,10 @@ export function searchItems(items: Item[], query: string, limit = 50) {
 }
 
 /** Combobox for choosing an item on a document line. Type to search; ↑ ↓ to move, Enter to pick, Esc to close. */
-export function ItemPicker({ items, value, tier, onPick, invalid, autoFocus, branchId }: {
+export function ItemPicker({ items, value, tier, onPick, invalid, autoFocus, branchId, price }: {
   items: Item[]; value: string; tier: PriceTier; onPick: (id: string) => void; invalid?: boolean; autoFocus?: boolean; branchId?: string | null;
+  /** What price to show next to each item (purchases show the cost); the selling price by default. */
+  price?: (it: Item) => number;
 }) {
   const selected = items.find((i) => i.id === value);
   const [open, setOpen] = useState(false);
@@ -109,7 +111,7 @@ export function ItemPicker({ items, value, tier, onPick, invalid, autoFocus, bra
             >
               <div className="combo-main">
                 <span className="combo-name">{it.name}</span>
-                <span className="combo-price">{money(priceOf(it, tier))}</span>
+                <span className="combo-price">{money(price ? price(it) : priceOf(it, tier))}</span>
               </div>
               <div className="combo-meta">
                 {[it.sku, it.hsn && `${it.type === 'Goods' ? 'HSN' : 'SAC'} ${it.hsn}`, it.type === 'Goods' ? `${stockOf(it)} ${it.unit} in stock` : 'Service', `${it.taxRate}% GST`].filter(Boolean).join(' · ')}

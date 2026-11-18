@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Plus, Trash2, ScanBarcode, Percent, ReceiptIndianRupee, AlertTriangle, Tag, BadgeIndianRupee } from 'lucide-react';
 import { useBranchItems, useItems } from '@/api/hooks';
+import { blankRowClass, enterToNextLine, withTrailingBlank } from '@/lib/lines';
 import { useToast } from '@/context/ToastContext';
 import { applyBillAdjustments, computeTotals, lineAmount, type BillDiscount } from '@/lib/calc';
 import { money, uid } from '@/lib/format';
@@ -51,11 +52,14 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
   const [scan, setScan] = useState('');
 
   const set = (key: string, patch: Partial<DraftLine>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  // Lines that arrive filled (editing, quick fill, a converted quote) also get an empty line to type the next item in.
+  useEffect(() => { if (lines.length && lines[lines.length - 1]!.itemId) onChange(withTrailingBlank(lines, (l) => !l.itemId, () => emptyLine(defaultTier))); }, [lines]);
 
   const pickItem = (key: string, itemId: string) => {
     const it = items.find((i) => i.id === itemId);
     const line = lines.find((l) => l.key === key)!;
-    set(key, { itemId, rate: it ? priceFor(it, line.tier, inclusive) : 0 });
+    // Picking an item on the last line opens a fresh line under it: no need to press "Add new row".
+    onChange(withTrailingBlank(lines.map((l) => (l.key === key ? { ...l, itemId, rate: it ? priceFor(it, line.tier, inclusive) : 0 } : l)), (l) => !l.itemId, () => emptyLine(defaultTier)));
     // Next stop is quantity, so a line is: type, Enter, quantity, Tab.
     requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-line="${key}"] input[aria-label="Quantity"]`)?.select());
   };
@@ -68,7 +72,7 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
     if (existing) return set(existing.key, { qty: existing.qty + 1 });
     const fresh: DraftLine = { ...emptyLine(defaultTier), itemId: it.id, rate: priceFor(it, defaultTier, inclusive) };
     const blankIdx = lines.findIndex((l) => !l.itemId);
-    onChange(blankIdx >= 0 ? lines.map((l, i) => (i === blankIdx ? { ...fresh, key: l.key } : l)) : [...lines, fresh]);
+    onChange(withTrailingBlank(blankIdx >= 0 ? lines.map((l, i) => (i === blankIdx ? { ...fresh, key: l.key } : l)) : [...lines, fresh], (l) => !l.itemId, () => emptyLine(defaultTier)));
   };
 
 
@@ -102,7 +106,7 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
               const branchStock = it && branchId ? it.stockByBranch[branchId] ?? 0 : it?.stock ?? 0;
               const short = it?.type === 'Goods' && l.qty > branchStock;
               return (
-                <tr key={l.key} data-line={l.key}>
+                <tr key={l.key} data-line={l.key} className={blankRowClass(!l.itemId)}>
                   <td>
                     <ItemPicker items={items} value={l.itemId} tier={l.tier} onPick={(id) => pickItem(l.key, id)} invalid={bad} branchId={branchId} />
                     {it && (
@@ -120,11 +124,11 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
                     {it && <input className="input input-sm line-note" style={{ marginTop: 6 }} maxLength={300} value={l.note ?? ''} onChange={(e) => set(l.key, { note: e.target.value })}
                       placeholder={it.trackSerials ? 'Warranty or other details (prints on the bill)' : 'Serial no., warranty or other details (prints on the bill)'} aria-label={`Details for ${it.name}`} />}
                   </td>
-                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={1} value={l.qty} onChange={(e) => set(l.key, { qty: Math.max(0, Number(e.target.value)) })} aria-label="Quantity" /></td>
-                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} value={rate} onChange={(e) => set(l.key, { rate: Math.max(0, Number(e.target.value)) })} aria-label="Rate" /></td>
-                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} max={100} value={l.discount} onChange={(e) => set(l.key, { discount: Math.min(100, Math.max(0, Number(e.target.value))) })} aria-label="Discount" /></td>
+                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={1} value={l.qty} onChange={(e) => set(l.key, { qty: Math.max(0, Number(e.target.value)) })} onKeyDown={enterToNextLine} aria-label="Quantity" /></td>
+                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} value={rate} onChange={(e) => set(l.key, { rate: Math.max(0, Number(e.target.value)) })} onKeyDown={enterToNextLine} aria-label="Rate" /></td>
+                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} max={100} value={l.discount} onChange={(e) => set(l.key, { discount: Math.min(100, Math.max(0, Number(e.target.value))) })} onKeyDown={enterToNextLine} aria-label="Discount" /></td>
                   <td className="num">{withGst && it ? <span className="chip">{it.taxRate}%</span> : <span className="muted small">—</span>}</td>
-                  <td className="num strong">{money(lineAmount({ qty: l.qty, rate, discount: l.discount, taxRate: 0 }))}</td>
+                  <td className="num strong">{l.itemId ? money(lineAmount({ qty: l.qty, rate, discount: l.discount, taxRate: 0 })) : <span className="muted">—</span>}</td>
                   <td>
                     <button type="button" className="icon-btn danger" disabled={lines.length === 1} onClick={() => onChange(lines.filter((x) => x.key !== l.key))} aria-label="Remove line"><Trash2 size={15} /></button>
                   </td>
@@ -134,7 +138,7 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
           </tbody>
         </table>
       </div>
-      <div style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
+      <div className="no-print" style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => onChange([...lines, emptyLine(defaultTier)])}><Plus size={14} /> Add new row</button>
       </div>
     </div>

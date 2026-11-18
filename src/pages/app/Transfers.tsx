@@ -14,6 +14,7 @@ import { ConfirmModal, EmptyState, Field, Modal, PageHeader, SearchInput, StatCa
 import { splitSerials, stockable } from '@/components/StockLines';
 import { fmtDate, money, todayISO, uid } from '@/lib/format';
 import { EWAY_BILL_THRESHOLD, OTP } from '../../../shared/transfers';
+import { blankRowClass, enterToNextLine, withTrailingBlank } from '@/lib/lines';
 
 const KEYS = [['stockTransfers'], ['transfer'], ['items'], ['stockAlerts'], ['movements'], ['stockSummary'], ['serials'], ['batches'], ['branchPrices'], ['notifications']];
 const STATUS_LABEL: Record<StockTransfer['status'], string> = { Draft: 'Draft', 'In transit': 'In transit · awaiting code', Received: 'Received', Cancelled: 'Cancelled' };
@@ -268,9 +269,10 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
                   const p = priceOf(l);
                   const e = lineErrors(l);
                   return (
-                    <tr key={l.key}>
+                    <tr key={l.key} data-line={l.key} className={blankRowClass(!l.itemId)}>
                       <td>
-                        <ItemPicker items={goods} value={l.itemId} tier="SP1" branchId={f.fromBranchId} onPick={(id) => upd(l.key, { itemId: id, batchNo: '', destPrice: '' })} />
+                        <ItemPicker items={goods} value={l.itemId} tier="SP1" branchId={f.fromBranchId}
+                          onPick={(id) => setF((x) => ({ ...x, lines: withTrailingBlank(x.lines.map((y) => (y.key === l.key ? { ...y, itemId: id, batchNo: '', destPrice: '' } : y)), (y) => !y.itemId, emptyLine) }))} />
                         {it?.trackSerials && <input className="input" style={{ marginTop: 6 }} value={l.serials} onChange={(ev) => upd(l.key, { serials: ev.target.value })} placeholder="Serial numbers" aria-label="Serial numbers" />}
                       </td>
                       <td>
@@ -282,7 +284,7 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
                         )}
                       </td>
                       <td className="num">
-                        <input className={`input num ${e && l.qty ? 'invalid' : ''}`} style={{ width: 96 }} type="number" min={0} step="any" value={l.qty} onChange={(ev) => upd(l.key, { qty: ev.target.value })} aria-label="Quantity" />
+                        <input className={`input num ${e && l.qty ? 'invalid' : ''}`} style={{ width: 96 }} type="number" min={0} step="any" value={l.qty} onChange={(ev) => upd(l.key, { qty: ev.target.value })} onKeyDown={enterToNextLine} aria-label="Quantity" />
                         {e && <div className="small" style={{ color: 'var(--red-600)' }}>{e}</div>}
                       </td>
                       <td className="num">{p ? money(p.unitCost) : '—'}<div className="small muted">kept on the batch</div></td>
@@ -304,7 +306,7 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
             </table>
           </div>
           <div className="row between" style={{ marginTop: 8 }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setF({ ...f, lines: [...f.lines, emptyLine()] })}><Plus size={14} /> Add item</button>
+            <button className="btn btn-ghost btn-sm no-print" onClick={() => setF({ ...f, lines: [...f.lines, emptyLine()] })}><Plus size={14} /> Add item</button>
             {pv && !pv.ok && pv.error && <span className="small" style={{ color: 'var(--red-600)' }}>{pv.error}</span>}
           </div>
           {err.lines && <div className="support-alert" style={{ marginTop: 8 }}><AlertTriangle size={15} /> {err.lines}</div>}

@@ -1,9 +1,11 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Plus, ScanBarcode, Trash2 } from 'lucide-react';
 import { findByCode } from '../../shared/barcode';
 import type { Item } from '@/api/types';
 import { money, uid } from '@/lib/format';
 import { Thumb } from './kit';
+import { ItemPicker } from './ItemPicker';
+import { blankRowClass, enterToNextLine, withTrailingBlank } from '@/lib/lines';
 
 /* Line editor for purchase orders and itemised bills — priced at cost, not selling price. */
 
@@ -47,6 +49,10 @@ export const toPurchaseInput = (lines: PLine[], opts: { serials?: boolean } = {}
  */
 export function PurchaseLinesEditor({ lines, onChange, items, error, withSerials, showSerialErrors }: { lines: PLine[]; onChange: (l: PLine[]) => void; items: Item[]; error?: string; withSerials?: boolean; showSerialErrors?: boolean }) {
   const upd = (key: string, patch: Partial<PLine>) => onChange(lines.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const pickable = items.filter((i) => !i.isGroup);
+  useEffect(() => { if (lines.length && lines[lines.length - 1]!.itemId) onChange(withTrailingBlank(lines, (l) => !l.itemId, emptyPLine)); }, [lines]);
+  /** After picking an item, the cursor goes to its quantity. */
+  const focusQty = (key: string) => requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-line="${key}"] input[aria-label="Quantity"]`)?.select());
   const t = pTotals(lines);
   // Receiving stock box by box: each scan adds the item, or one more of it if it is already on the bill.
   const [scan, setScan] = useState('');
@@ -77,7 +83,7 @@ export function PurchaseLinesEditor({ lines, onChange, items, error, withSerials
     setScanMsg(withSerials && it.trackSerials ? `Added ${it.name}. Now scan its IMEI / serial number.` : `Added ${it.name}`);
     const have = lines.find((l) => l.itemId === it.id);
     if (have) { setLastKey(have.key); onChange(lines.map((l) => (l.key === have.key ? { ...l, qty: String(Number(l.qty || 0) + 1) } : l))); }
-    else { const n = pLineFor(it); setLastKey(n.key); onChange([...lines.filter((l) => l.itemId), n]); }
+    else { const n = pLineFor(it); setLastKey(n.key); onChange([...lines.filter((l) => l.itemId), n, emptyPLine()]); }
   };
   return (
     <div>
@@ -105,21 +111,21 @@ export function PurchaseLinesEditor({ lines, onChange, items, error, withSerials
               const it = items.find((i) => i.id === l.itemId);
               return (
                 <Fragment key={l.key}>
-                <tr className={withSerials && it?.trackSerials ? 'has-serials' : ''}>
+                <tr data-line={l.key} className={`${withSerials && it?.trackSerials ? 'has-serials' : ''} ${blankRowClass(!l.itemId)}`}>
                   <td>
                     <div className="row" style={{ gap: 8 }}>
                       {it && <Thumb name={it.name} image={it.image} size={32} />}
-                      <select className="select" value={l.itemId} aria-label="Item"
-                        onChange={(e) => { const n = items.find((i) => i.id === e.target.value); upd(l.key, n ? { itemId: n.id, rate: String(n.cost ?? 0), taxRate: n.taxRate } : { itemId: '' }); }}>
-                        <option value="">Select an item…</option>
-                        {items.filter((i) => !i.isGroup).map((i) => <option key={i.id} value={i.id}>{i.name}{i.sku ? ` · ${i.sku}` : ''}{i.type === 'Goods' ? ` (${i.stock} in stock)` : ''}</option>)}
-                      </select>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {/* Type to search; picking fills the cost and GST and opens the next line. */}
+                        <ItemPicker items={pickable} value={l.itemId} tier="SP1" price={(i) => i.cost ?? 0}
+                          onPick={(id) => { const n = items.find((i) => i.id === id); if (!n) return; onChange(withTrailingBlank(lines.map((x) => (x.key === l.key ? { ...x, itemId: n.id, rate: String(n.cost ?? 0), taxRate: n.taxRate } : x)), (x) => !x.itemId, emptyPLine)); focusQty(l.key); }} />
+                      </div>
                     </div>
                   </td>
-                  <td className="num"><input className="input num" type="number" min={0} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} aria-label="Quantity" /></td>
-                  <td className="num"><input className="input num" type="number" min={0} value={l.rate} onChange={(e) => upd(l.key, { rate: e.target.value })} aria-label="Rate" /></td>
+                  <td className="num"><input className="input num" type="number" min={0} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} onKeyDown={enterToNextLine} aria-label="Quantity" /></td>
+                  <td className="num"><input className="input num" type="number" min={0} value={l.rate} onChange={(e) => upd(l.key, { rate: e.target.value })} onKeyDown={enterToNextLine} aria-label="Rate" /></td>
                   <td className="num muted">{l.itemId ? `${l.taxRate}%` : '—'}</td>
-                  <td className="num strong">{money(Number(l.qty || 0) * Number(l.rate || 0))}</td>
+                  <td className="num strong">{l.itemId ? money(Number(l.qty || 0) * Number(l.rate || 0)) : <span className="muted">—</span>}</td>
                   <td><button className="icon-btn danger" aria-label="Remove line" onClick={() => onChange(lines.length > 1 ? lines.filter((x) => x.key !== l.key) : [emptyPLine()])}><Trash2 size={15} /></button></td>
                 </tr>
                 {withSerials && it?.trackSerials && (() => {
@@ -153,7 +159,7 @@ export function PurchaseLinesEditor({ lines, onChange, items, error, withSerials
       </div>
       {error && <div className="field-error" style={{ marginTop: 6 }}>{error}</div>}
       <div className="row between" style={{ marginTop: 10, alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <button type="button" className="btn btn-soft btn-sm" onClick={() => onChange([...lines, emptyPLine()])}><Plus size={14} /> Add line</button>
+        <button type="button" className="btn btn-soft btn-sm no-print" onClick={() => onChange([...lines, emptyPLine()])}><Plus size={14} /> Add line</button>
         <div className="totals-mini">
           <div><span>Sub total</span><strong>{money(t.sub)}</strong></div>
           <div><span>GST (input credit)</span><strong>{money(t.tax)}</strong></div>
