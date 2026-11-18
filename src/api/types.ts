@@ -34,6 +34,8 @@ export interface Item {
   id: string; type: 'Goods' | 'Services'; name: string; sku: string; barcode: string; aliases?: string[]; unit: string; hsn: string; cost: number | null;
   sp1: number; sp2: number; sp3: number; taxSlabId: string; taxRate: number; reorderLevel: number; trackBatches: boolean; description: string;
   stock: number; stockByBranch: Record<string, number>; createdAt: string;
+  /** Units sent to each branch and not received there yet (not counted in its stock). */
+  inTransitByBranch?: Record<string, number>;
   category: string; brand: string; image: string; mrp: number | null;
   trackSerials: boolean; parentId: string | null; isGroup: boolean; variantAttrs: Record<string, string>; attributes: Array<{ name: string; values: string[] }>;
   /** Trade field values (purity, schedule, warranty …), keyed by the shop's item field keys. */

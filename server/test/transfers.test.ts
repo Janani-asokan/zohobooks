@@ -180,6 +180,26 @@ describe('inter-branch stock transfers', () => {
     expect((await batchAt(vel)).qty).toBe(25);
   });
 
+  it('a new branch starts at zero, and the item drawer’s quick transfer waits in transit too', async () => {
+    const nb = (await owner.post('/api/shop/branches').send({ name: 'Anna Nagar', address: '', phone: '' })).body.id;
+    const item = () => owner.get('/api/shop/items').then((r) => r.body.find((i: any) => i.id === apple.id));
+    let it = await item();
+    expect(it.stockByBranch[nb] ?? 0).toBe(0);
+    const headBefore = it.stockByBranch[head];
+    const r = await owner.post('/api/shop/stock/transfer').send({ itemId: apple.id, fromBranchId: head, toBranchId: nb, qty: 10 });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.transfer).toMatchObject({ status: 'In transit', toName: 'Anna Nagar' });
+    expect(r.body.transfer.lines[0]).toMatchObject({ batchNo: BATCH, qty: 10 });
+    it = await item();
+    expect(it.stockByBranch[head]).toBe(headBefore - 10);
+    expect(it.stockByBranch[nb] ?? 0).toBe(0);        // nothing at the new branch yet
+    expect(it.inTransitByBranch[nb]).toBe(10);        // shown as on the way
+    await owner.post('/api/shop/transfers/owner-receive').send({ transferId: r.body.transfer.id, reason: 'Checked at Anna Nagar on arrival' });
+    it = await item();
+    expect(it.stockByBranch[nb]).toBe(10);
+    expect(it.inTransitByBranch[nb] ?? 0).toBe(0);
+  });
+
   it('keeps transfers to their shop', async () => {
     const other = request.agent(app);
     await other.post('/api/auth/signup').set(csrf).send({ shopName: 'Second Shop', ownerName: 'Lakshmi R', email: 'second@example.com', phone: '9000012345', password: 'Second#2026' });

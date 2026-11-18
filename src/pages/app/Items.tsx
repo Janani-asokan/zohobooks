@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExportMenu } from '@/components/ExportMenu';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Package, Wrench, Pencil, Trash2, ScanBarcode, Upload, Boxes, Tag, ArrowLeftRight, SlidersHorizontal, X, CalendarClock, Archive, List, LayoutGrid, ExternalLink } from 'lucide-react';
 import { api, download } from '@/api/client';
 import { useBranches, useItemFacets, useItems, useMovements, useMut, useStockAlerts, useTaxSlabs, useOrg } from '@/api/hooks';
@@ -397,7 +397,9 @@ function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item
   const [form, setForm] = useState({ branchId: branches[0]?.id ?? '', toBranchId: branches[1]?.id ?? '', qty: '', dir: 'in' as 'in' | 'out', note: '', batchNo: '', expiryDate: '' });
   const keys = [['items'], ['movements'], ['stockAlerts'], ['notifications'], ['dashboard']];
   const adjust = useMut((b: Record<string, unknown>) => api.post<Item>(`/shop/items/${item.id}/adjust`, b), keys, { success: 'Stock adjusted' });
-  const transfer = useMut((b: Record<string, unknown>) => api.post<Item>('/shop/stock/transfer', b), keys, { success: 'Stock transferred' });
+  // Sends the units into transit: the other branch gets them only when its manager enters the emailed code.
+  const transfer = useMut((b: Record<string, unknown>) => api.post<{ transfer: { number: string; toName: string }; otp: { sentTo: string; delivered: boolean } }>('/shop/stock/transfer', b),
+    [...keys, ['stockTransfers']], { success: (r) => `${r.transfer.number} is in transit to ${r.transfer.toName}. It is added there when ${r.otp.delivered ? r.otp.sentTo : 'its manager'} enters the receipt code.` });
   useEffect(() => { if (!form.branchId && branches[0]) setForm((f) => ({ ...f, branchId: branches[0]!.id, toBranchId: branches[1]?.id ?? '' })); }, [branches, form.branchId]);
 
   const submit = () => {
@@ -447,7 +449,17 @@ function StockDrawer({ item, onClose, canWrite, showCost, onEdit }: { item: Item
           <div className="section-title mt-24">Stock · reorder at {item.reorderLevel} {item.unit}</div>
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(3, branches.length + 1)}, 1fr)`, gap: 10 }}>
             <div className="card" style={{ padding: 12, boxShadow: 'none', background: 'var(--brand-50)' }}><div className="small muted">Total</div><div style={{ fontSize: 20, fontWeight: 600, color: 'var(--ink-900)' }}>{item.stock} <span className="small muted">{item.unit}</span></div></div>
-            {branches.map((b) => <div key={b.id} className="card" style={{ padding: 12, boxShadow: 'none' }}><div className="small muted">{b.name}</div><div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink-900)' }}>{item.stockByBranch[b.id] ?? 0}</div></div>)}
+            {branches.map((b) => {
+              const coming = item.inTransitByBranch?.[b.id] ?? 0;
+              const here = item.stockByBranch[b.id] ?? 0;
+              return (
+                <div key={b.id} className="card" style={{ padding: 12, boxShadow: 'none' }}>
+                  <div className="small muted">{b.name}</div>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: here < 0 ? 'var(--red-600)' : 'var(--ink-900)' }}>{here}</div>
+                  {coming > 0 && <Link className="small" to="/app/inventory/transfers?tab=receive">+{coming} on the way</Link>}
+                </div>
+              );
+            })}
           </div>
           {canWrite && (
             <div className="row" style={{ gap: 8, marginTop: 14 }}>

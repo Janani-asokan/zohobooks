@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { cleanExtra, templateByKey } from '../../../../shared/templates';
 import { z } from 'zod';
-import { perm } from '../../auth';
+import { perm, todayISO } from '../../auth';
+import { initiate } from '../../services/transfers';
 import { audit } from '../../audit';
 import { many, one, type Db } from '../../db';
 import { badRequest, parse } from '../../http';
@@ -54,6 +55,9 @@ export async function listItems(db: Db, shopId: string, showCost: boolean, ids?:
     `SELECT i.*, t.rate AS tax_rate,
             coalesce((SELECT jsonb_object_agg(s.branch_id, s.qty) FROM item_stock s WHERE s.item_id = i.id), '{}'::jsonb) AS stock_by_branch,
             coalesce((SELECT sum(s.qty) FROM item_stock s WHERE s.item_id = i.id), 0) AS stock,
+            -- Sent to a branch but not received there yet (not in any branch's stock until the code is entered).
+            coalesce((SELECT jsonb_object_agg(x.to_branch_id, x.q) FROM (SELECT t.to_branch_id, sum(ti.qty_sent) AS q FROM stock_transfer_items ti
+               JOIN stock_transfers t ON t.id = ti.transfer_id WHERE ti.item_id = i.id AND t.status = 'In transit' GROUP BY t.to_branch_id) x), '{}'::jsonb) AS transit_by_branch,
             coalesce((SELECT array_agg(ib.value ORDER BY ib.created_at) FROM item_barcodes ib WHERE ib.item_id = i.id AND ib.status = 'alias'), '{}') AS aliases
        FROM items i JOIN tax_slabs t ON t.id = i.tax_slab_id
       WHERE i.shop_id = $1 AND NOT i.archived ${ids ? 'AND i.id = ANY($2::uuid[])' : ''}
@@ -91,6 +95,7 @@ export async function listItems(db: Db, shopId: string, showCost: boolean, ids?:
     mrp: r.mrp === null ? null : Number(r.mrp),
     stock: Number(r.stock),
     stockByBranch: Object.fromEntries(Object.entries(r.stock_by_branch as Record<string, unknown>).map(([k, v]) => [k, Number(v)])),
+    inTransitByBranch: Object.fromEntries(Object.entries((r.transit_by_branch ?? {}) as Record<string, unknown>).map(([k, v]) => [k, Number(v)])),
     createdAt: r.created_at,
   }));
 }
@@ -260,22 +265,34 @@ catalogRouter.post(
   }),
 );
 
+/**
+ * Quick transfer of one item (item drawer). It used to move the stock instantly; it now makes a normal transfer:
+ * the units leave the source (batches earliest-expiry first) and wait in transit until the destination's manager
+ * enters the emailed code, exactly like Inventory → Transfers.
+ */
 catalogRouter.post(
   '/stock/transfer',
   perm('items.write'),
-  T(async (db, req, c) => {
+  T(async (db, req, c, res) => {
     const b = parse(z.object({ itemId: z.string().uuid(), fromBranchId: z.string().uuid(), toBranchId: z.string().uuid(), qty: z.number().positive(), note: z.string().max(200).default('') }), req.body);
     if (b.fromBranchId === b.toBranchId) throw badRequest('Choose two different branches');
     const it = await requireRow(db, 'items', c.shopId, b.itemId, 'Item');
-    const from = await primaryBranchId(db, c.shopId, b.fromBranchId);
-    const to = await primaryBranchId(db, c.shopId, b.toBranchId);
-    const have = await one(db, 'SELECT qty FROM item_stock WHERE item_id = $1 AND branch_id = $2 FOR UPDATE', [it.id, from]);
-    if (Number(have?.qty ?? 0) < b.qty) throw badRequest(`Only ${Number(have?.qty ?? 0)} ${it.unit} available at the source branch`);
-    const used = await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId: from, qty: -b.qty, reason: 'transfer_out', note: b.note, userId: c.id });
-    if (used.length) for (const u of used) await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId: to, qty: u.qty, reason: 'transfer_in', note: b.note, userId: c.id, batchNo: u.batchNo, expiryDate: u.expiryDate });
-    else await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId: to, qty: b.qty, reason: 'transfer_in', note: b.note, userId: c.id });
-    await audit(db, req, c.shopId, 'stock_transfer', 'item', it.id, { qty: b.qty, from, to });
-    return (await listItems(db, c.shopId, allowed(c, 'items.cost'), [it.id]))[0];
+    if (it.track_serials) throw badRequest(`${it.name} has serial numbers: send it from Inventory → Transfers, where you pick the serials`);
+    let lines: Array<{ itemId: string; batchNo: string | null; qty: number }> = [{ itemId: it.id, batchNo: null, qty: b.qty }];
+    if (it.track_batches) {
+      lines = [];
+      let need = b.qty;
+      for (const bt of await many(db, 'SELECT batch_no, qty FROM item_batches WHERE item_id = $1 AND branch_id = $2 AND qty > 0 ORDER BY expiry_date NULLS LAST, created_at', [it.id, b.fromBranchId])) {
+        if (need <= 0) break;
+        const take = Math.min(need, Number(bt.qty));
+        lines.push({ itemId: it.id, batchNo: bt.batch_no, qty: Math.round(take * 1000) / 1000 });
+        need = Math.round((need - take) * 1000) / 1000;
+      }
+      if (need > 0) throw badRequest(`Only ${Math.round((b.qty - need) * 1000) / 1000} ${it.unit} of ${it.name} in batches at the source branch`);
+    }
+    const out = await initiate(db, req, c, { fromBranchId: b.fromBranchId, toBranchId: b.toBranchId, date: todayISO(), notes: b.note, ewayBillNo: '', vehicleNo: '', lines });
+    res.status(201);
+    return { transfer: out.transfer, otp: out.otp, item: (await listItems(db, c.shopId, allowed(c, 'items.cost'), [it.id]))[0] };
   }),
 );
 
