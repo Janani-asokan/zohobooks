@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { perm, todayISO } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, type Db } from '../../db';
-import { badRequest, conflict, HttpError, notFound, parse } from '../../http';
+import { badRequest, HttpError, parse } from '../../http';
 import { stockInsights } from '../../services/stockInsights';
 import { nextSeq, requireRow } from '../../services/common';
 import { checkSerialList, moveStock, serialsTaken } from '../../services/stock';
@@ -75,95 +75,7 @@ inventoryRouter.post(
   }),
 );
 
-/* ======================= Transfers (dispatch → receive) ======================= */
-const serializeTr = (t: any) => ({
-  id: t.id, number: t.number, fromBranchId: t.from_branch_id, fromName: t.from_name, toBranchId: t.to_branch_id, toName: t.to_name, date: t.date,
-  status: t.status, lines: t.lines, notes: t.notes, receivedAt: t.received_at, createdBy: t.created_by_name, createdAt: t.created_at,
-});
-const TR_SQL = 'SELECT t.*, f.name AS from_name, d.name AS to_name FROM stock_transfers t JOIN branches f ON f.id = t.from_branch_id JOIN branches d ON d.id = t.to_branch_id WHERE t.shop_id = $1';
-
-inventoryRouter.get('/stock/transfers', T(async (db, _req, c) => (await many(db, `${TR_SQL} ORDER BY t.date DESC, t.created_at DESC`, [c.shopId])).map(serializeTr)));
-
-/** Dispatch: stock leaves the source now and is "in transit" until the destination receives it. */
-inventoryRouter.post(
-  '/stock/transfers',
-  perm('items.write'),
-  T(async (db, req, c) => {
-    const b = parse(z.object({
-      fromBranchId: z.string().uuid('Choose where the stock is'), toBranchId: z.string().uuid('Choose where it is going'), date: iso.default(todayISO), notes: z.string().max(500).default(''),
-      receiveNow: z.boolean().default(false),
-      lines: z.array(z.object({ itemId: z.string().uuid(), qty: z.number().positive('Enter a quantity'), serials: z.array(z.string().trim().min(1)).max(1000).optional() })).min(1, 'Add at least one item').max(500),
-    }), req.body);
-    if (b.fromBranchId === b.toBranchId) throw badRequest('Choose two different warehouses', { toBranchId: 'Same as the source' });
-    await requireRow(db, 'branches', c.shopId, b.fromBranchId, 'Warehouse');
-    await requireRow(db, 'branches', c.shopId, b.toBranchId, 'Warehouse');
-    const items = await goodsItems(db, c.shopId, [...new Set(b.lines.map((l) => l.itemId))]);
-    const number = await docNo(db, c.shopId, 'tr', 'TR');
-    const row = await one(db, `INSERT INTO stock_transfers (shop_id, number, from_branch_id, to_branch_id, date, status, lines, notes, created_by, created_by_name)
-      VALUES ($1,$2,$3,$4,$5,'In transit','[]',$6,$7,$8) RETURNING *`, [c.shopId, number, b.fromBranchId, b.toBranchId, b.date, b.notes, c.id, c.name]);
-    const lines = [];
-    for (const l of b.lines) {
-      const it = items.get(l.itemId)!;
-      const have = await qtyAt(db, it.id, b.fromBranchId);
-      if (have < l.qty - 0.0005) throw badRequest(`Only ${have} ${it.unit} of ${it.name} at the source warehouse`);
-      let serials: string[] = [];
-      if (it.track_serials) {
-        serials = [...new Set((l.serials ?? []).map((s) => s.trim()))];
-        if (serials.length !== l.qty) throw badRequest(`${it.name} needs ${l.qty} serial number${l.qty === 1 ? '' : 's'}`);
-        const ok = await many(db, "SELECT id FROM item_serials WHERE shop_id = $1 AND item_id = $2 AND branch_id = $3 AND status = 'In stock' AND serial = ANY($4::text[]) FOR UPDATE", [c.shopId, it.id, b.fromBranchId, serials]);
-        if (ok.length !== serials.length) throw badRequest(`Some serial numbers of ${it.name} aren’t in stock at the source warehouse`);
-        await db.query("UPDATE item_serials SET status = 'In transit', updated_at = now() WHERE id = ANY($1::uuid[])", [ok.map((x) => x.id)]);
-      }
-      const batches = await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId: b.fromBranchId, qty: -l.qty, reason: 'transfer_out', refType: 'stock_transfer', refId: row.id, note: number, userId: c.id });
-      lines.push({ itemId: it.id, name: it.name, unit: it.unit, qty: l.qty, batches, serials });
-    }
-    await db.query('UPDATE stock_transfers SET lines = $3 WHERE shop_id = $1 AND id = $2', [c.shopId, row.id, JSON.stringify(lines)]);
-    await audit(db, req, c.shopId, 'dispatch', 'stock_transfer', row.id, { number, lines: lines.length });
-    if (b.receiveNow) await receiveTransfer(db, c.shopId, row.id, c.id);
-    return serializeTr((await many(db, `${TR_SQL} AND t.id = $2`, [c.shopId, row.id]))[0]);
-  }),
-);
-
-async function receiveTransfer(db: Db, shopId: string, id: string, userId: string) {
-  const t = await one(db, 'SELECT * FROM stock_transfers WHERE shop_id = $1 AND id = $2 FOR UPDATE', [shopId, id]);
-  if (!t) throw notFound('Transfer');
-  if (t.status !== 'In transit') throw conflict(`This transfer is already ${t.status.toLowerCase()}`);
-  for (const l of t.lines) {
-    if (l.batches?.length) for (const bt of l.batches) await moveStock(db, { shopId, itemId: l.itemId, branchId: t.to_branch_id, qty: bt.qty, reason: 'transfer_in', refType: 'stock_transfer', refId: t.id, note: t.number, userId, batchNo: bt.batchNo, expiryDate: bt.expiryDate });
-    else await moveStock(db, { shopId, itemId: l.itemId, branchId: t.to_branch_id, qty: l.qty, reason: 'transfer_in', refType: 'stock_transfer', refId: t.id, note: t.number, userId });
-    if (l.serials?.length) await db.query("UPDATE item_serials SET status = 'In stock', branch_id = $4, updated_at = now() WHERE shop_id = $1 AND item_id = $2 AND serial = ANY($3::text[]) AND status = 'In transit'", [shopId, l.itemId, l.serials, t.to_branch_id]);
-  }
-  await db.query("UPDATE stock_transfers SET status = 'Received', received_at = now() WHERE shop_id = $1 AND id = $2", [shopId, id]);
-}
-
-inventoryRouter.post(
-  '/stock/transfers/:id/receive',
-  perm('items.write'),
-  T(async (db, req, c) => {
-    await receiveTransfer(db, c.shopId, req.params.id!, c.id);
-    await audit(db, req, c.shopId, 'receive', 'stock_transfer', req.params.id!);
-    return serializeTr((await many(db, `${TR_SQL} AND t.id = $2`, [c.shopId, req.params.id]))[0]);
-  }),
-);
-
-/** Cancel while in transit: the stock goes back to the source warehouse. */
-inventoryRouter.post(
-  '/stock/transfers/:id/cancel',
-  perm('items.write'),
-  T(async (db, req, c) => {
-    const t = await one(db, 'SELECT * FROM stock_transfers WHERE shop_id = $1 AND id = $2 FOR UPDATE', [c.shopId, req.params.id]);
-    if (!t) throw notFound('Transfer');
-    if (t.status !== 'In transit') throw conflict('Only transfers still in transit can be cancelled');
-    for (const l of t.lines) {
-      if (l.batches?.length) for (const bt of l.batches) await moveStock(db, { shopId: c.shopId, itemId: l.itemId, branchId: t.from_branch_id, qty: bt.qty, reason: 'transfer_cancel', refType: 'stock_transfer', refId: t.id, note: `Cancel ${t.number}`, userId: c.id, batchNo: bt.batchNo, expiryDate: bt.expiryDate });
-      else await moveStock(db, { shopId: c.shopId, itemId: l.itemId, branchId: t.from_branch_id, qty: l.qty, reason: 'transfer_cancel', refType: 'stock_transfer', refId: t.id, note: `Cancel ${t.number}`, userId: c.id });
-      if (l.serials?.length) await db.query("UPDATE item_serials SET status = 'In stock', updated_at = now() WHERE shop_id = $1 AND item_id = $2 AND serial = ANY($3::text[]) AND status = 'In transit'", [c.shopId, l.itemId, l.serials]);
-    }
-    await db.query("UPDATE stock_transfers SET status = 'Cancelled' WHERE shop_id = $1 AND id = $2", [c.shopId, t.id]);
-    await audit(db, req, c.shopId, 'cancel', 'stock_transfer', t.id, { number: t.number });
-    return serializeTr((await many(db, `${TR_SQL} AND t.id = $2`, [c.shopId, t.id]))[0]);
-  }),
-);
+/* Transfers live in routes/shop/transfers.ts (batches, destination pricing, email-OTP receipt). */
 
 /* ======================= Serial numbers ======================= */
 const serializeSerial = (s: any) => ({ id: s.id, itemId: s.item_id, itemName: s.item_name, serial: s.serial, status: s.status, branchId: s.branch_id, branchName: s.branch_name, invoiceId: s.invoice_id, invoiceNumber: s.invoice_number, note: s.note, updatedAt: s.updated_at,

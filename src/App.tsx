@@ -73,6 +73,8 @@ const Team = IS_APP ? WebOnly : lazy(() => import('./pages/app/Team'));
 const Billing = IS_APP ? WebOnly : lazy(() => import('./pages/app/Billing'));
 const PrintSettings = lazy(() => import('./pages/app/PrintSettings'));
 const Support = lazy(() => import('./pages/app/Support'));
+const TransferNote = lazy(() => import('./pages/app/TransferNote'));
+const BranchPricing = lazy(() => import('./pages/app/BranchPricing'));
 const Licenses = lazy(() => import('./pages/app/Licenses'));
 const LicenseDetail = lazy(() => import('./pages/app/LicenseDetail'));
 const SuperSupport = lazy(() => import('./pages/super/Support'));
@@ -144,6 +146,8 @@ export default function App() {
             <Route path="inventory/warehouses" element={<Warehouses />} />
             <Route path="inventory/adjustments" element={<StockAdjustments />} />
             <Route path="inventory/transfers" element={<Transfers />} />
+            <Route path="inventory/transfers/:id/note" element={<TransferNote />} />
+            <Route path="inventory/pricing" element={<BranchPricing />} />
             <Route path="inventory/reorder" element={<StockInsights />} />
             <Route path="accounting/tally" element={<DataTransfer />} />
             <Route path="inventory/stock-summary" element={<StockSummary />} />

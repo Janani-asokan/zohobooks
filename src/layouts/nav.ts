@@ -223,6 +223,7 @@ const ROUTE_RULES: Array<[RegExp, (can: Can) => boolean]> = [
   [/^\/app\/items\/(new|rates|[^/]+\/edit)/, (can) => can('items.write')],
   [/^\/app\/(sales\/recurring|organization|team|print-settings|billing|features)/, (can) => can('admin')],
   [/^\/app\/licenses/, (can) => can('licenses.read')],
+  [/^\/app\/inventory\/pricing/, (can) => can('items.write')],
   [/^\/app\/audit/, (can) => can('audit.read') || can('admin')],
   [/^\/app\/microfinance\/(borrowers|reports)/, (can) => can('lending.read')],
   [/^\/app\/microfinance\/(loans\/new|settings)/, (can) => can('lending.write')],

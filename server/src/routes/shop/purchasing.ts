@@ -115,7 +115,7 @@ purchasingRouter.post(
   '/purchase-orders/:id/receive',
   perm('purchases.write'),
   T(async (db, req, c) => {
-    const b = parse(z.object({ lines: z.array(z.object({ lineId: z.string(), qty: z.number().min(0), batchNo: z.string().max(60).optional(), expiryDate: iso.optional(), serials: z.array(z.string().max(80)).max(5000).optional() })).min(1), updateCost: z.boolean().default(true) }), req.body);
+    const b = parse(z.object({ lines: z.array(z.object({ lineId: z.string(), qty: z.number().min(0), batchNo: z.string().max(60).optional(), expiryDate: iso.optional(), season: z.string().trim().max(60).optional(), serials: z.array(z.string().max(80)).max(5000).optional() })).min(1), updateCost: z.boolean().default(true) }), req.body);
     const po = await one(db, 'SELECT * FROM purchase_orders WHERE shop_id = $1 AND id = $2 FOR UPDATE', [c.shopId, req.params.id]);
     if (!po) throw notFound('Purchase order');
     if (po.status === 'Cancelled' || po.status === 'Draft') throw conflict(po.status === 'Draft' ? 'Issue the purchase order before receiving goods' : 'This purchase order is cancelled');
@@ -128,7 +128,7 @@ purchasingRouter.post(
       const left = r2(l.qty - l.received);
       if (r.qty > left + 1e-9) throw badRequest(`Only ${left} ${l.unit} of “${l.name}” are still to be received`);
       if (l.type === 'Goods') {
-        await moveStock(db, { shopId: c.shopId, itemId: l.itemId, branchId: po.branch_id, qty: r.qty, reason: 'purchase', refType: 'purchase_order', refId: po.id, userId: c.id, batchNo: r.batchNo, expiryDate: r.expiryDate ?? null, note: po.number });
+        await moveStock(db, { shopId: c.shopId, itemId: l.itemId, branchId: po.branch_id, qty: r.qty, reason: 'purchase', refType: 'purchase_order', refId: po.id, userId: c.id, batchNo: r.batchNo, expiryDate: r.expiryDate ?? null, note: po.number, unitCost: l.rate, season: r.season });
         // Serial / IMEI numbers of the units in this delivery (one each, new to the shop).
         if (await receiveSerials(db, { shopId: c.shopId, itemId: l.itemId, name: l.name, qty: r.qty, serials: r.serials, branchId: po.branch_id, purchaseOrderId: po.id, vendorId: po.vendor_id, date: todayISO(), note: `PO ${po.number}` }))
           l.serials = [...(l.serials ?? []), ...checkSerialList(l.name, r.serials ?? [])];

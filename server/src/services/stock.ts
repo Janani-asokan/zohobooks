@@ -16,6 +16,9 @@ interface Move {
   userId?: string | null;
   batchNo?: string;
   expiryDate?: string | null;
+  /** Stock-in to a batch: what one unit cost (averaged with what the batch already holds) and the season it belongs to. */
+  unitCost?: number;
+  season?: string;
 }
 
 /**
@@ -35,11 +38,18 @@ export async function moveStock(db: Db, m: Move): Promise<Array<{ batchNo: strin
   if (item.track_batches) {
     if (m.qty > 0) {
       const batchNo = m.batchNo?.trim() || 'DEFAULT';
+      // The batch keeps its purchase cost: a weighted average when more of the same batch arrives at another cost.
       await db.query(
-        `INSERT INTO item_batches (shop_id, item_id, branch_id, batch_no, expiry_date, qty) VALUES ($1,$2,$3,$4,$5,$6)
-         ON CONFLICT (item_id, branch_id, batch_no) DO UPDATE SET qty = item_batches.qty + EXCLUDED.qty,
+        `INSERT INTO item_batches (shop_id, item_id, branch_id, batch_no, expiry_date, qty, unit_cost, season, received_on) VALUES ($1,$2,$3,$4,$5,$6,$7,coalesce($8, ''),current_date)
+         ON CONFLICT (item_id, branch_id, batch_no) DO UPDATE SET
+           unit_cost = CASE WHEN EXCLUDED.unit_cost IS NULL THEN item_batches.unit_cost
+                            WHEN item_batches.unit_cost IS NULL OR item_batches.qty <= 0 THEN EXCLUDED.unit_cost
+                            ELSE round((item_batches.qty * item_batches.unit_cost + EXCLUDED.qty * EXCLUDED.unit_cost) / (item_batches.qty + EXCLUDED.qty), 4) END,
+           qty = item_batches.qty + EXCLUDED.qty,
+           season = CASE WHEN $8::text IS NULL OR $8 = '' THEN item_batches.season ELSE $8 END,
+           received_on = coalesce(item_batches.received_on, EXCLUDED.received_on),
            expiry_date = COALESCE(EXCLUDED.expiry_date, item_batches.expiry_date)`,
-        [m.shopId, m.itemId, m.branchId, batchNo, m.expiryDate ?? null, m.qty],
+        [m.shopId, m.itemId, m.branchId, batchNo, m.expiryDate ?? null, m.qty, m.unitCost ?? null, m.season ?? null],
       );
       used.push({ batchNo, qty: m.qty, expiryDate: m.expiryDate ?? null });
     } else {

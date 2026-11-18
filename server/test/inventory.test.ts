@@ -44,10 +44,11 @@ describe('transfers', () => {
     let it = await stockOf(a.id);
     expect(it.stockByBranch[head]).toBe(6);
     expect(it.stockByBranch[second] ?? 0).toBe(0);
-    expect((await owner.post(`/api/shop/stock/transfers/${t.id}/receive`).send({})).body.status).toBe('Received');
+    // Receipt needs the emailed code (tests in transfers.test.ts); the owner may receive without it, with a reason.
+    expect((await owner.post('/api/shop/transfers/owner-receive').send({ transferId: t.id, reason: 'Same premises, counted by the owner' })).body.status).toBe('Received');
     it = await stockOf(a.id);
     expect(it.stockByBranch[second]).toBe(4);
-    expect((await owner.post(`/api/shop/stock/transfers/${t.id}/receive`).send({})).status).toBe(409);
+    expect((await owner.post('/api/shop/transfers/owner-receive').send({ transferId: t.id, reason: 'Same premises, counted by the owner' })).status).toBe(409);
 
     const t2 = (await owner.post('/api/shop/stock/transfers').send({ fromBranchId: head, toBranchId: second, lines: [{ itemId: a.id, qty: 2 }] })).body;
     expect((await owner.post(`/api/shop/stock/transfers/${t2.id}/cancel`).send({})).body.status).toBe('Cancelled');

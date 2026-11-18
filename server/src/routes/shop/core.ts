@@ -6,7 +6,7 @@ import { aiBalance } from '../../services/aiUsage';
 import { z } from 'zod';
 import { hashPassword, perm, todayISO } from '../../auth';
 import { audit } from '../../audit';
-import { many, one, query, tx } from '../../db';
+import { many, one, query, tx, type Db } from '../../db';
 import { badRequest, conflict, HttpError, notFound, parse } from '../../http';
 import { getOrg, planLimits, requireRow } from '../../services/common';
 import { createOrder, razorpayEnabled, verifySignature } from '../../integrations/razorpay';
@@ -206,8 +206,20 @@ coreRouter.put(
 coreRouter.get('/tax-slabs', T(async (db) => (await many(db, 'SELECT * FROM tax_slabs ORDER BY rate')).map((s) => ({ id: s.id, name: s.name, rate: Number(s.rate), active: s.active }))));
 
 /* ---------- Branches ---------- */
-const serializeBranch = (b: any) => ({ id: b.id, name: b.name, address: b.address, phone: b.phone, isPrimary: b.is_primary });
-const branchBody = z.object({ name: z.string().trim().min(1, 'Branch name is required').max(100), address: z.string().max(300).default(''), phone: z.string().trim().max(30, VENDOR_PHONE_RULE).default('').refine(isValidVendorPhoneOrEmpty, VENDOR_PHONE_RULE).transform((v) => normalizeVendorPhone(v) ?? '') });
+const serializeBranch = (b: any) => ({ id: b.id, name: b.name, address: b.address, phone: b.phone, isPrimary: b.is_primary, gstin: b.gstin ?? '', state: b.state ?? '', managerUserId: b.manager_user_id ?? null });
+const branchBody = z.object({ name: z.string().trim().min(1, 'Branch name is required').max(100), address: z.string().max(300).default(''), phone: z.string().trim().max(30, VENDOR_PHONE_RULE).default('').refine(isValidVendorPhoneOrEmpty, VENDOR_PHONE_RULE).transform((v) => normalizeVendorPhone(v) ?? ''),
+  /** A branch in another state has its own GST registration; transfers between different GSTINs are taxable supplies. */
+  gstin: z.string().trim().toUpperCase().max(15).default('').refine((v) => v === '' || GSTIN_RE.test(v), 'Invalid GSTIN (e.g. 33AABCA1234F1Z5)'),
+  state: z.string().trim().max(60).default(''),
+  /** Gets the receipt code when stock is sent to this branch. */
+  managerUserId: z.string().uuid().nullable().default(null) });
+
+/** The receiving manager must be an active login of this shop with an email. */
+async function checkManager(db: Db, shopId: string, id: string | null) {
+  if (!id) return;
+  const u = await one(db, "SELECT email FROM users WHERE shop_id = $1 AND id = $2 AND active", [shopId, id]);
+  if (!u?.email) throw badRequest('Pick an active staff member with an email', { managerUserId: 'Pick a staff member' });
+}
 
 coreRouter.get('/branches', T(async (db, _req, c) => (await many(db, 'SELECT * FROM branches WHERE shop_id = $1 ORDER BY is_primary DESC, created_at', [c.shopId])).map(serializeBranch)));
 coreRouter.post(
@@ -218,7 +230,8 @@ coreRouter.post(
     const lim = await planLimits(db, c.shopId);
     const n = await one(db, 'SELECT count(*)::int AS n FROM branches WHERE shop_id = $1', [c.shopId]);
     if (n.n >= lim.max_branches) throw new HttpError(402, `Your ${lim.name} plan allows ${lim.max_branches} branch${lim.max_branches > 1 ? 'es' : ''}. Upgrade to add more.`, 'plan_limit');
-    const row = await one(db, 'INSERT INTO branches (shop_id, name, address, phone) VALUES ($1,$2,$3,$4) RETURNING *', [c.shopId, b.name, b.address, b.phone]);
+    await checkManager(db, c.shopId, b.managerUserId);
+    const row = await one(db, 'INSERT INTO branches (shop_id, name, address, phone, gstin, state, manager_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [c.shopId, b.name, b.address, b.phone, b.gstin, b.state, b.managerUserId]);
     await audit(db, req, c.shopId, 'create', 'branch', row.id, { name: b.name });
     return serializeBranch(row);
   }),
@@ -228,9 +241,12 @@ coreRouter.put(
   perm('admin'),
   T(async (db, req, c) => {
     const cur = await requireRow(db, 'branches', c.shopId, req.params.id!, 'Branch');
-    const b = parse(branchBody.extend({ isPrimary: z.boolean().optional() }), req.body);
+    // Fields left out keep their value (older screens don't send GSTIN, state or manager).
+    const b = parse(branchBody.extend({ isPrimary: z.boolean().optional() }), { gstin: cur.gstin, state: cur.state, managerUserId: cur.manager_user_id, ...req.body });
     if (b.isPrimary) await db.query('UPDATE branches SET is_primary = false WHERE shop_id = $1', [c.shopId]);
-    const row = await one(db, 'UPDATE branches SET name=$3, address=$4, phone=$5, is_primary = coalesce($6, is_primary) WHERE shop_id=$1 AND id=$2 RETURNING *', [c.shopId, cur.id, b.name, b.address, b.phone, b.isPrimary ?? null]);
+    await checkManager(db, c.shopId, b.managerUserId);
+    const row = await one(db, 'UPDATE branches SET name=$3, address=$4, phone=$5, is_primary = coalesce($6, is_primary), gstin=$7, state=$8, manager_user_id=$9 WHERE shop_id=$1 AND id=$2 RETURNING *',
+      [c.shopId, cur.id, b.name, b.address, b.phone, b.isPrimary ?? null, b.gstin, b.state, b.managerUserId]);
     await audit(db, req, c.shopId, 'update', 'branch', cur.id, b);
     return serializeBranch(row);
   }),
@@ -325,6 +341,12 @@ coreRouter.get(
       if (bad) out.push({ kind: 'wh_license_blocked', tone: 'red', text: `${bad} warehouse licence${bad > 1 ? 's' : ''} expired or suspended · billing blocked`, link: '/app/licenses?status=expired' });
       if (w.grace) out.push({ kind: 'wh_license_grace', tone: 'red', text: `${w.grace} warehouse licence${w.grace > 1 ? 's' : ''} in grace period`, link: '/app/licenses?status=grace' });
       if (w.expiring_soon) out.push({ kind: 'wh_license_soon', tone: 'amber', text: `${w.expiring_soon} warehouse licence${w.expiring_soon > 1 ? 's' : ''} expiring within 30 days`, link: '/app/licenses?status=expiring_soon' });
+    }
+    if (allowed(c, 'items.write')) {
+      // Stock sent to this user's branch (or any branch, for staff not tied to one) waiting for the receipt code.
+      const tr = await one(db, `SELECT count(*)::int AS n FROM stock_transfers WHERE shop_id = $1 AND status = 'In transit' AND ($2::uuid IS NULL OR to_branch_id = $2) AND created_by IS DISTINCT FROM $3`,
+        [c.shopId, c.branchId, c.id]);
+      if (tr.n) out.push({ kind: 'transfers_in', tone: 'blue', text: `${tr.n} stock transfer${tr.n > 1 ? 's' : ''} to receive · enter the emailed code`, link: '/app/inventory/transfers?tab=receive' });
     }
     if (bills.n) out.push({ kind: 'bills', tone: 'blue', text: `${bills.n} vendor bill${bills.n > 1 ? 's' : ''} due soon`, link: '/app/purchases' });
     if (allowed(c, 'admin') && aiEnabled()) {

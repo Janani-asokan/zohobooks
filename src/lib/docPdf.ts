@@ -101,8 +101,8 @@ export function transferTable(t: StockTransfer): ReportTable {
   return {
     title: `Stock transfer ${t.number}`, filename: fileName(`transfer-${t.number}`),
     subtitle: `${t.fromName} → ${t.toName} · ${fmtDate(t.date)} · ${t.status}`,
-    columns: [{ label: '#' }, { label: 'Item' }, { label: 'Quantity', align: 'right' }, { label: 'Serial numbers' }],
-    rows: t.lines.map((l, i) => ({ cells: [String(i + 1), l.name, `${l.qty} ${l.unit}`, l.serials?.join(', ') || '—'] })),
+    columns: [{ label: '#' }, { label: 'Item' }, { label: 'Batch' }, { label: 'Quantity', align: 'right' }, { label: 'Serial numbers' }],
+    rows: t.lines.map((l, i) => ({ cells: [String(i + 1), l.name, l.batchNo || '—', `${l.qty} ${l.unit}`, l.serials?.join(', ') || '—'] })),
     note: [t.notes, 'Received by: ____________________   Date: ____________'].filter(Boolean).join('\n'),
   };
 }

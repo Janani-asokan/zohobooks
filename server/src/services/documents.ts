@@ -61,16 +61,26 @@ export interface StoredLine {
 }
 
 /** Resolves item details, tier prices and the authoritative tax rate on the server. */
-export async function buildLines(db: Db, shopId: string, input: LineInput[]): Promise<StoredLine[]> {
+export async function buildLines(db: Db, shopId: string, input: LineInput[], branchId?: string | null): Promise<StoredLine[]> {
   if (!input.length) throw badRequest('Add at least one item');
   const ids = [...new Set(input.map((l) => l.itemId))];
   const items = await many(db, 'SELECT i.*, t.rate AS tax_rate FROM items i JOIN tax_slabs t ON t.id = i.tax_slab_id WHERE i.shop_id = $1 AND i.id = ANY($2::uuid[])', [shopId, ids]);
   const byId = new Map(items.map((i) => [i.id, i]));
+  // Branch selling prices (set by transfers and pricing rules) and each batch's own purchase cost, when billed from a branch.
+  const branchPrice = new Map<string, number>();
+  const batchInfo = new Map<string, { price: number | null; cost: number | null }>();
+  if (branchId) {
+    for (const r of await many(db, 'SELECT item_id, selling_price FROM item_stock WHERE shop_id = $1 AND branch_id = $2 AND item_id = ANY($3::uuid[]) AND selling_price IS NOT NULL', [shopId, branchId, ids]))
+      branchPrice.set(r.item_id, Number(r.selling_price));
+    for (const r of await many(db, 'SELECT item_id, batch_no, selling_price, unit_cost FROM item_batches WHERE shop_id = $1 AND branch_id = $2 AND item_id = ANY($3::uuid[])', [shopId, branchId, ids]))
+      batchInfo.set(`${r.item_id}|${r.batch_no}`, { price: r.selling_price == null ? null : Number(r.selling_price), cost: r.unit_cost == null ? null : Number(r.unit_cost) });
+  }
   return input.map((l) => {
     const it = byId.get(l.itemId);
     if (!it) throw badRequest('One of the selected items no longer exists');
     if (it.is_group) throw badRequest(`${it.name} has variants. Pick a size or colour instead.`);
-    const tierPrice = l.tier === 'SP1' ? it.sp1 : l.tier === 'SP2' ? it.sp2 : it.sp3;
+    const batch = l.batchNo ? batchInfo.get(`${it.id}|${l.batchNo}`) : undefined;
+    const tierPrice = l.tier === 'SP1' ? (batch?.price ?? branchPrice.get(it.id) ?? Number(it.sp1)) : l.tier === 'SP2' ? it.sp2 : it.sp3;
     const line: StoredLine = {
       id: crypto.randomUUID(),
       itemId: it.id,
@@ -84,7 +94,7 @@ export async function buildLines(db: Db, shopId: string, input: LineInput[]): Pr
       taxRate: Number(it.tax_rate),
       discount: l.discount,
       amount: 0,
-      cost: Number(it.cost ?? 0),
+      cost: batch?.cost ?? Number(it.cost ?? 0),
       ...(l.batchNo ? { batchNo: l.batchNo } : {}),
       ...(l.note ? { note: l.note } : {}),
       ...(it.track_serials && l.serials?.length ? { serials: [...new Set(l.serials.map((x) => x.trim()))] } : {}),
@@ -163,7 +173,8 @@ async function computeInvoiceFields(db: Db, shopId: string, input: InvoiceInput,
   if (input.dueDate < input.date) throw badRequest('Due date can’t be before invoice date', { dueDate: 'Due date can’t be before invoice date' });
   if (!input.customerId && source !== 'pos') throw badRequest('Select a customer', { customerId: 'Select a customer' });
   const org = await getOrg(db, shopId);
-  const built = await buildLines(db, shopId, input.lines);
+  const branchId = await primaryBranchId(db, shopId, input.branchId);
+  const built = await buildLines(db, shopId, input.lines, branchId);
   const { snap, id: customerId } = await customerSnapshot(db, shopId, input.customerId, org.state);
   const { withGst, docType } = taxTreatment(org, built, input.withGst);
   const promo = await applyOffersAndPoints(db, shopId, input, source, built, withGst, customerId, invoiceId);
@@ -171,7 +182,6 @@ async function computeInvoiceFields(db: Db, shopId: string, input: InvoiceInput,
   const pos = snap.state || org.state;
   const inter = isInterState(org.state, pos);
   const t = computeTotals(lines, withGst, inter, input.tcsRate);
-  const branchId = await primaryBranchId(db, shopId, input.branchId);
   return { org, lines, snap, customerId, withGst, docType, pos, inter, t, branchId, promo };
 }
 

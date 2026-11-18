@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { btPrinter, btSupported } from '@/lib/btPrinter';
 import { Gift, ScanBarcode, Search, Trash2, Banknote, Smartphone, CreditCard, Loader2, Printer, MessageCircle, Plus, CheckCircle2, Package, Wrench, UserRound, Split, Tag, Scale, AlertTriangle, CloudOff, Camera, Mic } from 'lucide-react';
 import { api } from '@/api/client';
-import { SALES_KEYS, useBranches, useCustomers, useItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
+import { SALES_KEYS, useBranches, useCustomers, useBranchItems, useMut, useOrg, usePrintSettings, pickable } from '@/api/hooks';
 import { ThermalReceipt, printReceipt, receiptFromInvoice, type ReceiptData } from '@/components/printing';
 import { isNetworkError, newClientRef, offlineRef, saveBill } from '@/lib/offlineQueue';
 import { peekNumber, takeNumber } from '@/lib/deviceSeries';
@@ -45,7 +45,8 @@ export default function Pos() {
   const qc = useQueryClient();
   const me = useShopUser();
   const toast = useToast();
-  const items = (useItems().data ?? []).filter((i) => !i.isGroup);
+  const [branchId, setBranchId] = useState(me.user.branchId ?? '');
+  const items = (useBranchItems(branchId).data ?? []).filter((i) => !i.isGroup);
   const { data: customers = [] } = useCustomers();
   const branches = useBranches().data ?? [];
   const org = useOrg().data;
@@ -57,7 +58,6 @@ export default function Pos() {
   const [kind, setKind] = useState<'all' | 'Goods' | 'Services'>('all');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [customerId, setCustomerId] = useState('');
-  const [branchId, setBranchId] = useState(me.user.branchId ?? '');
   const [withGst, setWithGst] = useState(true);
   const [mode, setMode] = useState<'Cash' | 'UPI' | 'Card' | 'Split'>('Cash');
   const [split, setSplit] = useState({ Cash: '', UPI: '', Card: '' });

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { api, ApiError } from './client';
 import { useToast } from '@/context/ToastContext';
@@ -16,6 +17,20 @@ export const useOrg = () => useQuery(q<Organization>(['org'], `${S}/organization
 export const useTaxSlabs = () => useQuery({ ...q<TaxSlab[]>(['taxSlabs'], `${S}/tax-slabs`), staleTime: 5 * 60_000 });
 export const useBranches = () => useQuery(q<Branch[]>(['branches'], `${S}/branches`));
 export const useItems = () => useQuery(q<Item[]>(['items'], `${S}/items`));
+/**
+ * Items priced for one branch: where a transfer or pricing rule set a selling price at that branch, it replaces the
+ * standard price (SP1), so billing screens pre-fill what the branch actually sells at.
+ */
+export function useBranchItems(branchId: string | null | undefined) {
+  const items = useItems();
+  const prices = useQuery({ ...q<Record<string, { price: number | null }>>(['branchPrices', branchId], `${S}/stock/branch-prices?branchId=${branchId}`, !!branchId), staleTime: 60_000 });
+  const data = useMemo(() => {
+    const p = prices.data;
+    if (!items.data || !p) return items.data;
+    return items.data.map((it) => (p[it.id]?.price != null ? { ...it, sp1: p[it.id]!.price!, branchPrice: true } : it));
+  }, [items.data, prices.data]);
+  return { ...items, data };
+}
 export const useItemFacets = () => useQuery(q<ItemFacets>(['itemFacets'], `${S}/items/facets`));
 export const usePurchaseOrders = (enabled = true) => useQuery(q<PurchaseOrder[]>(['purchaseOrders'], `${S}/purchase-orders`, enabled));
 export const useExpenses = (enabled = true) => useQuery(q<Expense[]>(['expenses'], `${S}/expenses`, enabled));

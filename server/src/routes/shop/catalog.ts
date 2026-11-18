@@ -122,7 +122,7 @@ catalogRouter.post(
     );
     if (b.type === 'Goods' && b.openingStock > 0) {
       const branchId = await primaryBranchId(db, c.shopId, b.branchId);
-      await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId, qty: b.openingStock, reason: 'opening', userId: c.id, batchNo: b.batchNo, expiryDate: b.expiryDate || null });
+      await moveStock(db, { shopId: c.shopId, itemId: it.id, branchId, qty: b.openingStock, reason: 'opening', userId: c.id, batchNo: b.batchNo, expiryDate: b.expiryDate || null, unitCost: Number(b.cost ?? 0) });
     }
     await audit(db, req, c.shopId, 'create', 'item', it.id, { name: b.name });
     return (await listItems(db, c.shopId, true, [it.id]))[0];

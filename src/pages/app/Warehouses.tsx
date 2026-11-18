@@ -3,21 +3,23 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Warehouse, Pencil, Loader2, Star, ArrowLeftRight, SlidersHorizontal } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
-import { useBranches, useMut } from '@/api/hooks';
+import { useBranches, useMut, useStaff } from '@/api/hooks';
 import type { Branch, StockSummary } from '@/api/types';
 import { useShopUser } from '@/context/AuthContext';
 import { Badge, EmptyState, Field, Modal, PageHeader, Toggle } from '@/components/ui';
 import { money } from '@/lib/format';
 import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty } from '../../../shared/contact';
+import { INDIAN_STATES } from '../../../shared/gst';
 import { VendorPhoneInput } from '@/components/QuickAdd';
 
-const blank = { name: '', address: '', phone: '', isPrimary: false };
+const blank = { name: '', address: '', phone: '', isPrimary: false, gstin: '', state: '', managerUserId: null as string | null };
 
 /** Warehouses (branches): where stock is kept, what each holds and what it is worth. */
 export default function Warehouses() {
   const me = useShopUser();
   const canEdit = me.can('admin');
   const { data: branches = [], isLoading } = useBranches();
+  const staff = (useStaff(canEdit).data ?? []).filter((u) => u.active && !('linked' in u && u.linked));
   const summary = useQuery({ queryKey: ['stockSummary', 'warehouses'], queryFn: () => api.get<StockSummary>('/shop/stock/summary') });
   const [params, setParams] = useSearchParams();
   const [form, setForm] = useState<(typeof blank & { id?: string }) | null>(null);
@@ -40,9 +42,10 @@ export default function Warehouses() {
               <div key={b.id} className="card wh-card">
                 <div className="row between">
                   <div className="row" style={{ gap: 8 }}><Warehouse size={18} className="muted" /><strong>{b.name}</strong>{b.isPrimary && <Badge tone="blue" plain><Star size={11} /> Main</Badge>}</div>
-                  {canEdit && <button className="icon-btn" aria-label={`Edit ${b.name}`} onClick={() => { setErr({}); setForm({ id: b.id, name: b.name, address: b.address, phone: b.phone, isPrimary: b.isPrimary }); }}><Pencil size={15} /></button>}
+                  {canEdit && <button className="icon-btn" aria-label={`Edit ${b.name}`} onClick={() => { setErr({}); setForm({ id: b.id, name: b.name, address: b.address, phone: b.phone, isPrimary: b.isPrimary, gstin: b.gstin, state: b.state, managerUserId: b.managerUserId }); }}><Pencil size={15} /></button>}
                 </div>
                 <div className="small muted" style={{ whiteSpace: 'pre-line', minHeight: 36 }}>{[b.address, b.phone].filter(Boolean).join('\n') || 'No address added'}</div>
+                <div className="small muted">{b.gstin ? `GSTIN ${b.gstin}` : 'Uses the business GSTIN'}{' · '}Transfer codes to {staff.find((u) => u.id === b.managerUserId)?.name ?? (b.managerUserId ? 'manager' : 'branch manager / owner')}</div>
                 <div className="kpi-row">
                   <div><div className="k">Stock value</div><div className="v">{s ? money(s.value) : '—'}</div></div>
                   <div><div className="k">Items in stock</div><div className="v">{s?.items ?? '—'}</div></div>
@@ -70,6 +73,14 @@ export default function Warehouses() {
             <Field label="Name" required error={err.name} className="span-all"><input className={`input ${err.name ? 'invalid' : ''}`} value={form.name} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Ambattur godown" autoFocus /></Field>
             <Field label="Address" className="span-all"><textarea className="textarea" rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
             <Field label="Phone" error={err.phone} hint="Optional · mobile or landline with STD code"><VendorPhoneInput value={form.phone} invalid={!!err.phone} onChange={(v) => { setForm({ ...form, phone: v }); setErr((x) => ({ ...x, phone: '' })); }} /></Field>
+            <Field label="Receives transfer codes" hint="Stock sent here is added only after this person enters the emailed code" error={err.managerUserId}>
+              <select className="select" value={form.managerUserId ?? ''} onChange={(e) => setForm({ ...form, managerUserId: e.target.value || null })}>
+                <option value="">A manager at this branch, else the owner</option>
+                {staff.map((u) => <option key={u.id} value={u.id}>{u.name} · {u.role}</option>)}
+              </select>
+            </Field>
+            <Field label="State"><select className="select" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })}><option value="">Same as the business</option>{INDIAN_STATES.map((st) => <option key={st}>{st}</option>)}</select></Field>
+            <Field label="GSTIN of this branch" error={err.gstin} hint="Only if it is registered separately (another state)"><input className="input" value={form.gstin} maxLength={15} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} /></Field>
             <div className="toggle-row span-all"><div><div className="strong">Main warehouse</div><div className="small muted">Used by default on new invoices, bills and opening stock.</div></div><Toggle checked={form.isPrimary} onChange={(v) => setForm({ ...form, isPrimary: v })} /></div>
           </div>
         )}

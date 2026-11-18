@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Plus, Trash2, ScanBarcode, Percent, ReceiptIndianRupee, AlertTriangle, Tag, BadgeIndianRupee } from 'lucide-react';
-import { useItems } from '@/api/hooks';
+import { useBranchItems, useItems } from '@/api/hooks';
 import { useToast } from '@/context/ToastContext';
 import { applyBillAdjustments, computeTotals, lineAmount, type BillDiscount } from '@/lib/calc';
 import { money, uid } from '@/lib/format';
@@ -46,7 +46,7 @@ export function useCalcLines(lines: DraftLine[]) {
 export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalidKeys, branchId, inclusive = false }: {
   lines: DraftLine[]; onChange: (l: DraftLine[]) => void; defaultTier: PriceTier; withGst: boolean; invalidKeys?: Set<string>; branchId?: string | null; inclusive?: boolean;
 }) {
-  const items = (useItems().data ?? []).filter((i) => !i.isGroup);
+  const items = (useBranchItems(branchId).data ?? []).filter((i) => !i.isGroup);
   const toast = useToast();
   const [scan, setScan] = useState('');
 

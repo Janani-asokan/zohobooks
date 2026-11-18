@@ -28,7 +28,7 @@ export interface Organization {
   businessType: string; itemFields: ItemField[]; invoiceFields: ItemField[]; units: string[]; tradeDetails: Record<string, string>;
 }
 export interface TaxSlab { id: string; name: string; rate: number; active: boolean }
-export interface Branch { id: string; name: string; address: string; phone: string; isPrimary: boolean }
+export interface Branch { id: string; name: string; address: string; phone: string; isPrimary: boolean; gstin: string; state: string; managerUserId: string | null }
 
 export interface Item {
   id: string; type: 'Goods' | 'Services'; name: string; sku: string; barcode: string; aliases?: string[]; unit: string; hsn: string; cost: number | null;
@@ -43,10 +43,26 @@ export interface StockAdjustment {
   id: string; number: string; branchId: string; branchName: string; date: string; reason: string; mode: 'change' | 'count'; value: number; notes: string; createdBy: string; createdAt: string;
   lines: Array<{ itemId: string; name: string; unit: string; before: number; change: number; after: number; cost: number; value: number }>;
 }
+export interface TransferLine {
+  id: string; lineNo: number; itemId: string; name: string; unit: string; hsn: string; taxRate: number; batchNo: string; expiryDate: string | null; season: string; serials: string[];
+  qty: number; qtyReceived: number | null; qtyDamaged: number | null; qtyMissing: number | null; unitCost: number; sourcePrice: number | null; destPrice: number | null;
+  destPriceApplied: number | null; manualPrice: boolean; priceRules: Array<{ name: string; kind: string; change: string; before: number; after: number }>;
+}
 export interface StockTransfer {
-  id: string; number: string; fromBranchId: string; fromName: string; toBranchId: string; toName: string; date: string; status: 'In transit' | 'Received' | 'Cancelled';
-  notes: string; receivedAt: string | null; createdBy: string; createdAt: string;
-  lines: Array<{ itemId: string; name: string; unit: string; qty: number; serials: string[] }>;
+  id: string; number: string; status: 'Draft' | 'In transit' | 'Received' | 'Cancelled'; date: string;
+  fromBranchId: string; fromName: string; fromGstin: string; fromState: string; fromAddress: string;
+  toBranchId: string; toName: string; toGstin: string; toState: string; toAddress: string;
+  notes: string; ewayBillNo: string; vehicleNo: string; createdBy: string; createdById: string | null; createdAt: string; dispatchedAt: string | null; receivedAt: string | null;
+  receivedBy: string | null; verifiedVia: 'otp' | 'owner_override' | 'before_otp' | null; overrideReason: string; discrepancyNote: string; lossValue: number; cancelledAt: string | null;
+  value: number; lines: TransferLine[]; canReceive?: boolean;
+}
+export interface TransferOtpState {
+  sentTo: string | null; delivered: boolean; expiresAt: string | null; state: 'open' | 'none' | 'expired' | 'locked'; attemptsLeft: number; resendAvailableAt: string; sendsLeftToday: number;
+}
+export interface TransferDetail extends StockTransfer {
+  otp: TransferOtpState | null; recipient: { name: string; email: string } | null;
+  otpLog: Array<{ event: string; by: string; detail: Record<string, unknown>; at: string }>;
+  can: { receive: boolean; ownerReceive: boolean; resend: boolean; cancel: boolean; senderIsMe: boolean };
 }
 export interface ItemSerial { id: string; itemId: string; itemName: string; serial: string; status: 'In stock' | 'Sold' | 'In transit' | 'Written off'; branchId: string | null; branchName: string | null; invoiceId: string | null; invoiceNumber: string | null; note: string; updatedAt: string;
   /** Where the unit came from (warranty with the vendor) and who bought it. */
