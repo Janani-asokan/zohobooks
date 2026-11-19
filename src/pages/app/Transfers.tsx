@@ -276,7 +276,7 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
                         {it?.trackSerials && <input className="input" style={{ marginTop: 6 }} value={l.serials} onChange={(ev) => upd(l.key, { serials: ev.target.value })} placeholder="Serial numbers" aria-label="Serial numbers" />}
                       </td>
                       <td>
-                        {!it ? <span className="muted small">Pick an item</span> : !it.trackBatches ? <span className="muted small">Not batch-tracked · {it.stockByBranch[f.fromBranchId] ?? 0} {it.unit} here</span> : (
+                        {!it ? <span className="muted small">Pick an item</span> : !it.trackBatches ? <span className="muted small">Not batch-tracked · {it.stockByBranch[f.fromBranchId] ?? 0} {it.unit} at {branches.find((b) => b.id === f.fromBranchId)?.name ?? 'the source'}</span> : (
                           <select className={`select ${!l.batchNo && e ? 'invalid' : ''}`} value={l.batchNo} onChange={(ev) => upd(l.key, { batchNo: ev.target.value })} aria-label="Batch">
                             <option value="">{batches.isLoading ? 'Loading…' : bs.length ? 'Choose batch…' : 'No stock in any batch here'}</option>
                             {bs.map((b) => <option key={b.batchNo} value={b.batchNo}>{b.batchNo} · {b.qty} {it.unit}{b.expiryDate ? ` · exp ${fmtDate(b.expiryDate)}` : ''}{b.season ? ` · ${b.season}` : ''}</option>)}
@@ -286,6 +286,20 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
                       <td className="num">
                         <input className={`input num ${e && l.qty ? 'invalid' : ''}`} style={{ width: 96 }} type="number" min={0} step="any" value={l.qty} onChange={(ev) => upd(l.key, { qty: ev.target.value })} onKeyDown={enterToNextLine} aria-label="Quantity" />
                         {e && <div className="small" style={{ color: 'var(--red-600)' }}>{e}</div>}
+                        {/* Each branch keeps its own stock: show both, before and after, so it's clear the destination only gets what is sent. */}
+                        {it && f.toBranchId && Number(l.qty) > 0 && !e && (() => {
+                          const n = Number(l.qty);
+                          const fromNow = it.stockByBranch[f.fromBranchId] ?? 0;
+                          const toNow = it.stockByBranch[f.toBranchId] ?? 0;
+                          const fromName = branches.find((b) => b.id === f.fromBranchId)?.name ?? 'Source';
+                          const toName = branches.find((b) => b.id === f.toBranchId)?.name ?? 'Destination';
+                          return (
+                            <div className="small muted tf-stock" style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+                              <div>{fromName}: {fromNow} → <strong>{Math.round((fromNow - n) * 1000) / 1000}</strong> now</div>
+                              <div>{toName}: {toNow} → <strong>{Math.round((toNow + n) * 1000) / 1000}</strong> on receipt</div>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="num">{p ? money(p.unitCost) : '—'}<div className="small muted">kept on the batch</div></td>
                       <td>
