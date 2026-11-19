@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, CheckCircle2, Headset, Phone, Settings2, UserCheck, XCircle, AlertTriangle } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Headset, Phone, Settings2, UserCheck, XCircle, AlertTriangle, MessageCircle, Send, Bot, UserRound } from 'lucide-react';
+import { ApiError } from '@/api/client';
+import { useToast } from '@/context/ToastContext';
 import { api } from '@/api/client';
 import { useMut } from '@/api/hooks';
 import { Badge, EmptyState, Field, Modal, PageHeader } from '@/components/ui';
 import { money } from '@/lib/format';
-import { istDay, istTime, topicLabel, type SlotDay, type SupportSettings } from '../../../shared/support';
+import { LIVE, istDay, istTime, topicLabel, type SlotDay, type SupportSettings } from '../../../shared/support';
 
 type Status = 'scheduled' | 'completed' | 'missed' | 'cancelled';
 interface Cb {
@@ -29,24 +31,32 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en
 
 /** Customer care console: staff see every shop's call-back, check the shop's account, call, and record what happened. */
 export default function SuperSupport() {
-  const [view, setView] = useState<(typeof VIEWS)[number][0]>('upcoming');
+  const [view, setView] = useState<(typeof VIEWS)[number][0] | 'live'>('upcoming');
+  // Polled while the console is open: keeps this agent "online" for live chat and shows waiting chats on every tab.
+  const live = useQuery({ queryKey: ['platform', 'support', 'live'], queryFn: () => api.get<LiveList>('/platform/support/live'), refetchInterval: 5000, refetchIntervalInBackground: true });
+  const waiting = live.data?.waiting ?? 0;
+  useEffect(() => { const t = document.title.replace(/^\(\d+\) /, ''); document.title = waiting ? `(${waiting}) ${t}` : t; }, [waiting]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const list = useQuery({ queryKey: ['platform', 'support', view], queryFn: () => api.get<{ callbacks: Cb[]; counts: { upcoming: number; overdue: number; today: number } }>(`/platform/support/callbacks?view=${view}`), refetchInterval: 60_000 });
-  const open = list.data?.callbacks.find((c) => c.id === openId) ?? null;
+  const list = useQuery({ queryKey: ['platform', 'support', 'callbacks', view], queryFn: () => api.get<{ callbacks: Cb[]; counts: { upcoming: number; overdue: number; today: number } }>(`/platform/support/callbacks?view=${view}`), refetchInterval: 60_000, enabled: view !== 'live' });
+  const open = list.data?.callbacks?.find((c) => c.id === openId) ?? null;
   const c = list.data?.counts;
 
   return (
     <div className="page">
-      <PageHeader title="Customer care" icon={Headset} subtitle="Call-backs shops have booked. Open one to check the shop's account, call them, and record the outcome."
+      <PageHeader title="Customer care" icon={Headset} subtitle="Live chats from shops, and the call-backs they booked. Keep this page open in support hours: shops can only start a chat while an agent is online here."
         actions={<button className="btn btn-secondary" onClick={() => setSettingsOpen(true)}><Settings2 size={15} /> Support hours</button>} />
       <div className="tabs">
+        <button className={view === 'live' ? 'active' : ''} onClick={() => setView('live')}>
+          <MessageCircle size={15} /> Live chats {waiting > 0 ? <span className="badge badge-red">{waiting} waiting</span> : <span className="count">{live.data?.chats.filter((x) => x.status === 'active').length ?? 0}</span>}
+        </button>
         {VIEWS.map(([k, l]) => (
           <button key={k} className={view === k ? 'active' : ''} onClick={() => setView(k)}>
             {l}{k === 'today' && c ? ` (${c.today})` : k === 'upcoming' && c ? ` (${c.upcoming})` : ''}
           </button>
         ))}
       </div>
+      {view === 'live' ? <LiveConsole data={live.data} /> : <>
       {!!c?.overdue && <div className="support-alert"><AlertTriangle size={15} /> {c.overdue} call-back{c.overdue > 1 ? 's are' : ' is'} past the booked time and not yet closed.</div>}
 
       <div className="card table-wrap">
@@ -72,6 +82,7 @@ export default function SuperSupport() {
         {list.data?.callbacks.length === 0 && <EmptyState icon={Headset} title="No call-backs here" text="When a shop books a call-back it shows up in this list." />}
       </div>
 
+      </>}
       {open && <CallbackPanel cb={open} onClose={() => setOpenId(null)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
@@ -203,5 +214,109 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         <Field label="Support email"><input className="input" type="email" value={v.email ?? ''} onChange={(e) => set({ email: e.target.value })} placeholder="help@corpus360lite.com" /></Field>
       </div>
     </Modal>
+  );
+}
+
+/* ======================= Live chats ======================= */
+
+interface LiveChatRow {
+  id: string; status: 'waiting' | 'active' | 'closed' | 'missed'; startedBy: string; agentName: string | null; createdAt: string; pickedAt: string | null; closedAt: string | null;
+  rating: number | null; shopId: string; shopName: string; shopPhone: string; lastMessage: string | null; unread: number; mine: boolean; botTranscript: Array<{ role: 'user' | 'bot'; text: string }>;
+}
+interface LiveList { chats: LiveChatRow[]; waiting: number; agentsOnline: string[] }
+interface LiveMsg { id: number; sender: 'shop' | 'agent' | 'system'; senderName: string; body: string; at: string }
+const ago = (iso: string) => { const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)); return m < 1 ? 'just now' : `${m} min ago`; };
+
+function LiveConsole({ data }: { data: LiveList | undefined }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const rows = data?.chats ?? [];
+  const sel = rows.find((r) => r.id === openId) ?? null;
+  return (
+    <div className="lc">
+      <aside className="card lc-list">
+        <div className="small muted" style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
+          Online: {data?.agentsOnline.join(', ') || '—'} · shops can start a chat while someone has this page open in support hours.
+        </div>
+        {rows.length === 0 ? <EmptyState icon={MessageCircle} title="No chats" text="New chats appear here; the tab title shows how many are waiting." /> : rows.map((r) => (
+          <button key={r.id} type="button" className={`lc-item ${openId === r.id ? 'on' : ''}`} onClick={() => setOpenId(r.id)}>
+            <div className="row between"><strong>{r.shopName}</strong>
+              <span className={`badge ${r.status === 'waiting' ? 'badge-red' : r.status === 'active' ? 'badge-green' : 'badge-gray'}`}>{r.status === 'waiting' ? `Waiting · ${ago(r.createdAt)}` : r.status === 'active' ? (r.mine ? 'You' : r.agentName) : r.status === 'missed' ? 'Missed' : 'Ended'}</span>
+            </div>
+            <div className="small muted">{r.startedBy}{r.unread && r.status !== 'closed' ? ` · ${r.unread} new` : ''}</div>
+            {r.lastMessage && <div className="small lc-last">{r.lastMessage}</div>}
+          </button>
+        ))}
+      </aside>
+      <section className="card lc-pane">{sel ? <AgentChat key={sel.id} row={sel} /> : <EmptyState icon={Headset} title="Pick a chat" text="Waiting chats are at the top. Open one to see what the shop asked the help bot, then pick it up." />}</section>
+    </div>
+  );
+}
+
+function AgentChat({ row }: { row: LiveChatRow }) {
+  const toast = useToast();
+  const [msgs, setMsgs] = useState<LiveMsg[]>([]);
+  const [status, setStatus] = useState(row.status);
+  const [mine, setMine] = useState(row.mine);
+  const [text, setText] = useState('');
+  const end = useRef<HTMLDivElement>(null);
+  const last = useRef(0);
+  const sum = useQuery({ queryKey: ['platform', 'support', 'shop', row.shopId], queryFn: () => api.get<Summary>(`/platform/support/shops/${row.shopId}`) });
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      try {
+        const r = await api.get<{ chat: { status: LiveChatRow['status']; mine: boolean }; messages: LiveMsg[] }>(`/platform/support/live/${row.id}?after=${last.current}`);
+        if (stop) return;
+        setStatus(r.chat.status); setMine(r.chat.mine);
+        if (r.messages.length) { last.current = r.messages[r.messages.length - 1]!.id; setMsgs((m) => [...m, ...r.messages.filter((x) => !m.some((y) => y.id === x.id))]); }
+      } catch { /* next tick */ }
+    };
+    void tick();
+    const t = setInterval(tick, LIVE.pollSeconds * 1000);
+    return () => { stop = true; clearInterval(t); };
+  }, [row.id]);
+  useEffect(() => { end.current?.scrollIntoView({ block: 'nearest' }); }, [msgs.length]);
+  const act = async (path: string, body: object = {}) => { try { return await api.post<any>(`/platform/support/live/${row.id}/${path}`, body); } catch (e) { toast('error', (e as ApiError).message); return null; } };
+  const send = async () => {
+    const b = text.trim();
+    if (!b) return;
+    const m = await act('messages', { body: b });
+    if (m) { setText(''); last.current = Math.max(last.current, m.id); setMsgs((x) => [...x, m]); }
+  };
+  const open = status === 'waiting' || status === 'active';
+  const s = sum.data;
+  return (
+    <div className="lc-chat">
+      <div className="lc-head">
+        <div><strong>{row.shopName}</strong> <span className="small muted">· {row.startedBy}{row.shopPhone ? ` · ${row.shopPhone}` : ''}</span></div>
+        <div className="row" style={{ gap: 8 }}>
+          {status === 'waiting' && <button className="btn btn-primary btn-sm" onClick={async () => { if (await act('pick')) { setStatus('active'); setMine(true); } }}><UserCheck size={14} /> Pick up</button>}
+          {status === 'active' && !mine && <button className="btn btn-secondary btn-sm" onClick={async () => { if (await act('pick', { takeOver: true })) setMine(true); }}>Take over</button>}
+          {open && <button className="btn btn-ghost btn-sm" onClick={async () => { if (await act('close')) setStatus('closed'); }}><XCircle size={14} /> End chat</button>}
+        </div>
+      </div>
+      {s && <div className="small muted lc-shop">{s.shop.plan} plan · licence till {when(s.shop.licenseEnd)} · {s.usage.invoicesThisMonth} bills this month · {s.users.length} users · last bill {when(s.usage.lastInvoice)}</div>}
+      {row.botTranscript.length > 0 && (
+        <details className="support-chatlog">
+          <summary className="small strong">What they asked the help bot ({row.botTranscript.length})</summary>
+          <ul>{row.botTranscript.map((m, i) => <li key={i} className={m.role}><span>{m.role === 'user' ? 'Shop' : 'Bot'}</span><div>{m.text}</div></li>)}</ul>
+        </details>
+      )}
+      <div className="hc-log lc-log">
+        {msgs.map((m) => m.sender === 'system' ? <div key={m.id} className="hc-system">{m.body}</div> : m.sender === 'agent' ? (
+          <div key={m.id} className="hc-row me"><div className="hc-bubble me"><div className="small" style={{ opacity: .85 }}>{m.senderName}</div>{m.body}</div><span className="hc-av me"><Headset size={14} /></span></div>
+        ) : (
+          <div key={m.id} className="hc-row"><span className="hc-av"><UserRound size={14} /></span><div className="hc-bubble"><div className="small strong">{m.senderName}</div><div style={{ whiteSpace: 'pre-wrap' }}>{m.body}</div></div></div>
+        ))}
+        <div ref={end} />
+      </div>
+      {open ? (
+        <form className="hc-input" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+          <input className="input" value={text} onChange={(e) => setText(e.target.value)} disabled={!mine || status !== 'active'} maxLength={2000}
+            placeholder={status === 'waiting' ? 'Pick up the chat to reply' : mine ? 'Type a reply…' : `${row.agentName} is handling this chat`} aria-label="Reply" />
+          <button className="btn btn-primary" disabled={!mine || status !== 'active' || !text.trim()} aria-label="Send"><Send size={15} /></button>
+        </form>
+      ) : <div className="small muted"><Bot size={13} style={{ verticalAlign: -2 }} /> This chat has ended{row.rating ? ` · rated ${row.rating}/5` : ''}.</div>}
+    </div>
   );
 }

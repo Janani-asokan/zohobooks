@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { app, freshDb, login } from './helpers';
+import { query } from '../src/db';
 
 let owner: Awaited<ReturnType<typeof login>>;
 let admin: Awaited<ReturnType<typeof login>>;
@@ -128,5 +129,67 @@ describe('help chat', () => {
     expect(b.body).toMatchObject({ source: 'chat', chat });
     const staffView = (await admin.get('/api/platform/support/callbacks?view=upcoming')).body.callbacks.find((x: any) => x.id === b.body.id);
     expect(staffView.chat).toEqual(chat);
+  });
+});
+
+describe('live chat with an agent', () => {
+  let id: string;
+  let allHours: any;
+  beforeAll(async () => {
+    // Open every day, all day, so the test doesn't depend on the clock.
+    const s = (await admin.get('/api/platform/support/settings')).body;
+    allHours = { ...s, days: [1, 2, 3, 4, 5, 6, 7], start: '00:00', end: '23:59' };
+    expect((await admin.put('/api/platform/support/settings').send(allHours)).status).toBe(200);
+    await query('UPDATE super_admins SET support_seen_at = NULL');
+  });
+
+  it('is offered only while an agent is online', async () => {
+    expect((await owner.get('/api/shop/support/contact')).body).toMatchObject({ agentsOnline: 0, liveChat: false });
+    expect((await owner.post('/api/shop/support/live').send({})).body.code).toBe('live_no_agent');
+    expect((await admin.get('/api/platform/support/live')).status).toBe(200);    // console open → online
+    expect((await owner.get('/api/shop/support/contact')).body).toMatchObject({ agentsOnline: 1, liveChat: true });
+  });
+
+  it('queues the chat with the bot conversation, and only a picked-up chat gets agent replies', async () => {
+    const bot = [{ role: 'user', text: 'Labels print sideways' }, { role: 'bot', text: 'Printer and paper size: …' }];
+    const r = await owner.post('/api/shop/support/live').send({ botChat: bot, first: 'Still printing sideways on the TSC printer' });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    id = r.body.chat.id;
+    expect(r.body.chat).toMatchObject({ status: 'waiting', queuePosition: 1, botTranscript: bot });
+    expect(r.body.messages.map((m: any) => m.sender)).toEqual(['system', 'shop']);
+    // Starting again returns the same open chat.
+    expect((await owner.post('/api/shop/support/live').send({})).body.chat.id).toBe(id);
+    const list = (await admin.get('/api/platform/support/live')).body;
+    expect(list.waiting).toBe(1);
+    expect(list.chats[0]).toMatchObject({ id, status: 'waiting', unread: 1, shopName: expect.any(String) });
+    expect((await admin.post(`/api/platform/support/live/${id}/messages`).send({ body: 'Hi' })).body.code).toBe('chat_not_mine');
+    expect((await admin.post(`/api/platform/support/live/${id}/pick`).send({})).body).toMatchObject({ status: 'active', agentName: 'Platform Admin' });
+    expect((await admin.post(`/api/platform/support/live/${id}/messages`).send({ body: 'Set the label size to 50 x 25 in Print settings' })).status).toBe(201);
+    const last = r.body.messages.at(-1).id;
+    const poll = (await owner.get(`/api/shop/support/live/${id}?after=${last}`)).body;
+    expect(poll.chat).toMatchObject({ status: 'active', agentName: 'Platform Admin' });
+    expect(poll.messages.map((m: any) => [m.sender, m.body])).toEqual([['system', 'Platform Admin from Corpus360 support joined the chat.'], ['agent', 'Set the label size to 50 x 25 in Print settings']]);
+    expect((await owner.post(`/api/shop/support/live/${id}/messages`).send({ body: 'That fixed it, thanks!' })).status).toBe(201);
+  });
+
+  it('keeps chats private to the person who started them (and the owner), and to the shop', async () => {
+    expect((await sales.get(`/api/shop/support/live/${id}`)).status).toBe(404);
+    expect((await other.get(`/api/shop/support/live/${id}`).set(csrf)).status).toBe(404);
+    expect((await other.post(`/api/shop/support/live/${id}/messages`).set(csrf).send({ body: 'hi' })).status).toBe(404);
+  });
+
+  it('either side can end it; the shop can rate it once, and nothing more can be sent', async () => {
+    expect((await admin.post(`/api/platform/support/live/${id}/close`).send({})).body.status).toBe('closed');
+    const rated = (await owner.post(`/api/shop/support/live/${id}/close`).send({ rating: 5 })).body;
+    expect(rated.chat).toMatchObject({ status: 'closed', closedBy: 'agent', rating: 5 });
+    expect((await owner.post(`/api/shop/support/live/${id}/messages`).send({ body: 'one more' })).body.code).toBe('chat_closed');
+  });
+
+  it('a chat nobody picks up in 5 minutes ends with an offer of a call-back', async () => {
+    const r = (await owner.post('/api/shop/support/live').send({})).body;
+    await query("UPDATE support_chats SET created_at = now() - interval '6 minutes' WHERE id = $1", [r.chat.id]);
+    const poll = (await owner.get(`/api/shop/support/live/${r.chat.id}`)).body;
+    expect(poll.chat.status).toBe('missed');
+    expect(poll.messages.at(-1).body).toMatch(/book a call-back/);
   });
 });

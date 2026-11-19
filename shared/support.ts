@@ -78,3 +78,23 @@ export function isSlot(s: SupportSettings, t: Date): boolean {
   const startMin = mins(s.start), endMin = mins(s.end);
   return t.getUTCSeconds() === 0 && t.getUTCMilliseconds() === 0 && m >= startMin && m + s.slotMinutes <= endMin && (m - startMin) % s.slotMinutes === 0;
 }
+
+/** Live chat with the support team (polling). */
+export const LIVE = {
+  /** A chat nobody picks up in this long ends with an offer of a call-back. */
+  waitMinutes: 5,
+  /** An agent counts as online while their console has polled within this many seconds. */
+  agentOnlineSeconds: 120,
+  /** How often the open chat checks for new messages. */
+  pollSeconds: 3,
+  /** Messages one side may send per minute. */
+  perMinute: 20,
+} as const;
+
+/** Whether support is open at this moment (India time). */
+export function supportOpenAt(s: SupportSettings, now = new Date()) {
+  const ist = new Date(now.getTime() + IST_MIN * 60_000);
+  const m = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  const dow = ((ist.getUTCDay() + 6) % 7) + 1;
+  return s.days.includes(dow) && m >= mins(s.start) && m < mins(s.end);
+}

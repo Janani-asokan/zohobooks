@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { audit } from '../audit';
 import { many, one, query, tx, withTenant, type Db } from '../db';
 import { HttpError, badRequest, h, notFound, parse } from '../http';
-import { bookedPerSlot, serializeCallback, supportSettings } from './shop/support';
+import { bookedPerSlot, expireWaiting, serializeCallback, serializeChat, serializeMsg, supportSettings } from './shop/support';
 import { isSlot, supportSlots } from '../../../shared/support';
 
 export const platformSupportRouter = Router();
@@ -125,4 +125,92 @@ platformSupportRouter.put('/settings', h(async (req, res) => {
     await audit(db, req, null, 'update', 'support_settings', undefined, b);
   });
   res.json(await tx(async (db) => ({ ...(await supportSettings(db)), ...(await contact(db)) })));
+}));
+
+/* ======================= Live chats ======================= */
+
+const agent = (req: Request) => (req.ctx?.kind === 'super' ? { id: req.ctx.id, name: req.ctx.name } : null);
+
+/** Open chats (waiting first, oldest first) and the last two hours of finished ones. Polling this marks the agent online. */
+platformSupportRouter.get('/live', h(async (req, res) => {
+  const me = agent(req)!;
+  const out = await platformTx(async (db) => {
+    await db.query('UPDATE super_admins SET support_seen_at = now() WHERE id = $1', [me.id]);
+    await expireWaiting(db);
+    const rows = await many(db, `SELECT ch.*, s.name AS shop_name, s.phone AS shop_phone,
+        (SELECT body FROM support_chat_messages m WHERE m.chat_id = ch.id AND m.sender <> 'system' ORDER BY m.id DESC LIMIT 1) AS last_body,
+        (SELECT count(*)::int FROM support_chat_messages m WHERE m.chat_id = ch.id AND m.sender = 'shop' AND m.created_at > coalesce(ch.agent_seen_at, 'epoch')) AS unread
+      FROM support_chats ch JOIN shops s ON s.id = ch.shop_id
+      WHERE ch.status IN ('waiting', 'active') OR ch.closed_at > now() - interval '2 hours'
+      ORDER BY (ch.status = 'waiting') DESC, (ch.status = 'active') DESC, ch.created_at LIMIT 100`);
+    const online = await many(db, "SELECT name FROM super_admins WHERE support_seen_at > now() - interval '2 minutes' ORDER BY name");
+    return { rows, online };
+  });
+  res.json({
+    chats: out.rows.map((r) => ({ ...serializeChat(r), shopId: r.shop_id, shopName: r.shop_name, shopPhone: r.shop_phone, lastMessage: r.last_body, unread: r.unread, mine: r.agent_id === me.id })),
+    waiting: out.rows.filter((r) => r.status === 'waiting').length,
+    agentsOnline: out.online.map((a) => a.name),
+  });
+}));
+
+platformSupportRouter.get('/live/:id', h(async (req, res) => {
+  const me = agent(req)!;
+  const after = Number(req.query.after) || 0;
+  const out = await platformTx(async (db) => {
+    const r = await one(db, 'SELECT ch.*, s.name AS shop_name FROM support_chats ch JOIN shops s ON s.id = ch.shop_id WHERE ch.id = $1', [req.params.id]);
+    if (!r) throw notFound('Chat');
+    await db.query('UPDATE super_admins SET support_seen_at = now() WHERE id = $1', [me.id]);
+    if (r.agent_id === me.id) await db.query('UPDATE support_chats SET agent_seen_at = now() WHERE id = $1', [r.id]);
+    const msgs = await many(db, 'SELECT * FROM support_chat_messages WHERE chat_id = $1 AND id > $2 ORDER BY id LIMIT 200', [r.id, after]);
+    return { chat: { ...serializeChat(r), shopId: r.shop_id, shopName: r.shop_name, mine: r.agent_id === me.id }, messages: msgs.map(serializeMsg) };
+  });
+  res.json(out);
+}));
+
+/** Pick up a waiting chat (or take over one, with takeOver). */
+platformSupportRouter.post('/live/:id/pick', h(async (req, res) => {
+  const me = agent(req)!;
+  const b = parse(z.object({ takeOver: z.boolean().default(false) }), req.body ?? {});
+  const out = await platformTx(async (db) => {
+    const r = await one(db, 'SELECT * FROM support_chats WHERE id = $1 FOR UPDATE', [req.params.id]);
+    if (!r) throw notFound('Chat');
+    if (r.status !== 'waiting' && r.status !== 'active') throw new HttpError(409, 'This chat has ended', 'chat_closed');
+    if (r.status === 'active' && r.agent_id !== me.id && !b.takeOver) throw new HttpError(409, `${r.agent_name} is already in this chat`, 'chat_taken');
+    if (r.agent_id === me.id) return r;
+    await db.query("UPDATE support_chats SET status = 'active', agent_id = $2, agent_name = $3, picked_at = coalesce(picked_at, now()), agent_seen_at = now() WHERE id = $1", [r.id, me.id, me.name]);
+    await db.query(`INSERT INTO support_chat_messages (shop_id, chat_id, sender, sender_name, body) VALUES ($1,$2,'system','',$3)`, [r.shop_id, r.id, `${me.name} from Corpus360 support joined the chat.`]);
+    await audit(db, req, r.shop_id, 'pick', 'support_chat', r.id);
+    return one(db, 'SELECT * FROM support_chats WHERE id = $1', [r.id]);
+  });
+  res.json(serializeChat(out));
+}));
+
+platformSupportRouter.post('/live/:id/messages', h(async (req, res) => {
+  const me = agent(req)!;
+  const b = parse(z.object({ body: z.string().trim().min(1, 'Type a message').max(2000) }), req.body);
+  const m = await platformTx(async (db) => {
+    const r = await one(db, 'SELECT * FROM support_chats WHERE id = $1 FOR UPDATE', [req.params.id]);
+    if (!r) throw notFound('Chat');
+    if (r.status !== 'active' && r.status !== 'waiting') throw new HttpError(409, 'This chat has ended', 'chat_closed');
+    if (r.status === 'waiting' || r.agent_id !== me.id) throw new HttpError(409, 'Pick up the chat first', 'chat_not_mine');
+    const msg = await one(db, `INSERT INTO support_chat_messages (shop_id, chat_id, sender, sender_name, body) VALUES ($1,$2,'agent',$3,$4) RETURNING *`, [r.shop_id, r.id, me.name, b.body]);
+    await db.query('UPDATE support_chats SET last_message_at = now(), agent_seen_at = now() WHERE id = $1', [r.id]);
+    return msg;
+  });
+  res.status(201).json(serializeMsg(m));
+}));
+
+platformSupportRouter.post('/live/:id/close', h(async (req, res) => {
+  const me = agent(req)!;
+  const out = await platformTx(async (db) => {
+    const r = await one(db, 'SELECT * FROM support_chats WHERE id = $1 FOR UPDATE', [req.params.id]);
+    if (!r) throw notFound('Chat');
+    if (r.status === 'waiting' || r.status === 'active') {
+      await db.query("UPDATE support_chats SET status = 'closed', closed_at = now(), closed_by = 'agent' WHERE id = $1", [r.id]);
+      await db.query(`INSERT INTO support_chat_messages (shop_id, chat_id, sender, sender_name, body) VALUES ($1,$2,'system','',$3)`, [r.shop_id, r.id, `${me.name} ended the chat. Thanks for contacting Corpus360 support.`]);
+      await audit(db, req, r.shop_id, 'close', 'support_chat', r.id);
+    }
+    return one(db, 'SELECT * FROM support_chats WHERE id = $1', [r.id]);
+  });
+  res.json(serializeChat(out));
 }));

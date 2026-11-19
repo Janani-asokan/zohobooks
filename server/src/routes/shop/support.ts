@@ -9,7 +9,7 @@ import { perm } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, type Db } from '../../db';
 import { HttpError, badRequest, notFound, parse } from '../../http';
-import { SUPPORT_TOPICS, isSlot, supportSlots, MIN_NOTICE_MIN, istDate, type SupportSettings } from '../../../../shared/support';
+import { SUPPORT_TOPICS, isSlot, supportSlots, MIN_NOTICE_MIN, istDate, LIVE, supportOpenAt, type SupportSettings } from '../../../../shared/support';
 import { HOWTO, STARTERS, itemWords, understand } from '../../../../shared/supportBot';
 import { getOrg } from '../../services/common';
 import { aiEnabled } from '../../services/extract';
@@ -100,14 +100,11 @@ supportRouter.get('/support/contact', T(async (db, _req, c) => {
   const s = await supportSettings(db);
   const cfg = await one(db, 'SELECT support_phone, support_email FROM platform_config WHERE id = 1');
   const now = new Date();
-  const ist = new Date(now.getTime() + 330 * 60_000);
-  const minutes = ist.getUTCHours() * 60 + ist.getUTCMinutes();
-  const dow = ((ist.getUTCDay() + 6) % 7) + 1;
-  const toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
-  const openNow = s.days.includes(dow) && minutes >= toMin(s.start) && minutes < toMin(s.end);
+  const openNow = supportOpenAt(s, now);
   const next = supportSlots(s, await bookedPerSlot(db))[0]?.slots[0]?.start ?? null;
+  const online = await agentsOnline(db);
   return { phone: cfg?.support_phone ?? '', email: cfg?.support_email ?? '', days: s.days, start: s.start, end: s.end, openNow, nextSlot: next, today: istDate(now),
-    canBook: c.permissions.includes('admin') };
+    canBook: c.permissions.includes('admin'), agentsOnline: online, liveChat: openNow && online > 0 };
 }));
 
 type Reply = { text: string; table?: { columns: string[]; rows: string[][] }; links?: Array<{ label: string; to: string }>; suggestions?: string[]; escalate?: boolean; by: 'bot' | 'ai' };
@@ -221,4 +218,108 @@ supportRouter.post('/support/chat', T(async (db, req, c): Promise<Reply> => {
       return { text: 'I’m not sure about that one. Try asking another way, pick one of these, or talk to our support team.', suggestions: STARTERS, escalate: true, by: 'bot' };
     }
   }
+}));
+
+/* ======================= Live chat with an agent ======================= */
+
+/** Agents with the console open in the last couple of minutes. */
+export async function agentsOnline(db: Db) {
+  return Number((await one(db, `SELECT count(*)::int AS n FROM super_admins WHERE support_seen_at > now() - make_interval(secs => $1)`, [LIVE.agentOnlineSeconds])).n);
+}
+
+/** Chats nobody picked up in time end with an offer of a call-back (run on every poll; cheap and idempotent). */
+export async function expireWaiting(db: Db) {
+  const gone = await many(db, `UPDATE support_chats SET status = 'missed', closed_at = now(), closed_by = 'system'
+                               WHERE status = 'waiting' AND created_at < now() - make_interval(mins => $1) RETURNING id, shop_id`, [LIVE.waitMinutes]);
+  for (const g of gone) await db.query(`INSERT INTO support_chat_messages (shop_id, chat_id, sender, sender_name, body) VALUES ($1,$2,'system','',$3)`,
+    [g.shop_id, g.id, 'Sorry, no agent was free to pick this up. Please book a call-back or call us: this chat goes with it.']);
+}
+
+/** Runs with the platform policy on (every shop's chats) for one read, then switches it off again. */
+async function platformRead<T>(db: Db, fn: () => Promise<T>) {
+  await db.query("SELECT set_config('app.platform', 'on', true)");
+  try { return await fn(); } finally { await db.query("SELECT set_config('app.platform', 'off', true)"); }
+}
+
+export const serializeChat = (r: any, queue: number | null = null) => ({
+  id: r.id, status: r.status as 'waiting' | 'active' | 'closed' | 'missed', startedBy: r.started_by_name, agentName: r.agent_name ?? null,
+  createdAt: r.created_at, pickedAt: r.picked_at, closedAt: r.closed_at, closedBy: r.closed_by, rating: r.rating, queuePosition: queue, botTranscript: r.bot_transcript ?? [],
+});
+export const serializeMsg = (m: any) => ({ id: Number(m.id), sender: m.sender as 'shop' | 'agent' | 'system', senderName: m.sender_name, body: m.body, at: m.created_at });
+
+async function myChat(db: Db, c: UserCtx, id: string, lock = false) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw notFound('Chat');
+  const r = await one(db, `SELECT * FROM support_chats WHERE shop_id = $1 AND id = $2${lock ? ' FOR UPDATE' : ''}`, [c.shopId, id]);
+  // The person who started it, or the owner / an admin of the shop.
+  if (!r || (r.started_by !== c.id && !c.permissions.includes('admin'))) throw notFound('Chat');
+  return r;
+}
+const mine = (c: UserCtx) => (c.homeShopId === c.shopId ? c.id : null);
+
+async function chatState(db: Db, c: UserCtx, r: any, after: number) {
+  const msgs = await many(db, 'SELECT * FROM support_chat_messages WHERE chat_id = $1 AND id > $2 ORDER BY id LIMIT 200', [r.id, after]);
+  const queue = r.status === 'waiting'
+    // Compared in the database: a JavaScript Date drops the microseconds of created_at.
+    ? await platformRead(db, async () => Number((await one(db, "SELECT count(*)::int AS n FROM support_chats WHERE status = 'waiting' AND created_at <= (SELECT created_at FROM support_chats WHERE id = $1)", [r.id])).n))
+    : null;
+  return { chat: serializeChat(r, queue), messages: msgs.map(serializeMsg) };
+}
+
+/** Starts a chat with the team (during support hours, with an agent online), handing over the bot conversation. */
+supportRouter.post('/support/live', T(async (db, req, c, res) => {
+  const b = parse(z.object({ botChat: z.array(z.object({ role: z.enum(['user', 'bot']), text: z.string().max(2000) })).max(60).default([]), first: z.string().trim().max(2000).optional() }), req.body);
+  await expireWaiting(db);
+  const open = await one(db, "SELECT * FROM support_chats WHERE shop_id = $1 AND started_by = $2 AND status IN ('waiting', 'active') ORDER BY created_at DESC LIMIT 1", [c.shopId, c.id]);
+  if (open) return chatState(db, c, open, 0);
+  const s = await supportSettings(db);
+  if (!supportOpenAt(s)) throw new HttpError(409, 'Our support team is closed right now. Book a call-back and we’ll call you in support hours.', 'live_closed');
+  if (!(await agentsOnline(db))) throw new HttpError(409, 'No agent is online right now. Book a call-back, or call us.', 'live_no_agent');
+  const r = await one(db, `INSERT INTO support_chats (shop_id, started_by, started_by_name, bot_transcript) VALUES ($1,$2,$3,$4) RETURNING *`,
+    [c.shopId, mine(c), c.name, JSON.stringify(b.botChat)]);
+  await db.query(`INSERT INTO support_chat_messages (shop_id, chat_id, sender, sender_name, body) VALUES ($1,$2,'system','',$3)`,
+    [c.shopId, r.id, 'You’re in the queue. An agent will join in a moment; they can see what you asked the help bot.']);
+  if (b.first) await db.query(`INSERT INTO support_chat_messages (shop_id, chat_id, sender, sender_name, body) VALUES ($1,$2,'shop',$3,$4)`, [c.shopId, r.id, c.name, b.first]);
+  await audit(db, req, c.shopId, 'start', 'support_chat', r.id);
+  req.audited = true;
+  res.status(201);
+  return chatState(db, c, r, 0);
+}));
+
+/** This user's open chat, to carry on after a page reload. */
+supportRouter.get('/support/live/current', T(async (db, _req, c) => {
+  await expireWaiting(db);
+  const r = await one(db, "SELECT * FROM support_chats WHERE shop_id = $1 AND started_by = $2 AND (status IN ('waiting', 'active') OR closed_at > now() - interval '2 minutes') ORDER BY created_at DESC LIMIT 1", [c.shopId, c.id]);
+  return r ? chatState(db, c, r, 0) : null;
+}));
+
+/** Poll: new messages after `after`, status and queue position. */
+supportRouter.get('/support/live/:id', T(async (db, req, c) => {
+  await expireWaiting(db);
+  const r = await myChat(db, c, req.params.id!);
+  await db.query('UPDATE support_chats SET shop_seen_at = now() WHERE id = $1', [r.id]);
+  return chatState(db, c, r, Number(req.query.after) || 0);
+}));
+
+supportRouter.post('/support/live/:id/messages', T(async (db, req, c, res) => {
+  const b = parse(z.object({ body: z.string().trim().min(1, 'Type a message').max(2000) }), req.body);
+  const r = await myChat(db, c, req.params.id!, true);
+  if (r.status !== 'waiting' && r.status !== 'active') throw new HttpError(409, 'This chat has ended', 'chat_closed');
+  const recent = await one(db, "SELECT count(*)::int AS n FROM support_chat_messages WHERE chat_id = $1 AND sender = 'shop' AND created_at > now() - interval '1 minute'", [r.id]);
+  if (recent.n >= LIVE.perMinute) throw new HttpError(429, 'You’re sending messages very fast. Please wait a moment.', 'chat_rate');
+  const m = await one(db, `INSERT INTO support_chat_messages (shop_id, chat_id, sender, sender_name, body) VALUES ($1,$2,'shop',$3,$4) RETURNING *`, [c.shopId, r.id, c.name, b.body]);
+  await db.query('UPDATE support_chats SET last_message_at = now(), shop_seen_at = now() WHERE id = $1', [r.id]);
+  res.status(201);
+  return serializeMsg(m);
+}));
+
+/** End the chat (and optionally rate it, 1–5; a closed chat can still be rated once). */
+supportRouter.post('/support/live/:id/close', T(async (db, req, c) => {
+  const b = parse(z.object({ rating: z.number().int().min(1).max(5).optional() }), req.body ?? {});
+  const r = await myChat(db, c, req.params.id!, true);
+  if (r.status === 'waiting' || r.status === 'active') {
+    await db.query("UPDATE support_chats SET status = 'closed', closed_at = now(), closed_by = 'shop' WHERE id = $1", [r.id]);
+    await db.query(`INSERT INTO support_chat_messages (shop_id, chat_id, sender, sender_name, body) VALUES ($1,$2,'system','',$3)`, [c.shopId, r.id, `${c.name} ended the chat.`]);
+  }
+  if (b.rating && r.rating == null) await db.query('UPDATE support_chats SET rating = $2 WHERE id = $1', [r.id, b.rating]);
+  return chatState(db, c, await one(db, 'SELECT * FROM support_chats WHERE id = $1', [r.id]), 0);
 }));
