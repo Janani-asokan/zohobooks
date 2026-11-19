@@ -4,6 +4,7 @@ import { FullPageSpinner, ProtectedRoute } from './components/ProtectedRoute';
 import { homeFor, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import { DeleteAccountHelp, Privacy, Terms } from './pages/Legal';
 import ResetPassword from './pages/ResetPassword';
 import SuperAdminLayout from './layouts/SuperAdminLayout';
 import AppLayout from './layouts/AppLayout';
@@ -78,6 +79,7 @@ const BranchPricing = lazy(() => import('./pages/app/BranchPricing'));
 const Licenses = lazy(() => import('./pages/app/Licenses'));
 const LicenseDetail = lazy(() => import('./pages/app/LicenseDetail'));
 const SuperSupport = lazy(() => import('./pages/super/Support'));
+const Account = lazy(() => import('./pages/app/Account'));
 const BarcodeLabels = lazy(() => import('./pages/app/BarcodeLabels'));
 
 /** "/" shows the public landing page to visitors and sends signed-in users to their workspace. */
@@ -102,6 +104,9 @@ export default function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/share/:token" element={<PublicInvoice />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/delete-account" element={<DeleteAccountHelp />} />
         <Route path="/invoices/:id/print" element={<PrintInvoice />} />
 
         <Route element={<ProtectedRoute kind="super" />}>
@@ -119,6 +124,7 @@ export default function App() {
           <Route path="/app" element={<AppLayout />}>
             <Route index element={<Home />} />
             <Route path="pos" element={<Pos />} />
+            <Route path="account" element={<Account />} />
             <Route path="items" element={<Items />} />
             <Route path="items/new" element={<ItemForm />} />
             <Route path="items/rates" element={<TodayRates />} />

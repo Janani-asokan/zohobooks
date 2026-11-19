@@ -56,3 +56,14 @@ publicRouter.get(
     res.json(await withTenant(shopId, (db) => invoicePrintBundle(db, shopId, req.params.id!)));
   }),
 );
+
+/** The support email and phone, for the public privacy and account-deletion pages. */
+publicRouter.get(
+  '/contact',
+  rateLimit('public', 60, 60_000),
+  h(async (_req, res) => {
+    const [c] = await query('SELECT support_phone, support_email FROM platform_config WHERE id = 1');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.json({ phone: c?.support_phone ?? '', email: c?.support_email ?? '' });
+  }),
+);

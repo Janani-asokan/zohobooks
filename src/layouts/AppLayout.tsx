@@ -270,6 +270,9 @@ export default function AppLayout() {
             <ProfileMenu name={me.user.name} sub={`${me.user.role} · ${me.shop.name}`} email={me.user.email}>
               {(close) => (
                 <>
+                  <button className="dropdown-item" onClick={() => { close(); navigate('/app/account'); }}>
+                    <UserRound size={16} /> My account
+                  </button>
                   {me.can('admin') && (
                     <>
                       <button className="dropdown-item" onClick={() => { close(); navigate('/app/organization'); }}>

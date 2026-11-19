@@ -9,6 +9,7 @@ import { h, HttpError, parse } from '../http';
 import { sendMail } from '../mailer';
 import { provisionShop } from '../services/provision';
 import { BUSINESS_TEMPLATES } from '../../../shared/templates';
+import { confirmsShopName, deletedEmail, recordsUntil, SHOP_RESTORE_DAYS } from '../../../shared/accountDeletion';
 import { isStrongPassword, PASSWORD_RULE, type UserRole } from '../../../shared/permissions';
 
 export const authRouter = Router();
@@ -299,5 +300,65 @@ authRouter.post(
       await withTenant(ctx.shopId, (db) => audit(db, req, ctx.shopId, 'change_password', 'user', ctx.id));
     }
     res.json(await mePayload(req));
+  }),
+);
+
+/**
+ * Delete an account (Google Play's account-deletion rule). Needs the password again.
+ * - scope "me": a staff member's own login is wiped at once (name, email, password) and every session ends.
+ *   Bills they made stay, still showing who made them in the audit trail.
+ * - scope "shop": the owner closes the whole shop. Everyone is signed out now; personal details are wiped after
+ *   SHOP_RESTORE_DAYS by the hourly job (runAccountDeletions); bills and accounts are kept as GST law requires.
+ */
+authRouter.post(
+  '/delete-account',
+  rateLimit('delete-account', 5, 15 * 60_000),
+  h(async (req, res) => {
+    const ctx = req.ctx;
+    if (!ctx) throw new HttpError(401, 'Not signed in', 'unauthenticated');
+    if (ctx.kind !== 'user') throw new HttpError(403, 'Platform staff accounts are removed by another administrator', 'forbidden');
+    const body = parse(z.object({
+      scope: z.enum(['me', 'shop']),
+      password: z.string().min(1).max(200),
+      confirm: z.string().max(200).optional(),
+      reason: z.string().trim().max(500).optional(),
+    }), req.body);
+    const [u] = await query('SELECT id, password_hash, role, shop_id FROM users WHERE id = $1 AND deleted_at IS NULL', [ctx.id]);
+    if (!u) throw new HttpError(404, 'Account not found', 'not_found');
+    if (!(await verifyPassword(body.password, u.password_hash))) throw new HttpError(400, 'Password is incorrect', 'bad_request', { password: 'Password is incorrect' });
+
+    if (body.scope === 'me') {
+      if (ctx.role === 'Owner') throw new HttpError(400, 'An owner can’t delete only their login: close the shop instead, or make someone else the owner first.', 'owner_must_close');
+      await tx(async (db) => {
+        await db.query(`UPDATE users SET name = 'Deleted user', email = $2, password_hash = $3, active = false, deleted_at = now(),
+                          must_change_password = false, failed_attempts = 0, locked_until = NULL WHERE id = $1`,
+          [u.id, deletedEmail(u.id), await hashPassword(randomToken())]);
+        await db.query("DELETE FROM sessions WHERE principal_type = 'user' AND principal_id = $1", [u.id]);
+      });
+      await withTenant(ctx.shopId, (db) => audit(db, req, ctx.shopId, 'delete_own_account', 'user', u.id, { reason: body.reason ?? '' }));
+      clearSessionCookie(res);
+      return res.json({ ok: true, scope: 'me' });
+    }
+
+    if (ctx.role !== 'Owner') throw new HttpError(403, 'Only the shop owner can close the shop', 'forbidden');
+    const [shop] = await query('SELECT id, name, email, owner_name FROM shops WHERE id = $1', [ctx.shopId]);
+    if (!confirmsShopName(body.confirm ?? '', shop.name)) throw new HttpError(400, `Type the shop name “${shop.name}” to confirm`, 'bad_request', { confirm: 'Shop name doesn’t match' });
+    await tx(async (db) => {
+      await db.query(`UPDATE shops SET active = false, deletion_requested_at = now(), deletion_reason = $2, records_until = $3 WHERE id = $1`,
+        [shop.id, body.reason ?? '', recordsUntil(todayISO())]);
+      await db.query(`DELETE FROM sessions WHERE principal_type = 'user'
+                        AND (principal_id IN (SELECT id FROM users WHERE shop_id = $1) OR active_shop_id = $1)`, [shop.id]);
+    });
+    await withTenant(ctx.shopId, (db) => audit(db, req, ctx.shopId, 'close_shop', 'shop', shop.id, { reason: body.reason ?? '' }));
+    void sendMail({
+      to: shop.email,
+      subject: 'Your Corpus360 shop has been closed',
+      text: `Hi ${shop.owner_name},\n\n"${shop.name}" was closed on ${todayISO()} and everyone has been signed out.\n\n`
+        + `Changed your mind? Reply to this email or contact support within ${SHOP_RESTORE_DAYS} days and we can restore it. `
+        + `After that, the names, emails and passwords of the shop's logins are erased. Bills and accounts are kept until `
+        + `${recordsUntil(todayISO())} because GST law requires it, and are then deleted.\n\nIf you didn't do this, contact support at once.`,
+    }).catch(() => {});
+    clearSessionCookie(res);
+    res.json({ ok: true, scope: 'shop', restoreDays: SHOP_RESTORE_DAYS });
   }),
 );

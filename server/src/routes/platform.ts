@@ -108,7 +108,9 @@ platformRouter.patch(
   h(async (req, res) => {
     const b = parse(z.object({ active: z.boolean() }), req.body);
     await tx(async (db) => {
-      const s = await one(db, 'UPDATE shops SET active = $2 WHERE id = $1 RETURNING id, name', [req.params.id, b.active]);
+      const s = await one(db, `UPDATE shops SET active = $2,
+         deletion_requested_at = CASE WHEN $2 AND personal_data_erased_at IS NULL THEN NULL ELSE deletion_requested_at END
+       WHERE id = $1 RETURNING id, name`, [req.params.id, b.active]);
       if (!s) throw notFound('Shop');
       if (!b.active) await db.query("DELETE FROM sessions WHERE principal_type = 'user' AND principal_id IN (SELECT id FROM users WHERE shop_id = $1)", [s.id]);
       await audit(db, req, null, b.active ? 'activate_shop' : 'deactivate_shop', 'shop', s.id, { name: s.name });

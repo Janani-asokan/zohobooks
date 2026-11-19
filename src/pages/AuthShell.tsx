@@ -13,7 +13,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
         </Link>
         <div className="login-form-wrap">{children}</div>
         <div className="login-foot">
-          <span>© {new Date().getFullYear()} Corpus360</span>
+          <span>© {new Date().getFullYear()} Corpus360 · <Link to="/privacy">Privacy</Link> · <Link to="/terms">Terms</Link></span>
           <span className="row" style={{ gap: 6 }}><ShieldCheck size={14} /> Encrypted sessions. Each business sees only its own data.</span>
         </div>
       </div>

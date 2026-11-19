@@ -1,3 +1,4 @@
+import { runAccountDeletions } from './services/accountDeletion';
 import { config } from './config';
 import { query, withTenant } from './db';
 import { sendMail } from './mailer';
@@ -114,6 +115,8 @@ export function startJobs() {
     safe('license', runLicenseReminders)();
     // Warehouse licences: statuses, 90/60/30/7/0-day reminders, renewal invoices. Idempotent, so hourly is safe.
     safe('warehouse-licenses', () => runLicenseJob())();
+    // Shops closed by their owner: wipe login details once the restore window has passed.
+    safe('account-deletions', runAccountDeletions)();
     safe('sessions', () => query("DELETE FROM sessions WHERE expires_at < now(); DELETE FROM password_resets WHERE expires_at < now() - interval '7 days'"))();
   };
   setTimeout(hourly, 10_000);

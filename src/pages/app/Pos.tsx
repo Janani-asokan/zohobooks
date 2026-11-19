@@ -523,7 +523,7 @@ export default function Pos() {
           <div className="input-group" style={{ flex: 1, minWidth: 240 }}>
             <span className="lead" style={{ color: 'var(--brand-600)' }}>{q ? <Search size={17} /> : <ScanBarcode size={17} />}</span>
             <input ref={scanRef} className="input" style={{ height: 46, fontSize: 14 }} placeholder="Scan, type a name or code (F2)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onScanKey} aria-label="Scan or search items" autoComplete="off" spellCheck={false} />
-            <button type="button" className={`input-side ${listening ? 'on' : ''}`} onClick={listen} title="Say the item (e.g. “two rice”)" aria-label="Voice: say the item"><Mic size={17} /></button>
+            {!IS_APP && <button type="button" className={`input-side ${listening ? 'on' : ''}`} onClick={listen} title="Say the item (e.g. “two rice”)" aria-label="Voice: say the item"><Mic size={17} /></button>}
           </div>
           <button type="button" className={`btn ${camOn ? 'btn-soft active' : 'btn-secondary'} cam-btn`} onClick={() => { setCamOn(!camOn); focusScan(); }} title="Scan with this device’s camera" aria-pressed={camOn}><Camera size={16} /> {camOn ? 'Camera on' : 'Camera'}</button>
           <Segmented value={kind} onChange={setKind} options={[{ value: 'all', label: 'All' }, { value: 'Goods', label: 'Goods', icon: Package }, { value: 'Services', label: 'Services', icon: Wrench }]} />

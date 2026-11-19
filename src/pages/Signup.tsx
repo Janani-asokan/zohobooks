@@ -114,6 +114,7 @@ export default function Signup() {
         <button className="btn btn-primary btn-block login-btn" type="submit" disabled={busy}>
           {busy ? <><Loader2 size={18} className="spin" /> Creating your shop…</> : <>Create my shop <ArrowRight size={18} /></>}
         </button>
+        <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>By creating a shop you agree to the <Link to="/terms">terms of use</Link> and <Link to="/privacy">privacy policy</Link>.</p>
         <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>Already have an account? <Link to="/login" style={{ fontWeight: 600 }}>Sign in</Link></p>
       </form>
     </AuthShell>

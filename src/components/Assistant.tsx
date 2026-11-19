@@ -1,3 +1,4 @@
+import { IS_APP } from '@/lib/platform';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -17,7 +18,8 @@ const SUGGESTIONS = [
 export interface AiCredits { allowance: number; used: number; left: number; pct: number }
 const useAiStatusQuery = () => useQuery({ queryKey: ['ai-status'], queryFn: () => api.get<{ enabled: boolean; credits: AiCredits | null }>('/shop/ai/status'), staleTime: 10 * 60_000 });
 // Voice: speech-to-text (Chrome, Edge, Safari) and read-aloud answers, in the app's language.
-const Recog = (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) as any;
+// The Android app's WebView has no speech service, so voice is offered only in browsers.
+const Recog = (!IS_APP && typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) as any;
 const VOICE_LANG: Record<string, string> = { en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN' };
 /** Markdown → something pleasant to hear: no symbols, tables read row by row. */
 const speakable = (md: string) => md.replace(/\|/g, ', ').replace(/[*#`>_-]{1,3}/g, ' ').replace(/₹/g, 'rupees ').replace(/\s+/g, ' ').trim();

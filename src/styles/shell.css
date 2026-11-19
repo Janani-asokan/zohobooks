@@ -190,3 +190,13 @@ tr.row-click { cursor: pointer; }
   .split-page.has-detail .split-panel { position: fixed; inset: 0; z-index: 60; max-height: none; border-radius: 0; border: none; }
 }
 .split-page.has-detail .table { width: 100%; }
+
+/* Public privacy, terms and account-deletion pages. */
+.legal { min-height: 100vh; background: var(--bg, var(--surface)); color: var(--ink-800); }
+.legal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top)); border-bottom: 1px solid var(--line, var(--ink-100)); background: var(--surface); position: sticky; top: 0; z-index: 2; }
+.legal-body { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; line-height: 1.6; }
+.legal-body h1 { font-size: 1.6rem; margin: 0 0 4px; }
+.legal-body h2 { font-size: 1.1rem; margin: 26px 0 6px; }
+.legal-body ul, .legal-body ol { padding-left: 1.2rem; }
+.legal-body li { margin: 4px 0; }
+.legal-links { display: flex; gap: 16px; flex-wrap: wrap; border-top: 1px solid var(--line, var(--ink-100)); margin-top: 32px; padding-top: 14px; }

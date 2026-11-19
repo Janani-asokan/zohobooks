@@ -1,3 +1,4 @@
+import { IS_APP } from '@/lib/platform';
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Mic, MicOff, Sparkles, Wand2 } from 'lucide-react';
 import { api } from '@/api/client';
@@ -16,7 +17,8 @@ export interface ParsedBill {
 
 // The Web Speech API is Chrome/Edge/Safari only, and prefixed in Chrome.
 type Recognition = { lang: string; interimResults: boolean; continuous: boolean; start: () => void; stop: () => void; onresult: ((e: any) => void) | null; onend: (() => void) | null; onerror: ((e: any) => void) | null };
-const SpeechRecognition = (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) as (new () => Recognition) | undefined;
+// The Android app's WebView has no speech service, so voice is offered only in browsers.
+const SpeechRecognition = (!IS_APP && typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) as (new () => Recognition) | undefined;
 const LANGS = [['en-IN', 'English'], ['hi-IN', 'हिन्दी'], ['ta-IN', 'தமிழ்'], ['te-IN', 'తెలుగు'], ['kn-IN', 'ಕನ್ನಡ'], ['ml-IN', 'മലയാളം'], ['mr-IN', 'मराठी'], ['gu-IN', 'ગુજરાતી'], ['bn-IN', 'বাংলা']] as const;
 
 /** Type or say the bill in plain words ("3 Logitech mouse and a Dell monitor for Nila Textiles, 5% off, UPI"); AI fills the form. */
