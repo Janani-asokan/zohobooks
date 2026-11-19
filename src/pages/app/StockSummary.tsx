@@ -55,7 +55,7 @@ export default function StockSummary() {
           <StatCard label="Stock value" value={data.totals.value === null ? '—' : money(data.totals.value)} icon={Boxes} tone="blue" foot="At current cost price" />
           <StatCard label="Items" value={data.totals.items} icon={Boxes} tone="violet" foot={`${n3(data.totals.qty)} units on hand`} />
           <StatCard label="At or below reorder level" value={data.totals.lowStock} icon={AlertTriangle} tone="red" foot={<Link to="/app/items?tab=stock">See alerts</Link>} />
-          <StatCard label="Transfers in transit" value={data.inTransit} icon={Boxes} tone="amber" foot={<Link to="/app/inventory/transfers">Not in any warehouse yet</Link>} />
+          <StatCard label={branch ? 'Transfers on the way here' : 'Transfers in transit'} value={data.inTransit} icon={Boxes} tone="amber" foot={<Link to={branch ? '/app/inventory/transfers?tab=receive' : '/app/inventory/transfers'}>{branch ? 'Added when received with the code' : 'Not in any warehouse yet'}</Link>} />
         </div>
       )}
       <div className="card mt-16 print-area">
@@ -72,7 +72,11 @@ export default function StockSummary() {
               <tbody>{data.byCategory.map((c) => <tr key={c.category}><td className="strong">{c.category}</td><td className="num">{c.items}</td><td className="num">{n3(c.qty)}</td><td className="num">{money(c.value)}</td><td className="num muted">{data.totals.value ? `${Math.round((c.value / data.totals.value) * 100)}%` : '—'}</td></tr>)}</tbody>
               <tfoot><tr><td className="strong">Total</td><td className="num">{data.totals.items}</td><td className="num">{n3(data.totals.qty)}</td><td className="num strong">{data.totals.value === null ? '—' : money(data.totals.value)}</td><td /></tr></tfoot>
             </table>
-          ) : rows.length === 0 ? <EmptyState icon={Boxes} title="No stock items" text="Goods you add appear here with their movements." /> : (
+          ) : rows.length === 0 ? (branch && !q
+            ? <EmptyState icon={Boxes} title={`Nothing at ${branches.find((b) => b.id === branch)?.name ?? 'this branch'} yet`}
+                text={`A new branch starts with no stock. Stock arrives here through transfers${data.inTransit ? ` (${data.inTransit} on the way)` : ''} or purchases at this branch.`}
+                action={<Link className="btn btn-primary btn-sm" to="/app/inventory/transfers?new=1">Send stock here</Link>} />
+            : <EmptyState icon={Boxes} title="No stock items" text="Goods you add appear here with their movements." />) : (
             <table className="table">
               <thead><tr><th>Item</th><th className="num">Opening</th><th className="num">In</th><th className="num">Out</th><th className="num">Closing</th><th className="num">Unit cost</th><th className="num">Value</th></tr></thead>
               <tbody>{rows.map((r) => (

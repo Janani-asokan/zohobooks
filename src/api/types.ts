@@ -73,7 +73,7 @@ export interface StockSummary {
   from: string; to: string; branchId: string | null; inTransit: number;
   items: Array<{ itemId: string; name: string; sku: string; unit: string; category: string; opening: number; in: number; out: number; closing: number; sold: number; reorderLevel: number; cost: number | null; value: number | null }>;
   byCategory: Array<{ category: string; items: number; qty: number; value: number }>;
-  byBranch: Array<{ branchId: string; name: string; value: number; qty: number; items: number }>;
+  byBranch: Array<{ branchId: string; name: string; value: number; qty: number; items: number; incoming?: number }>;
   totals: { qty: number; value: number | null; items: number; lowStock: number };
 }
 export interface ItemFacets { categories: Array<{ name: string; count: number }>; brands: Array<{ name: string; count: number }>; units: string[] }

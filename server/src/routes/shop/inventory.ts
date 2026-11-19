@@ -190,21 +190,25 @@ inventoryRouter.get(
         closing, sold: r3(Number(r.sold)), reorderLevel: Number(r.reorder_level), cost: showCost ? cost : null, value: showCost ? r2(closing * cost) : null,
       };
     });
-    const byCategory = Object.values(items.reduce<Record<string, { category: string; items: number; qty: number; value: number }>>((acc, i) => {
+    // One branch: only what it has handled (a new branch shows nothing, not every catalogue item at zero).
+    const shown = branchId ? items.filter((i) => i.opening || i.in || i.out || i.closing) : items;
+    const byCategory = Object.values(shown.reduce<Record<string, { category: string; items: number; qty: number; value: number }>>((acc, i) => {
       const k = i.category;
       acc[k] ??= { category: k, items: 0, qty: 0, value: 0 };
       acc[k].items++; acc[k].qty = r3(acc[k].qty + i.closing); acc[k].value = r2(acc[k].value + (i.value ?? 0));
       return acc;
     }, {})).sort((a, b) => b.value - a.value);
     const byBranch = showCost
-      ? (await many(db, `SELECT b.id, b.name, coalesce(sum(s.qty * i.cost), 0) AS value, coalesce(sum(s.qty), 0) AS qty, count(*) FILTER (WHERE s.qty > 0) AS items
+      ? (await many(db, `SELECT b.id, b.name, coalesce(sum(s.qty * i.cost), 0) AS value, coalesce(sum(s.qty), 0) AS qty, count(*) FILTER (WHERE s.qty > 0) AS items,
+            (SELECT count(*) FROM stock_transfers t WHERE t.to_branch_id = b.id AND t.status = 'In transit')::int AS incoming
           FROM branches b LEFT JOIN item_stock s ON s.branch_id = b.id LEFT JOIN items i ON i.id = s.item_id WHERE b.shop_id = $1 GROUP BY b.id ORDER BY b.is_primary DESC, b.name`, [c.shopId]))
-          .map((b) => ({ branchId: b.id, name: b.name, value: r2(Number(b.value)), qty: r3(Number(b.qty)), items: Number(b.items) }))
+          .map((b) => ({ branchId: b.id, name: b.name, value: r2(Number(b.value)), qty: r3(Number(b.qty)), items: Number(b.items), incoming: Number(b.incoming) }))
       : [];
-    const inTransit = Number((await one(db, "SELECT count(*)::int AS n FROM stock_transfers WHERE shop_id = $1 AND status = 'In transit'", [c.shopId])).n);
+    // For one branch: transfers on their way to it.
+    const inTransit = Number((await one(db, "SELECT count(*)::int AS n FROM stock_transfers WHERE shop_id = $1 AND status = 'In transit' AND ($2::uuid IS NULL OR to_branch_id = $2)", [c.shopId, branchId])).n);
     return {
-      from, to, branchId, items, byCategory, byBranch, inTransit,
-      totals: { qty: r3(items.reduce((s, i) => s + i.closing, 0)), value: showCost ? r2(items.reduce((s, i) => s + (i.value ?? 0), 0)) : null, items: items.length, lowStock: items.filter((i) => i.closing <= i.reorderLevel).length },
+      from, to, branchId, items: shown, byCategory, byBranch, inTransit,
+      totals: { qty: r3(shown.reduce((s, i) => s + i.closing, 0)), value: showCost ? r2(shown.reduce((s, i) => s + (i.value ?? 0), 0)) : null, items: shown.length, lowStock: shown.filter((i) => i.closing <= i.reorderLevel).length },
     };
   }),
 );

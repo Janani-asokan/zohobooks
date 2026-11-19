@@ -46,6 +46,7 @@ export default function Warehouses() {
                 </div>
                 <div className="small muted" style={{ whiteSpace: 'pre-line', minHeight: 36 }}>{[b.address, b.phone].filter(Boolean).join('\n') || 'No address added'}</div>
                 <div className="small muted">{b.gstin ? `GSTIN ${b.gstin}` : 'Uses the business GSTIN'}{' · '}Transfer codes to {staff.find((u) => u.id === b.managerUserId)?.name ?? (b.managerUserId ? 'manager' : 'branch manager / owner')}</div>
+                {!!s?.incoming && <Link className="small" to="/app/inventory/transfers?tab=receive">{s.incoming} transfer{s.incoming > 1 ? 's' : ''} on the way here (not counted yet)</Link>}
                 <div className="kpi-row">
                   <div><div className="k">Stock value</div><div className="v">{s ? money(s.value) : '—'}</div></div>
                   <div><div className="k">Items in stock</div><div className="v">{s?.items ?? '—'}</div></div>

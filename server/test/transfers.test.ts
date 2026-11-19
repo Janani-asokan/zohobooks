@@ -185,6 +185,8 @@ describe('inter-branch stock transfers', () => {
     const item = () => owner.get('/api/shop/items').then((r) => r.body.find((i: any) => i.id === apple.id));
     let it = await item();
     expect(it.stockByBranch[nb] ?? 0).toBe(0);
+    const summary = () => owner.get(`/api/shop/stock/summary?branchId=${nb}`).then((r) => r.body);
+    expect(await summary()).toMatchObject({ items: [], totals: { items: 0, qty: 0, lowStock: 0 }, inTransit: 0 });   // not every item at zero
     const headBefore = it.stockByBranch[head];
     const r = await owner.post('/api/shop/stock/transfer').send({ itemId: apple.id, fromBranchId: head, toBranchId: nb, qty: 10 });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
@@ -194,10 +196,14 @@ describe('inter-branch stock transfers', () => {
     expect(it.stockByBranch[head]).toBe(headBefore - 10);
     expect(it.stockByBranch[nb] ?? 0).toBe(0);        // nothing at the new branch yet
     expect(it.inTransitByBranch[nb]).toBe(10);        // shown as on the way
+    expect(await summary()).toMatchObject({ items: [], inTransit: 1 });
     await owner.post('/api/shop/transfers/owner-receive').send({ transferId: r.body.transfer.id, reason: 'Checked at Anna Nagar on arrival' });
     it = await item();
     expect(it.stockByBranch[nb]).toBe(10);
     expect(it.inTransitByBranch[nb] ?? 0).toBe(0);
+    const after = await summary();
+    expect(after.items.map((x: any) => [x.name, x.closing])).toEqual([['Shimla Apple', 10]]);
+    expect(after).toMatchObject({ totals: { items: 1, qty: 10 }, inTransit: 0 });
   });
 
   it('keeps transfers to their shop', async () => {
