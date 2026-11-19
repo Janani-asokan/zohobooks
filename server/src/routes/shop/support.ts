@@ -289,7 +289,8 @@ supportRouter.post('/support/live', T(async (db, req, c, res) => {
 supportRouter.get('/support/live/current', T(async (db, _req, c) => {
   await expireWaiting(db);
   const r = await one(db, "SELECT * FROM support_chats WHERE shop_id = $1 AND started_by = $2 AND (status IN ('waiting', 'active') OR closed_at > now() - interval '2 minutes') ORDER BY created_at DESC LIMIT 1", [c.shopId, c.id]);
-  return r ? chatState(db, c, r, 0) : null;
+  // An explicit empty answer (a null reply would be sent as { ok: true }).
+  return r ? chatState(db, c, r, 0) : { chat: null, messages: [] };
 }));
 
 /** Poll: new messages after `after`, status and queue position. */

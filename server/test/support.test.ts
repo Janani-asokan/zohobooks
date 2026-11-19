@@ -144,6 +144,7 @@ describe('live chat with an agent', () => {
   });
 
   it('is offered only while an agent is online', async () => {
+    expect((await owner.get('/api/shop/support/live/current')).body).toEqual({ chat: null, messages: [] });
     expect((await owner.get('/api/shop/support/contact')).body).toMatchObject({ agentsOnline: 0, liveChat: false });
     expect((await owner.post('/api/shop/support/live').send({})).body.code).toBe('live_no_agent');
     expect((await admin.get('/api/platform/support/live')).status).toBe(200);    // console open → online

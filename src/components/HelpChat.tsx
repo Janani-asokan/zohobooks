@@ -27,7 +27,7 @@ export function HelpChat({ contact, onBook }: { contact: SupportContact | undefi
   const toast = useToast();
   const end = useRef<HTMLDivElement>(null);
   // An open chat with an agent carries on after a page reload.
-  useEffect(() => { api.get<LiveState | null>('/shop/support/live/current').then((r) => { if (r && (r.chat.status === 'waiting' || r.chat.status === 'active')) setLive(r); }).catch(() => undefined); }, []);
+  useEffect(() => { api.get<{ chat: LiveState['chat'] | null; messages: LiveState['messages'] }>('/shop/support/live/current').then((r) => { if (r.chat && (r.chat.status === 'waiting' || r.chat.status === 'active')) setLive(r as LiveState); }).catch(() => undefined); }, []);
   useEffect(() => { end.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [msgs, human]);
 
   const ask = async (q: string) => {

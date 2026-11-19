@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, CheckCircle2, Headset, Phone, Settings2, UserCheck, XCircle, AlertTriangle, MessageCircle, Send, Bot, UserRound } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Headset, Phone, Settings2, UserCheck, XCircle, AlertTriangle, MessageCircle, Send, Bot, UserRound, Bell, BellOff } from 'lucide-react';
+import { playChime, unlockChime } from '@/lib/chime';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/context/ToastContext';
 import { api } from '@/api/client';
@@ -36,6 +37,38 @@ export default function SuperSupport() {
   const live = useQuery({ queryKey: ['platform', 'support', 'live'], queryFn: () => api.get<LiveList>('/platform/support/live'), refetchInterval: 5000, refetchIntervalInBackground: true });
   const waiting = live.data?.waiting ?? 0;
   useEffect(() => { const t = document.title.replace(/^\(\d+\) /, ''); document.title = waiting ? `(${waiting}) ${t}` : t; }, [waiting]);
+
+  // Sound (and a desktop notification when the tab isn't in view) for a new waiting chat, and a softer sound for a
+  // new message in a chat this agent is handling. Browsers allow sound only after a click, so any click unlocks it.
+  const [sound, setSound] = useState(() => { try { return localStorage.getItem('corpus.support.sound') !== 'off'; } catch { return true; } });
+  useEffect(() => { const on = () => unlockChime(); window.addEventListener('pointerdown', on, { once: true }); return () => window.removeEventListener('pointerdown', on); }, []);
+  const seen = useRef<{ waiting: Set<string>; unread: Map<string, number> } | null>(null);
+  useEffect(() => {
+    const chats = live.data?.chats;
+    if (!chats) return;
+    const nowWaiting = new Set(chats.filter((x) => x.status === 'waiting').map((x) => x.id));
+    const unread = new Map(chats.filter((x) => x.mine && x.status === 'active').map((x) => [x.id, x.unread]));
+    const prev = seen.current;
+    seen.current = { waiting: nowWaiting, unread };
+    if (!prev || !sound) return; // the first load is what was already there: no sound
+    const fresh = chats.filter((x) => x.status === 'waiting' && !prev.waiting.has(x.id));
+    if (fresh.length) {
+      playChime('new');
+      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+        try { new Notification('New support chat', { body: `${fresh[0]!.shopName}: ${fresh[0]!.lastMessage ?? 'waiting for an agent'}`, tag: 'support-chat' }); } catch { /* not allowed here */ }
+      }
+    } else if ([...unread].some(([id, n]) => n > (prev.unread.get(id) ?? 0))) playChime('message');
+  }, [live.data, sound]);
+  const toggleSound = () => {
+    const on = !sound;
+    setSound(on);
+    try { localStorage.setItem('corpus.support.sound', on ? 'on' : 'off'); } catch { /* private window */ }
+    if (on) {
+      unlockChime();
+      setTimeout(() => playChime('new'), 50); // a test so the agent hears it works
+      if ('Notification' in window && Notification.permission === 'default') void Notification.requestPermission();
+    }
+  };
   const [openId, setOpenId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const list = useQuery({ queryKey: ['platform', 'support', 'callbacks', view], queryFn: () => api.get<{ callbacks: Cb[]; counts: { upcoming: number; overdue: number; today: number } }>(`/platform/support/callbacks?view=${view}`), refetchInterval: 60_000, enabled: view !== 'live' });
@@ -45,7 +78,12 @@ export default function SuperSupport() {
   return (
     <div className="page">
       <PageHeader title="Customer care" icon={Headset} subtitle="Live chats from shops, and the call-backs they booked. Keep this page open in support hours: shops can only start a chat while an agent is online here."
-        actions={<button className="btn btn-secondary" onClick={() => setSettingsOpen(true)}><Settings2 size={15} /> Support hours</button>} />
+        actions={<>
+          <button className={`btn ${sound ? 'btn-secondary' : 'btn-ghost'}`} onClick={toggleSound} title={sound ? 'A chime plays when a chat arrives. Click to mute.' : 'Muted. Click to hear a chime when a chat arrives.'} aria-pressed={sound}>
+            {sound ? <Bell size={15} /> : <BellOff size={15} />} Sound {sound ? 'on' : 'off'}
+          </button>
+          <button className="btn btn-secondary" onClick={() => setSettingsOpen(true)}><Settings2 size={15} /> Support hours</button>
+        </>} />
       <div className="tabs">
         <button className={view === 'live' ? 'active' : ''} onClick={() => setView('live')}>
           <MessageCircle size={15} /> Live chats {waiting > 0 ? <span className="badge badge-red">{waiting} waiting</span> : <span className="count">{live.data?.chats.filter((x) => x.status === 'active').length ?? 0}</span>}
