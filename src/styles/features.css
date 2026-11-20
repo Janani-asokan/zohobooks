@@ -645,6 +645,21 @@
 .hc-bubble { background: var(--surface); border: 1px solid var(--border); border-radius: 12px 12px 12px 4px; padding: 9px 12px; max-width: min(640px, 85%); min-width: 0; font-size: var(--fs-14); }
 .hc-bubble.me { background: var(--brand-600); color: #fff; border-color: var(--brand-600); border-radius: 12px 12px 4px 12px; }
 .hc-table { margin-top: 8px; }
+/* A bubble holding rows takes the full width it may use, so the rows can measure it (container query below). */
+.hc-bubble.has-data { width: min(640px, 85%); }
+.hc-data { container-type: inline-size; }
+.hc-data .hc-table { display: none; }
+.hc-cards { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.hc-card { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--surface-2, var(--surface)); }
+.hc-card > strong { display: block; font-size: 13px; line-height: 1.35; margin-bottom: 4px; overflow-wrap: anywhere; }
+.hc-card dl { margin: 0; display: grid; gap: 2px; }
+.hc-card dl > div { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.hc-card dt { color: var(--ink-500); min-width: 0; overflow-wrap: anywhere; }
+.hc-card dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+@container (min-width: 440px) {
+  .hc-data .hc-table { display: block; }
+  .hc-data .hc-cards { display: none; }
+}
 .hc-table .table th, .hc-table .table td { padding: 6px 8px; font-size: 12.5px; }
 .hc-links { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .hc-chips { display: flex; gap: 6px; flex-wrap: wrap; }

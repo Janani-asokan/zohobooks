@@ -70,14 +70,9 @@ export function HelpChat({ contact, onBook }: { contact: SupportContact | undefi
         ) : (
           <div key={i} className="hc-row">
             <span className="hc-av"><Bot size={14} /></span>
-            <div className="hc-bubble">
+            <div className={`hc-bubble${m.table ? ' has-data' : ''}`}>
               <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
-              {m.table && (
-                <div className="table-wrap hc-table"><table className="table">
-                  <thead><tr>{m.table.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-                  <tbody>{m.table.rows.map((r, j) => <tr key={j}>{r.map((c, k) => <td key={k} className={k ? 'num' : 'strong'}>{c}</td>)}</tr>)}</tbody>
-                </table></div>
-              )}
+              {m.table && <BotTable table={m.table} />}
               {!!m.links?.length && <div className="hc-links">{m.links.map((l) => <Link key={l.to + l.label} className="btn btn-soft btn-sm" to={l.to}>{l.label} →</Link>)}</div>}
               {m.by === 'ai' && <div className="small muted" style={{ marginTop: 4 }}>Answered by the AI assistant</div>}
             </div>
@@ -204,6 +199,29 @@ function LiveChat({ initial, onEnd, onBook, canBook }: { initial: LiveState; onE
           <button type="button" className="btn btn-secondary btn-sm" onClick={onEnd}><Bot size={14} /> Back to the help bot</button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A bot answer's rows. In a wide chat it is a table; in a narrow one (a phone) each row becomes a small card with
+ * "column: value" lines, so no column is cut off or needs sideways scrolling.
+ */
+function BotTable({ table }: { table: NonNullable<BotReply['table']> }) {
+  return (
+    <div className="hc-data">
+      <div className="table-wrap hc-table"><table className="table">
+        <thead><tr>{table.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+        <tbody>{table.rows.map((r, j) => <tr key={j}>{r.map((c, k) => <td key={k} className={k ? 'num' : 'strong'}>{c}</td>)}</tr>)}</tbody>
+      </table></div>
+      <ul className="hc-cards">
+        {table.rows.map((r, j) => (
+          <li key={j} className="hc-card">
+            <strong>{r[0]}</strong>
+            <dl>{r.slice(1).map((c, k) => <div key={k}><dt>{table.columns[k + 1]}</dt><dd>{c === '' ? '—' : c}</dd></div>)}</dl>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
