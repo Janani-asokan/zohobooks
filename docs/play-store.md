@@ -44,7 +44,8 @@ real signing key, so if the upload key is lost Google can reset it.
   - *Shared with third parties:* no. The email provider, Razorpay and the AI provider are service providers acting for us, which Play does not count as sharing.
   - *Camera:* used on the phone only, not collected.
 - **Financial features declaration:** the app is billing and accounting software. It does not lend money or hold funds, so choose "none of these". Microfinance is web-only and not in the app.
-- **Store listing assets:**
+- **Store listing assets:** ready in `mobile/store-listing/` (6 phone screenshots 1080×1920, feature graphic 1024×500, icon 512×512). Rebuild with `node mobile/store-listing/compose.cjs <raw-dir> <out-dir> <repo>` from 390×780 @3x captures.
+- **Originally required:**
   - 512×512 icon
   - 1024×500 feature graphic
   - at least 2 phone screenshots (sign-in, POS bill, items, invoice)
