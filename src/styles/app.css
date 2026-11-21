@@ -31,3 +31,80 @@
 html.native-app, html.native-app body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
 html.native-app body { -webkit-touch-callout: none; }
 html.native-ios input, html.native-ios textarea, html.native-ios select { font-size: max(16px, 1em); } /* iOS zooms into smaller fields */
+
+/* Phones: tables wider than the screen become cards (marked .as-cards by src/lib/tableCards.ts).
+   Each cell shows its column heading as a small label; cells with a field put the label above it. */
+@media screen and (max-width: 640px) {
+  .table-wrap:has(> table.as-cards) { overflow: visible; border: 0; background: transparent; box-shadow: none; }
+  table.as-cards, table.as-cards > tbody, table.as-cards > tfoot { display: block; width: 100%; }
+  table.as-cards > thead { display: none; }
+  table.as-cards > tbody > tr, table.as-cards > tfoot > tr {
+    display: flex; flex-wrap: wrap; gap: 6px 12px; position: relative;
+    border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin: 0 0 8px; background: var(--surface);
+  }
+  table.as-cards > tfoot > tr { background: var(--ink-50); }
+  table.as-cards > tbody > tr > td, table.as-cards > tfoot > tr > td,
+  table.as-cards > tbody > tr > td:first-child, table.as-cards > tbody > tr > td:last-child,
+  table.as-cards > tfoot > tr > td:first-child, table.as-cards > tfoot > tr > td:last-child {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    flex: 1 1 100%; min-width: 0; height: auto; padding: 0; border: 0; text-align: right; white-space: normal; background: none;
+  }
+  table.as-cards td[data-label]:not([data-label=""])::before {
+    content: attr(data-label); flex: 0 0 auto; max-width: 45%; text-align: left;
+    font-size: 12px; font-weight: 600; color: var(--ink-500);
+  }
+  table.as-cards td > * { min-width: 0; }
+  /* The first cell is the row's title: full width, left aligned, no label. */
+  table.as-cards > tbody > tr > td:first-child:not(:has(> input[type=checkbox])),
+  table.as-cards > tbody > tr > td:has(> input[type=checkbox]) + td { justify-content: flex-start; text-align: left; font-weight: 600; }
+  table.as-cards > tbody > tr > td:first-child:not(:has(> input[type=checkbox]))::before,
+  table.as-cards > tbody > tr > td:has(> input[type=checkbox]) + td::before { display: none; }
+  /* Select boxes sit in the card's top-right corner. */
+  table.as-cards td:has(> input[type=checkbox]:only-child), table.as-cards td:has(> label > input[type=checkbox]:only-child) {
+    position: absolute; top: 10px; right: 10px; flex: 0 0 auto; width: auto;
+  }
+  table.as-cards > tbody > tr:has(> td > input[type=checkbox]:only-child) { padding-right: 40px; }
+  /* Cells with fields: label above, field full width. */
+  table.as-cards td:has(input:not([type=checkbox]):not([type=radio]), select, textarea, .combo, .item-picker) {
+    display: block; text-align: left;
+  }
+  table.as-cards td:has(input:not([type=checkbox]):not([type=radio]), select, textarea, .combo, .item-picker)::before { display: block; max-width: none; margin-bottom: 4px; }
+  table.as-cards td :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { width: 100% !important; max-width: 100%; }
+  /* Two short fields side by side (qty, rate, discount…), anything long takes the full width. */
+  table.as-cards td.num:has(input) { flex: 1 1 calc(50% - 6px); }
+  /* Cells with only buttons (edit, delete): a row of their own at the right. */
+  table.as-cards td:not(:has(input, select, textarea)):has(> button:only-child, > .icon-btn, > .row > .icon-btn) { justify-content: flex-end; }
+  table.as-cards td:empty { display: none; }
+  table.as-cards td[colspan] { justify-content: center; text-align: center; }
+}
+
+/* Phones: small layout fixes found in the phone sweep. */
+@media screen and (max-width: 640px) {
+  /* Long codes and names wrap inside cards instead of pushing past the edge. */
+  table.as-cards td, table.as-cards td * { overflow-wrap: anywhere; }
+  table.as-cards .name-cell .sub { white-space: normal; }
+  /* Option switches wrap onto a second row rather than hiding options off the edge. */
+  .segmented { display: flex; flex-wrap: wrap; overflow: visible; width: fit-content; max-width: 100%; }
+  .segmented > button { flex: 1 1 auto; justify-content: center; }
+  /* New item: "Goods · has stock" / "Service · no stock" share the row equally. */
+  .type-cards.compact { grid-template-columns: 1fr 1fr; }
+  .type-cards.compact .type-card { height: auto; min-height: 40px; }
+  .type-cards.compact .type-card > div { white-space: normal; }
+}
+@media screen and (max-width: 640px) {
+  /* Save bars at the foot of long forms: buttons wrap and share the width. */
+  .form-actions-bar > .row { flex-wrap: wrap; width: 100%; margin-left: 0 !important; }
+  .form-actions-bar > .row > .btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
+  /* Section headings with a tool on the right (e.g. margin auto-fill): the tool moves under the heading. */
+  .form-section-head { flex-wrap: wrap; }
+  .form-section-head > .quickfill { margin-left: 34px; }
+  .toast-stack { max-width: calc(100vw - 32px); }
+}
+@media screen and (max-width: 640px) {
+  /* Any row of controls wraps rather than pushing a button past the edge of the screen. */
+  .row:has(> .btn) { flex-wrap: wrap; }
+}
+@media screen and (max-width: 640px) {
+  /* Short number fields (qty, rate, discount) sit two to a row in a card. */
+  table.as-cards td:has(input[type=number]):not(:has(textarea, select, .item-picker, .combo)) { flex: 1 1 calc(50% - 6px); }
+}

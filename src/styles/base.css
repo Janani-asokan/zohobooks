@@ -221,6 +221,7 @@ input, select, textarea { font-family: inherit; font-size: var(--fs-14); color: 
 .cell-input { height: 28px; padding: 0 6px; border: 1px solid var(--brand-500); border-radius: 4px; box-shadow: var(--ring); outline: none; width: 100%; min-width: 70px; font-size: var(--fs-13); background: var(--surface); }
 .cell-input.num { text-align: right; }
 .name-cell { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.name-cell > div { min-width: 0; }
 .name-cell .title { font-weight: 500; color: var(--ink-900); }
 .name-cell .sub { font-size: var(--fs-12); color: var(--ink-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mini-table td, .mini-table th { padding-top: 0; padding-bottom: 0; }
