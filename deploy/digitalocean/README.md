@@ -19,9 +19,9 @@ GitHub builds it (`.github/workflows/server-image.yml`, free for public reposito
 downloads the finished image, which takes about a minute. While GitHub is still building, the current version keeps
 running. If GitHub's build fails, or the image can't be downloaded, the Droplet builds it itself as before.
 
-**One-time step:** after the first successful run of the **Server image** workflow (GitHub → Actions), open GitHub →
-your profile → **Packages** → **zohobooks-server** → **Package settings** → **Change visibility** → **Public**. Until
-then the Droplet can't download the image and falls back to building it itself.
+**If downloads ever fail** (the update log says "make the zohobooks-server package public"): open GitHub → your
+profile → **Packages** → **zohobooks-server** → **Package settings** → **Change visibility** → **Public**. Until then
+the Droplet builds the image itself. As of 21 Nov 2026 the package is public and downloads work without a login.
 
 ## Everyday
 - Deploy now instead of waiting: `corpus360-update --force` (it uses GitHub's image when there is one)
