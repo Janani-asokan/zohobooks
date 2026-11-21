@@ -693,3 +693,26 @@
 .lc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .lc-shop { background: var(--ink-50, #f8fafc); border-radius: 8px; padding: 6px 10px; }
 .lc-log { min-height: 260px; max-height: 50vh; }
+
+/* Phones: modal buttons wrap onto a second row instead of squeezing, and each one fills its row. */
+@media (max-width: 560px) {
+  .modal-footer { flex-wrap: wrap; padding: 12px 16px; }
+  .modal-footer > .btn, .modal-footer > a.btn { flex: 1 1 auto; justify-content: center; white-space: nowrap; }
+}
+
+/* Phones: transfer lines become cards (label above each value) instead of a table that runs off the screen. */
+@media (max-width: 640px) {
+  .tf-cards thead { display: none; }
+  .tf-cards, .tf-cards tbody { display: block; }
+  .tf-cards tr { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; position: relative;
+    border: 1px solid var(--border); border-radius: 12px; padding: 12px 44px 12px 12px; margin-bottom: 10px; background: var(--surface); }
+  .table.tf-cards td, .table.tf-cards td:first-child, .table.tf-cards td:last-child { display: block; height: auto; padding: 0; border: 0; min-width: 0; text-align: left; background: none; }
+  .table.tf-cards td > * { max-width: 100%; }
+  .tf-cards td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 600; color: var(--ink-500); margin-bottom: 4px; }
+  .tf-cards td[data-label="Item"], .tf-cards td.tf-batch, .tf-cards td[data-label="Price at destination"] { grid-column: 1 / -1; }
+  .tf-cards td .input.num { width: 100% !important; text-align: left; }
+  .tf-cards td[data-label="Price at destination"] .input.num { width: 120px !important; }
+  .tf-cards .tf-stock { white-space: normal !important; }
+  .tf-cards td.tf-remove { position: absolute; top: 8px; right: 6px; }
+  .modal .table-wrap:has(> .tf-cards) { overflow: visible; border: 0; }
+}

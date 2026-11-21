@@ -259,7 +259,7 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
         <section>
           {step(2, 'Items, batches and destination price')}
           <div className="table-wrap">
-            <table className="table tf-lines">
+            <table className="table tf-lines tf-cards">
               <thead><tr><th style={{ minWidth: 220 }}>Item</th><th style={{ minWidth: 220 }}>Batch</th><th className="num" style={{ width: 120 }}>Qty</th>
                 <th className="num" style={{ width: 120 }}>Cost / unit</th><th style={{ minWidth: 210 }}>Price at destination</th><th style={{ width: 40 }} /></tr></thead>
               <tbody>
@@ -270,12 +270,12 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
                   const e = lineErrors(l);
                   return (
                     <tr key={l.key} data-line={l.key} className={blankRowClass(!l.itemId)}>
-                      <td>
+                      <td data-label="Item">
                         <ItemPicker items={goods} value={l.itemId} tier="SP1" branchId={f.fromBranchId}
                           onPick={(id) => setF((x) => ({ ...x, lines: withTrailingBlank(x.lines.map((y) => (y.key === l.key ? { ...y, itemId: id, batchNo: '', destPrice: '' } : y)), (y) => !y.itemId, emptyLine) }))} />
                         {it?.trackSerials && <input className="input" style={{ marginTop: 6 }} value={l.serials} onChange={(ev) => upd(l.key, { serials: ev.target.value })} placeholder="Serial numbers" aria-label="Serial numbers" />}
                       </td>
-                      <td>
+                      <td data-label="Batch" className="tf-batch">
                         {!it ? <span className="muted small">Pick an item</span> : !it.trackBatches ? <span className="muted small">Not batch-tracked · {it.stockByBranch[f.fromBranchId] ?? 0} {it.unit} at {branches.find((b) => b.id === f.fromBranchId)?.name ?? 'the source'}</span> : (
                           <select className={`select ${!l.batchNo && e ? 'invalid' : ''}`} value={l.batchNo} onChange={(ev) => upd(l.key, { batchNo: ev.target.value })} aria-label="Batch">
                             <option value="">{batches.isLoading ? 'Loading…' : bs.length ? 'Choose batch…' : 'No stock in any batch here'}</option>
@@ -283,7 +283,7 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
                           </select>
                         )}
                       </td>
-                      <td className="num">
+                      <td className="num" data-label="Qty">
                         <input className={`input num ${e && l.qty ? 'invalid' : ''}`} style={{ width: 96 }} type="number" min={0} step="any" value={l.qty} onChange={(ev) => upd(l.key, { qty: ev.target.value })} onKeyDown={enterToNextLine} aria-label="Quantity" />
                         {e && <div className="small" style={{ color: 'var(--red-600)' }}>{e}</div>}
                         {/* Each branch keeps its own stock: show both, before and after, so it's clear the destination only gets what is sent. */}
@@ -301,8 +301,8 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
                           );
                         })()}
                       </td>
-                      <td className="num">{p ? money(p.unitCost) : '—'}<div className="small muted">kept on the batch</div></td>
-                      <td>
+                      <td className="num" data-label="Cost / unit">{p ? money(p.unitCost) : '—'}<div className="small muted">kept on the batch</div></td>
+                      <td data-label="Price at destination">
                         <div className="row" style={{ gap: 6 }}>
                           <input className="input num" style={{ width: 100 }} type="number" min={0} step="0.01" value={l.destPrice} placeholder={p ? String(p.destPrice) : ''} onChange={(ev) => upd(l.key, { destPrice: ev.target.value })} aria-label="Destination price" />
                           {p && <span className="small muted">from {money(p.sourcePrice)}</span>}
@@ -312,7 +312,7 @@ function TransferForm({ draft, onClose }: { draft?: StockTransfer; onClose: () =
                         </div>}
                         {p?.belowCost && <div className="small" style={{ color: 'var(--red-600)' }}>Below the batch cost</div>}
                       </td>
-                      <td><button className="icon-btn danger" aria-label="Remove line" onClick={() => setF({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [emptyLine()] })}><Trash2 size={15} /></button></td>
+                      <td className="tf-remove"><button className="icon-btn danger" aria-label="Remove line" onClick={() => setF({ ...f, lines: f.lines.length > 1 ? f.lines.filter((x) => x.key !== l.key) : [emptyLine()] })}><Trash2 size={15} /></button></td>
                     </tr>
                   );
                 })}
