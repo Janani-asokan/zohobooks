@@ -64,6 +64,7 @@ export function Privacy() {
         <li><strong>Pictures and files you add:</strong> item pictures, your logo, bill photos and attachments, and files you import. Only the ones you choose to upload.</li>
         <li><strong>This phone’s app ID:</strong> a random ID the app makes for each phone so it can number bills in its own series, even offline. It is not your phone’s IMEI or advertising ID.</li>
         <li><strong>Support:</strong> call-back requests, chat messages and help-bot questions you send us.</li>
+        <li><strong>Email records:</strong> when we emailed you, the subject, and whether it was delivered, so we can sort out problems like a code that never arrived. Not the email text. Kept for 2 years.</li>
       </ul>
 
       <h2>What the phone uses, and only when you ask</h2>

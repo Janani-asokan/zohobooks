@@ -22,6 +22,8 @@ export async function runAccountDeletions(): Promise<number> {
           [u.id, deletedEmail(u.id), await hashPassword(randomToken())]);
       }
       await db.query(`UPDATE shops SET owner_name = 'Deleted', email = '', phone = '', personal_data_erased_at = now() WHERE id = $1`, [id]);
+      // The email log keeps that an email went out, but no longer to whom.
+      await db.query(`UPDATE email_log SET recipient = 'deleted', cc = '' WHERE shop_id = $1`, [id]);
     });
   }
   return due.length;

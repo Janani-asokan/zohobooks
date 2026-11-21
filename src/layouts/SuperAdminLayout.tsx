@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Menu, Settings2, ShieldCheck, Layers, History, Puzzle, Headset } from 'lucide-react';
+import { LayoutDashboard, LogOut, Menu, Settings2, ShieldCheck, Layers, History, Puzzle, Headset, ScrollText } from 'lucide-react';
 import { Sidebar, useSidebarState, type NavItem } from './Sidebar';
 import { ProfileMenu } from './ProfileMenu';
 import { PrefsMenu } from './PrefsMenu';
@@ -19,6 +19,7 @@ export default function SuperAdminLayout() {
     { label: 'Features & prices', icon: Puzzle, to: '/super-admin/features' },
     { label: 'Customer care', icon: Headset, to: '/super-admin/support' },
     { label: 'Activity & backups', icon: History, to: '/super-admin/activity' },
+    { label: 'Logs', icon: ScrollText, to: '/super-admin/logs' },
   ];
   const title = pathname.includes('configuration') ? 'Platform Configuration' : pathname.includes('plans') ? 'Plans & limits' : pathname.includes('activity') ? 'Activity & backups' : 'SaaS Overview';
 

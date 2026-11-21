@@ -259,6 +259,7 @@ async function issueOtp(db: Db, req: Request, c: UserCtx, t: any, recipient: { i
   try {
     const lines = await transferItems(db, t.id);
     delivered = await sendMail({
+      kind: 'transfer_code', shopId: c.shopId,
       to: recipient.email,
       // The code is only in the body: subjects show on lock screens and are written to server logs.
       subject: `Receipt code for stock transfer ${t.number} to ${t.to_name}`,

@@ -234,6 +234,7 @@ async function sendAlert(db: Db, shop: { id: string; name: string }, r: any, thr
   try {
     for (const u of to) {
       await sendMail({
+        kind: 'warehouse_licence_alert', shopId: shop.id,
         to: u.email,
         subject: `${what} ${THRESHOLD_TEXT(threshold)}`,
         text: `Hi ${u.name},\n\n${what} for ${shop.name} ${THRESHOLD_TEXT(threshold)} (expiry date ${d(r.expiry_date)}).`

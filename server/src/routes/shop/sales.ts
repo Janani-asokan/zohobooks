@@ -604,6 +604,7 @@ salesRouter.post(
       `Regards,\n${org.company_name}`,
     ].filter(Boolean).join('\n\n');
     const sent = await sendMail({
+      kind: 'invoice',
       to: b.to, cc: b.cc || undefined, subject: `Invoice ${inv.number} from ${org.company_name}`, text,
       attachments: [{ filename: pdfName(inv), content: pdf, contentType: 'application/pdf' }],
     });
@@ -650,6 +651,7 @@ export async function emailReminder(db: Db, shopId: string, inv: any, org: any) 
   if (!email) return { status: 'skipped', detail: 'Customer has no email address' };
   const link = `${config.appUrl}/share/${inv.public_token}`;
   const sent = await sendMail({
+    kind: 'payment_reminder', shopId,
     to: email,
     subject: `Payment reminder: ${inv.number} from ${org.company_name}`,
     text: `Dear ${inv.customer.companyName || inv.customer.name},\n\nThis is a friendly reminder that invoice ${inv.number} dated ${inv.date} has a balance of ₹${balance.toFixed(2)}, due on ${inv.due_date}.\n\nView & pay: ${link}\n\nThank you,\n${org.company_name}`,

@@ -1,4 +1,5 @@
 import { runAccountDeletions } from './services/accountDeletion';
+import { pruneOutboundLogs } from './services/outbound';
 import { config } from './config';
 import { query, withTenant } from './db';
 import { sendMail } from './mailer';
@@ -97,6 +98,7 @@ export async function runLicenseReminders() {
   );
   for (const r of rows) {
     await sendMail({
+      kind: 'licence_expiry', shopId: r.id,
       to: r.email,
       subject: `Your Corpus360 license expires in ${r.days} day${r.days > 1 ? 's' : ''}`,
       text: `Hi ${r.owner},\n\nThe license for "${r.name}" expires on ${r.license_end}. Renew from ${config.appUrl}/app/billing to avoid interruption.`,
@@ -117,6 +119,8 @@ export function startJobs() {
     safe('warehouse-licenses', () => runLicenseJob())();
     // Shops closed by their owner: wipe login details once the restore window has passed.
     safe('account-deletions', runAccountDeletions)();
+    // Email and API-call logs older than their keep periods (EMAIL_LOG_DAYS, API_LOG_DAYS).
+    safe('outbound-logs', pruneOutboundLogs)();
     safe('sessions', () => query("DELETE FROM sessions WHERE expires_at < now(); DELETE FROM password_resets WHERE expires_at < now() - interval '7 days'; DELETE FROM signup_verifications WHERE expires_at < now() - interval '1 day' OR verified_at < now() - interval '1 day'"))();
   };
   setTimeout(hourly, 10_000);

@@ -35,6 +35,13 @@ import { adminRouter } from './routes/shop/admin';
 import { featuresRouter } from './routes/shop/features';
 import { featureGate } from './services/features';
 import { aiContext } from './services/aiUsage';
+import { outboundStore } from './services/outbound';
+
+/** Lets the email and API-call logs record which shop and person a request was for. */
+const shopOutboundCtx = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+  const c = req.ctx as { shopId?: string; id?: string } | undefined;
+  outboundStore.run({ shopId: c?.shopId ?? null, userId: c?.id ?? null }, next);
+};
 
 export function createApp() {
   const app = express();
@@ -100,7 +107,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), featureGate, aiContext, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, appDevicesRouter, supportRouter, licensesRouter, transfersRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, briefingRouter, lendingRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), featureGate, aiContext, shopOutboundCtx, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, appDevicesRouter, supportRouter, licensesRouter, transfersRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, briefingRouter, lendingRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

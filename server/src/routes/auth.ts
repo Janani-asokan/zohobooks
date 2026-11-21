@@ -158,6 +158,7 @@ async function completeSignup(req: Request, res: import('express').Response, f: 
   };
   await withTenant(shop.id, (db) => audit(db, req, shop.id, 'signup', 'shop', shop.id, { email: f.email }));
   sendMail({
+    kind: 'welcome', shopId: shop.id,
     to: f.email,
     subject: 'Welcome to Corpus360',
     text: `Hi ${f.ownerName},\n\nYour workspace "${f.shopName}" is ready, with a free trial of every feature.\nSign in any time at ${config.appUrl}/login with ${f.email}.`,
@@ -181,6 +182,7 @@ async function sendSignupCode(id: string, email: string, ownerName: string) {
   await query(`UPDATE signup_verifications SET code_hash = $2, attempts = 0, last_sent_at = now(), expires_at = now() + make_interval(mins => $3) WHERE id = $1`,
     [id, `${salt}:${codeHash(salt, id, code)}`, SIGNUP_CODE.ttlMinutes]);
   await sendMail({
+    kind: 'signup_code',
     to: email,
     // The code is only in the body: subjects show on lock screens and in server logs.
     subject: 'Confirm your email for Corpus360',
@@ -365,6 +367,7 @@ authRouter.post(
       const url = `${config.appUrl}/reset-password?token=${token}`;
       // A failed send is logged, not shown: the reply must look the same whether or not the account exists.
       await sendMail({
+        kind: 'password_reset', shopId: p.type === 'user' ? p.row.shop_id : null,
         to: p.row.email,
         subject: 'Reset your Corpus360 password',
         text: `Hi ${p.row.name},\n\nUse this link to set a new password (valid for 30 minutes):\n${url}\n\nIf you didn't request this, you can ignore this email.`,
@@ -461,6 +464,7 @@ authRouter.post(
     });
     await withTenant(ctx.shopId, (db) => audit(db, req, ctx.shopId, 'close_shop', 'shop', shop.id, { reason: body.reason ?? '' }));
     void sendMail({
+      kind: 'shop_closed', shopId: shop.id,
       to: shop.email,
       subject: 'Your Corpus360 shop has been closed',
       text: `Hi ${shop.owner_name},\n\n"${shop.name}" was closed on ${todayISO()} and everyone has been signed out.\n\n`

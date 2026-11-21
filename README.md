@@ -75,6 +75,7 @@ In production the API serves the built web app too, so you deploy one process. M
 | `CHROMIUM_PATH` | Chromium used to print invoices to PDF (the Docker image sets `/usr/bin/chromium`) |
 | `PUBLIC_SIGNUP` | `1` (default) lets anyone create a shop on the free trial plan from the landing page (`/signup`); `0` turns sign-up off, and shops are then created by the super admin only |
 | `SIGNUP_EMAIL_VERIFY` | Email check on sign-up. `auto` (default): once an email provider (`BREVO_API_KEY`, `RESEND_API_KEY` or SMTP) is set, new owners must enter a 6-digit code emailed to them before the shop is created (15 minutes, 3 tries, new code after 60 s, 6 a day); with no provider, sign-up works without it so it never gets stuck. `on` always asks, `off` never does |
+| `EMAIL_LOG_DAYS`, `API_LOG_DAYS` | How long Super Admin → Logs keeps the email log (default 730 days) and the outside-API call log (default 180 days). See docs/integrations.md |
 | `RENDER_ORIGIN` | Where that browser loads the print page from. Defaults to this server (`http://127.0.0.1:$PORT`) in production and Vite in development |
 | `EINVOICE_API_URL`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | Reserved for direct GSP/IRP filing and the WhatsApp Business API (see below) |
 

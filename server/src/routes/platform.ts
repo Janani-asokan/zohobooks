@@ -15,6 +15,7 @@ import { BUSINESS_TEMPLATES } from '../../../shared/templates';
 import { EMAIL_RE } from '../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
 import { platformSupportRouter } from './platformSupport';
+import { platformLogsRouter } from './platformLogs';
 
 /**
  * Super Admin API. Reads/writes only platform tables (shops, plans, config, tax slabs,
@@ -25,6 +26,7 @@ export const platformRouter = Router();
 platformRouter.use(requireSuper);
 // Customer care console: call-back requests from every shop.
 platformRouter.use('/support', platformSupportRouter);
+platformRouter.use('/logs', platformLogsRouter);
 
 const serializeShop = (s: any) => ({
   id: s.id,
@@ -94,6 +96,7 @@ platformRouter.post(
       ]);
     }
     await sendMail({
+      kind: 'workspace_ready', shopId: shop.id,
       to: b.email,
       subject: 'Your Corpus360 workspace is ready',
       text: `Hi ${b.ownerName},\n\nYour workspace "${b.shopName}" is ready.\nSign in at ${config.appUrl}/login with ${b.email} and the temporary password shared with you. You'll be asked to set a new password on first sign-in.`,
@@ -160,7 +163,7 @@ platformRouter.post(
     await query("INSERT INTO password_resets (token_hash, principal_type, principal_id, expires_at) VALUES ($1,'user',$2, now() + interval '24 hours')", [sha256(token), owner.id]);
     const url = `${config.appUrl}/reset-password?token=${token}`;
     let emailed = false; let emailError: string | undefined;
-    try { emailed = await sendMail({ to: owner.email, subject: 'Reset your Corpus360 password', text: `Hi ${owner.name},\n\nYour service provider sent you a password reset link (valid 24 hours):\n${url}` }); }
+    try { emailed = await sendMail({ kind: 'password_reset_admin', shopId: req.params.id, to: owner.email, subject: 'Reset your Corpus360 password', text: `Hi ${owner.name},\n\nYour service provider sent you a password reset link (valid 24 hours):\n${url}` }); }
     catch (e) { emailError = (e as Error).message; }
     await tx((db) => audit(db, req, null, 'send_owner_reset', 'shop', req.params.id, { emailed }));
     // When email can't go out, the super admin gets the link to pass on by phone or WhatsApp.
@@ -178,7 +181,7 @@ platformRouter.post(
     const status = mailStatus();
     if (!status.configured) return res.json({ ...status, sent: false, error: 'No email provider is set on the server. Add BREVO_API_KEY (or RESEND_API_KEY, or SMTP_HOST) and MAIL_FROM in the hosting environment, then redeploy.' });
     try {
-      await sendMail({ to: b.to, subject: 'Corpus360 test email', text: `This is a test email from Corpus360 (${config.appUrl}).\n\nIf you can read this, password-reset and invoice emails will be delivered.` });
+      await sendMail({ kind: 'test_email', to: b.to, subject: 'Corpus360 test email', text: `This is a test email from Corpus360 (${config.appUrl}).\n\nIf you can read this, password-reset and invoice emails will be delivered.` });
       res.json({ ...status, sent: true });
     } catch (e) {
       res.json({ ...status, sent: false, error: (e as Error).message });

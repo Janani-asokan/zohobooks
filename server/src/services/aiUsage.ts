@@ -5,6 +5,7 @@ import type { UserCtx } from '../auth';
 import { query } from '../db';
 import { HttpError } from '../http';
 import { sendMail } from '../mailer';
+import { logApiCall, trackedCall } from './outbound';
 import { loadEntitlements, priceList } from './features';
 
 /*
@@ -77,6 +78,7 @@ async function alertOnThreshold(shopId: string, before: AiBalance, usedNow: numb
   const [shop] = await query('SELECT name, email, owner_name FROM shops WHERE id = $1', [shopId]);
   if (!shop) return;
   await sendMail({
+    kind: 'ai_credits_alert', shopId,
     to: shop.email,
     subject: crossed === 100 ? 'Your AI credits for this month are used up' : 'You have used 80% of this month’s AI credits',
     text: `Hi ${shop.owner_name},\n\n${shop.name} has used ${Math.round(usedNow)} of ${before.allowance} AI credits this month.${crossed === 100
@@ -89,7 +91,7 @@ async function alertOnThreshold(shopId: string, before: AiBalance, usedNow: numb
 export async function meteredCall<T extends { model: string; usage: UsageLike }>(purpose: string, call: () => Promise<T>): Promise<T> {
   const c = current();
   await assertCanUse(c);
-  const res = await call();
+  const res = await trackedCall('anthropic', purpose, 'api.anthropic.com/v1/messages', call, (r) => String((r as { id?: string }).id ?? ''));
   await record(c, purpose, res.model, res.usage);
   return res;
 }
@@ -99,10 +101,20 @@ export async function meteredRunner<M extends { model: string; usage: UsageLike 
   const c = current();
   await assertCanUse(c);
   let last: M | undefined;
-  for await (const message of start()) {
-    await record(c, purpose, message.model, message.usage);
-    last = message;
+  let steps = 0;
+  const t0 = Date.now();
+  try {
+    for await (const message of start()) {
+      steps++;
+      await record(c, purpose, message.model, message.usage);
+      last = message;
+    }
+  } catch (e) {
+    const err = e as Error & { status?: number };
+    await logApiCall({ service: 'anthropic', feature: purpose, endpoint: 'api.anthropic.com/v1/messages', ok: false, statusCode: err.status ?? null, durationMs: Date.now() - t0, error: err.message, ref: `${steps} steps` });
+    throw e;
   }
+  await logApiCall({ service: 'anthropic', feature: purpose, endpoint: 'api.anthropic.com/v1/messages', ok: !!last, statusCode: last ? 200 : null, durationMs: Date.now() - t0, ref: `${steps} steps` });
   if (!last) throw new HttpError(502, 'The AI couldn’t answer right now. Please try again.', 'ai_failed');
   return last;
 }

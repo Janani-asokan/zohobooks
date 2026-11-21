@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { config } from '../config';
 import { HttpError } from '../http';
+import { trackedFetch } from '../services/outbound';
 
 export const razorpayEnabled = () => !!config.razorpay;
 
@@ -8,7 +9,7 @@ export const razorpayEnabled = () => !!config.razorpay;
 export async function createOrder(amountRupees: number, receipt: string, notes: Record<string, string>) {
   const rz = config.razorpay;
   if (!rz) throw new HttpError(501, 'Online payments are not configured. Contact your service provider.', 'not_configured');
-  const res = await fetch('https://api.razorpay.com/v1/orders', {
+  const res = await trackedFetch('razorpay', 'plan_payment', 'https://api.razorpay.com/v1/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Basic ' + Buffer.from(`${rz.keyId}:${rz.keySecret}`).toString('base64') },
     body: JSON.stringify({ amount: Math.round(amountRupees * 100), currency: 'INR', receipt, notes }),
