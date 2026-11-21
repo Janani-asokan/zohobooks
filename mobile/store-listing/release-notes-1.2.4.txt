@@ -1,0 +1,9 @@
+<en-IN>
+• Every screen now fits your phone: lists, bills and stock screens show neat cards instead of wide tables
+• Faster billing: a new line appears as you add items, and you can repeat a customer's last bill
+• Move stock between branches, confirmed with a one-time code
+• Sales beyond a branch's stock are blocked; owners can allow one with a reason
+• Help chat: ask the help bot or talk to our team
+• My account: change your password or delete your account
+• Security improvements
+</en-IN>
