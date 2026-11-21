@@ -13,8 +13,18 @@ It adds swap, installs Docker, opens the firewall for SSH/HTTP/HTTPS, writes sec
 builds and starts the app on port 80, deploys new GitHub commits every 5 minutes, and backs up the database nightly
 to `/opt/corpus360/backups` (14 days).
 
+## Updates are built on GitHub
+Building the app on this 1 GB, 1-CPU Droplet takes 20+ minutes and makes the live site slow while it runs. So
+GitHub builds it (`.github/workflows/server-image.yml`, free for public repositories) and the Droplet only
+downloads the finished image, which takes about a minute. While GitHub is still building, the current version keeps
+running. If GitHub's build fails, or the image can't be downloaded, the Droplet builds it itself as before.
+
+**One-time step:** after the first successful run of the **Server image** workflow (GitHub → Actions), open GitHub →
+your profile → **Packages** → **zohobooks-server** → **Package settings** → **Change visibility** → **Public**. Until
+then the Droplet can't download the image and falls back to building it itself.
+
 ## Everyday
-- Deploy now instead of waiting: `corpus360-update --force`
+- Deploy now instead of waiting: `corpus360-update --force` (it uses GitHub's image when there is one)
 - Change a setting (email key, AI key…): edit `/opt/corpus360/.env`, then `corpus360-update --force`
 - Logs: `cd /opt/corpus360/src/deploy/digitalocean && docker compose logs app --tail 100`
 - Back up now: `corpus360-backup`
