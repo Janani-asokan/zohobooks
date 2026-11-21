@@ -1,0 +1,65 @@
+APP NAME (max 30)
+CorpusLite: GST Billing & POS
+
+SHORT DESCRIPTION (max 80)
+GST billing, POS and stock for Indian shops. Works offline, prints receipts.
+
+FULL DESCRIPTION (max 4000)
+CorpusLite is the phone app for Corpus360, made for Indian shops and small businesses. Make GST bills at the counter, take payment, keep stock right across your branches and see how the shop is doing, all from your phone.
+
+BILL IN SECONDS
+• Fast counter billing (POS): tap an item, scan its barcode with the phone camera, or type a few letters of its name, SKU or HSN.
+• Weighing-scale items and daily rates for goods whose price changes every day.
+• Take cash, UPI or card, or split one bill between them. Change to return is worked out for you.
+• Repeat a customer's last bill in one tap. The app remembers your last customer and branch.
+• Selling below stock is blocked so your numbers stay right. The owner can allow it, with a reason that is recorded.
+
+PROPER GST INVOICES
+• CGST and SGST, or IGST, chosen automatically from the place of supply.
+• GST invoices with your logo, GSTIN, HSN codes and a UPI QR code for payment.
+• Share as a PDF on WhatsApp or email, or print on A4.
+• Invoice numbers follow the financial year and restart every April.
+• Record full or part payments and see who still owes you.
+
+WORKS WITHOUT INTERNET
+No signal in the shop? Keep billing. Bills made offline are saved safely on the phone and sent as soon as the internet is back.
+
+PRINT ON BLUETOOTH PRINTERS
+Pair a 58 mm or 80 mm Bluetooth receipt printer once and print every bill straight from the phone. Tamil and Hindi item names, the ₹ sign, your logo and the UPI QR all print exactly as you see them. You can also print barcode labels for your items.
+
+STOCK FOR EVERY BRANCH
+• Stock updates by itself: bills reduce it, purchases add to it.
+• See stock and stock value by branch or warehouse, with alerts for items at or below their reorder level.
+• Move stock between branches. The receiving branch confirms with a one-time code, so nothing is lost on the way.
+• Track batches and different selling prices for each branch.
+• Record stock adjustments for damage, loss or counting.
+
+PURCHASES AND EXPENSES
+Record supplier bills and purchase orders, pay suppliers, and track daily expenses.
+
+KNOW HOW YOUR SHOP IS DOING
+The home screen shows a business health score, collections, cash coming in, sales growth, stock health and profit margin. Reports include sales, stock and GSTR-1 and GSTR-3B summaries.
+
+FOR YOUR WHOLE TEAM
+Each staff member gets their own login, and you choose what each person can do: Owner, Manager, Accountant, Sales staff or Warehouse. You add staff on the website, and they sign in to the app. Every change is recorded with who made it.
+
+IN YOUR LANGUAGE
+Use the app in English, Hindi or Tamil.
+
+HELP WHEN YOU NEED IT
+Ask the help bot about stock, a bill, what a customer owes, or how to do something. If it can't help, chat with our support team or book a call-back from inside the app.
+
+SAFE AND PRIVATE
+• Your shop's records are kept separate from every other business.
+• All data is sent over encrypted connections, and passwords are never stored in readable form.
+• No ads. We never sell your data.
+• Delete your account at any time from My account.
+
+ONE ACCOUNT, PHONE AND WEBSITE
+CorpusLite uses the same account as the Corpus360 website, so your bills and stock are the same on both. Accounting, bank reconciliation, the AI assistant, field staff tracking and team settings are on the website.
+
+GET STARTED
+Create your shop in the app, add your items, and make your first bill in minutes. Already using Corpus360? Sign in with your usual email and password.
+
+Privacy policy: https://corpus360lite.com/privacy
+Delete your account: https://corpus360lite.com/delete-account
