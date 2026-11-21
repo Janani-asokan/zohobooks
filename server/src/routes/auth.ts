@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { loadEntitlements } from '../services/features';
@@ -6,9 +7,11 @@ import { audit } from '../audit';
 import { config } from '../config';
 import { query, tx, withTenant } from '../db';
 import { h, HttpError, parse } from '../http';
-import { sendMail } from '../mailer';
+import { mailConfigured, sendMail } from '../mailer';
 import { provisionShop } from '../services/provision';
 import { BUSINESS_TEMPLATES } from '../../../shared/templates';
+import { SIGNUP_CODE } from '../../../shared/signupVerify';
+import { maskEmail } from '../../../shared/transfers';
 import { confirmsShopName, deletedEmail, recordsUntil, SHOP_RESTORE_DAYS } from '../../../shared/accountDeletion';
 import { isStrongPassword, PASSWORD_RULE, type UserRole } from '../../../shared/permissions';
 
@@ -119,7 +122,7 @@ authRouter.post(
 
 /* ---------- Self-service signup (landing page) ---------- */
 authRouter.get('/signup', h(async (_req, res) => {
-  res.json({ enabled: config.publicSignup, businessTypes: BUSINESS_TEMPLATES.map((t) => ({ key: t.key, name: t.name })) });
+  res.json({ enabled: config.publicSignup, verifyEmail: signupVerifyOn(), businessTypes: BUSINESS_TEMPLATES.map((t) => ({ key: t.key, name: t.name })) });
 }));
 
 const signupBody = z.object({
@@ -139,6 +142,63 @@ const signupBody = z.object({
  * provisioning as a shop the super admin creates (branch, cash account, trial of every add-on), with the password the
  * owner chose, so no forced change. Limited to a few sign-ups per address per hour; PUBLIC_SIGNUP=0 turns it off.
  */
+interface SignupForm { shopName: string; ownerName: string; email: string; phone: string; city: string; businessType?: string; passwordHash: string }
+
+/** Creates the shop from a checked sign-up form, signs the owner in and sends the welcome email. */
+async function completeSignup(req: Request, res: import('express').Response, f: SignupForm) {
+  const shop = await provisionShop(req, {
+    shopName: f.shopName, ownerName: f.ownerName, email: f.email, phone: f.phone, city: f.city, planId: 'trial', years: 1,
+    password: '', passwordHash: f.passwordHash, mustChangePassword: false, licenseStart: todayISO(), features: 'trial', businessType: f.businessType || undefined,
+  });
+  const [u] = await query("SELECT id, name, email, role, branch_id FROM users WHERE shop_id = $1 AND role = 'Owner' LIMIT 1", [shop.id]);
+  const token = await createSession(res, req, 'user', u.id, true);
+  req.ctx = {
+    kind: 'user', id: u.id, name: u.name, email: u.email, role: u.role as UserRole, shopId: shop.id, branchId: u.branch_id, mustChangePassword: false,
+    permissions: await permissionsFor(shop.id, u.role as UserRole), homeShopId: shop.id,
+  };
+  await withTenant(shop.id, (db) => audit(db, req, shop.id, 'signup', 'shop', shop.id, { email: f.email }));
+  sendMail({
+    to: f.email,
+    subject: 'Welcome to Corpus360',
+    text: `Hi ${f.ownerName},\n\nYour workspace "${f.shopName}" is ready, with a free trial of every feature.\nSign in any time at ${config.appUrl}/login with ${f.email}.`,
+  }).catch((e) => console.error(`[mail] Welcome email to ${f.email} failed: ${(e as Error).message}`));
+  res.status(201).json({ ...(await mePayload(req)), ...(req.headers['x-client'] === 'corpuslite' ? { token } : {}) });
+}
+
+const emailTaken = async (email: string) =>
+  (await query('SELECT 1 FROM users WHERE lower(email) = $1 UNION SELECT 1 FROM super_admins WHERE lower(email) = $1', [email])).length > 0;
+
+/** Whether new shops must confirm their email with a code ('auto': only once an email provider is set up). */
+export const signupVerifyOn = () => config.signupVerify === 'on' || (config.signupVerify === 'auto' && mailConfigured());
+
+const codeHash = (salt: string, id: string, code: string) =>
+  crypto.createHash('sha256').update(`${salt}:${id}:${code}:${process.env.OTP_PEPPER ?? ''}`).digest('hex');
+
+/** Makes a new code for a pending sign-up (the old one stops working), stores its hash and emails it. */
+async function sendSignupCode(id: string, email: string, ownerName: string) {
+  const code = String(crypto.randomInt(0, 10 ** SIGNUP_CODE.digits)).padStart(SIGNUP_CODE.digits, '0');
+  const salt = crypto.randomBytes(8).toString('hex');
+  await query(`UPDATE signup_verifications SET code_hash = $2, attempts = 0, last_sent_at = now(), expires_at = now() + make_interval(mins => $3) WHERE id = $1`,
+    [id, `${salt}:${codeHash(salt, id, code)}`, SIGNUP_CODE.ttlMinutes]);
+  await sendMail({
+    to: email,
+    // The code is only in the body: subjects show on lock screens and in server logs.
+    subject: 'Confirm your email for Corpus360',
+    text: `Hi ${ownerName},\n\nEnter this code to finish creating your shop:\n\n    ${code}\n\n`
+      + `It works for ${SIGNUP_CODE.ttlMinutes} minutes. If you didn't try to sign up, ignore this email: no account is created without the code.`,
+  });
+}
+
+const pendingPublic = (r: { id: string; email: string; last_sent_at: Date }) => ({
+  verify: true, signupId: r.id, email: maskEmail(r.email), expiresInMinutes: SIGNUP_CODE.ttlMinutes,
+  resendInSeconds: Math.max(0, SIGNUP_CODE.resendSeconds - Math.floor((Date.now() - new Date(r.last_sent_at).getTime()) / 1000)),
+});
+
+/**
+ * A business owner creates their own shop on the free trial plan. With the email check on, the form is held until
+ * the emailed code is entered (/signup/verify); otherwise the shop is created and the owner signed in straight away.
+ * Limited to a few sign-ups per address per hour; PUBLIC_SIGNUP=0 turns sign-up off.
+ */
 authRouter.post(
   '/signup',
   rateLimit('signup', 5, 60 * 60_000),
@@ -147,26 +207,76 @@ authRouter.post(
     const b = parse(signupBody, req.body);
     if (b.website) throw new HttpError(400, 'Could not create the account', 'rejected');
     const email = b.email.toLowerCase();
-    const [dup] = await query('SELECT 1 FROM users WHERE lower(email) = $1 UNION SELECT 1 FROM super_admins WHERE lower(email) = $1', [email]);
-    if (dup) throw new HttpError(409, 'An account with this email already exists. Sign in, or use “Forgot password”.', 'email_taken');
+    if (await emailTaken(email)) throw new HttpError(409, 'An account with this email already exists. Sign in, or use “Forgot password”.', 'email_taken');
     if (b.businessType && !BUSINESS_TEMPLATES.some((t) => t.key === b.businessType)) throw new HttpError(400, 'Choose a business type from the list', 'bad_request');
-    const shop = await provisionShop(req, {
-      shopName: b.shopName, ownerName: b.ownerName, email, phone: b.phone, city: b.city, planId: 'trial', years: 1,
-      password: b.password, mustChangePassword: false, licenseStart: todayISO(), features: 'trial', businessType: b.businessType || undefined,
-    });
-    const [u] = await query("SELECT id, name, email, role, branch_id FROM users WHERE shop_id = $1 AND role = 'Owner' LIMIT 1", [shop.id]);
-    const token = await createSession(res, req, 'user', u.id, true);
-    req.ctx = {
-      kind: 'user', id: u.id, name: u.name, email: u.email, role: u.role as UserRole, shopId: shop.id, branchId: u.branch_id, mustChangePassword: false,
-      permissions: await permissionsFor(shop.id, u.role as UserRole), homeShopId: shop.id,
-    };
-    await withTenant(shop.id, (db) => audit(db, req, shop.id, 'signup', 'shop', shop.id, { email }));
-    sendMail({
-      to: email,
-      subject: 'Welcome to Corpus360',
-      text: `Hi ${b.ownerName},\n\nYour workspace "${b.shopName}" is ready, with a free trial of every feature.\nSign in any time at ${config.appUrl}/login with ${email}.`,
-    }).catch((e) => console.error(`[mail] Welcome email to ${email} failed: ${(e as Error).message}`));
-    res.status(201).json({ ...(await mePayload(req)), ...(req.headers['x-client'] === 'corpuslite' ? { token } : {}) });
+    const form: SignupForm = { shopName: b.shopName, ownerName: b.ownerName, email, phone: b.phone, city: b.city, businessType: b.businessType, passwordHash: await hashPassword(b.password) };
+    if (!signupVerifyOn()) return completeSignup(req, res, form);
+
+    const [{ n }] = await query(`SELECT coalesce(sum(sends), 0)::int AS n FROM signup_verifications WHERE lower(email) = $1 AND created_at > now() - interval '24 hours'`, [email]);
+    if (n >= SIGNUP_CODE.perDay) throw new HttpError(429, 'Too many codes sent to this email today. Try again tomorrow.', 'too_many_codes');
+    const [row] = await query(`INSERT INTO signup_verifications (email, form, code_hash, expires_at, ip) VALUES ($1, $2, '', now(), $3) RETURNING id, email, last_sent_at`,
+      [email, JSON.stringify(form), req.ip ?? '']);
+    try { await sendSignupCode(row.id, email, form.ownerName); }
+    catch (e) {
+      console.error(`[mail] Sign-up code to ${email} failed: ${(e as Error).message}`);
+      throw new HttpError(503, 'We couldn’t send the code to that email just now. Check the address and try again in a minute.', 'mail_failed');
+    }
+    res.status(202).json(pendingPublic(row));
+  }),
+);
+
+const pendingRow = async (id: string) => {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return undefined;
+  const [r] = await query('SELECT * FROM signup_verifications WHERE id = $1', [id]);
+  return r as undefined | { id: string; email: string; form: SignupForm; code_hash: string; attempts: number; sends: number; last_sent_at: Date; expires_at: Date; verified_at: Date | null };
+};
+
+authRouter.post(
+  '/signup/verify',
+  rateLimit('signup-verify', 30, 15 * 60_000),
+  h(async (req, res) => {
+    const b = parse(z.object({ signupId: z.string().max(40), code: z.string().trim().max(12) }), req.body);
+    const r = await pendingRow(b.signupId);
+    if (!r || r.verified_at) throw new HttpError(404, 'This sign-up has expired. Fill in the form again.', 'signup_expired');
+    if (r.attempts >= SIGNUP_CODE.maxAttempts) throw new HttpError(400, 'Too many wrong codes. Tap “Send a new code”.', 'code_locked', { code: 'Send a new code' });
+    if (new Date(r.expires_at) < new Date()) throw new HttpError(400, 'This code has expired. Tap “Send a new code”.', 'code_expired', { code: 'Code expired' });
+    const [salt, want] = r.code_hash.split(':');
+    const got = codeHash(salt ?? '', r.id, b.code.replace(/\D/g, ''));
+    const ok = !!want && want.length === got.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(got));
+    if (!ok) {
+      // Saved before replying (not thrown inside a transaction), so wrong tries always count.
+      await query('UPDATE signup_verifications SET attempts = attempts + 1 WHERE id = $1', [r.id]);
+      const left = SIGNUP_CODE.maxAttempts - r.attempts - 1;
+      return res.status(400).json({ error: left > 0 ? `That code isn’t right. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'Too many wrong codes. Tap “Send a new code”.',
+        code: left > 0 ? 'code_wrong' : 'code_locked', details: { code: 'Wrong code' } });
+    }
+    // Only one request can use the code, even if it is sent twice at once.
+    const [claimed] = await query('UPDATE signup_verifications SET verified_at = now() WHERE id = $1 AND verified_at IS NULL RETURNING id', [r.id]);
+    if (!claimed) throw new HttpError(409, 'This sign-up is already finished. Sign in instead.', 'signup_done');
+    if (await emailTaken(r.email)) throw new HttpError(409, 'An account with this email already exists. Sign in, or use “Forgot password”.', 'email_taken');
+    await completeSignup(req, res, r.form);
+  }),
+);
+
+authRouter.post(
+  '/signup/resend',
+  rateLimit('signup-resend', 10, 15 * 60_000),
+  h(async (req, res) => {
+    const b = parse(z.object({ signupId: z.string().max(40) }), req.body);
+    const r = await pendingRow(b.signupId);
+    if (!r || r.verified_at || new Date(r.expires_at).getTime() < Date.now() - 24 * 3600_000) throw new HttpError(404, 'This sign-up has expired. Fill in the form again.', 'signup_expired');
+    const wait = SIGNUP_CODE.resendSeconds - Math.floor((Date.now() - new Date(r.last_sent_at).getTime()) / 1000);
+    if (wait > 0) throw new HttpError(429, `Wait ${wait} seconds before asking for a new code.`, 'resend_wait', { resendInSeconds: wait });
+    const [{ n }] = await query(`SELECT coalesce(sum(sends), 0)::int AS n FROM signup_verifications WHERE lower(email) = $1 AND created_at > now() - interval '24 hours'`, [r.email]);
+    if (n >= SIGNUP_CODE.perDay) throw new HttpError(429, 'Too many codes sent to this email today. Try again tomorrow.', 'too_many_codes');
+    await query('UPDATE signup_verifications SET sends = sends + 1 WHERE id = $1', [r.id]);
+    try { await sendSignupCode(r.id, r.email, r.form.ownerName); }
+    catch (e) {
+      console.error(`[mail] Sign-up code to ${r.email} failed: ${(e as Error).message}`);
+      throw new HttpError(503, 'We couldn’t send the code just now. Try again in a minute.', 'mail_failed');
+    }
+    const [fresh] = await query('SELECT id, email, last_sent_at FROM signup_verifications WHERE id = $1', [r.id]);
+    res.json(pendingPublic(fresh));
   }),
 );
 

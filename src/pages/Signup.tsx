@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { AlertCircle, ArrowRight, Loader2, Mail, Phone, Store, UserRound, MapPin } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, Loader2, Mail, MailCheck, Phone, Store, UserRound, MapPin } from 'lucide-react';
 import { homeFor, useAuth } from '@/context/AuthContext';
 import type { Me } from '@/api/types';
 import { useToast } from '@/context/ToastContext';
@@ -11,10 +11,12 @@ import { Field } from '@/components/ui';
 import { PasswordInput } from '@/components/PasswordInput';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { isStrongPassword, PASSWORD_RULE } from '../../shared/permissions';
+import { isSignupCode, SIGNUP_CODE } from '../../shared/signupVerify';
 import { AuthShell } from './AuthShell';
 import { IS_APP, cacheClear, setAppToken } from '@/lib/platform';
 
-interface SignupInfo { enabled: boolean; businessTypes: Array<{ key: string; name: string }> }
+interface SignupInfo { enabled: boolean; verifyEmail?: boolean; businessTypes: Array<{ key: string; name: string }> }
+interface Pending { verify: true; signupId: string; email: string; expiresInMinutes: number; resendInSeconds: number }
 const blank = { shopName: '', ownerName: '', email: '', phone: '', city: '', businessType: 'general', password: '', website: '' };
 
 /**
@@ -30,6 +32,15 @@ export default function Signup() {
   const [touched, setTouched] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // With the email check on, the shop is created only after the emailed code is entered.
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [code, setCode] = useState('');
+  const [wait, setWait] = useState(0);
+  useEffect(() => {
+    if (wait <= 0) return;
+    const t = window.setTimeout(() => setWait((w) => w - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [wait]);
 
   if (authLoading) return <FullPageSpinner />;
   if (me) return <Navigate to={homeFor(me)} replace />;
@@ -50,18 +61,77 @@ export default function Signup() {
     if (Object.values(errs).some(Boolean)) return;
     setBusy(true);
     try {
-      const { token, ...m } = await api.post<Me & { token?: string }>('/auth/signup', { ...f, shopName: f.shopName.trim(), ownerName: f.ownerName.trim(), email: f.email.trim() });
-      // Phone app: the session is a bearer token kept on the phone (no cookies); on the web the cookie is already set.
-      if (IS_APP) { setAppToken(token ?? null); await cacheClear(); }
-      await refresh(); // load who we are
-      toast('success', 'Your shop is ready', 'Free trial of every feature. Add your first item or invoice.');
-      navigate(homeFor(m as Me), { replace: true });
+      const r = await api.post<(Me & { token?: string }) | Pending>('/auth/signup', { ...f, shopName: f.shopName.trim(), ownerName: f.ownerName.trim(), email: f.email.trim() });
+      if ('verify' in r && r.verify) { setPending(r); setCode(''); setWait(r.resendInSeconds); }
+      else await finish(r as Me & { token?: string });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create the account. Please try again.');
     } finally {
       setBusy(false);
     }
   };
+
+  const finish = async ({ token, ...m }: Me & { token?: string }) => {
+    // Phone app: the session is a bearer token kept on the phone (no cookies); on the web the cookie is already set.
+    if (IS_APP) { setAppToken(token ?? null); await cacheClear(); }
+    await refresh(); // load who we are
+    toast('success', 'Your shop is ready', 'Free trial of every feature. Add your first item or invoice.');
+    navigate(homeFor(m as Me), { replace: true });
+  };
+
+  const verify = async (value = code) => {
+    if (!pending || !isSignupCode(value) || busy) return;
+    setBusy(true); setError('');
+    try {
+      await finish(await api.post<Me & { token?: string }>('/auth/signup/verify', { signupId: pending.signupId, code: value.trim() }));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not check the code. Please try again.');
+      if (err instanceof ApiError && err.code === 'signup_expired') setPending(null);
+      setCode('');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resend = async () => {
+    if (!pending || wait > 0) return;
+    setError('');
+    try {
+      const r = await api.post<Pending>('/auth/signup/resend', { signupId: pending.signupId });
+      setPending(r); setWait(r.resendInSeconds || SIGNUP_CODE.resendSeconds); setCode('');
+      toast('success', 'New code sent', `Check ${r.email}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not send a new code. Please try again.');
+      if (err instanceof ApiError && err.code === 'signup_expired') setPending(null);
+    }
+  };
+
+  if (pending) {
+    return (
+      <AuthShell>
+        <MailCheck size={34} style={{ color: 'var(--accent)' }} />
+        <h1>Check your email</h1>
+        <p className="lead">We sent a {SIGNUP_CODE.digits}-digit code to <strong>{pending.email}</strong>. Enter it to finish creating your shop. It works for {pending.expiresInMinutes} minutes.</p>
+        <form className="login-form" onSubmit={(ev) => { ev.preventDefault(); void verify(); }} noValidate>
+          <Field label="Code from the email" required>
+            <input className="input otp-input" value={code} autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={SIGNUP_CODE.digits}
+              placeholder={'•'.repeat(SIGNUP_CODE.digits)} aria-label="Code from the email"
+              onChange={(x) => { const v = x.target.value.replace(/\D/g, '').slice(0, SIGNUP_CODE.digits); setCode(v); if (v.length === SIGNUP_CODE.digits) void verify(v); }}
+              style={{ height: 52, width: '100%', fontSize: 24, letterSpacing: '0.4em', textAlign: 'center' }} />
+          </Field>
+          {error && <div className="login-alert" role="alert"><AlertCircle size={17} style={{ flexShrink: 0, marginTop: 1 }} /><span>{error}</span></div>}
+          <button className="btn btn-primary btn-block login-btn" type="submit" disabled={busy || !isSignupCode(code)}>
+            {busy ? <><Loader2 size={18} className="spin" /> Creating your shop…</> : <>Confirm and create my shop <ArrowRight size={18} /></>}
+          </button>
+          <div className="row between" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setPending(null); setError(''); }}><ArrowLeft size={15} /> Change email</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={resend} disabled={wait > 0}>{wait > 0 ? `Send a new code in ${wait}s` : 'Send a new code'}</button>
+          </div>
+          <p className="small muted" style={{ margin: 0 }}>No email? Check spam or promotions, and make sure the address is right.</p>
+        </form>
+      </AuthShell>
+    );
+  }
 
   if (info.data && !info.data.enabled) {
     return (
@@ -112,8 +182,9 @@ export default function Signup() {
         <input type="text" name="website" tabIndex={-1} autoComplete="off" value={f.website} onChange={(x) => set('website')(x.target.value)} aria-hidden="true" style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
         {error && <div className="login-alert" role="alert"><AlertCircle size={17} style={{ flexShrink: 0, marginTop: 1 }} /><span>{error}</span></div>}
         <button className="btn btn-primary btn-block login-btn" type="submit" disabled={busy}>
-          {busy ? <><Loader2 size={18} className="spin" /> Creating your shop…</> : <>Create my shop <ArrowRight size={18} /></>}
+          {busy ? <><Loader2 size={18} className="spin" /> {info.data?.verifyEmail ? 'Sending code…' : 'Creating your shop…'}</> : <>{info.data?.verifyEmail ? 'Continue' : 'Create my shop'} <ArrowRight size={18} /></>}
         </button>
+        {info.data?.verifyEmail && <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>We’ll email you a code to confirm your address.</p>}
         <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>By creating a shop you agree to the <Link to="/terms">terms of use</Link> and <Link to="/privacy">privacy policy</Link>.</p>
         <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>Already have an account? <Link to="/login" style={{ fontWeight: 600 }}>Sign in</Link></p>
       </form>

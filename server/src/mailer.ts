@@ -81,6 +81,12 @@ export function mailStatus() {
 }
 
 /** Sends through Brevo, Resend or SMTP (first one configured); otherwise logs and stores in an in-memory outbox. Returns whether it was really sent. */
+/** Whether an email provider is set up, so emails really go out. */
+export function mailConfigured() {
+  const m = config.mail;
+  return !!(m.brevoKey || m.resendKey || m.smtp);
+}
+
 export async function sendMail(mail: Mail): Promise<boolean> {
   const m = config.mail;
   if (m.brevoKey) await viaBrevo(mail, m.brevoKey, m.from);

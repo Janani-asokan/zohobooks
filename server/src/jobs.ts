@@ -117,7 +117,7 @@ export function startJobs() {
     safe('warehouse-licenses', () => runLicenseJob())();
     // Shops closed by their owner: wipe login details once the restore window has passed.
     safe('account-deletions', runAccountDeletions)();
-    safe('sessions', () => query("DELETE FROM sessions WHERE expires_at < now(); DELETE FROM password_resets WHERE expires_at < now() - interval '7 days'"))();
+    safe('sessions', () => query("DELETE FROM sessions WHERE expires_at < now(); DELETE FROM password_resets WHERE expires_at < now() - interval '7 days'; DELETE FROM signup_verifications WHERE expires_at < now() - interval '1 day' OR verified_at < now() - interval '1 day'"))();
   };
   setTimeout(hourly, 10_000);
   setInterval(hourly, 60 * 60_000);

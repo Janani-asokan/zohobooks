@@ -1,6 +1,6 @@
 # CorpusLite on Google Play: release checklist
 
-App id `in.corpus360.lite`. Release 1.2.2 is versionCode 6. Every upload needs a higher versionCode
+App id `in.corpus360.lite`. Release 1.2.3 is versionCode 7. Every upload needs a higher versionCode
 (`mobile/android/app/build.gradle`).
 
 ## Build

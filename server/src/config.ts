@@ -20,6 +20,13 @@ export const config = {
   cookieSecure: bool(env.COOKIE_SECURE, env.NODE_ENV === 'production'),
   /** Self-service signup from the landing page: a new shop on the free trial plan. PUBLIC_SIGNUP=0 turns it off. */
   publicSignup: bool(env.PUBLIC_SIGNUP, true),
+  /**
+   * Email check on sign-up: 'auto' (default) asks for an emailed code only once an email provider is set up, so
+   * sign-up never gets stuck on codes that cannot be delivered; 'on' always asks; 'off' never does.
+   */
+  signupVerify: (['on', 'off'].includes((env.SIGNUP_EMAIL_VERIFY ?? '').toLowerCase()) ? env.SIGNUP_EMAIL_VERIFY!.toLowerCase()
+    : ['1', 'true', 'yes'].includes((env.SIGNUP_EMAIL_VERIFY ?? '').toLowerCase()) ? 'on'
+    : ['0', 'false', 'no'].includes((env.SIGNUP_EMAIL_VERIFY ?? '').toLowerCase()) ? 'off' : 'auto') as 'auto' | 'on' | 'off',
   sessionDays: Number(env.SESSION_DAYS ?? 7),
   /** In development, password-reset links are returned in the API response so the flow is testable without SMTP. */
   exposeDevResetLinks: bool(env.EXPOSE_DEV_RESET_LINKS, env.NODE_ENV !== 'production'),

@@ -18,6 +18,8 @@ export interface NewShop {
   planId: string;
   years: number;
   password: string;
+  /** Already-hashed password (sign-up after the email check); used instead of `password`. */
+  passwordHash?: string;
   mustChangePassword?: boolean;
   licenseStart: string;
   /**
@@ -41,7 +43,7 @@ export const FEATURE_TRIAL_DAYS = 14;
 export async function provisionShop(req: Request | null, s: NewShop) {
   const plan = await withPlatformPlan(s.planId);
   const days = plan.trial_days ?? 365 * s.years;
-  const passwordHash = await hashPassword(s.password);
+  const passwordHash = s.passwordHash ?? await hashPassword(s.password);
   return tx(async (db) => {
     const shop = await one(
       db,
