@@ -18,7 +18,7 @@ import { AreaChart, Donut, MeterList } from '@/components/charts';
 import { fmtDate, money, moneyShort } from '@/lib/format';
 
 const pctChange = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : cur > 0 ? 100 : null);
-const STATUS_COLORS = { Paid: '#7d8c77', 'Partially Paid': '#c98a3c', Sent: '#e398a4', Overdue: '#b53a3a' } as const;
+const STATUS_COLORS = { Paid: '#2f7a4c', 'Partially Paid': '#b06a14', Sent: '#d19783', Overdue: '#c62828' } as const;
 
 /** Staff who only work on loans (collectors) start on the lending screen instead of the shop dashboard. */
 export default function Home() {

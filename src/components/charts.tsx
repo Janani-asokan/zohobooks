@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export const SERIES = ['#c75f71', '#7d8c77'] as const;
+export const SERIES = ['#5c1410', '#d19783'] as const;
 
 interface Series {
   name: string;
