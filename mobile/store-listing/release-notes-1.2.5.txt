@@ -1,7 +1,7 @@
 <en-IN>
 • A fresh, calmer look in oxblood, taupe and peach
-• Every screen now fits your phone: lists, bills and stock screens show neat cards instead of wide tables
-• Faster billing: a new line appears as you add items, and you can repeat a customer's last bill
+• Every screen fits your phone: lists and bills show as neat cards
+• Faster billing: a new line appears as you add items; repeat a customer's last bill
 • Move stock between branches, confirmed with a one-time code
 • Sales beyond a branch's stock are blocked; owners can allow one with a reason
 • Help chat: ask the help bot or talk to our team
