@@ -11,7 +11,7 @@ import { SHOP_RESTORE_DAYS } from '../../shared/accountDeletion';
  * Public pages the Play Store listing links to: privacy policy, terms and how to delete an account. They open without
  * signing in, on the website and in the app.
  */
-const UPDATED = '19 November 2026';
+const UPDATED = '21 November 2026';
 
 function useContact() {
   return useQuery({ queryKey: ['public', 'contact'], queryFn: () => api.get<{ phone: string; email: string }>('/public/contact'), staleTime: 300_000, retry: false });
@@ -61,7 +61,9 @@ export function Privacy() {
         <li><strong>Your account:</strong> your name, email, phone number and a scrambled (hashed) copy of your password. We never see your password itself.</li>
         <li><strong>Your shop’s records:</strong> shop details and GSTIN, customers and suppliers, items, stock, bills, payments and accounts that you and your staff enter.</li>
         <li><strong>Sign-in and safety records:</strong> when and from which device and IP address someone signed in, and who changed what (the audit trail), so a shop can see who did what and we can stop misuse.</li>
-        <li><strong>Support:</strong> call-back requests and chat messages you send to our support team.</li>
+        <li><strong>Pictures and files you add:</strong> item pictures, your logo, bill photos and attachments, and files you import. Only the ones you choose to upload.</li>
+        <li><strong>This phone’s app ID:</strong> a random ID the app makes for each phone so it can number bills in its own series, even offline. It is not your phone’s IMEI or advertising ID.</li>
+        <li><strong>Support:</strong> call-back requests, chat messages and help-bot questions you send us.</li>
       </ul>
 
       <h2>What the phone uses, and only when you ask</h2>
@@ -70,7 +72,7 @@ export function Privacy() {
         <li><strong>Nearby devices (Bluetooth)</strong> — to print on a receipt printer you paired. Nothing is sent to us.</li>
         <li><strong>Files and share</strong> — to save or share a bill PDF or an export you made, through Android’s own share screen.</li>
       </ul>
-      <p>The app does not read your contacts, messages, photos or location. On the website, the optional field-staff feature records the location of staff on duty, only while they have started their day, so their shop can see visits.</p>
+      <p>The app does not read your contacts, messages or location, and sees only the pictures and files you choose to add. On the website, the optional field-staff feature records the location of staff on duty, only while they have started their day, so their shop can see visits.</p>
 
       <h2>Why we use it</h2>
       <p>Only to run the service for your shop: making and sending bills, keeping stock, GST reports, sign-in and security, sending the emails you expect (password reset, receipts, licence reminders) and answering support. We don’t use your shop’s records for advertising.</p>
