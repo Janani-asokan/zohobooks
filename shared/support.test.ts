@@ -28,3 +28,24 @@ describe('support call-back slots (IST)', () => {
     expect(isSlot(DEFAULT_SUPPORT, new Date('2026-11-22T04:30:00Z'))).toBe(false); // Sunday
   });
 });
+
+describe('WhatsApp support', () => {
+  it('turns typed numbers into what wa.me wants: digits with the country code', async () => {
+    const { waDigits } = await import('./support');
+    expect(waDigits('98400 12345')).toBe('919840012345');
+    expect(waDigits('+91 98400-12345')).toBe('919840012345');
+    expect(waDigits('098400 12345')).toBe('919840012345');
+    expect(waDigits('+971 50 123 4567')).toBe('971501234567');
+    expect(waDigits('12345')).toBe('');
+    expect(waDigits('0441234567')).toBe(''); // a 10-digit landline is not a WhatsApp mobile
+    expect(waDigits('')).toBe('');
+  });
+
+  it('writes a message that says who is asking and why, and links to it', async () => {
+    const { waLink, whatsappSupportText } = await import('./support');
+    const t = whatsappSupportText({ shopName: 'Aravind Computer Store', userName: 'Aravind', question: '  printer   not printing  ' });
+    expect(t).toBe('Hi Corpus360 support, I need help.\nShop: Aravind Computer Store\nName: Aravind\nAbout: printer not printing');
+    expect(whatsappSupportText({ shopName: 'S', userName: 'U' })).not.toContain('About');
+    expect(waLink('919840012345', 'a b&c')).toBe('https://wa.me/919840012345?text=a%20b%26c');
+  });
+});

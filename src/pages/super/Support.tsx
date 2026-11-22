@@ -32,7 +32,7 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en
 
 /** Customer care console: staff see every shop's call-back, check the shop's account, call, and record what happened. */
 export default function SuperSupport() {
-  const [view, setView] = useState<(typeof VIEWS)[number][0] | 'live'>('upcoming');
+  const [view, setView] = useState<(typeof VIEWS)[number][0] | 'live' | 'whatsapp'>('upcoming');
   // Polled while the console is open: keeps this agent "online" for live chat and shows waiting chats on every tab.
   const live = useQuery({ queryKey: ['platform', 'support', 'live'], queryFn: () => api.get<LiveList>('/platform/support/live'), refetchInterval: 5000, refetchIntervalInBackground: true });
   const waiting = live.data?.waiting ?? 0;
@@ -71,8 +71,9 @@ export default function SuperSupport() {
   };
   const [openId, setOpenId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const list = useQuery({ queryKey: ['platform', 'support', 'callbacks', view], queryFn: () => api.get<{ callbacks: Cb[]; counts: { upcoming: number; overdue: number; today: number } }>(`/platform/support/callbacks?view=${view}`), refetchInterval: 60_000, enabled: view !== 'live' });
+  const list = useQuery({ queryKey: ['platform', 'support', 'callbacks', view], queryFn: () => api.get<{ callbacks: Cb[]; counts: { upcoming: number; overdue: number; today: number } }>(`/platform/support/callbacks?view=${view}`), refetchInterval: 60_000, enabled: view !== 'live' && view !== 'whatsapp' });
   const open = list.data?.callbacks?.find((c) => c.id === openId) ?? null;
+  const wa = useQuery({ queryKey: ['platform', 'support', 'whatsapp', 'open'], queryFn: () => api.get<WaList>('/platform/support/whatsapp'), refetchInterval: 30_000 });
   const c = list.data?.counts;
 
   return (
@@ -88,13 +89,16 @@ export default function SuperSupport() {
         <button className={view === 'live' ? 'active' : ''} onClick={() => setView('live')}>
           <MessageCircle size={15} /> Live chats {waiting > 0 ? <span className="badge badge-red">{waiting} waiting</span> : <span className="count">{live.data?.chats.filter((x) => x.status === 'active').length ?? 0}</span>}
         </button>
+        <button className={view === 'whatsapp' ? 'active' : ''} onClick={() => setView('whatsapp')}>
+          <MessageCircle size={15} /> WhatsApp {wa.data?.counts.open ? <span className="badge badge-amber">{wa.data.counts.open} open</span> : null}
+        </button>
         {VIEWS.map(([k, l]) => (
           <button key={k} className={view === k ? 'active' : ''} onClick={() => setView(k)}>
             {l}{k === 'today' && c ? ` (${c.today})` : k === 'upcoming' && c ? ` (${c.upcoming})` : ''}
           </button>
         ))}
       </div>
-      {view === 'live' ? <LiveConsole data={live.data} /> : <>
+      {view === 'live' ? <LiveConsole data={live.data} /> : view === 'whatsapp' ? <WhatsAppList /> : <>
       {!!c?.overdue && <div className="support-alert"><AlertTriangle size={15} /> {c.overdue} call-back{c.overdue > 1 ? 's are' : ' is'} past the booked time and not yet closed.</div>}
 
       <div className="card table-wrap">
@@ -221,12 +225,12 @@ function CallbackPanel({ cb, onClose }: { cb: Cb; onClose: () => void }) {
 }
 
 function SettingsModal({ onClose }: { onClose: () => void }) {
-  const cur = useQuery({ queryKey: ['platform', 'support', 'settings'], queryFn: () => api.get<SupportSettings & { phone: string; email: string }>('/platform/support/settings') });
-  const [f, setF] = useState<(SupportSettings & { phone: string; email: string }) | null>(null);
+  const cur = useQuery({ queryKey: ['platform', 'support', 'settings'], queryFn: () => api.get<SupportSettings & { phone: string; email: string; whatsapp: string }>('/platform/support/settings') });
+  const [f, setF] = useState<(SupportSettings & { phone: string; email: string; whatsapp: string }) | null>(null);
   const v = f ?? cur.data;
-  const save = useMut((b: SupportSettings & { phone: string; email: string }) => api.put('/platform/support/settings', b), [['platform', 'support'], ['supportSlots']], { success: 'Support hours saved' });
+  const save = useMut((b: SupportSettings & { phone: string; email: string; whatsapp: string }) => api.put('/platform/support/settings', b), [['platform', 'support'], ['supportSlots']], { success: 'Support hours saved' });
   if (!v) return null;
-  const set = (p: Partial<SupportSettings & { phone: string; email: string }>) => setF({ ...v, ...p });
+  const set = (p: Partial<SupportSettings & { phone: string; email: string; whatsapp: string }>) => setF({ ...v, ...p });
   return (
     <Modal open title="Support hours & call-back slots" onClose={onClose}
       footer={<><button className="btn btn-secondary" onClick={onClose}>Close</button><button className="btn btn-primary" disabled={save.isPending || v.days.length === 0} onClick={() => save.mutate(v, { onSuccess: onClose })}>Save</button></>}>
@@ -250,6 +254,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         <Field label="Book up to (days ahead)"><input className="input" type="number" min={1} max={60} value={v.bookingDays} onChange={(e) => set({ bookingDays: Number(e.target.value) })} /></Field>
         <Field label="Support phone" hint="Shown in shops’ help chat (“Call now” during hours)"><input className="input" type="tel" value={v.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} placeholder="+91 44 4000 1234" /></Field>
         <Field label="Support email"><input className="input" type="email" value={v.email ?? ''} onChange={(e) => set({ email: e.target.value })} placeholder="help@corpus360lite.com" /></Field>
+        <Field label="Support WhatsApp" hint="With country code. Shops’ “WhatsApp us” opens a chat with this number; answer from the WhatsApp Business app."><input className="input" type="tel" value={v.whatsapp ?? ''} onChange={(e) => set({ whatsapp: e.target.value })} placeholder="+91 98400 12345" /></Field>
       </div>
     </Modal>
   );
@@ -356,5 +361,80 @@ function AgentChat({ row }: { row: LiveChatRow }) {
         </form>
       ) : <div className="small muted"><Bot size={13} style={{ verticalAlign: -2 }} /> This chat has ended{row.rating ? ` · rated ${row.rating}/5` : ''}.</div>}
     </div>
+  );
+}
+
+/* ---------- WhatsApp contacts ---------- */
+
+interface WaContact {
+  id: string; shopId: string; shop: { name: string; ownerName: string; phone: string; city: string };
+  contactName: string; userEmail: string; question: string; chat: Array<{ role: 'user' | 'bot'; text: string }>;
+  status: 'open' | 'done'; handledBy: string | null; staffNotes: string; createdAt: string; doneAt: string | null; shopWhatsapp: string;
+}
+interface WaList { contacts: WaContact[]; counts: { open: number; today: number } }
+
+/** Shops that tapped "WhatsApp us". Their message arrives on the team's WhatsApp; this list says who, and what the bot already tried. */
+function WhatsAppList() {
+  const [view, setView] = useState<'open' | 'done'>('open');
+  const [openId, setOpenId] = useState<string | null>(null);
+  const list = useQuery({ queryKey: ['platform', 'support', 'whatsapp', view], queryFn: () => api.get<WaList>(`/platform/support/whatsapp?view=${view}`), refetchInterval: 30_000 });
+  const cur = list.data?.contacts.find((x) => x.id === openId) ?? null;
+  return (
+    <>
+      <p className="small muted" style={{ marginTop: 0 }}>The message itself arrives on your support WhatsApp. Reply there, then mark it handled here so the team knows it’s done.</p>
+      <div className="segmented" style={{ marginBottom: 12 }}>
+        <button className={view === 'open' ? 'active' : ''} onClick={() => setView('open')}>Open{list.data && view === 'open' ? ` (${list.data.counts.open})` : ''}</button>
+        <button className={view === 'done' ? 'active' : ''} onClick={() => setView('done')}>Handled</button>
+      </div>
+      <div className="card table-wrap">
+        <table className="table">
+          <thead><tr><th>When (IST)</th><th>Shop</th><th>Person</th><th>About</th><th>Status</th><th /></tr></thead>
+          <tbody>
+            {(list.data?.contacts ?? []).map((w) => (
+              <tr key={w.id} className="clickable" onClick={() => setOpenId(w.id)}>
+                <td style={{ whiteSpace: 'nowrap' }}><strong>{istTime(w.createdAt)}</strong> <span className="muted">{istDay(w.createdAt)}</span></td>
+                <td className="strong">{w.shop.name}<div className="small muted">{w.shop.city}</div></td>
+                <td>{w.contactName}{w.userEmail && <div className="small muted">{w.userEmail}</div>}</td>
+                <td className="small" style={{ maxWidth: 320 }}>{w.question || <span className="muted">No question typed</span>}</td>
+                <td><Badge tone={w.status === 'open' ? 'amber' : 'green'}>{w.status === 'open' ? 'Open' : `Handled${w.handledBy ? ` · ${w.handledBy}` : ''}`}</Badge></td>
+                <td><button className="btn btn-secondary btn-sm">Open</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {list.data?.contacts.length === 0 && <EmptyState icon={MessageCircle} title={view === 'open' ? 'No open WhatsApp requests' : 'Nothing handled yet'} text="When a shop taps “WhatsApp us” in Help, it shows up here." />}
+      </div>
+      {cur && <WhatsAppPanel w={cur} onClose={() => setOpenId(null)} />}
+    </>
+  );
+}
+
+function WhatsAppPanel({ w, onClose }: { w: WaContact; onClose: () => void }) {
+  const [notes, setNotes] = useState(w.staffNotes);
+  const save = useMut((b: { status?: 'open' | 'done'; staffNotes?: string }) => api.patch(`/platform/support/whatsapp/${w.id}`, b), [['platform', 'support', 'whatsapp']], { success: 'Saved' });
+  return (
+    <Modal open onClose={onClose} title={`${w.shop.name} · WhatsApp`} subtitle={`${w.contactName} · ${istDay(w.createdAt)}, ${istTime(w.createdAt)}`}
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Close</button>
+        {w.status === 'open'
+          ? <button className="btn btn-primary" disabled={save.isPending} onClick={() => save.mutate({ status: 'done', staffNotes: notes }, { onSuccess: onClose })}><CheckCircle2 size={15} /> Mark handled</button>
+          : <button className="btn btn-secondary" disabled={save.isPending} onClick={() => save.mutate({ status: 'open', staffNotes: notes }, { onSuccess: onClose })}>Reopen</button>}
+      </>}>
+      <dl className="kv">
+        <dt>Shop</dt><dd>{w.shop.name}{w.shop.city ? ` · ${w.shop.city}` : ''}</dd>
+        <dt>Owner</dt><dd>{w.shop.ownerName}</dd>
+        <dt>Shop phone</dt><dd>{w.shop.phone || '—'}{w.shopWhatsapp && <> · <a href={`https://wa.me/${w.shopWhatsapp}`} target="_blank" rel="noreferrer">Open in WhatsApp</a></>}</dd>
+        <dt>Asked</dt><dd>{w.question || '—'}</dd>
+      </dl>
+      {w.chat.length > 0 && (
+        <details style={{ marginTop: 10 }}>
+          <summary className="small" style={{ cursor: 'pointer', fontWeight: 600 }}>What the help bot already tried ({w.chat.length} messages)</summary>
+          <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+            {w.chat.map((m, i) => <div key={i} className="small"><strong>{m.role === 'user' ? w.contactName : 'Bot'}:</strong> {m.text}</div>)}
+          </div>
+        </details>
+      )}
+      <Field label="Notes for the team"><textarea className="input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What was the problem, what did you do?" /></Field>
+    </Modal>
   );
 }

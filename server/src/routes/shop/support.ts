@@ -9,7 +9,7 @@ import { perm } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, type Db } from '../../db';
 import { HttpError, badRequest, notFound, parse } from '../../http';
-import { SUPPORT_TOPICS, isSlot, supportSlots, MIN_NOTICE_MIN, istDate, LIVE, supportOpenAt, type SupportSettings } from '../../../../shared/support';
+import { SUPPORT_TOPICS, isSlot, supportSlots, MIN_NOTICE_MIN, istDate, LIVE, supportOpenAt, waDigits, type SupportSettings } from '../../../../shared/support';
 import { HOWTO, STARTERS, itemWords, understand } from '../../../../shared/supportBot';
 import { getOrg } from '../../services/common';
 import { aiEnabled } from '../../services/extract';
@@ -98,13 +98,30 @@ supportRouter.post('/support/callbacks/:id/cancel', perm('admin'), T(async (db, 
 /** The support team's details for the chat: phone, email, hours, whether they are open now, and the next free slot. */
 supportRouter.get('/support/contact', T(async (db, _req, c) => {
   const s = await supportSettings(db);
-  const cfg = await one(db, 'SELECT support_phone, support_email FROM platform_config WHERE id = 1');
+  const cfg = await one(db, 'SELECT support_phone, support_email, support_whatsapp FROM platform_config WHERE id = 1');
   const now = new Date();
   const openNow = supportOpenAt(s, now);
   const next = supportSlots(s, await bookedPerSlot(db))[0]?.slots[0]?.start ?? null;
   const online = await agentsOnline(db);
-  return { phone: cfg?.support_phone ?? '', email: cfg?.support_email ?? '', days: s.days, start: s.start, end: s.end, openNow, nextSlot: next, today: istDate(now),
+  return { phone: cfg?.support_phone ?? '', email: cfg?.support_email ?? '', whatsapp: waDigits(cfg?.support_whatsapp ?? ''), days: s.days, start: s.start, end: s.end, openNow, nextSlot: next, today: istDate(now),
     canBook: c.permissions.includes('admin'), agentsOnline: online, liveChat: openNow && online > 0 };
+}));
+
+/**
+ * "WhatsApp us": the app opens WhatsApp itself (a wa.me link with the message written); this records the contact,
+ * with what the bot already tried, so the support team sees it in Customer care. Any signed-in user can use it.
+ */
+supportRouter.post('/support/whatsapp', T(async (db, req, c, res) => {
+  const b = parse(z.object({
+    question: z.string().trim().max(500).default(''),
+    chat: z.array(z.object({ role: z.enum(['user', 'bot']), text: z.string().max(2000) })).max(40).default([]),
+  }), req.body);
+  const [{ n }] = (await db.query("SELECT count(*)::int AS n FROM support_whatsapp WHERE shop_id = $1 AND created_at > now() - interval '1 hour'", [c.shopId])).rows;
+  if (n >= 10) { res.status(429); return { recorded: false, error: 'Too many WhatsApp requests from this shop in the last hour.' }; }
+  const r = await one(db, `INSERT INTO support_whatsapp (shop_id, user_id, contact_name, question, chat) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+    [c.shopId, c.id, c.name, b.question, JSON.stringify(b.chat)]);
+  await audit(db, req, c.shopId, 'create', 'support_whatsapp', r!.id, {});
+  return { recorded: true, id: r!.id };
 }));
 
 type Reply = { text: string; table?: { columns: string[]; rows: string[][] }; links?: Array<{ label: string; to: string }>; suggestions?: string[]; escalate?: boolean; by: 'bot' | 'ai' };

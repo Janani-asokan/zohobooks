@@ -111,3 +111,7 @@
 :root[data-theme='dark'] .tabs button.active { color: var(--accent-ink); }
 :root[data-theme='dark'] .filter-chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 :root[data-theme='dark'] .badge-blue { background: #1c2e2e; color: #b4c7c5; }
+
+/* WhatsApp support button: WhatsApp's own deep green so people recognise it, with white text that passes AA. */
+.btn-whatsapp { background: #075e54; color: #fff; border: none; }
+.btn-whatsapp:hover:not(:disabled) { background: #054c44; color: #fff; }

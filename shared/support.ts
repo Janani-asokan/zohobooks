@@ -98,3 +98,24 @@ export function supportOpenAt(s: SupportSettings, now = new Date()) {
   const dow = ((ist.getUTCDay() + 6) % 7) + 1;
   return s.days.includes(dow) && m >= mins(s.start) && m < mins(s.end);
 }
+
+/* ---------- WhatsApp support ---------- */
+
+/**
+ * A WhatsApp number as wa.me wants it: digits only, with the country code. A 10-digit Indian mobile gets 91 in front;
+ * an 11-digit number starting with 0 drops the 0. Anything else that isn't 11–15 digits is not a number ('').
+ */
+export function waDigits(raw: string): string {
+  let d = (raw ?? '').replace(/\D/g, '');
+  if (d.length === 11 && d.startsWith('0')) d = d.slice(1);
+  if (d.length === 10) return /^[6-9]/.test(d) ? `91${d}` : '';
+  return d.length >= 11 && d.length <= 15 ? d : '';
+}
+
+/** The message WhatsApp opens with, so the team knows who is writing and why without asking. */
+export function whatsappSupportText(x: { shopName: string; userName: string; question?: string }) {
+  const q = (x.question ?? '').trim().replace(/\s+/g, ' ').slice(0, 300);
+  return [`Hi Corpus360 support, I need help.`, `Shop: ${x.shopName}`, `Name: ${x.userName}`, q ? `About: ${q}` : ''].filter(Boolean).join('\n');
+}
+
+export const waLink = (digits: string, text: string) => `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;

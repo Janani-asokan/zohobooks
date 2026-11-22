@@ -4,12 +4,22 @@ import { Bot, Loader2, Mail, Phone, Send, UserRound, Headset, CalendarClock, Mes
 import { ApiError } from '@/api/client';
 import { useToast } from '@/context/ToastContext';
 import { api } from '@/api/client';
-import { LIVE, istDay, istTime } from '../../shared/support';
+import { LIVE, istDay, istTime, waLink, whatsappSupportText } from '../../shared/support';
+import { useAuth } from '@/context/AuthContext';
 import { STARTERS } from '../../shared/supportBot';
 
 export interface BotReply { text: string; table?: { columns: string[]; rows: string[][] }; links?: Array<{ label: string; to: string }>; suggestions?: string[]; escalate?: boolean; by: 'bot' | 'ai' }
 export type ChatMsg = { role: 'user'; text: string } | ({ role: 'bot' } & BotReply);
-export interface SupportContact { phone: string; email: string; days: number[]; start: string; end: string; openNow: boolean; nextSlot: string | null; canBook: boolean; agentsOnline?: number; liveChat?: boolean }
+export interface SupportContact { phone: string; email: string; whatsapp?: string; days: number[]; start: string; end: string; openNow: boolean; nextSlot: string | null; canBook: boolean; agentsOnline?: number; liveChat?: boolean }
+
+/** WhatsApp's speech-bubble mark (lucide has no brand icons). */
+function WhatsAppIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.2.1-.2 0-.3 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.5-.6 1.8-1.2.2-.6.2-1.1.1-1.2l-.4-.2Z" />
+    </svg>
+  );
+}
 
 const DAYS = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const hhmm = (t: string) => istTime(`2026-01-01T${t}:00+05:30`);
@@ -25,7 +35,15 @@ export function HelpChat({ contact, onBook }: { contact: SupportContact | undefi
   const [human, setHuman] = useState(false);
   const [live, setLive] = useState<LiveState | null>(null);
   const toast = useToast();
+  const { me } = useAuth();
   const end = useRef<HTMLDivElement>(null);
+  // "WhatsApp us": WhatsApp opens with who is asking and the last question; the tap is recorded for the support team.
+  // The person's own last question, not a button they tapped to reach us ("Talk to a person").
+  const lastQuestion = [...msgs].reverse().find((m) => m.role === 'user' && !/^(talk to a person|that solved it)/i.test(m.text))?.text ?? '';
+  const whatsapp = contact?.whatsapp && me?.kind === 'user' ? {
+    href: waLink(contact.whatsapp, whatsappSupportText({ shopName: me.shop.name, userName: me.user.name, question: lastQuestion })),
+    onOpen: () => { void api.post('/shop/support/whatsapp', { question: lastQuestion, chat: transcript() }).catch(() => undefined); },
+  } : undefined;
   // An open chat with an agent carries on after a page reload.
   useEffect(() => { api.get<{ chat: LiveState['chat'] | null; messages: LiveState['messages'] }>('/shop/support/live/current').then((r) => { if (r.chat && (r.chat.status === 'waiting' || r.chat.status === 'active')) setLive(r as LiveState); }).catch(() => undefined); }, []);
   useEffect(() => { end.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [msgs, human]);
@@ -79,7 +97,7 @@ export function HelpChat({ contact, onBook }: { contact: SupportContact | undefi
           </div>
         ))}
         {busy && <div className="hc-row"><span className="hc-av"><Bot size={14} /></span><div className="hc-bubble"><Loader2 size={14} className="spin" /> Looking that up…</div></div>}
-        {human && <PersonPanel contact={contact} onBook={() => onBook(transcript())} onLive={startLive} />}
+        {human && <PersonPanel contact={contact} onBook={() => onBook(transcript())} onLive={startLive} whatsapp={whatsapp} />}
         <div ref={end} />
       </div>
       {lastBot?.suggestions && !busy && <div className="hc-chips">{lastBot.suggestions.map((s) => <button key={s} type="button" className="filter-chip" onClick={() => (/talk to a person/i.test(s) ? (setMsgs((m) => [...m, { role: 'user', text: s }]), setHuman(true)) : ask(s))}>{s}</button>)}</div>}
@@ -98,7 +116,7 @@ export function HelpChat({ contact, onBook }: { contact: SupportContact | undefi
 }
 
 /** The support team: open now or not, call / email, and a call-back with this chat attached. */
-function PersonPanel({ contact, onBook, onLive }: { contact: SupportContact | undefined; onBook: () => void; onLive: () => void }) {
+function PersonPanel({ contact, onBook, onLive, whatsapp }: { contact: SupportContact | undefined; onBook: () => void; onLive: () => void; whatsapp?: { href: string; onOpen: () => void } }) {
   if (!contact) return null;
   const tel = contact.phone.replace(/[^\d+]/g, '');
   const hours = `${contact.days.map((d) => DAYS[d]).join(', ')} · ${hhmm(contact.start)} – ${hhmm(contact.end)}`;
@@ -113,12 +131,14 @@ function PersonPanel({ contact, onBook, onLive }: { contact: SupportContact | un
         {contact.liveChat && <button type="button" className="btn btn-primary btn-sm" onClick={onLive}><MessageCircle size={14} /> Chat with an agent now</button>}
         {tel && contact.openNow && <a className={`btn ${contact.liveChat ? 'btn-secondary' : 'btn-primary'} btn-sm`} href={`tel:${tel}`}><Phone size={14} /> Call now · {contact.phone}</a>}
         {tel && !contact.openNow && <span className="small">Phone: {contact.phone} (during hours)</span>}
+        {whatsapp && <a className="btn btn-whatsapp btn-sm" href={whatsapp.href} target="_blank" rel="noreferrer" onClick={whatsapp.onOpen}><WhatsAppIcon /> WhatsApp us</a>}
         {contact.email && <a className="btn btn-secondary btn-sm" href={`mailto:${contact.email}`}><Mail size={14} /> {contact.email}</a>}
         {contact.canBook ? (
           <button type="button" className="btn btn-secondary btn-sm" onClick={onBook}><CalendarClock size={14} /> Book a call-back{contact.nextSlot ? ` · next free ${istDay(contact.nextSlot)}, ${istTime(contact.nextSlot)}` : ''}</button>
         ) : <span className="small muted">Only the owner can book a call-back; ask them, or call us.</span>}
       </div>
       {contact.canBook && <div className="small muted">This chat goes with the call-back, so you won’t have to explain again.</div>}
+      {whatsapp && <div className="small muted">WhatsApp opens with your shop and question already written. We reply during support hours.</div>}
     </div>
   );
 }

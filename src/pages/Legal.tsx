@@ -14,19 +14,18 @@ import { SHOP_RESTORE_DAYS } from '../../shared/accountDeletion';
 const UPDATED = '21 November 2026';
 
 function useContact() {
-  return useQuery({ queryKey: ['public', 'contact'], queryFn: () => api.get<{ phone: string; email: string }>('/public/contact'), staleTime: 300_000, retry: false });
+  return useQuery({ queryKey: ['public', 'contact'], queryFn: () => api.get<{ phone: string; email: string; whatsapp?: string }>('/public/contact'), staleTime: 300_000, retry: false });
 }
 
 function ContactLine() {
   const c = useContact().data;
-  if (!c?.email && !c?.phone) return <>through <strong>Help → Talk to us</strong> in the app or on the website</>;
-  return (
-    <>
-      {c.email && <>by email at <a href={`mailto:${c.email}`}>{c.email}</a></>}
-      {c.email && c.phone && ' or '}
-      {c.phone && <>by phone on <a href={`tel:${c.phone.replace(/\s/g, '')}`}>{c.phone}</a></>}
-    </>
-  );
+  const ways = [
+    c?.email ? <>by email at <a href={`mailto:${c.email}`}>{c.email}</a></> : null,
+    c?.phone ? <>by phone on <a href={`tel:${c.phone.replace(/\s/g, '')}`}>{c.phone}</a></> : null,
+    c?.whatsapp ? <>on <a href={`https://wa.me/${c.whatsapp}`} target="_blank" rel="noreferrer">WhatsApp</a></> : null,
+  ].filter(Boolean);
+  if (!ways.length) return <>through <strong>Help → Talk to us</strong> in the app or on the website</>;
+  return <>{ways.map((w, i) => <span key={i}>{i > 0 && (i === ways.length - 1 ? ' or ' : ', ')}{w}</span>)}</>;
 }
 
 function LegalShell({ title, children }: { title: string; children: ReactNode }) {

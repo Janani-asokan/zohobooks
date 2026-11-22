@@ -14,7 +14,7 @@ Super admin → **Logs** shows all of this live. The list of services and which 
 | **Razorpay** (api.razorpay.com) | Online payment for Corpus360 plans | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | API calls |
 | Razorpay Checkout (checkout.razorpay.com) | The payment window, which runs in the browser | (`RAZORPAY_KEY_ID`) | Not by the server |
 | OpenStreetMap tiles | Field staff maps, on the website only | none | Not by the server |
-| Google Maps / WhatsApp (wa.me) links | "Open in maps" and "Share on WhatsApp" links | none | Not by the server; they are only links |
+| Google Maps / WhatsApp (wa.me) links | "Open in maps", "Share on WhatsApp" and "WhatsApp us" (support) links | Support number: Customer care → Support hours | Support taps are recorded in Customer care → WhatsApp |
 
 E-invoice (IRP) and WhatsApp Business API settings exist in `config.ts`, but nothing calls them yet. The app
 produces the official JSON for upload on the government portals and uses `wa.me` links instead.

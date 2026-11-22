@@ -91,8 +91,8 @@ export const INTEGRATIONS: Integration[] = [
     settings: [], features: [], note: 'Just a link; nothing is sent by the server.',
   },
   {
-    key: 'whatsapp_link', name: 'WhatsApp links (wa.me)', what: 'Share an invoice or reminder on WhatsApp', side: 'browser', host: 'wa.me',
-    settings: [], features: [], note: 'Opens WhatsApp with the message ready; the person sends it. Automatic WhatsApp messages (WHATSAPP_TOKEN) are not built yet.',
+    key: 'whatsapp_link', name: 'WhatsApp links (wa.me)', what: 'Share an invoice or reminder on WhatsApp, and “WhatsApp us” support in Help', side: 'browser', host: 'wa.me',
+    settings: [], features: [], note: 'Opens WhatsApp with the message ready; the person sends it. Support taps are recorded in Customer care → WhatsApp; the team replies from the WhatsApp Business app. Automatic WhatsApp messages (WHATSAPP_TOKEN) are not built yet.',
   },
 ];
 

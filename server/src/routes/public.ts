@@ -5,6 +5,7 @@ import { h, notFound } from '../http';
 import { getInvoice } from '../services/documents';
 import { invoicePrintBundle, verifyRenderToken } from '../services/printBundle';
 import { pdfName, renderPdfOr503 } from './shop/sales';
+import { waDigits } from '../../../shared/support';
 
 /** Unauthenticated, read-only invoice view behind an unguessable token (for WhatsApp / email links). */
 export const publicRouter = Router();
@@ -62,8 +63,8 @@ publicRouter.get(
   '/contact',
   rateLimit('public', 60, 60_000),
   h(async (_req, res) => {
-    const [c] = await query('SELECT support_phone, support_email FROM platform_config WHERE id = 1');
+    const [c] = await query('SELECT support_phone, support_email, support_whatsapp FROM platform_config WHERE id = 1');
     res.setHeader('Cache-Control', 'public, max-age=300');
-    res.json({ phone: c?.support_phone ?? '', email: c?.support_email ?? '' });
+    res.json({ phone: c?.support_phone ?? '', email: c?.support_email ?? '', whatsapp: waDigits(c?.support_whatsapp ?? '') });
   }),
 );

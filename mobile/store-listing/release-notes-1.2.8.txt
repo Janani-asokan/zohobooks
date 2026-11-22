@@ -1,0 +1,10 @@
+<en-IN>
+• A fresh teal and mint look and a new app icon
+• Every screen fits your phone: lists and bills show as neat cards
+• Faster billing: a new line appears as you add items; repeat a customer's last bill
+• Move stock between branches, confirmed with a one-time code
+• Sales beyond a branch's stock are blocked; owners can allow one with a reason
+• Help: ask the help bot, chat with our team, or WhatsApp us
+• My account: change your password or delete your account
+• Security improvements
+</en-IN>
