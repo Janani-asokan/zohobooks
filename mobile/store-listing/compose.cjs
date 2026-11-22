@@ -13,7 +13,7 @@ const base = `
 @font-face { font-family: Int; src: url(${inter(500)}); font-weight: 500; }
 * { box-sizing: border-box; margin: 0; }
 body { width: __W__; height: __H__; overflow: hidden; color: #fff;
-  background: radial-gradient(120% 70% at 85% 0%, #c96478 0%, rgba(201,100,120,0) 60%), linear-gradient(165deg, #a9475a 0%, #7d2f42 100%); }
+  background: radial-gradient(110% 60% at 85% 0%, rgba(209,151,131,.38) 0%, rgba(209,151,131,0) 60%), linear-gradient(165deg, #5a1611 0%, #330000 70%); }
 `;
 
 const shots = [
@@ -34,9 +34,9 @@ const shots = [
     await p.setContent(`<html><style>${base.replace('__W__', '1080px').replace('__H__', '1920px')}
       .cap { position: absolute; top: 110px; left: 80px; right: 80px; text-align: center; }
       h1 { font: 700 76px/1.12 Pop; letter-spacing: -0.5px; }
-      p { font: 500 38px/1.4 Int; opacity: .88; margin-top: 22px; }
+      p { font: 500 38px/1.4 Int; color: #f1d3c7; margin-top: 22px; }
       .phone { position: absolute; left: 50%; top: 470px; width: 760px; transform: translateX(-50%); border-radius: 64px; padding: 18px;
-        background: #1d1416; box-shadow: 0 40px 90px rgba(40,6,16,.45); }
+        background: #140404; box-shadow: 0 40px 90px rgba(0,0,0,.45); }
       .phone img { display: block; width: 100%; border-radius: 48px; }
     </style><body><div class="cap"><h1>${title}</h1><p>${sub}</p></div><div class="phone"><img src="${img}"></div></body></html>`);
     await p.evaluate(() => document.fonts.ready);
@@ -53,11 +53,11 @@ const shots = [
   await p.setContent(`<html><style>${base.replace('__W__', '1024px').replace('__H__', '500px')}
     .l { position: absolute; left: 60px; top: 0; bottom: 0; width: 500px; display: flex; flex-direction: column; justify-content: center; }
     .brand { display: flex; align-items: center; gap: 16px; }
-    .mark { width: 64px; height: 64px; border-radius: 16px; background: #fff; color: #a9475a; padding: 9px; }
+    .mark { width: 64px; height: 64px; border-radius: 16px; background: linear-gradient(135deg, #330000, #5a1611); border: 1.5px solid rgba(209,151,131,.6); color: #d19783; padding: 9px; }
     .name { font: 700 52px/1 Pop; letter-spacing: -0.5px; }
     h1 { font: 600 38px/1.2 Pop; margin-top: 30px; }
-    p { font: 500 21px/1.45 Int; opacity: .88; margin-top: 14px; }
-    .ph { position: absolute; width: 230px; border-radius: 30px; padding: 8px; background: #1d1416; box-shadow: 0 24px 60px rgba(40,6,16,.5); }
+    p { font: 500 21px/1.45 Int; color: #f1d3c7; margin-top: 14px; }
+    .ph { position: absolute; width: 230px; border-radius: 30px; padding: 8px; background: #140404; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
     .ph img { display: block; width: 100%; border-radius: 23px; }
     .p1 { left: 600px; top: 80px; transform: rotate(-6deg); }
     .p2 { left: 760px; top: 46px; transform: rotate(5deg); }
@@ -73,7 +73,7 @@ const shots = [
 
   // App icon: 512x512, full square (Play rounds the corners itself).
   await p.setViewportSize({ width: 512, height: 512 });
-  await p.setContent(`<html><style>* { margin: 0 } body { width: 512px; height: 512px; background: linear-gradient(160deg, #b9566a, #8e3549); display: grid; place-items: center; color: #fff; }
+  await p.setContent(`<html><style>* { margin: 0 } body { width: 512px; height: 512px; background: linear-gradient(135deg, #330000, #5a1611); display: grid; place-items: center; color: #d19783; }
     .m { width: 300px; height: 300px; }</style><body><div class="m">${MARK}</div></body></html>`);
   await p.screenshot({ path: `${OUT}/icon-512.png` });
   await b.close();
