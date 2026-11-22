@@ -123,14 +123,14 @@ export const FEATURES: FeatureDef[] = [
   },
   {
     key: 'attendance', name: 'Staff attendance', group: 'Staff',
-    summary: 'Know who came to work and when, and pay salaries on correct days.',
-    includes: ['Daily attendance', 'Monthly attendance report'],
+    summary: 'Staff check in and out on their own phone or laptop: location, a selfie, and their fingerprint or face unlock.',
+    includes: ['Check in / out with location (and distance from the shop)', 'Selfie at every check-in', 'Fingerprint or face unlock of their own phone or laptop', 'Who is in today, and a monthly report with hours'],
     levels: [
-      { key: 'manual', name: 'Manual entry', description: 'The owner or manager marks attendance' },
-      { key: 'face', name: 'Face recognition', description: 'Staff mark attendance with a selfie on the shop phone' },
-      { key: 'biometric', name: 'Biometric device', description: 'Attendance comes from a fingerprint machine' },
+      { key: 'manual', name: 'Location check-in', description: 'Staff tap Check in; where they were is recorded. The owner can also mark by hand.' },
+      { key: 'face', name: 'Selfie + location', description: 'Each check-in also takes a selfie.' },
+      { key: 'biometric', name: 'Fingerprint / face unlock + selfie', description: 'Staff confirm with their own phone’s or laptop’s fingerprint or face unlock. No machine to buy.' },
     ],
-    available: false, api: [], pages: [],
+    available: true, api: [/^\/attendance(\/|$)/], pages: [/^\/app\/attendance(\/|$)/],
     defaultMonthly: { manual: 99, face: 199, biometric: 299 },
   },
   {

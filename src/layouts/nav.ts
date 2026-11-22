@@ -1,7 +1,7 @@
 import { IS_APP } from '@/lib/platform';
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift, Tag, Headset, ShieldCheck } from 'lucide-react';
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift, Tag, Headset, ShieldCheck, Fingerprint } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import { featureForPage } from '../../shared/features';
 import type { PaletteAction } from './CommandPalette';
@@ -97,6 +97,7 @@ export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavIte
       ],
     });
   }
+  items.push({ label: 'Attendance', icon: Fingerprint, to: '/app/attendance' }); // shown only when the shop has the add-on
   if (can('reports.read')) items.push({ label: 'Reports', icon: BarChart3, to: '/app/reports' });
   if (can('admin')) items.push({ label: 'Settings', icon: Settings, to: '/app/organization' });
   else if (can('audit.read')) items.push({ label: 'Audit Log', icon: History, to: '/app/audit' });
@@ -175,6 +176,7 @@ export function buildActions(can: Can, flags: NavFlags = { lending: false }): Pa
   add(true, 'Go to', 'Stock adjustments', SlidersHorizontal, '/app/inventory/adjustments', 'stock count damaged expired write off');
   add(true, 'Go to', 'Transfers', ArrowLeftRight, '/app/inventory/transfers', 'move stock between branches in transit');
   add(can('items.write') || can('purchases.read'), 'Go to', 'Smart Reorder', BrainCircuit, '/app/inventory/reorder', 'reorder low stock purchase suggestions dead stock expiry AI');
+  add(true, 'Go to', 'Attendance', Fingerprint, '/app/attendance', 'staff attendance check in check out selfie fingerprint face present absent hours');
   add(true, 'Go to', 'My Day (field visits)', MapPin, '/app/field', 'salesman check in visit gps start day');
   add(can('field.view'), 'Go to', 'Field Team', MapPinned, '/app/field/team', 'salesman tracking map route gps team');
   add(true, 'Go to', 'Tally & Import', RefreshCw, '/app/accounting/tally', 'tally export import xml vyapar busy excel csv migrate');

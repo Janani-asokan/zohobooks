@@ -1,6 +1,6 @@
 import {
   ArrowLeftRight, BarChart3, BrainCircuit, RefreshCw, MapPin, MapPinned, BookOpen, Boxes, Building2, ClipboardList, FileMinus, FileSignature, FileText, History, IndianRupee, Landmark, LayoutDashboard,
-  NotebookPen, Package, Percent, Printer, Receipt, Repeat, Scale, ScanLine, CreditCard, SlidersHorizontal, Truck, UserRound, Users, Wallet, Warehouse, type LucideIcon, Puzzle } from 'lucide-react';
+  NotebookPen, Package, Percent, Printer, Receipt, Repeat, Scale, ScanLine, CreditCard, SlidersHorizontal, Truck, UserRound, Users, Wallet, Warehouse, type LucideIcon, Puzzle, Fingerprint } from 'lucide-react';
 
 /** Icon and colour for each page title, matched on the longest route prefix. */
 const ICONS: Array<[string, LucideIcon, string]> = [
@@ -10,7 +10,7 @@ const ICONS: Array<[string, LucideIcon, string]> = [
   ['/app/purchases/vendors', Truck, 'cocoa'], ['/app/purchases/orders', ClipboardList, 'gold'], ['/app/purchases/bills', Receipt, 'rose'],
   ['/app/purchases/payments', IndianRupee, 'sage'], ['/app/purchases/expenses', Wallet, 'gold'],
   ['/app/items', Package, 'sage'], ['/app/inventory/warehouses', Warehouse, 'cocoa'], ['/app/inventory/adjustments', SlidersHorizontal, 'gold'],
-  ['/app/inventory/transfers', ArrowLeftRight, 'blush'], ['/app/inventory/reorder', BrainCircuit, 'rose'], ['/app/accounting/tally', RefreshCw, 'sage'], ['/app/field/team', MapPinned, 'sage'], ['/app/field', MapPin, 'rose'], ['/app/inventory/stock-summary', Boxes, 'sage'],
+  ['/app/inventory/transfers', ArrowLeftRight, 'blush'], ['/app/inventory/reorder', BrainCircuit, 'rose'], ['/app/accounting/tally', RefreshCw, 'sage'], ['/app/field/team', MapPinned, 'sage'], ['/app/field', MapPin, 'rose'], ['/app/attendance', Fingerprint, 'sage'], ['/app/inventory/stock-summary', Boxes, 'sage'],
   ['/app/banking', Landmark, 'cocoa'], ['/app/accounting/accounts', BookOpen, 'rose'], ['/app/accounting/journals', NotebookPen, 'gold'], ['/app/accounting/ledger', BookOpen, 'sage'],
   ['/app/reports/gst', Percent, 'gold'], ['/app/reports/balance-sheet', Scale, 'sage'], ['/app/reports', BarChart3, 'rose'],
   ['/app/organization', Building2, 'rose'], ['/app/team', Users, 'sage'], ['/app/print-settings', Printer, 'cocoa'], ['/app/billing', CreditCard, 'gold'], ['/app/features', Puzzle, 'sage'], ['/app/audit', History, 'cocoa'],

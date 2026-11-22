@@ -1,0 +1,27 @@
+/* Staff attendance */
+.att-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .att-grid { grid-template-columns: 1fr; } }
+.att-hero { display: flex; flex-direction: column; gap: 14px; }
+.att-state { display: flex; align-items: center; gap: 10px; font-size: 17px; }
+.att-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ink-300); box-shadow: 0 0 0 4px var(--ink-50); flex: none; }
+.att-state.in .att-dot { background: var(--green-600); box-shadow: 0 0 0 4px var(--green-50); }
+.att-go { align-self: flex-start; min-width: 200px; justify-content: center; height: 52px; font-size: 17px; }
+.att-needs { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.att-needs li { display: flex; gap: 6px; align-items: center; }
+.att-marks { list-style: none; padding: 12px 0 0; margin: 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.att-marks li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.att-kind { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--ink-50); color: var(--ink-700); }
+.att-kind.in { background: var(--green-50); color: var(--green-700); }
+.att-devices { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.att-devices li { display: flex; align-items: center; gap: 8px; }
+.att-devices li span { flex: 1; }
+.att-step { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--ink-50); margin-bottom: 12px; flex-wrap: wrap; }
+.att-step.warn { background: var(--amber-50); color: var(--amber-700); }
+.att-cam { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.att-cam video, .att-cam img { width: 100%; max-width: 360px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 14px; background: #000; }
+.att-cam video { transform: scaleX(-1); }
+.att-selfie { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; display: inline-grid; place-items: center; background: var(--ink-50); color: var(--ink-400); }
+.att-proof { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; max-width: 460px; }
+.att-month .att-day { width: 24px; padding: 4px 2px; text-align: center; font-size: 12px; }
+.att-month td.att-day.p { color: var(--green-700); font-weight: 700; background: var(--green-50); }
+.att-month td.att-day.open { color: var(--amber-700); font-weight: 700; background: var(--amber-50); }

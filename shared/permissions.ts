@@ -17,6 +17,7 @@ export const PERMISSIONS = {
   'reports.read': 'View reports & GST returns',
   'audit.read': 'View the audit log',
   'field.view': 'See field staff visits, routes and locations',
+  'attendance.manage': 'Staff attendance: see everyone’s check-ins and selfies, mark by hand, set shop locations',
   'lending.read': 'Microfinance: see borrowers, loans, dues and reports',
   'lending.write': 'Microfinance: register borrowers, give and close loans, late charges',
   'lending.collect': 'Microfinance: collect instalments (without “see” access, only loans assigned to them)',
@@ -49,7 +50,8 @@ export const PERMISSION_GROUPS: Array<{ module: string; permissions: Permission[
   { module: 'Reports', permissions: ['reports.read'] },
   { module: 'Warehouse licences', permissions: ['licenses.read', 'licenses.write', 'licenses.override'] },
   { module: 'Microfinance management', permissions: ['lending.read', 'lending.write', 'lending.collect'] },
-  { module: 'Administration', permissions: ['field.view', 'audit.read', 'admin'] },
+  { module: 'Staff', permissions: ['field.view', 'attendance.manage'] },
+  { module: 'Administration', permissions: ['audit.read', 'admin'] },
 ];
 
 /** Only the owner holds admin; it lets a user manage staff and permissions, so it can't be granted. */

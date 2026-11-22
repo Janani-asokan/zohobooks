@@ -84,7 +84,7 @@ describe('asking for a feature and turning it on', () => {
     const quotes = list.features.find((f: { key: string }) => f.key === 'quotes_orders');
     expect(quotes.on).toBe(false);
     expect(quotes.levels[0].monthly).toBeGreaterThan(0);
-    expect(list.features.some((f: { key: string }) => f.key === 'attendance')).toBe(false); // not offered yet
+    expect(list.features.some((f: { key: string }) => f.key === 'microfinance')).toBe(false); // retired here: not offered to shops without it
 
     expect((await basic.post('/api/shop/features/quotes_orders/request').send({ level: 'standard' })).status).toBe(200);
     const again = await basic.post('/api/shop/features/quotes_orders/request').send({ level: 'standard' });
@@ -130,7 +130,7 @@ describe('asking for a feature and turning it on', () => {
 
   it('a level that does not exist and a feature that is not offered are refused', async () => {
     expect((await basic.post('/api/shop/features/pos/request').send({ level: 'gold' })).status).toBe(400);
-    expect((await basic.post('/api/shop/features/attendance/request').send({ level: 'manual' })).status).toBe(400);
+    expect((await basic.post('/api/shop/features/microfinance/request').send({ level: 'standard' })).status).toBe(400); // not offered
   });
 });
 

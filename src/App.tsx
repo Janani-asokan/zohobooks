@@ -52,6 +52,7 @@ const DeliveryChallans = IS_APP ? WebOnly : lazy(() => import('./pages/app/Deliv
 const StockInsights = IS_APP ? WebOnly : lazy(() => import('./pages/app/StockInsights'));
 const DataTransfer = IS_APP ? WebOnly : lazy(() => import('./pages/app/DataTransfer'));
 const FieldDay = IS_APP ? WebOnly : lazy(() => import('./pages/app/FieldDay'));
+const Attendance = lazy(() => import('./pages/app/Attendance'));
 const FieldTeam = IS_APP ? WebOnly : lazy(() => import('./pages/app/FieldTeam'));
 const LendingHome = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/LendingHome'));
 const Borrowers = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/Borrowers'));
@@ -142,6 +143,7 @@ export default function App() {
             <Route path="sales/orders" element={<SalesOrders key="order" />} />
             <Route path="sales/challans" element={<DeliveryChallans />} />
             <Route path="field" element={<FieldDay />} />
+            <Route path="attendance" element={<Attendance />} />
             <Route path="field/team" element={<FieldTeam />} />
             <Route path="sales/invoices" element={<Invoices />} />
             <Route path="sales/invoices/new" element={<InvoiceForm />} />
