@@ -115,3 +115,23 @@
 /* WhatsApp support button: WhatsApp's own deep green so people recognise it, with white text that passes AA. */
 .btn-whatsapp { background: #075e54; color: #fff; border: none; }
 .btn-whatsapp:hover:not(:disabled) { background: #054c44; color: #fff; }
+
+/* Customer care → WhatsApp inbox: conversations on the left, the thread on the right (stacked on phones). */
+.wa-inbox { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 12px; height: max(440px, calc(100vh - 370px)); }
+.wa-list { overflow-y: auto; padding-bottom: 8px; min-height: 0; }
+.wa-row { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 10px 14px; border: 0; border-top: 1px solid var(--border); background: none; cursor: pointer; color: var(--ink-800); }
+.wa-row:hover { background: var(--row-hover); }
+.wa-row.on { background: var(--row-selected); box-shadow: inset 3px 0 0 var(--teal); }
+.wa-preview { color: var(--ink-600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-thread { display: flex; min-height: 0; padding: 0; }
+.wa-thread-inner { display: flex; flex-direction: column; width: 100%; min-height: 0; }
+.wa-thread-head { padding: 12px 14px; border-bottom: 1px solid var(--border); gap: 10px; }
+.wa-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--canvas); }
+.wa-msg { max-width: 78%; padding: 8px 12px; border-radius: 14px 14px 14px 4px; background: var(--surface); border: 1px solid var(--border); align-self: flex-start; overflow-wrap: anywhere; }
+.wa-msg.out { align-self: flex-end; border-radius: 14px 14px 4px 14px; background: var(--brand-100); border-color: var(--brand-200); }
+.wa-msg img { display: block; max-width: 260px; max-height: 260px; border-radius: 10px; margin-bottom: 4px; }
+.wa-body { white-space: pre-wrap; }
+.wa-meta { font-size: 11.5px; color: var(--ink-500); margin-top: 3px; }
+.wa-compose { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); align-items: flex-end; }
+.wa-compose .input { flex: 1; resize: vertical; }
+@media (max-width: 760px) { .wa-inbox { grid-template-columns: 1fr; height: auto; } .wa-list { max-height: 40vh; } .wa-thread { height: 70vh; } }

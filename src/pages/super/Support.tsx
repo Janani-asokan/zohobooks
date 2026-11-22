@@ -74,6 +74,15 @@ export default function SuperSupport() {
   const list = useQuery({ queryKey: ['platform', 'support', 'callbacks', view], queryFn: () => api.get<{ callbacks: Cb[]; counts: { upcoming: number; overdue: number; today: number } }>(`/platform/support/callbacks?view=${view}`), refetchInterval: 60_000, enabled: view !== 'live' && view !== 'whatsapp' });
   const open = list.data?.callbacks?.find((c) => c.id === openId) ?? null;
   const wa = useQuery({ queryKey: ['platform', 'support', 'whatsapp', 'open'], queryFn: () => api.get<WaList>('/platform/support/whatsapp'), refetchInterval: 30_000 });
+  const inbox = useQuery({ queryKey: ['platform', 'support', 'wa-inbox', 'open'], queryFn: () => api.get<WaInboxList>('/platform/support/wa'), refetchInterval: 5000, refetchIntervalInBackground: true });
+  // A chime when a new WhatsApp message arrives (same sound setting as live chats).
+  const unreadBefore = useRef<number | null>(null);
+  useEffect(() => {
+    const n = inbox.data?.unread;
+    if (n === undefined) return;
+    if (unreadBefore.current !== null && n > unreadBefore.current && sound) playChime('new');
+    unreadBefore.current = n;
+  }, [inbox.data?.unread, sound]);
   const c = list.data?.counts;
 
   return (
@@ -90,7 +99,9 @@ export default function SuperSupport() {
           <MessageCircle size={15} /> Live chats {waiting > 0 ? <span className="badge badge-red">{waiting} waiting</span> : <span className="count">{live.data?.chats.filter((x) => x.status === 'active').length ?? 0}</span>}
         </button>
         <button className={view === 'whatsapp' ? 'active' : ''} onClick={() => setView('whatsapp')}>
-          <MessageCircle size={15} /> WhatsApp {wa.data?.counts.open ? <span className="badge badge-amber">{wa.data.counts.open} open</span> : null}
+          <MessageCircle size={15} /> WhatsApp {inbox.data?.configured
+            ? (inbox.data.unread ? <span className="badge badge-red">{inbox.data.unread} new</span> : null)
+            : (wa.data?.counts.open ? <span className="badge badge-amber">{wa.data.counts.open} open</span> : null)}
         </button>
         {VIEWS.map(([k, l]) => (
           <button key={k} className={view === k ? 'active' : ''} onClick={() => setView(k)}>
@@ -98,7 +109,7 @@ export default function SuperSupport() {
           </button>
         ))}
       </div>
-      {view === 'live' ? <LiveConsole data={live.data} /> : view === 'whatsapp' ? <WhatsAppList /> : <>
+      {view === 'live' ? <LiveConsole data={live.data} /> : view === 'whatsapp' ? <WhatsAppTab inbox={inbox.data} /> : <>
       {!!c?.overdue && <div className="support-alert"><AlertTriangle size={15} /> {c.overdue} call-back{c.overdue > 1 ? 's are' : ' is'} past the booked time and not yet closed.</div>}
 
       <div className="card table-wrap">
@@ -436,5 +447,142 @@ function WhatsAppPanel({ w, onClose }: { w: WaContact; onClose: () => void }) {
       )}
       <Field label="Notes for the team"><textarea className="input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What was the problem, what did you do?" /></Field>
     </Modal>
+  );
+}
+
+/* ---------- WhatsApp Business API inbox ---------- */
+
+interface WaConv { id: string; waId: string; profileName: string; shopId: string | null; shopName: string | null; status: 'open' | 'closed'; unread: number; lastInboundAt: string | null; lastMessageAt: string; preview: string; assignedTo: string | null; windowOpen: boolean }
+interface WaMsg { id: number; direction: 'in' | 'out'; kind: string; body: string; hasMedia: boolean; mediaMime: string; mediaName: string; status: string; error: string; sentBy: string | null; at: string }
+interface WaInboxList { configured: boolean; webhookSecured: boolean; templateSet: boolean; webhookAt: string | null; unread: number; conversations: WaConv[] }
+
+/** The WhatsApp tab: the two-way inbox when the Business API is set up, and the list of "WhatsApp us" taps. */
+function WhatsAppTab({ inbox }: { inbox: WaInboxList | undefined }) {
+  const [part, setPart] = useState<'inbox' | 'taps'>('inbox');
+  if (!inbox?.configured) return <WhatsAppList />;
+  return (
+    <>
+      <div className="segmented" style={{ marginBottom: 12 }}>
+        <button className={part === 'inbox' ? 'active' : ''} onClick={() => setPart('inbox')}>Inbox{inbox.unread ? ` (${inbox.unread} new)` : ''}</button>
+        <button className={part === 'taps' ? 'active' : ''} onClick={() => setPart('taps')}>“WhatsApp us” taps</button>
+      </div>
+      {part === 'inbox' ? <WaInbox data={inbox} /> : <WhatsAppList />}
+    </>
+  );
+}
+
+const TICK: Record<string, string> = { sending: '…', sent: '✓', delivered: '✓✓', read: '✓✓ read', failed: 'Not sent' };
+const fmtAt = (iso: string) => `${istDay(iso)}, ${istTime(iso)}`;
+
+function WaInbox({ data }: { data: WaInboxList }) {
+  const [view, setView] = useState<'open' | 'closed'>('open');
+  const closed = useQuery({ queryKey: ['platform', 'support', 'wa-inbox', 'closed'], queryFn: () => api.get<WaInboxList>('/platform/support/wa?view=closed'), enabled: view === 'closed' });
+  const list = view === 'open' ? data.conversations : closed.data?.conversations ?? [];
+  const [openId, setOpenId] = useState<string | null>(null);
+  const cur = list.find((c) => c.id === openId) ?? null;
+  return (
+    <>
+      {!data.webhookSecured && <div className="support-alert"><AlertTriangle size={15} /> WHATSAPP_APP_SECRET and WHATSAPP_VERIFY_TOKEN must be set on the server, or Meta’s messages are refused.</div>}
+      <p className="small muted" style={{ marginTop: 0 }}>
+        Messages to your support WhatsApp number arrive here. {data.webhookAt ? `WhatsApp last reached us ${fmtAt(data.webhookAt)}.` : 'No message from WhatsApp yet: check the webhook in your Meta app.'}
+      </p>
+      <div className="wa-inbox">
+        <div className="card wa-list">
+          <div className="segmented" style={{ margin: 10 }}>
+            <button className={view === 'open' ? 'active' : ''} onClick={() => setView('open')}>Open</button>
+            <button className={view === 'closed' ? 'active' : ''} onClick={() => setView('closed')}>Closed</button>
+          </div>
+          {list.map((c) => (
+            <button key={c.id} className={`wa-row ${c.id === openId ? 'on' : ''}`} onClick={() => setOpenId(c.id)}>
+              <span className="row between" style={{ gap: 8 }}>
+                <strong>{c.shopName ?? (c.profileName || `+${c.waId}`)}</strong>
+                {c.unread > 0 && <span className="badge badge-red">{c.unread}</span>}
+              </span>
+              <span className="small muted">{c.shopName ? `${c.profileName || ''} +${c.waId}` : 'Shop not matched'} · {fmtAt(c.lastMessageAt)}</span>
+              <span className="small wa-preview">{c.preview}</span>
+            </button>
+          ))}
+          {!list.length && <EmptyState icon={MessageCircle} title={view === 'open' ? 'No open conversations' : 'No closed conversations'} text="When a shop messages your support WhatsApp, it shows up here." />}
+        </div>
+        <div className="card wa-thread">
+          {cur ? <WaThread key={cur.id} conv={cur} templateSet={data.templateSet} /> : <EmptyState icon={MessageCircle} title="Pick a conversation" text="Choose one on the left to read and reply." />}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function WaThread({ conv, templateSet }: { conv: WaConv; templateSet: boolean }) {
+  const toast = useToast();
+  const [msgs, setMsgs] = useState<WaMsg[]>([]);
+  const [info, setInfo] = useState<WaConv>(conv);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const end = useRef<HTMLDivElement>(null);
+  const lastId = useRef(0);
+  const load = async () => {
+    try {
+      const r = await api.get<{ conversation: WaConv; messages: WaMsg[] }>(`/platform/support/wa/${conv.id}?after=0`);
+      setInfo(r.conversation);
+      setMsgs(r.messages);
+      const newest = r.messages[r.messages.length - 1]?.id ?? 0;
+      if (newest !== lastId.current) { lastId.current = newest; requestAnimationFrame(() => end.current?.scrollIntoView({ block: 'end' })); }
+    } catch { /* try again next round */ }
+  };
+  useEffect(() => { void load(); const t = window.setInterval(load, 5000); return () => window.clearInterval(t); }, [conv.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const send = async () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    try { await api.post(`/platform/support/wa/${conv.id}/messages`, { body: text.trim() }); setText(''); await load(); }
+    catch (e) { toast('error', 'Not sent', e instanceof ApiError ? e.message : 'Try again.'); await load(); }
+    finally { setBusy(false); }
+  };
+  const template = async () => {
+    setBusy(true);
+    try { await api.post(`/platform/support/wa/${conv.id}/template`); await load(); toast('success', 'Template sent', 'Reply once they answer.'); }
+    catch (e) { toast('error', 'Not sent', e instanceof ApiError ? e.message : 'Try again.'); }
+    finally { setBusy(false); }
+  };
+  const setStatus = async (status: 'open' | 'closed') => {
+    try { setInfo(await api.patch<WaConv>(`/platform/support/wa/${conv.id}`, { status })); toast('success', status === 'closed' ? 'Conversation closed' : 'Conversation reopened'); }
+    catch (e) { toast('error', 'Couldn’t update', e instanceof ApiError ? e.message : 'Try again.'); }
+  };
+  return (
+    <div className="wa-thread-inner">
+      <div className="row between wa-thread-head">
+        <div style={{ minWidth: 0 }}>
+          <strong>{info.shopName ?? (info.profileName || `+${info.waId}`)}</strong>
+          <div className="small muted">{info.profileName} · +{info.waId}{info.shopName ? '' : ' · shop not matched'}</div>
+        </div>
+        {info.status === 'open'
+          ? <button className="btn btn-secondary btn-sm" onClick={() => setStatus('closed')}><CheckCircle2 size={14} /> Close</button>
+          : <button className="btn btn-secondary btn-sm" onClick={() => setStatus('open')}>Reopen</button>}
+      </div>
+      <div className="wa-msgs">
+        {msgs.map((m) => (
+          <div key={m.id} className={`wa-msg ${m.direction}`}>
+            {m.hasMedia && (m.mediaMime.startsWith('image/')
+              ? <a href={`/api/platform/support/wa/media/${m.id}`} target="_blank" rel="noreferrer"><img src={`/api/platform/support/wa/media/${m.id}`} alt={m.body || 'Photo from the shop'} loading="lazy" /></a>
+              : <a className="btn btn-secondary btn-sm" href={`/api/platform/support/wa/media/${m.id}`} target="_blank" rel="noreferrer">Open {m.mediaName || m.kind}</a>)}
+            {m.body && <div className="wa-body">{m.body}</div>}
+            <div className="wa-meta">{m.direction === 'out' && m.sentBy ? `${m.sentBy} · ` : ''}{fmtAt(m.at)}{m.direction === 'out' ? ` · ${TICK[m.status] ?? m.status}` : ''}</div>
+            {m.status === 'failed' && m.error && <div className="small" style={{ color: 'var(--red-600)' }}>{m.error}</div>}
+          </div>
+        ))}
+        <div ref={end} />
+      </div>
+      {info.windowOpen ? (
+        <form className="wa-compose" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+          <textarea className="input" rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="Reply on WhatsApp…" maxLength={4000}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+          <button className="btn btn-primary" disabled={busy || !text.trim()}><Send size={15} /> Send</button>
+        </form>
+      ) : (
+        <div className="support-alert" style={{ margin: 12 }}>
+          <AlertTriangle size={15} /> More than 24 hours since they last wrote, so WhatsApp only allows an approved template.
+          {templateSet ? <button className="btn btn-secondary btn-sm" style={{ marginLeft: 8 }} disabled={busy} onClick={template}>Send template</button> : ' None is set: call them instead.'}
+        </div>
+      )}
+    </div>
   );
 }

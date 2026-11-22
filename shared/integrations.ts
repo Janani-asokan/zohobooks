@@ -48,6 +48,11 @@ export const FEATURE_LABELS: Record<string, string> = {
   briefing: 'Morning business briefing',
   // Payments
   plan_payment: 'Pay for a Corpus360 plan online',
+  // WhatsApp Business API (support inbox)
+  support_reply: 'WhatsApp reply from Customer care',
+  support_template: 'WhatsApp template (after 24 hours)',
+  support_read: 'WhatsApp read receipt',
+  support_media: 'Open a photo or file sent on WhatsApp',
 };
 
 const EMAIL_FEATURES = ['signup_code', 'welcome', 'password_reset', 'password_reset_admin', 'workspace_ready', 'shop_closed', 'invoice',
@@ -77,6 +82,12 @@ export const INTEGRATIONS: Integration[] = [
     key: 'razorpay', name: 'Razorpay', what: 'Online payment for Corpus360 plans', side: 'server', host: 'api.razorpay.com',
     settings: ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'], features: ['plan_payment'], docs: 'https://razorpay.com/docs/api/orders/create/',
     note: 'The card/UPI payment itself happens in Razorpay’s checkout window (checkout.razorpay.com) in the browser.',
+  },
+  {
+    key: 'whatsapp', name: 'WhatsApp Business API (Meta)', what: 'Two-way WhatsApp support inbox in Customer care', side: 'server', host: 'graph.facebook.com',
+    settings: ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN', 'WHATSAPP_TEMPLATE'],
+    features: ['support_reply', 'support_template', 'support_read', 'support_media'], docs: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
+    note: 'Incoming messages arrive on the webhook /api/webhooks/whatsapp (checked with the app secret). Replying within 24 hours of the shop’s message is free; templates are charged by Meta. See docs/whatsapp-business-api.md.',
   },
   {
     key: 'razorpay_checkout', name: 'Razorpay Checkout', what: 'The payment window shown to the shop owner', side: 'browser', host: 'checkout.razorpay.com',

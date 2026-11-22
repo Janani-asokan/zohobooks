@@ -35,6 +35,7 @@ const NO_RLS = new Set(['users', 'user_shops', 'public_links', 'role_permissions
   'shop_features', // platform billing, read on every request before the shop context is set
   'ai_usage', 'ai_topups', // platform billing of AI credits, written outside the shop transaction
   'email_log', 'api_calls', // platform logs of outgoing emails and API calls, read by the super admin across shops
+  'wa_conversations', // WhatsApp support inbox: a message arrives before its shop is known
 ]);
 
 const MIGRATIONS = path.resolve(__dirname, '../migrations');

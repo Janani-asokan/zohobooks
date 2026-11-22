@@ -10,6 +10,8 @@ import { many, one, query, tx, withTenant, type Db } from '../db';
 import { HttpError, badRequest, h, notFound, parse } from '../http';
 import { bookedPerSlot, expireWaiting, serializeCallback, serializeChat, serializeMsg, supportSettings } from './shop/support';
 import { isSlot, supportSlots, waDigits } from '../../../shared/support';
+import { config } from '../config';
+import { fetchMedia, markRead, sendTemplate, sendText, waEnabled, windowOpen } from '../services/whatsappCloud';
 
 export const platformSupportRouter = Router();
 
@@ -161,6 +163,119 @@ platformSupportRouter.patch('/whatsapp/:id', h(async (req, res) => {
     return one(db, `${WA_SQL} WHERE w.id = $1`, [cur.id]);
   });
   res.json(serializeWa(row));
+}));
+
+/* ======================= WhatsApp Business API inbox ======================= */
+
+const waConv = (r: any) => ({
+  id: r.id, waId: r.wa_id, profileName: r.profile_name, shopId: r.shop_id, shopName: r.shop_name ?? null, status: r.status,
+  unread: r.unread, lastInboundAt: r.last_inbound_at, lastMessageAt: r.last_message_at, preview: r.last_preview,
+  assignedTo: r.assigned_name ?? null, windowOpen: windowOpen(r.last_inbound_at),
+});
+const waMsg = (r: any) => ({
+  id: Number(r.id), direction: r.direction, kind: r.kind, body: r.body, hasMedia: !!r.media_id, mediaMime: r.media_mime, mediaName: r.media_name,
+  status: r.status, error: r.error, sentBy: r.sent_by_name || null, at: r.created_at,
+});
+const CONV_SQL = `SELECT c.*, s.name AS shop_name, sa.name AS assigned_name FROM wa_conversations c
+                  LEFT JOIN shops s ON s.id = c.shop_id LEFT JOIN super_admins sa ON sa.id = c.assigned_to`;
+
+/** Whether the API is set up, when Meta last reached the webhook, and the conversations (open first). */
+platformSupportRouter.get('/wa', h(async (req, res) => {
+  const closed = req.query.view === 'closed';
+  const rows = await query(`${CONV_SQL} WHERE c.status = $1 ORDER BY c.last_message_at DESC LIMIT 200`, [closed ? 'closed' : 'open']);
+  const [cfg] = await query('SELECT wa_webhook_at FROM platform_config WHERE id = 1');
+  const [{ unread }] = await query("SELECT coalesce(sum(unread), 0)::int AS unread FROM wa_conversations WHERE status = 'open'");
+  res.json({
+    configured: waEnabled(), webhookSecured: !!config.whatsapp?.appSecret && !!config.whatsapp?.verifyToken, templateSet: !!config.whatsapp?.template,
+    webhookAt: cfg?.wa_webhook_at ?? null, unread, conversations: rows.map(waConv),
+  });
+}));
+
+/** One conversation: its messages (after ?after= for polling). Opening it marks it read here and on the shop's phone. */
+platformSupportRouter.get('/wa/:id', h(async (req, res) => {
+  const [c] = await query(`${CONV_SQL} WHERE c.id = $1`, [req.params.id]);
+  if (!c) throw notFound('Conversation');
+  const after = Number(req.query.after ?? 0) || 0;
+  const msgs = await query('SELECT * FROM wa_messages WHERE conversation_id = $1 AND id > $2 ORDER BY id LIMIT 500', [c.id, after]);
+  if (c.unread > 0) {
+    await query('UPDATE wa_conversations SET unread = 0 WHERE id = $1', [c.id]);
+    const [last] = await query("SELECT wa_message_id FROM wa_messages WHERE conversation_id = $1 AND direction = 'in' ORDER BY id DESC LIMIT 1", [c.id]);
+    if (last?.wa_message_id) void markRead(last.wa_message_id);
+  }
+  res.json({ conversation: { ...waConv(c), unread: 0 }, messages: msgs.map(waMsg) });
+}));
+
+/** A text reply from an agent. WhatsApp only allows free text for 24 hours after the shop's last message. */
+platformSupportRouter.post('/wa/:id/messages', h(async (req, res) => {
+  const b = parse(z.object({ body: z.string().trim().min(1, 'Type a message').max(4000) }), req.body);
+  const [c] = await query('SELECT * FROM wa_conversations WHERE id = $1', [req.params.id]);
+  if (!c) throw notFound('Conversation');
+  if (!windowOpen(c.last_inbound_at)) {
+    throw new HttpError(409, config.whatsapp?.template
+      ? 'More than 24 hours since the shop last wrote: WhatsApp only allows the approved template now. Send it, and reply once they answer.'
+      : 'More than 24 hours since the shop last wrote: WhatsApp only allows an approved template message, and none is set (WHATSAPP_TEMPLATE). Call them instead.', 'window_closed');
+  }
+  const a = agent(req);
+  const [row] = await query(`INSERT INTO wa_messages (conversation_id, direction, kind, body, status, sent_by, sent_by_name) VALUES ($1, 'out', 'text', $2, 'sending', $3, $4) RETURNING *`,
+    [c.id, b.body, a?.id ?? null, a?.name ?? '']);
+  try {
+    const waId = await sendText(c.wa_id, b.body);
+    const [sent] = await query("UPDATE wa_messages SET wa_message_id = $2, status = 'sent' WHERE id = $1 RETURNING *", [row.id, waId || null]);
+    await query("UPDATE wa_conversations SET last_message_at = now(), last_preview = $2, assigned_to = coalesce(assigned_to, $3) WHERE id = $1", [c.id, b.body.slice(0, 140), a?.id ?? null]);
+    res.json(waMsg(sent));
+  } catch (e) {
+    await query("UPDATE wa_messages SET status = 'failed', error = $2 WHERE id = $1", [row.id, (e as Error).message]);
+    throw e;
+  }
+}));
+
+/** The approved template, to reopen a conversation after the 24-hour window. */
+platformSupportRouter.post('/wa/:id/template', h(async (req, res) => {
+  if (!config.whatsapp?.template) throw badRequest('No approved template is set on the server (WHATSAPP_TEMPLATE).');
+  const [c] = await query('SELECT * FROM wa_conversations WHERE id = $1', [req.params.id]);
+  if (!c) throw notFound('Conversation');
+  const a = agent(req);
+  const body = `[Template: ${config.whatsapp.template}]`;
+  const [row] = await query(`INSERT INTO wa_messages (conversation_id, direction, kind, body, status, sent_by, sent_by_name) VALUES ($1, 'out', 'template', $2, 'sending', $3, $4) RETURNING *`,
+    [c.id, body, a?.id ?? null, a?.name ?? '']);
+  try {
+    const waId = await sendTemplate(c.wa_id);
+    const [sent] = await query("UPDATE wa_messages SET wa_message_id = $2, status = 'sent' WHERE id = $1 RETURNING *", [row.id, waId || null]);
+    await query('UPDATE wa_conversations SET last_message_at = now(), last_preview = $2 WHERE id = $1', [c.id, body]);
+    res.json(waMsg(sent));
+  } catch (e) {
+    await query("UPDATE wa_messages SET status = 'failed', error = $2 WHERE id = $1", [row.id, (e as Error).message]);
+    throw e;
+  }
+}));
+
+/** Close or reopen a conversation, or link it to a shop when it wasn't matched automatically. */
+platformSupportRouter.patch('/wa/:id', h(async (req, res) => {
+  const b = parse(z.object({ status: z.enum(['open', 'closed']).optional(), shopId: z.string().uuid().nullable().optional() }), req.body);
+  const [c] = await query('SELECT * FROM wa_conversations WHERE id = $1', [req.params.id]);
+  if (!c) throw notFound('Conversation');
+  if (b.shopId) { const [s] = await query('SELECT 1 FROM shops WHERE id = $1', [b.shopId]); if (!s) throw notFound('Shop'); }
+  await query('UPDATE wa_conversations SET status = $2, shop_id = $3 WHERE id = $1', [c.id, b.status ?? c.status, b.shopId === undefined ? c.shop_id : b.shopId]);
+  await tx((db) => audit(db, req, b.shopId ?? c.shop_id ?? null, 'update', 'wa_conversation', c.id, { status: b.status ?? c.status }));
+  const [row] = await query(`${CONV_SQL} WHERE c.id = $1`, [c.id]);
+  res.json(waConv(row));
+}));
+
+/** A photo or document the shop sent, fetched from WhatsApp on demand (never stored on our server). */
+platformSupportRouter.get('/wa/media/:messageId', h(async (req, res) => {
+  const [m] = await query("SELECT media_id, media_mime, media_name FROM wa_messages WHERE id = $1 AND media_id <> ''", [Number(req.params.messageId) || 0]);
+  if (!m) throw notFound('File');
+  const f = await fetchMedia(m.media_id);
+  // Only formats a browser shows safely are opened inline; anything else (HTML, SVG, scripts…) is a plain download,
+  // so a file from WhatsApp can never run in the console.
+  const inline = /^(image\/(jpeg|png|webp|gif)|application\/pdf|audio\/[\w.+-]+|video\/[\w.+-]+)$/i.test(f.mime);
+  const name = (m.media_name || 'whatsapp-file').replace(/[^\w.\- ]/g, '_');
+  res.setHeader('Content-Type', inline ? f.mime : 'application/octet-stream');
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${name}"`);
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox");
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.send(f.data);
 }));
 
 /* ======================= Live chats ======================= */

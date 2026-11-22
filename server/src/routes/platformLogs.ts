@@ -130,7 +130,7 @@ platformLogsRouter.get('/integrations', h(async (_req, res) => {
       const e = lastErr.find((x) => x.service === i.key);
       return {
         ...i,
-        configured: i.settings.length ? i.settings.filter((n) => n !== 'MAIL_FROM' && n !== 'AI_MODEL' && n !== 'SMTP_PORT').every(isSet) : null,
+        configured: i.settings.length ? i.settings.filter((n) => !['MAIL_FROM', 'AI_MODEL', 'SMTP_PORT', 'WHATSAPP_TEMPLATE'].includes(n)).every(isSet) : null,
         settingsStatus: i.settings.map((n) => ({ name: n, set: isSet(n) })),
         inUse: i.key === 'brevo' || i.key === 'resend' || i.key === 'smtp' ? mail.provider === i.key : undefined,
         last7Days: s ? { calls: s.calls, failed: s.failed, avgMs: s.avg_ms, lastAt: s.last_at, lastOkAt: s.last_ok_at } : { calls: 0, failed: 0 },

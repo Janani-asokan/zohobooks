@@ -36,6 +36,7 @@ import { featuresRouter } from './routes/shop/features';
 import { featureGate } from './services/features';
 import { aiContext } from './services/aiUsage';
 import { outboundStore } from './services/outbound';
+import { whatsappWebhookRouter } from './routes/whatsappWebhook';
 
 /** Lets the email and API-call logs record which shop and person a request was for. */
 const shopOutboundCtx = (req: express.Request, _res: express.Response, next: express.NextFunction) => {
@@ -77,6 +78,8 @@ export function createApp() {
   const httpsHeaders = securityHeaders(true);
   const httpHeaders = securityHeaders(false);
   app.use((req, res, next) => (req.secure ? httpsHeaders : httpHeaders)(req, res, next));
+  // Meta's WhatsApp webhook: before the JSON parser and the session/CSRF checks (it signs the raw body instead).
+  app.use('/api/webhooks/whatsapp', whatsappWebhookRouter);
   // Uploads (files sent as base64) get a larger body limit than everything else.
   const smallJson = express.json({ limit: '3mb' });
   const uploadJson = express.json({ limit: '15mb' });

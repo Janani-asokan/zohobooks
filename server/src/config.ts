@@ -48,7 +48,15 @@ export const config = {
   razorpay: env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? { keyId: env.RAZORPAY_KEY_ID, keySecret: env.RAZORPAY_KEY_SECRET } : null,
   /** E-invoice (IRP) provider credentials — when absent, the app generates the JSON for manual upload only. */
   einvoice: env.EINVOICE_API_URL ? { url: env.EINVOICE_API_URL, clientId: env.EINVOICE_CLIENT_ID ?? '', clientSecret: env.EINVOICE_CLIENT_SECRET ?? '' } : null,
-  whatsapp: env.WHATSAPP_TOKEN && env.WHATSAPP_PHONE_ID ? { token: env.WHATSAPP_TOKEN, phoneId: env.WHATSAPP_PHONE_ID } : null,
+  /**
+   * WhatsApp Business (Cloud) API from Meta, for the support inbox. TOKEN: a permanent system-user token;
+   * PHONE_ID: the phone number's id; APP_SECRET: checks that webhook calls come from Meta; VERIFY_TOKEN: any secret
+   * string, typed into Meta's webhook settings too. TEMPLATE: an approved template for replying after 24 hours.
+   */
+  whatsapp: env.WHATSAPP_TOKEN && env.WHATSAPP_PHONE_ID ? {
+    token: env.WHATSAPP_TOKEN, phoneId: env.WHATSAPP_PHONE_ID, appSecret: env.WHATSAPP_APP_SECRET ?? '', verifyToken: env.WHATSAPP_VERIFY_TOKEN ?? '',
+    template: env.WHATSAPP_TEMPLATE ?? '', templateLang: env.WHATSAPP_TEMPLATE_LANG ?? 'en', version: env.WHATSAPP_API_VERSION ?? 'v21.0',
+  } : null,
   /**
    * Demo mode: the well-known demo passwords (owner123, admin123 …) work and the login page lists them.
    * On by default whenever demo data is seeded; set DEMO_SIMPLE_PASSWORDS=0 to turn it off.

@@ -153,6 +153,7 @@ function Calls() {
           <select className="select" value={f.service} onChange={(e) => set({ service: e.target.value })} aria-label="Service" style={{ width: 170 }}>
             <option value="">All services</option><option value="brevo">Brevo (email)</option><option value="resend">Resend (email)</option><option value="smtp">SMTP (email)</option>
             <option value="anthropic">Anthropic (AI)</option><option value="razorpay">Razorpay (payments)</option>
+            <option value="whatsapp">WhatsApp (Meta)</option>
           </select>
           <select className="select" value={f.ok} onChange={(e) => set({ ok: e.target.value })} aria-label="Result" style={{ width: 140 }}>
             <option value="">All results</option><option value="false">Failures only</option><option value="true">Worked</option>
