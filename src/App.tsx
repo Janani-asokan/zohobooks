@@ -1,9 +1,10 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { FullPageSpinner, ProtectedRoute } from './components/ProtectedRoute';
-import { homeFor, useAuth } from './context/AuthContext';
+import { hasSignedInBefore, homeFor, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import LandingPage from './pages/Landing';
 import { DeleteAccountHelp, Privacy, Terms } from './pages/Legal';
 import ResetPassword from './pages/ResetPassword';
 import SuperAdminLayout from './layouts/SuperAdminLayout';
@@ -16,7 +17,8 @@ import { IS_APP } from './lib/platform';
 const WebOnly = lazy(() => import('./pages/WebOnly'));
 const PublicInvoice = IS_APP ? WebOnly : lazy(() => import('./pages/PublicInvoice'));
 const PrintInvoice = lazy(() => import('./pages/PrintInvoice'));
-const Landing = IS_APP ? WebOnly : lazy(() => import('./pages/Landing'));
+// The website's front page is in the main bundle (not loaded separately), so visitors wait for one download fewer.
+const Landing = IS_APP ? WebOnly : LandingPage;
 const SuperDashboard = IS_APP ? WebOnly : lazy(() => import('./pages/super/Dashboard'));
 const Configuration = IS_APP ? WebOnly : lazy(() => import('./pages/super/Configuration'));
 const Plans = IS_APP ? WebOnly : lazy(() => import('./pages/super/Plans'));
@@ -86,7 +88,9 @@ const BarcodeLabels = lazy(() => import('./pages/app/BarcodeLabels'));
 /** "/" shows the public landing page to visitors and sends signed-in users to their workspace. */
 function RootPage() {
   const { me, loading } = useAuth();
-  if (loading) return <FullPageSpinner />;
+  // A first-time visitor sees the front page at once instead of waiting for the "are you signed in?" check; only
+  // someone who signed in on this device before waits for it (and is then taken to their workspace).
+  if (loading) return IS_APP || hasSignedInBefore() ? <FullPageSpinner /> : <Landing />;
   return me ? <Navigate to={homeFor(me)} replace /> : IS_APP ? <Navigate to="/login" replace /> : <Landing />;
 }
 

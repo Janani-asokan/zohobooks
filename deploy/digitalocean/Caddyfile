@@ -4,7 +4,8 @@
 # server's IP address is served by the plain-http block below.
 
 {$SITE_ADDRESS:http://localhost} {
-	encode gzip
+	# zstd for browsers that accept it (smaller, faster to unpack), gzip for the rest.
+	encode zstd gzip
 	# Send www to the main address.
 	@www host www.{$PRIMARY_HOST:localhost}
 	redir @www https://{$PRIMARY_HOST:localhost}{uri} permanent

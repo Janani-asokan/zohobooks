@@ -10,6 +10,10 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script src="/theme-init.js"></script>
+      <script>
+      // Front page only: fetch the first-screen photo in parallel with the app's code.
+      if (location.pathname === '/') { var l = document.createElement('link'); l.rel = 'preload'; l.as = 'image'; l.setAttribute('imagesrcset', '/img/hero-480.webp 480w, /img/hero-960.webp 960w'); l.setAttribute('imagesizes', '(max-width: 520px) 92vw, 470px'); l.setAttribute('fetchpriority', 'high'); document.head.appendChild(l); }
+    </script>
   </head>
   <body>
     <div id="root"></div>

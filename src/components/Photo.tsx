@@ -4,10 +4,15 @@ import { useState, type ReactNode } from 'react';
  * A photo slot: shows /public/img/<file> when it exists, otherwise the drawn illustration.
  * Drop a real photo with the same name into public/img and it appears without code changes.
  */
-export function Photo({ src, alt, fallback, className }: { src: string; alt: string; fallback: ReactNode; className?: string }) {
+/**
+ * `priority`: the photo is on the first screen, so it loads at once and before other images (not lazily).
+ * `srcSet`/`sizes`: smaller files for phones and normal screens, the big one only for sharp screens.
+ */
+export function Photo({ src, alt, fallback, className, priority, srcSet, sizes }: { src: string; alt: string; fallback: ReactNode; className?: string; priority?: boolean; srcSet?: string; sizes?: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <>{fallback}</>;
-  return <img className={className} src={src} alt={alt} loading="lazy" decoding="async" onError={() => setFailed(true)} />;
+  return <img className={className} src={src} srcSet={srcSet} sizes={sizes} alt={alt} loading={priority ? 'eager' : 'lazy'} decoding={priority ? 'sync' : 'async'}
+    {...(priority ? { fetchpriority: 'high' } : {})} onError={() => setFailed(true)} />;
 }
 
 /** Hero illustration: a billing tablet with an invoice, coins, a parcel and a shopping bag. */

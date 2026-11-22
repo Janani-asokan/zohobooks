@@ -11,13 +11,20 @@ import { registerServiceWorker } from './pwa';
 import { IS_APP } from './lib/platform';
 import { installNativeBridges } from './lib/native';
 import { installTableCards } from './lib/tableCards';
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/500.css';
-import '@fontsource/inter/600.css';
-import '@fontsource/inter/700.css';
-import '@fontsource/poppins/500.css';
-import '@fontsource/poppins/600.css';
-import '@fontsource/poppins/700.css';
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-ext-400.css'; // ₹ and Indian names with accents
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-ext-500.css'; // ₹ and Indian names with accents
+import '@fontsource/inter/latin-600.css';
+import '@fontsource/inter/latin-ext-600.css'; // ₹ and Indian names with accents
+import '@fontsource/inter/latin-700.css';
+import '@fontsource/inter/latin-ext-700.css'; // ₹ and Indian names with accents
+import '@fontsource/poppins/latin-500.css';
+import '@fontsource/poppins/latin-ext-500.css'; // ₹ and Indian names with accents
+import '@fontsource/poppins/latin-600.css';
+import '@fontsource/poppins/latin-ext-600.css'; // ₹ and Indian names with accents
+import '@fontsource/poppins/latin-700.css';
+import '@fontsource/poppins/latin-ext-700.css'; // ₹ and Indian names with accents
 import './styles/tokens.css';
 import './styles/base.css';
 import './styles/shell.css';

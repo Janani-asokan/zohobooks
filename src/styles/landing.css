@@ -25,7 +25,7 @@
 
 /* Hero */
 .lp-hero { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 40px; align-items: center; padding: 40px 6vw 80px; max-width: 1320px; margin: 0 auto; }
-.lp-hero-text { animation: rise-in .7s cubic-bezier(.2, .7, .2, 1) backwards; }
+.lp-hero-text { } /* no entrance animation: the first screen shows as soon as it arrives */
 .lp-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 99px; background: #fff; color: var(--brand-700); font-weight: 600; font-size: 13px; box-shadow: 0 6px 18px rgba(1, 143, 150, .14); }
 .lp-badge svg { color: var(--rose); animation: wiggle 2.4s ease-in-out infinite; }
 .lp-hero h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; font-weight: 700; margin: 22px 0 0; letter-spacing: -0.02em; }
@@ -41,10 +41,10 @@
 .lp-facts li { display: inline-flex; align-items: center; gap: 8px; }
 .lp-facts svg { width: 22px; height: 22px; padding: 4px; border-radius: 50%; background: var(--sage-grad); color: #fff; }
 
-.lp-hero-art { position: relative; min-height: 480px; display: grid; place-items: center; animation: pop-in .9s .1s cubic-bezier(.2, .7, .2, 1) backwards; }
+.lp-hero-art { position: relative; min-height: 480px; display: grid; place-items: center; }
 .lp-blob { position: absolute; inset: 6% 8%; border-radius: 46% 54% 52% 48% / 52% 44% 56% 48%; background: linear-gradient(135deg, #c6e0d6 0%, #d4e1d0 50%, #a9d2c6 100%); animation: morph 12s ease-in-out infinite; }
 @keyframes morph { 0%, 100% { border-radius: 46% 54% 52% 48% / 52% 44% 56% 48%; } 50% { border-radius: 56% 44% 42% 58% / 44% 58% 42% 56%; } }
-.lp-hero-photo { position: relative; width: 92%; max-width: 470px; height: auto; object-fit: contain; filter: drop-shadow(0 24px 34px rgba(11, 61, 64, .22)); animation: rise-in .9s .2s cubic-bezier(.2, .7, .2, 1) backwards; }
+.lp-hero-photo { position: relative; width: 92%; max-width: 470px; height: auto; object-fit: contain; filter: drop-shadow(0 24px 34px rgba(11, 61, 64, .22)); }
 .lp-art { position: relative; width: 92%; max-width: 500px; height: auto; }
 .lp-bob { animation: float-y 5s ease-in-out infinite; transform-box: fill-box; }
 .lp-twinkle { animation: twinkle 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }

@@ -43,9 +43,9 @@ const TRADE_ICON: Record<string, LucideIcon> = {
 const TRADES = BUSINESS_TEMPLATES.map((t) => ({ key: t.key, name: t.name, line: t.helps[0] ?? t.summary, icon: TRADE_ICON[t.key] ?? Store }));
 
 const AUDIENCE = [
-  { img: '/img/owner.webp', tone: 'rose' as const, icon: <Store size={44} />, title: 'For shop owners', text: 'See sales, dues and stock on one screen every morning.', cta: 'See the dashboard' },
-  { img: '/img/counter.webp', tone: 'sage' as const, icon: <ScanLine size={44} />, title: 'For the billing counter', text: 'Scan, bill and print — even during the evening rush.', cta: 'Try POS billing' },
-  { img: '/img/accountant.webp', tone: 'cocoa' as const, icon: <Calculator size={44} />, title: 'For your accountant', text: 'Clean books, GST returns and exports ready to file.', cta: 'View reports' },
+  { img: '/img/owner-900.webp', tone: 'rose' as const, icon: <Store size={44} />, title: 'For shop owners', text: 'See sales, dues and stock on one screen every morning.', cta: 'See the dashboard' },
+  { img: '/img/counter-900.webp', tone: 'sage' as const, icon: <ScanLine size={44} />, title: 'For the billing counter', text: 'Scan, bill and print — even during the evening rush.', cta: 'Try POS billing' },
+  { img: '/img/accountant-900.webp', tone: 'cocoa' as const, icon: <Calculator size={44} />, title: 'For your accountant', text: 'Clean books, GST returns and exports ready to file.', cta: 'View reports' },
 ];
 
 const STEPS = [
@@ -55,14 +55,14 @@ const STEPS = [
 ];
 
 const SCREENS = [
-  { id: 'dashboard', label: 'AI morning plan', icon: Sparkles, caption: 'Every morning: a health score for your business and a to-do list written by AI, with one-tap reminders.', src: '/screens/dashboard.jpg' },
-  { id: 'pos', label: 'Speak the bill', icon: Mic, caption: 'Say or type the bill in your own words. Items, customer, discount and payment fill themselves.', src: '/screens/pos.jpg' },
-  { id: 'reorder', label: 'Smart reorder', icon: BrainCircuit, caption: 'What to buy, how much and from whom, with festival tips. One tap makes the purchase orders.', src: '/screens/reorder.jpg' },
-  { id: 'ask', label: 'Ask AI', icon: MessageCircle, caption: 'Ask your shop anything, by voice or text, and hear the answer read aloud.', src: '/screens/ask.jpg' },
-  { id: 'counter', label: 'Counter & camera', icon: ScanLine, caption: 'Scanner, camera, voice or tap: every way to put items on the bill, with keyboard keys for the rush.', src: '/screens/counter.jpg' },
-  { id: 'labels', label: 'Barcode labels', icon: Tag, caption: 'Pick items, choose your label roll or sticker sheet, and print. What you see is the real label size.', src: '/screens/labels.jpg' },
-  { id: 'invoice', label: 'GST invoice', icon: FileText, caption: 'Clean GST invoices with your logo, UPI QR and profit on every bill.', src: '/screens/invoice.jpg' },
-  { id: 'reports', label: 'Reports', icon: BarChart3, caption: 'P&L, balance sheet, GST returns and Tally export, ready for your CA.', src: '/screens/reports.jpg' },
+  { id: 'dashboard', label: 'AI morning plan', icon: Sparkles, caption: 'Every morning: a health score for your business and a to-do list written by AI, with one-tap reminders.', src: '/screens/dashboard.webp' },
+  { id: 'pos', label: 'Speak the bill', icon: Mic, caption: 'Say or type the bill in your own words. Items, customer, discount and payment fill themselves.', src: '/screens/pos.webp' },
+  { id: 'reorder', label: 'Smart reorder', icon: BrainCircuit, caption: 'What to buy, how much and from whom, with festival tips. One tap makes the purchase orders.', src: '/screens/reorder.webp' },
+  { id: 'ask', label: 'Ask AI', icon: MessageCircle, caption: 'Ask your shop anything, by voice or text, and hear the answer read aloud.', src: '/screens/ask.webp' },
+  { id: 'counter', label: 'Counter & camera', icon: ScanLine, caption: 'Scanner, camera, voice or tap: every way to put items on the bill, with keyboard keys for the rush.', src: '/screens/counter.webp' },
+  { id: 'labels', label: 'Barcode labels', icon: Tag, caption: 'Pick items, choose your label roll or sticker sheet, and print. What you see is the real label size.', src: '/screens/labels.webp' },
+  { id: 'invoice', label: 'GST invoice', icon: FileText, caption: 'Clean GST invoices with your logo, UPI QR and profit on every bill.', src: '/screens/invoice.webp' },
+  { id: 'reports', label: 'Reports', icon: BarChart3, caption: 'P&L, balance sheet, GST returns and Tally export, ready for your CA.', src: '/screens/reports.webp' },
 ];
 
 /** Where Corpus360 goes further than a regular billing app. */
@@ -158,7 +158,7 @@ export default function Landing() {
         </div>
         <div className="lp-hero-art">
           <div className="lp-blob" />
-          <Photo className="lp-hero-photo" src="/img/hero.webp" alt="Smiling shop owner holding a tablet" fallback={<HeroArt />} />
+          <Photo className="lp-hero-photo" priority src="/img/hero-480.webp" srcSet="/img/hero-480.webp 480w, /img/hero-960.webp 960w" sizes="(max-width: 520px) 92vw, 470px" alt="Smiling shop owner holding a tablet" fallback={<HeroArt />} />
           <div className="lp-float f1"><span className="ic rose"><IndianRupee size={16} /></span><div><strong>₹15,947</strong><span>Collected this month</span></div></div>
           <div className="lp-float f2"><span className="ic sage"><Check size={16} /></span><div><strong>Invoice sent</strong><span>INV-0012 on WhatsApp</span></div></div>
           <div className="lp-float f3"><span className="ic gold"><BellRing size={16} /></span><div><strong>Low stock</strong><span>HP 680 ink · reorder</span></div><Link to="/login" className="lp-mini">View</Link></div>
@@ -201,7 +201,7 @@ export default function Landing() {
         <p className="lp-lead reveal">The evening rush, a weak connection, a box of phones, a new label roll: the counter keeps moving.</p>
         <div className="lp-counter">
           <div className="lp-counter-art reveal">
-            <div className="lp-frame"><div className="lp-frame-bar"><i /><i /><i /></div><img src="/screens/counter.jpg" alt="Corpus360 billing counter with the camera scanner open and a bill of four items" loading="lazy" /></div>
+            <div className="lp-frame"><div className="lp-frame-bar"><i /><i /><i /></div><img src="/screens/counter.webp" alt="Corpus360 billing counter with the camera scanner open and a bill of four items" loading="lazy" /></div>
             <div className="lp-float lp-offline"><span className="ic sage"><CloudOff size={16} /></span><div><strong>3 bills saved on this counter</strong><span>Sending when the internet is back</span></div></div>
           </div>
           <div className="lp-cpoints">

@@ -30,6 +30,9 @@ const ME_KEY = 'c360.me';
 function rememberMe(me: Me | null) { try { if (me) localStorage.setItem(ME_KEY, JSON.stringify(me)); else localStorage.removeItem(ME_KEY); } catch { /* private mode */ } }
 function lastMe(): Me | null { try { const v = localStorage.getItem(ME_KEY); return v ? (JSON.parse(v) as Me) : null; } catch { return null; } }
 
+/** True when someone signed in on this device before (their details are remembered for offline use). */
+export const hasSignedInBefore = () => { try { return !!localStorage.getItem(ME_KEY); } catch { return false; } };
+
 export const homeFor = (me: Me) => (me.kind === 'super' ? '/super-admin' : '/app');
 
 export function AuthProvider({ children }: { children: ReactNode }) {
