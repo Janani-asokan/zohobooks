@@ -77,6 +77,10 @@ export async function seed({ quiet = false } = {}) {
     shopName: 'Aravind Computer Store', ownerName: 'Aravind Kumar', email: 'owner@shop.com', phone: '+91 98400 12345', city: 'Chennai',
     planId: 'premium', years: 1, password: pw('owner123'), mustChangePassword: false, licenseStart: day(-120), features: 'all',
   });
+  // Microfinance is retired for new shops ('all' leaves it out), but the demo shop has a lending book, as shops that
+  // already used it keep it.
+  await query(`INSERT INTO shop_features (shop_id, feature_key, level, status, source, starts_on, monthly_price, decided_by)
+    VALUES ($1, 'microfinance', 'standard', 'active', 'complimentary', current_date, 0, 'seed')`, [demo.id]);
   for (const [i, [name, owner, email, city, plan, start]] of others.entries()) {
     const s = await provisionShop(null, { shopName: name, ownerName: owner, email, phone: `+91 98${String(41000000 + i * 1234567).slice(0, 8)}`, city, planId: plan, years: 1, password: pw('welcome123'), mustChangePassword: true, licenseStart: day(start), features: 'all' });
     if (name === 'Annapoorna Sweets') await query('UPDATE shops SET active = false WHERE id = $1', [s.id]);

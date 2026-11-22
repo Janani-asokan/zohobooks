@@ -105,7 +105,10 @@ platformSupportRouter.get('/slots', h(async (_req, res) => {
   res.json(await tx(async (db) => { const s = await supportSettings(db); return { settings: s, days: supportSlots(s, await bookedPerSlot(db)) }; }));
 }));
 
-const contact = async (db: Db) => { const c = await one(db, 'SELECT support_phone, support_email, support_whatsapp FROM platform_config WHERE id = 1'); return { phone: c?.support_phone ?? '', email: c?.support_email ?? '', whatsapp: c?.support_whatsapp ?? '' }; };
+const contact = async (db: Db) => {
+  const c = await one(db, 'SELECT support_phone, support_email, support_whatsapp, sales_phone, sales_email, sales_whatsapp FROM platform_config WHERE id = 1');
+  return { phone: c?.support_phone ?? '', email: c?.support_email ?? '', whatsapp: c?.support_whatsapp ?? '', salesPhone: c?.sales_phone ?? '', salesEmail: c?.sales_email ?? '', salesWhatsapp: c?.sales_whatsapp ?? '' };
+};
 platformSupportRouter.get('/settings', h(async (_req, res) => { res.json(await tx(async (db) => ({ ...(await supportSettings(db)), ...(await contact(db)) }))); }));
 platformSupportRouter.put('/settings', h(async (req, res) => {
   const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM, e.g. 10:00');
@@ -120,12 +123,17 @@ platformSupportRouter.put('/settings', h(async (req, res) => {
     email: z.string().trim().max(120).refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Enter a valid email').default(''),
     /** The team's WhatsApp number: shops' "WhatsApp us" opens a chat with it. */
     whatsapp: z.string().trim().max(30).refine((v) => v === '' || waDigits(v) !== '', 'Enter a WhatsApp number with country code, e.g. +91 98400 12345').default(''),
+    /** The sales team, for visitors and shops that haven't paid yet. Empty: the support contact is used. */
+    salesPhone: z.string().trim().max(30).default(''),
+    salesEmail: z.string().trim().max(120).refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Enter a valid email').default(''),
+    salesWhatsapp: z.string().trim().max(30).refine((v) => v === '' || waDigits(v) !== '', 'Enter a WhatsApp number with country code, e.g. +91 98400 12345').default(''),
   }), req.body);
   if (b.start >= b.end) throw badRequest('Support must end after it starts');
   await tx(async (db) => {
     await db.query(`UPDATE platform_config SET support_days = $1, support_start = $2, support_end = $3, support_slot_minutes = $4,
-                    support_slot_capacity = $5, support_booking_days = $6, support_phone = $7, support_email = $8, support_whatsapp = $9, updated_at = now() WHERE id = 1`,
-    [[...new Set(b.days)].sort(), b.start, b.end, b.slotMinutes, b.capacity, b.bookingDays, b.phone, b.email, b.whatsapp]);
+                    support_slot_capacity = $5, support_booking_days = $6, support_phone = $7, support_email = $8, support_whatsapp = $9,
+                    sales_phone = $10, sales_email = $11, sales_whatsapp = $12, updated_at = now() WHERE id = 1`,
+    [[...new Set(b.days)].sort(), b.start, b.end, b.slotMinutes, b.capacity, b.bookingDays, b.phone, b.email, b.whatsapp, b.salesPhone, b.salesEmail, b.salesWhatsapp]);
     await audit(db, req, null, 'update', 'support_settings', undefined, b);
   });
   res.json(await tx(async (db) => ({ ...(await supportSettings(db)), ...(await contact(db)) })));
@@ -163,6 +171,40 @@ platformSupportRouter.patch('/whatsapp/:id', h(async (req, res) => {
     return one(db, `${WA_SQL} WHERE w.id = $1`, [cur.id]);
   });
   res.json(serializeWa(row));
+}));
+
+/* ======================= Sales leads ======================= */
+
+const LEAD_SQL = `SELECT l.*, s.name AS shop_name, s.plan_id, sa.name AS handled_name FROM sales_leads l
+                    LEFT JOIN shops s ON s.id = l.shop_id LEFT JOIN super_admins sa ON sa.id = l.handled_by`;
+const serializeLead = (r: any) => ({
+  id: r.id, name: r.name, phone: r.phone, email: r.email, business: r.business, city: r.city, message: r.message,
+  source: r.source, page: r.page, shopId: r.shop_id, shopName: r.shop_name ?? null, planId: r.plan_id ?? null,
+  status: r.status, staffNotes: r.staff_notes, handledBy: r.handled_name ?? null, createdAt: r.created_at, updatedAt: r.updated_at,
+  whatsapp: waDigits(r.phone ?? ''),
+});
+
+/** "Talk to sales" requests: new ones first, or those already contacted, won or lost. */
+platformSupportRouter.get('/leads', h(async (req, res) => {
+  const view = ['new', 'contacted', 'won', 'lost'].includes(String(req.query.view)) ? String(req.query.view) : 'new';
+  const rows = await platformTx((db) => many(db, `${LEAD_SQL} WHERE l.status = $1 ORDER BY l.created_at DESC LIMIT 300`, [view]));
+  const counts = await platformTx((db) => one(db, `SELECT count(*) FILTER (WHERE status = 'new')::int AS new,
+      count(*) FILTER (WHERE created_at::date = (now() AT TIME ZONE 'Asia/Kolkata')::date)::int AS today,
+      count(*) FILTER (WHERE status = 'won')::int AS won FROM sales_leads`));
+  res.json({ leads: rows.map(serializeLead), counts });
+}));
+
+platformSupportRouter.patch('/leads/:id', h(async (req, res) => {
+  const b = parse(z.object({ status: z.enum(['new', 'contacted', 'won', 'lost']).optional(), staffNotes: z.string().max(2000).optional() }), req.body);
+  const row = await platformTx(async (db) => {
+    const cur = await one(db, 'SELECT * FROM sales_leads WHERE id = $1', [req.params.id]);
+    if (!cur) throw notFound('Sales lead');
+    await db.query('UPDATE sales_leads SET status = $2, staff_notes = $3, handled_by = $4, updated_at = now() WHERE id = $1',
+      [cur.id, b.status ?? cur.status, b.staffNotes ?? cur.staff_notes, staffId(req) ?? cur.handled_by]);
+    await audit(db, req, cur.shop_id, 'update', 'sales_lead', cur.id, { status: b.status ?? cur.status });
+    return one(db, `${LEAD_SQL} WHERE l.id = $1`, [cur.id]);
+  });
+  res.json(serializeLead(row));
 }));
 
 /* ======================= WhatsApp Business API inbox ======================= */

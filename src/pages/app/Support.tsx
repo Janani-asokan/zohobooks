@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock, CheckCircle2, Headset, Loader2, PhoneCall, XCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { SalesPanel } from '@/components/SalesPanel';
+import '@/styles/sales.css';
 import { api } from '@/api/client';
 import { useMut, useOrg } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
 import { Field, PageHeader } from '@/components/ui';
 import { HelpChat, type SupportContact } from '@/components/HelpChat';
-import { SUPPORT_TOPICS, istDay, istTime, topicLabel, type SlotDay, type SupportSettings } from '../../../shared/support';
+import { SUPPORT_TOPICS, isPaidShop, istDay, istTime, topicLabel, type SlotDay, type SupportSettings } from '../../../shared/support';
 
 interface Callback { id: string; contactName: string; phone: string; topic: string; message: string; slotStart: string; status: 'scheduled' | 'completed' | 'missed' | 'cancelled'; staffNotes: string; assignedTo?: string | null }
 const STATUS: Record<Callback['status'], { label: string; cls: string }> = {
@@ -20,7 +23,9 @@ const hours = (s: SupportSettings) => `${s.days.map((d) => DAYS[d]).join(', ')} 
 export default function Support() {
   const me = useShopUser();
   const org = useOrg().data;
-  const canBook = me.can('admin');
+  // Customer care is for paying shops. On the trial, or once the license ran out, Help leads to the sales team.
+  const paid = isPaidShop(me.shop);
+  const canBook = paid && me.can('admin');
   const contact = useQuery({ queryKey: ['supportContact'], queryFn: () => api.get<SupportContact>('/shop/support/contact') });
   const slots = useQuery({ queryKey: ['supportSlots'], queryFn: () => api.get<{ settings: SupportSettings; days: SlotDay[] }>('/shop/support/slots'), enabled: canBook });
   const list = useQuery({ queryKey: ['supportCallbacks'], queryFn: () => api.get<Callback[]>('/shop/support/callbacks'), enabled: canBook });
@@ -47,10 +52,22 @@ export default function Support() {
 
   return (
     <div className="page">
-      <PageHeader title="Help & support" icon={Headset} subtitle="Ask the help bot first. If it can’t solve it, call our support team or book a call-back: the chat goes with it." />
+      <PageHeader title="Help & support" icon={Headset} subtitle={paid
+        ? 'Ask the help bot first. If it can’t solve it, call our support team or book a call-back: the chat goes with it.'
+        : 'The help bot shows you how to do anything in the app. For plans, prices and a guided demo, talk to our sales team.'} />
+      {!paid && (
+        <section className="card card-body sales-in-app" style={{ marginBottom: 16 }}>
+          <SalesPanel source="app" shop={{ name: me.shop.name, userName: me.user.name, phone: org?.phone ?? '', renew: true }} />
+          <p className="small muted" style={{ margin: '12px 0 0' }}>
+            {me.shop.licenseExpired ? 'Your license has ended. ' : 'You’re on the free trial. '}
+            Customer care (live chat with an agent, call-backs and WhatsApp support) comes with every paid plan.
+            {me.can('admin') && <> <Link to="/app/billing">See plans and pay →</Link></>}
+          </p>
+        </section>
+      )}
       <section className="card card-body" style={{ marginBottom: 16 }}>
         <h3 style={{ margin: '0 0 10px' }}>Help chat</h3>
-        <HelpChat contact={contact.data} onBook={fromChat} />
+        <HelpChat contact={contact.data} onBook={fromChat} sales={!paid ? { name: me.shop.name, userName: me.user.name, phone: org?.phone ?? '' } : undefined} />
       </section>
       {canBook && <div className="support-grid" id="support-book">
         <section className="card card-body">

@@ -26,6 +26,7 @@ import { ReceiptCheck } from '@/components/PrintCheck';
 import { initials } from '@/lib/format';
 import { AssistantButton } from '@/components/Assistant';
 import { useFieldTracker } from '@/lib/geo';
+import { isPaidShop } from '../../shared/support';
 
 export function OrgLogo({ logo, name, size = 36 }: { logo?: string; name: string; size?: number }) {
   return (
@@ -263,7 +264,7 @@ export default function AppLayout() {
             <button className="icon-btn mobile-only" onClick={() => setPalette(true)} aria-label="Search"><Search size={18} /></button>
             <AssistantButton />
             <QuickCreate me={me} />
-            <Link to="/app/support" className="topbar-help" title="Help: ask the help bot, or talk to our support team" aria-label="Help">
+            <Link to="/app/support" className="topbar-help" title={isPaidShop(me.shop) ? 'Help: ask the help bot, or talk to our support team' : 'Help: ask the help bot, or talk to our sales team about plans'} aria-label="Help">
               <Headset size={17} /><span>Help</span>
             </Link>
             <NotificationBell />

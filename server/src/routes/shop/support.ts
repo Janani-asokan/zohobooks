@@ -9,7 +9,7 @@ import { perm } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, type Db } from '../../db';
 import { HttpError, badRequest, notFound, parse } from '../../http';
-import { SUPPORT_TOPICS, isSlot, supportSlots, MIN_NOTICE_MIN, istDate, LIVE, supportOpenAt, waDigits, type SupportSettings } from '../../../../shared/support';
+import { SUPPORT_TOPICS, isSlot, supportSlots, MIN_NOTICE_MIN, istDate, LIVE, supportOpenAt, waDigits, isPaidShop, salesContact, type SupportSettings } from '../../../../shared/support';
 import { HOWTO, STARTERS, itemWords, understand } from '../../../../shared/supportBot';
 import { getOrg } from '../../services/common';
 import { aiEnabled } from '../../services/extract';
@@ -17,6 +17,16 @@ import { aiAvailable } from '../../services/aiUsage';
 import { askAssistant } from '../../services/assistant';
 import { todayISO, type UserCtx } from '../../auth';
 import { T } from './ctx';
+
+/** Whether the shop is a paying customer (paid plan, license current): only they get customer care. */
+async function shopPaid(db: Db, shopId: string) {
+  const s = await one(db, 'SELECT plan_id, license_end FROM shops WHERE id = $1', [shopId]);
+  return !!s && isPaidShop({ planId: s.plan_id, licenseExpired: s.license_end < todayISO() });
+}
+/** Customer care (call-backs, live chat, WhatsApp support) is for paying shops; others are sent to sales. */
+async function paidOnly(db: Db, shopId: string) {
+  if (!(await shopPaid(db, shopId))) throw new HttpError(402, 'Customer care comes with a paid plan. Our sales team can help you choose one: tap Talk to sales.', 'paid_only');
+}
 
 export const supportRouter = Router();
 
@@ -57,6 +67,7 @@ supportRouter.get('/support/callbacks', perm('admin'), T(async (db, _req, c) =>
                     WHERE cb.shop_id = $1 ORDER BY cb.slot_start DESC LIMIT 50`, [c.shopId])).map(serializeCallback)));
 
 supportRouter.post('/support/callbacks', perm('admin'), T(async (db, req, c, res) => {
+  await paidOnly(db, c.shopId);
   const b = parse(z.object({
     slotStart: z.string().datetime({ offset: true }),
     topic: z.enum(SUPPORT_TOPICS.map((t) => t.key) as [string, ...string[]]),
@@ -98,14 +109,17 @@ supportRouter.post('/support/callbacks/:id/cancel', perm('admin'), T(async (db, 
 /** The support team's details for the chat: phone, email, hours, whether they are open now, and the next free slot. */
 supportRouter.get('/support/contact', T(async (db, _req, c) => {
   const s = await supportSettings(db);
-  const cfg = await one(db, 'SELECT support_phone, support_email, support_whatsapp FROM platform_config WHERE id = 1');
+  const cfg = await one(db, 'SELECT support_phone, support_email, support_whatsapp, sales_phone, sales_email, sales_whatsapp FROM platform_config WHERE id = 1');
+  const paid = await shopPaid(db, c.shopId);
+  const sales = salesContact({ phone: cfg?.support_phone, email: cfg?.support_email, whatsapp: cfg?.support_whatsapp, salesPhone: cfg?.sales_phone, salesEmail: cfg?.sales_email, salesWhatsapp: cfg?.sales_whatsapp });
   const now = new Date();
   const openNow = supportOpenAt(s, now);
   const next = supportSlots(s, await bookedPerSlot(db))[0]?.slots[0]?.start ?? null;
   const online = await agentsOnline(db);
   return { phone: cfg?.support_phone ?? '', email: cfg?.support_email ?? '', whatsapp: waDigits(cfg?.support_whatsapp ?? ''), days: s.days, start: s.start, end: s.end, openNow, nextSlot: next, today: istDate(now),
-    canBook: c.permissions.includes('admin'), agentsOnline: online, liveChat: openNow && online > 0 };
+    canBook: paid && c.permissions.includes('admin'), agentsOnline: online, liveChat: paid && openNow && online > 0, paid, sales };
 }));
+
 
 /**
  * "WhatsApp us": the app opens WhatsApp itself (a wa.me link with the message written); this records the contact,
@@ -116,6 +130,7 @@ supportRouter.post('/support/whatsapp', T(async (db, req, c, res) => {
     question: z.string().trim().max(500).default(''),
     chat: z.array(z.object({ role: z.enum(['user', 'bot']), text: z.string().max(2000) })).max(40).default([]),
   }), req.body);
+  await paidOnly(db, c.shopId);
   const [{ n }] = (await db.query("SELECT count(*)::int AS n FROM support_whatsapp WHERE shop_id = $1 AND created_at > now() - interval '1 hour'", [c.shopId])).rows;
   if (n >= 10) { res.status(429); return { recorded: false, error: 'Too many WhatsApp requests from this shop in the last hour.' }; }
   const r = await one(db, `INSERT INTO support_whatsapp (shop_id, user_id, contact_name, question, chat) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
@@ -284,6 +299,7 @@ async function chatState(db: Db, c: UserCtx, r: any, after: number) {
 
 /** Starts a chat with the team (during support hours, with an agent online), handing over the bot conversation. */
 supportRouter.post('/support/live', T(async (db, req, c, res) => {
+  await paidOnly(db, c.shopId);
   const b = parse(z.object({ botChat: z.array(z.object({ role: z.enum(['user', 'bot']), text: z.string().max(2000) })).max(60).default([]), first: z.string().trim().max(2000).optional() }), req.body);
   await expireWaiting(db);
   const open = await one(db, "SELECT * FROM support_chats WHERE shop_id = $1 AND started_by = $2 AND status IN ('waiting', 'active') ORDER BY created_at DESC LIMIT 1", [c.shopId, c.id]);

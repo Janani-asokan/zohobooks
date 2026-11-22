@@ -50,7 +50,8 @@ describe('catalogue', () => {
 
   it('existing shops were given every feature by the migration, and the demo shop has them all', async () => {
     const owner = await login('owner@shop.com', 'owner123');
-    expect(Object.keys(owner.me.shop.features).sort()).toEqual(FEATURES.filter((f) => f.available && !f.capacity && !f.retired).map((f) => f.key).sort());
+    // Every add-on new shops can get, plus microfinance: retired for new shops, but the demo shop already used it.
+    expect(Object.keys(owner.me.shop.features).sort()).toEqual([...FEATURES.filter((f) => f.available && !f.capacity && !f.retired).map((f) => f.key), 'microfinance'].sort());
   });
 });
 

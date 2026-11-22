@@ -18,6 +18,8 @@ beforeAll(async () => {
   other = request.agent(app);
   const r = await other.post('/api/auth/signup').set(csrf).send({ shopName: 'Second Shop', ownerName: 'Lakshmi R', email: 'second@example.com', phone: '9000012345', password: 'Second#2026' });
   expect(r.status).toBe(201);
+  // Call-backs are customer care, for paying shops: this one has bought a plan.
+  await query("UPDATE shops SET plan_id = 'standard' WHERE name = 'Second Shop'");
 });
 
 describe('customer support call-backs', () => {

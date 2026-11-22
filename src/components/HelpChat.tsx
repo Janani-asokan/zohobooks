@@ -7,10 +7,11 @@ import { api } from '@/api/client';
 import { LIVE, istDay, istTime, waLink, whatsappSupportText } from '../../shared/support';
 import { useAuth } from '@/context/AuthContext';
 import { STARTERS } from '../../shared/supportBot';
+import { SalesPanel } from './SalesPanel';
 
 export interface BotReply { text: string; table?: { columns: string[]; rows: string[][] }; links?: Array<{ label: string; to: string }>; suggestions?: string[]; escalate?: boolean; by: 'bot' | 'ai' }
 export type ChatMsg = { role: 'user'; text: string } | ({ role: 'bot' } & BotReply);
-export interface SupportContact { phone: string; email: string; whatsapp?: string; days: number[]; start: string; end: string; openNow: boolean; nextSlot: string | null; canBook: boolean; agentsOnline?: number; liveChat?: boolean }
+export interface SupportContact { phone: string; email: string; whatsapp?: string; days: number[]; start: string; end: string; openNow: boolean; nextSlot: string | null; canBook: boolean; agentsOnline?: number; liveChat?: boolean; paid?: boolean }
 
 /** WhatsApp's speech-bubble mark (lucide has no brand icons). */
 function WhatsAppIcon() {
@@ -28,7 +29,12 @@ const hhmm = (t: string) => istTime(`2026-01-01T${t}:00+05:30`);
  * Help chat: answers from the shop's own data and how-to answers first; when that doesn't solve it, "Talk to a
  * person" shows the support team's phone, email and hours, and a call-back that carries this conversation.
  */
-export function HelpChat({ contact, onBook }: { contact: SupportContact | undefined; onBook: (chat: Array<{ role: 'user' | 'bot'; text: string }>) => void }) {
+export function HelpChat({ contact, onBook, sales }: {
+  contact: SupportContact | undefined;
+  onBook: (chat: Array<{ role: 'user' | 'bot'; text: string }>) => void;
+  /** Set for a shop that hasn't paid: "Talk to a person" reaches the sales team instead of customer care. */
+  sales?: { name: string; userName: string; phone: string };
+}) {
   const [msgs, setMsgs] = useState<ChatMsg[]>([{ role: 'bot', by: 'bot', text: 'Hi! I can check stock, a bill, what a customer owes, or show you how to do something. What do you need?', suggestions: STARTERS }]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -40,12 +46,12 @@ export function HelpChat({ contact, onBook }: { contact: SupportContact | undefi
   // "WhatsApp us": WhatsApp opens with who is asking and the last question; the tap is recorded for the support team.
   // The person's own last question, not a button they tapped to reach us ("Talk to a person").
   const lastQuestion = [...msgs].reverse().find((m) => m.role === 'user' && !/^(talk to a person|that solved it)/i.test(m.text))?.text ?? '';
-  const whatsapp = contact?.whatsapp && me?.kind === 'user' ? {
+  const whatsapp = !sales && contact?.whatsapp && me?.kind === 'user' ? {
     href: waLink(contact.whatsapp, whatsappSupportText({ shopName: me.shop.name, userName: me.user.name, question: lastQuestion })),
     onOpen: () => { void api.post('/shop/support/whatsapp', { question: lastQuestion, chat: transcript() }).catch(() => undefined); },
   } : undefined;
   // An open chat with an agent carries on after a page reload.
-  useEffect(() => { api.get<{ chat: LiveState['chat'] | null; messages: LiveState['messages'] }>('/shop/support/live/current').then((r) => { if (r.chat && (r.chat.status === 'waiting' || r.chat.status === 'active')) setLive(r as LiveState); }).catch(() => undefined); }, []);
+  useEffect(() => { if (sales) return; api.get<{ chat: LiveState['chat'] | null; messages: LiveState['messages'] }>('/shop/support/live/current').then((r) => { if (r.chat && (r.chat.status === 'waiting' || r.chat.status === 'active')) setLive(r as LiveState); }).catch(() => undefined); }, []);
   useEffect(() => { end.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [msgs, human]);
 
   const ask = async (q: string) => {
@@ -97,7 +103,9 @@ export function HelpChat({ contact, onBook }: { contact: SupportContact | undefi
           </div>
         ))}
         {busy && <div className="hc-row"><span className="hc-av"><Bot size={14} /></span><div className="hc-bubble"><Loader2 size={14} className="spin" /> Looking that up…</div></div>}
-        {human && <PersonPanel contact={contact} onBook={() => onBook(transcript())} onLive={startLive} whatsapp={whatsapp} />}
+        {human && (sales
+          ? <div className="hc-person"><SalesPanel source="app" shop={{ ...sales, renew: true }} compact /></div>
+          : <PersonPanel contact={contact} onBook={() => onBook(transcript())} onLive={startLive} whatsapp={whatsapp} />)}
         <div ref={end} />
       </div>
       {lastBot?.suggestions && !busy && <div className="hc-chips">{lastBot.suggestions.map((s) => <button key={s} type="button" className="filter-chip" onClick={() => (/talk to a person/i.test(s) ? (setMsgs((m) => [...m, { role: 'user', text: s }]), setHuman(true)) : ask(s))}>{s}</button>)}</div>}
@@ -108,7 +116,7 @@ export function HelpChat({ contact, onBook }: { contact: SupportContact | undefi
       <div className="hc-foot">
         <span className="small muted">Not solved?</span>
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setHuman(true); setMsgs((m) => (m[m.length - 1]?.role === 'user' && m[m.length - 1]!.text === 'Talk to a person' ? m : [...m, { role: 'user', text: 'Talk to a person' }])); }}>
-          <Headset size={14} /> Talk to a person
+          <Headset size={14} /> {sales ? 'Talk to sales' : 'Talk to a person'}
         </button>
       </div>
     </div>

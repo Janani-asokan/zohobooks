@@ -1,3 +1,6 @@
+import { SalesPanel } from '@/components/SalesPanel';
+import { isPaidShop } from '../../../shared/support';
+import '@/styles/sales.css';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CreditCard, ShieldCheck, Users, GitBranch, FileText, Loader2, AlertTriangle, CheckCircle2, Phone } from 'lucide-react';
@@ -67,7 +70,13 @@ export default function Billing() {
     }
   };
 
-  if (!me.can('admin')) return <div className="page"><PageHeader title="Subscription" subtitle="Only the shop owner can manage the subscription." /></div>;
+  // On the trial or after the license ends, the sales team helps choose a plan (customer care is for paid plans).
+  const sales = !isPaidShop(me.shop) && (
+    <section className="card card-body" style={{ marginBottom: 16 }}>
+      <SalesPanel source="app" shop={{ name: me.shop.name, userName: me.user.name, phone: '', renew: true }} />
+    </section>
+  );
+  if (!me.can('admin')) return <div className="page"><PageHeader title="Subscription" subtitle="Only the shop owner can manage the subscription." />{sales}</div>;
 
   return (
     <div className="page" style={{ maxWidth: 1080 }}>
@@ -77,6 +86,7 @@ export default function Billing() {
           <AlertTriangle size={18} /> Your license expired on {fmtDate(me.shop.licenseEnd)}. Renew to unlock your workspace — your data is safe.
         </div>
       )}
+      {sales}
       <div className="grid-3-1" style={{ alignItems: 'start' }}>
         <div className="stack">
           <div className="card">

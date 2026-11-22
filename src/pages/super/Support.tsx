@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarClock, CheckCircle2, Headset, Phone, Settings2, UserCheck, XCircle, AlertTriangle, MessageCircle, Send, Bot, UserRound, Bell, BellOff } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Headset, Phone, Settings2, UserCheck, XCircle, AlertTriangle, MessageCircle, Send, Bot, UserRound, Bell, BellOff, Sparkles, Mail } from 'lucide-react';
 import { playChime, unlockChime } from '@/lib/chime';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/context/ToastContext';
@@ -32,7 +32,7 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en
 
 /** Customer care console: staff see every shop's call-back, check the shop's account, call, and record what happened. */
 export default function SuperSupport() {
-  const [view, setView] = useState<(typeof VIEWS)[number][0] | 'live' | 'whatsapp'>('upcoming');
+  const [view, setView] = useState<(typeof VIEWS)[number][0] | 'live' | 'whatsapp' | 'leads'>('upcoming');
   // Polled while the console is open: keeps this agent "online" for live chat and shows waiting chats on every tab.
   const live = useQuery({ queryKey: ['platform', 'support', 'live'], queryFn: () => api.get<LiveList>('/platform/support/live'), refetchInterval: 5000, refetchIntervalInBackground: true });
   const waiting = live.data?.waiting ?? 0;
@@ -71,7 +71,8 @@ export default function SuperSupport() {
   };
   const [openId, setOpenId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const list = useQuery({ queryKey: ['platform', 'support', 'callbacks', view], queryFn: () => api.get<{ callbacks: Cb[]; counts: { upcoming: number; overdue: number; today: number } }>(`/platform/support/callbacks?view=${view}`), refetchInterval: 60_000, enabled: view !== 'live' && view !== 'whatsapp' });
+  const list = useQuery({ queryKey: ['platform', 'support', 'callbacks', view], queryFn: () => api.get<{ callbacks: Cb[]; counts: { upcoming: number; overdue: number; today: number } }>(`/platform/support/callbacks?view=${view}`), refetchInterval: 60_000, enabled: view !== 'live' && view !== 'whatsapp' && view !== 'leads' });
+  const leads = useQuery({ queryKey: ['platform', 'support', 'leads', 'new'], queryFn: () => api.get<LeadList>('/platform/support/leads'), refetchInterval: 60_000 });
   const open = list.data?.callbacks?.find((c) => c.id === openId) ?? null;
   const wa = useQuery({ queryKey: ['platform', 'support', 'whatsapp', 'open'], queryFn: () => api.get<WaList>('/platform/support/whatsapp'), refetchInterval: 30_000 });
   const inbox = useQuery({ queryKey: ['platform', 'support', 'wa-inbox', 'open'], queryFn: () => api.get<WaInboxList>('/platform/support/wa'), refetchInterval: 5000, refetchIntervalInBackground: true });
@@ -92,7 +93,7 @@ export default function SuperSupport() {
           <button className={`btn ${sound ? 'btn-secondary' : 'btn-ghost'}`} onClick={toggleSound} title={sound ? 'A chime plays when a chat arrives. Click to mute.' : 'Muted. Click to hear a chime when a chat arrives.'} aria-pressed={sound}>
             {sound ? <Bell size={15} /> : <BellOff size={15} />} Sound {sound ? 'on' : 'off'}
           </button>
-          <button className="btn btn-secondary" onClick={() => setSettingsOpen(true)}><Settings2 size={15} /> Support hours</button>
+          <button className="btn btn-secondary" onClick={() => setSettingsOpen(true)}><Settings2 size={15} /> Hours & contacts</button>
         </>} />
       <div className="tabs">
         <button className={view === 'live' ? 'active' : ''} onClick={() => setView('live')}>
@@ -103,13 +104,16 @@ export default function SuperSupport() {
             ? (inbox.data.unread ? <span className="badge badge-red">{inbox.data.unread} new</span> : null)
             : (wa.data?.counts.open ? <span className="badge badge-amber">{wa.data.counts.open} open</span> : null)}
         </button>
+        <button className={view === 'leads' ? 'active' : ''} onClick={() => setView('leads')}>
+          <Sparkles size={15} /> Sales leads {leads.data?.counts.new ? <span className="badge badge-amber">{leads.data.counts.new} new</span> : null}
+        </button>
         {VIEWS.map(([k, l]) => (
           <button key={k} className={view === k ? 'active' : ''} onClick={() => setView(k)}>
             {l}{k === 'today' && c ? ` (${c.today})` : k === 'upcoming' && c ? ` (${c.upcoming})` : ''}
           </button>
         ))}
       </div>
-      {view === 'live' ? <LiveConsole data={live.data} /> : view === 'whatsapp' ? <WhatsAppTab inbox={inbox.data} /> : <>
+      {view === 'live' ? <LiveConsole data={live.data} /> : view === 'whatsapp' ? <WhatsAppTab inbox={inbox.data} /> : view === 'leads' ? <LeadsTab /> : <>
       {!!c?.overdue && <div className="support-alert"><AlertTriangle size={15} /> {c.overdue} call-back{c.overdue > 1 ? 's are' : ' is'} past the booked time and not yet closed.</div>}
 
       <div className="card table-wrap">
@@ -235,13 +239,14 @@ function CallbackPanel({ cb, onClose }: { cb: Cb; onClose: () => void }) {
   );
 }
 
+type Contacts = { phone: string; email: string; whatsapp: string; salesPhone: string; salesEmail: string; salesWhatsapp: string };
 function SettingsModal({ onClose }: { onClose: () => void }) {
-  const cur = useQuery({ queryKey: ['platform', 'support', 'settings'], queryFn: () => api.get<SupportSettings & { phone: string; email: string; whatsapp: string }>('/platform/support/settings') });
-  const [f, setF] = useState<(SupportSettings & { phone: string; email: string; whatsapp: string }) | null>(null);
+  const cur = useQuery({ queryKey: ['platform', 'support', 'settings'], queryFn: () => api.get<SupportSettings & Contacts>('/platform/support/settings') });
+  const [f, setF] = useState<(SupportSettings & Contacts) | null>(null);
   const v = f ?? cur.data;
-  const save = useMut((b: SupportSettings & { phone: string; email: string; whatsapp: string }) => api.put('/platform/support/settings', b), [['platform', 'support'], ['supportSlots']], { success: 'Support hours saved' });
+  const save = useMut((b: SupportSettings & Contacts) => api.put('/platform/support/settings', b), [['platform', 'support'], ['supportSlots']], { success: 'Support hours saved' });
   if (!v) return null;
-  const set = (p: Partial<SupportSettings & { phone: string; email: string; whatsapp: string }>) => setF({ ...v, ...p });
+  const set = (p: Partial<SupportSettings & Contacts>) => setF({ ...v, ...p });
   return (
     <Modal open title="Support hours & call-back slots" onClose={onClose}
       footer={<><button className="btn btn-secondary" onClick={onClose}>Close</button><button className="btn btn-primary" disabled={save.isPending || v.days.length === 0} onClick={() => save.mutate(v, { onSuccess: onClose })}>Save</button></>}>
@@ -266,6 +271,13 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
         <Field label="Support phone" hint="Shown in shops’ help chat (“Call now” during hours)"><input className="input" type="tel" value={v.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} placeholder="+91 44 4000 1234" /></Field>
         <Field label="Support email"><input className="input" type="email" value={v.email ?? ''} onChange={(e) => set({ email: e.target.value })} placeholder="help@corpus360lite.com" /></Field>
         <Field label="Support WhatsApp" hint="With country code. Shops’ “WhatsApp us” opens a chat with this number; answer from the WhatsApp Business app."><input className="input" type="tel" value={v.whatsapp ?? ''} onChange={(e) => set({ whatsapp: e.target.value })} placeholder="+91 98400 12345" /></Field>
+      </div>
+      <h4 style={{ margin: '18px 0 4px' }}>Sales team</h4>
+      <p className="small muted" style={{ marginTop: 0 }}>Help on the website, and Help for shops on the trial or whose license ended, leads here. Leave a field empty to use the support contact above.</p>
+      <div className="form-grid">
+        <Field label="Sales phone"><input className="input" type="tel" value={v.salesPhone ?? ''} onChange={(e) => set({ salesPhone: e.target.value })} placeholder="+91 44 4000 5678" /></Field>
+        <Field label="Sales email" hint="New “call me back” requests are emailed here"><input className="input" type="email" value={v.salesEmail ?? ''} onChange={(e) => set({ salesEmail: e.target.value })} placeholder="sales@corpus360lite.com" /></Field>
+        <Field label="Sales WhatsApp" hint="With country code"><input className="input" type="tel" value={v.salesWhatsapp ?? ''} onChange={(e) => set({ salesWhatsapp: e.target.value })} placeholder="+91 98400 67890" /></Field>
       </div>
     </Modal>
   );
@@ -446,6 +458,84 @@ function WhatsAppPanel({ w, onClose }: { w: WaContact; onClose: () => void }) {
         </details>
       )}
       <Field label="Notes for the team"><textarea className="input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What was the problem, what did you do?" /></Field>
+    </Modal>
+  );
+}
+
+/* ---------- Sales leads ---------- */
+
+type LeadStatus = 'new' | 'contacted' | 'won' | 'lost';
+interface Lead {
+  id: string; name: string; phone: string; email: string; business: string; city: string; message: string; source: string; page: string;
+  shopId: string | null; shopName: string | null; planId: string | null; status: LeadStatus; staffNotes: string; handledBy: string | null; createdAt: string; whatsapp: string;
+}
+interface LeadList { leads: Lead[]; counts: { new: number; today: number; won: number } }
+const LEAD_TABS: Array<[LeadStatus, string]> = [['new', 'New'], ['contacted', 'Contacted'], ['won', 'Won'], ['lost', 'Lost']];
+const LEAD_TONE: Record<LeadStatus, string> = { new: 'amber', contacted: 'blue', won: 'green', lost: 'gray' };
+const SOURCE_LABEL: Record<string, string> = { landing: 'Website', login: 'Sign-in page', signup: 'Sign-up page', legal: 'Policy pages', app: 'In the app (trial / unpaid)' };
+
+/** "Talk to sales" requests from visitors and from shops that haven't paid: call them, then record how it went. */
+function LeadsTab() {
+  const [view, setView] = useState<LeadStatus>('new');
+  const [openId, setOpenId] = useState<string | null>(null);
+  const list = useQuery({ queryKey: ['platform', 'support', 'leads', view], queryFn: () => api.get<LeadList>(`/platform/support/leads?view=${view}`), refetchInterval: 60_000 });
+  const cur = list.data?.leads.find((x) => x.id === openId) ?? null;
+  return (
+    <>
+      <p className="small muted" style={{ marginTop: 0 }}>People who tapped Help → Talk to sales on the website, and shops on the trial or whose license ended. Call them, then move each lead along.</p>
+      <div className="segmented" style={{ marginBottom: 12 }}>
+        {LEAD_TABS.map(([k, l]) => <button key={k} className={view === k ? 'active' : ''} onClick={() => setView(k)}>{l}{k === 'new' && list.data ? ` (${list.data.counts.new})` : ''}</button>)}
+      </div>
+      <div className="card table-wrap">
+        <table className="table">
+          <thead><tr><th>When (IST)</th><th>Who</th><th>Business</th><th>From</th><th>Wants to know</th><th>Status</th><th /></tr></thead>
+          <tbody>
+            {(list.data?.leads ?? []).map((l) => (
+              <tr key={l.id} className="clickable" onClick={() => setOpenId(l.id)}>
+                <td style={{ whiteSpace: 'nowrap' }}><strong>{istTime(l.createdAt)}</strong> <span className="muted">{istDay(l.createdAt)}</span></td>
+                <td className="strong">{l.name}<div className="small muted">{l.phone || l.email}</div></td>
+                <td>{l.business || l.shopName || '—'}{l.city && <div className="small muted">{l.city}</div>}</td>
+                <td className="small">{SOURCE_LABEL[l.source] ?? l.source}{l.planId && <div className="muted">Plan: {l.planId}</div>}</td>
+                <td className="small" style={{ maxWidth: 300 }}>{l.message || <span className="muted">—</span>}</td>
+                <td><Badge tone={LEAD_TONE[l.status]}>{LEAD_TABS.find(([k]) => k === l.status)?.[1]}{l.handledBy ? ` · ${l.handledBy}` : ''}</Badge></td>
+                <td><button className="btn btn-secondary btn-sm">Open</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {list.data?.leads.length === 0 && <EmptyState icon={Sparkles} title={view === 'new' ? 'No new leads' : 'Nothing here yet'} text="When someone taps Help → Talk to sales and leaves their number, it shows up here." />}
+      </div>
+      {cur && <LeadPanel l={cur} onClose={() => setOpenId(null)} />}
+    </>
+  );
+}
+
+function LeadPanel({ l, onClose }: { l: Lead; onClose: () => void }) {
+  const [notes, setNotes] = useState(l.staffNotes);
+  const save = useMut((b: { status?: LeadStatus; staffNotes?: string }) => api.patch(`/platform/support/leads/${l.id}`, b), [['platform', 'support', 'leads']], { success: 'Saved' });
+  const tel = l.phone.replace(/[^\d+]/g, '');
+  const move = (status: LeadStatus) => save.mutate({ status, staffNotes: notes }, { onSuccess: onClose });
+  return (
+    <Modal open onClose={onClose} title={l.business || l.shopName || l.name} subtitle={`${l.name} · ${istDay(l.createdAt)}, ${istTime(l.createdAt)}`}
+      footer={<>
+        <button className="btn btn-secondary" onClick={onClose}>Close</button>
+        {l.status !== 'lost' && <button className="btn btn-ghost" disabled={save.isPending} onClick={() => move('lost')}>Not interested</button>}
+        {l.status === 'new' && <button className="btn btn-secondary" disabled={save.isPending} onClick={() => move('contacted')}>Contacted</button>}
+        {l.status !== 'won' && <button className="btn btn-primary" disabled={save.isPending} onClick={() => move('won')}><CheckCircle2 size={15} /> Won</button>}
+      </>}>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        {tel && <a className="btn btn-primary btn-sm" href={`tel:${tel}`}><Phone size={14} /> Call {l.phone}</a>}
+        {l.whatsapp && <a className="btn btn-whatsapp btn-sm" href={`https://wa.me/${l.whatsapp}`} target="_blank" rel="noreferrer"><MessageCircle size={14} /> WhatsApp</a>}
+        {l.email && <a className="btn btn-secondary btn-sm" href={`mailto:${l.email}`}><Mail size={14} /> {l.email}</a>}
+      </div>
+      <dl className="kv">
+        <dt>From</dt><dd>{SOURCE_LABEL[l.source] ?? l.source}{l.page ? ` (${l.page})` : ''}</dd>
+        {l.shopName && <><dt>Shop</dt><dd>{l.shopName}{l.planId ? ` · plan ${l.planId}` : ''}</dd></>}
+        {l.city && <><dt>City</dt><dd>{l.city}</dd></>}
+        <dt>Message</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{l.message || '—'}</dd>
+      </dl>
+      <Field label="Notes for the team"><textarea className="input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What did they ask? Demo booked? Plan quoted?" /></Field>
+      {notes !== l.staffNotes && <button className="btn btn-secondary btn-sm" disabled={save.isPending} onClick={() => save.mutate({ staffNotes: notes })}>Save notes</button>}
     </Modal>
   );
 }

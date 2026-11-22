@@ -5,7 +5,10 @@ import { h, notFound } from '../http';
 import { getInvoice } from '../services/documents';
 import { invoicePrintBundle, verifyRenderToken } from '../services/printBundle';
 import { pdfName, renderPdfOr503 } from './shop/sales';
-import { waDigits } from '../../../shared/support';
+import { z } from 'zod';
+import { parse } from '../http';
+import { LEAD_SOURCES, salesContact, waDigits } from '../../../shared/support';
+import { saveLead } from '../services/salesLeads';
 
 /** Unauthenticated, read-only invoice view behind an unguessable token (for WhatsApp / email links). */
 export const publicRouter = Router();
@@ -63,8 +66,35 @@ publicRouter.get(
   '/contact',
   rateLimit('public', 60, 60_000),
   h(async (_req, res) => {
-    const [c] = await query('SELECT support_phone, support_email, support_whatsapp FROM platform_config WHERE id = 1');
+    const [c] = await query('SELECT support_phone, support_email, support_whatsapp, sales_phone, sales_email, sales_whatsapp FROM platform_config WHERE id = 1');
     res.setHeader('Cache-Control', 'public, max-age=300');
-    res.json({ phone: c?.support_phone ?? '', email: c?.support_email ?? '', whatsapp: waDigits(c?.support_whatsapp ?? '') });
+    const support = { phone: c?.support_phone ?? '', email: c?.support_email ?? '', whatsapp: waDigits(c?.support_whatsapp ?? '') };
+    res.json({ ...support, sales: salesContact({ ...support, salesPhone: c?.sales_phone, salesEmail: c?.sales_email, salesWhatsapp: c?.sales_whatsapp }) });
+  }),
+);
+
+/**
+ * "Talk to sales" from the landing, login, signup and legal pages: a visitor asks the sales team to call them.
+ * A hidden field ("website") that people never see catches form-filling bots: the request looks accepted but
+ * nothing is saved.
+ */
+publicRouter.post(
+  '/sales-leads',
+  rateLimit('sales-lead', 5, 10 * 60_000),
+  h(async (req, res) => {
+    const b = parse(z.object({
+      name: z.string().trim().min(2, 'Tell us your name').max(120),
+      phone: z.string().trim().max(30).default(''),
+      email: z.string().trim().max(160).default(''),
+      business: z.string().trim().max(160).default(''),
+      city: z.string().trim().max(80).default(''),
+      message: z.string().trim().max(1000).default(''),
+      source: z.enum(LEAD_SOURCES).default('landing'),
+      page: z.string().trim().max(200).default(''),
+      website: z.string().max(200).default(''),
+    }), req.body);
+    if (b.website) { res.status(201).json({ ok: true }); return; }
+    await saveLead({ ...b, ip: req.ip ?? '' });
+    res.status(201).json({ ok: true });
   }),
 );

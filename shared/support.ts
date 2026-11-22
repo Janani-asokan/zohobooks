@@ -119,3 +119,29 @@ export function whatsappSupportText(x: { shopName: string; userName: string; que
 }
 
 export const waLink = (digits: string, text: string) => `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
+
+/* ---------- Sales or customer care ---------- */
+
+/**
+ * Who Help connects you to. A shop on a paid plan whose license is current gets customer care (live chat, call-backs,
+ * WhatsApp support). Visitors, trial shops and shops whose license ran out are connected to the sales team instead.
+ */
+export const isPaidShop = (s: { planId: string; licenseExpired: boolean }) => s.planId !== 'trial' && !s.licenseExpired;
+
+/** The sales contact, falling back to the support contact for anything the platform hasn't set. */
+export const salesContact = (c: { salesPhone?: string; salesEmail?: string; salesWhatsapp?: string; phone?: string; email?: string; whatsapp?: string }) => ({
+  phone: c.salesPhone || c.phone || '',
+  email: c.salesEmail || c.email || '',
+  whatsapp: waDigits(c.salesWhatsapp || c.whatsapp || ''),
+});
+
+export const LEAD_SOURCES = ['landing', 'login', 'signup', 'legal', 'app'] as const;
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+/** The message WhatsApp opens with when someone taps "WhatsApp sales". */
+export function whatsappSalesText(x: { shopName?: string; name?: string; renew?: boolean }) {
+  const lines = [x.renew ? 'Hi Corpus360, I’d like to choose a plan for my shop.' : 'Hi Corpus360, I’d like to know more about Corpus360 Lite for my business.'];
+  if (x.shopName) lines.push(`Shop: ${x.shopName}`);
+  if (x.name) lines.push(`Name: ${x.name}`);
+  return lines.join('\n');
+}

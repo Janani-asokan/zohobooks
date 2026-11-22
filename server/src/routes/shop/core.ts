@@ -18,6 +18,7 @@ import { isStrongPassword, PASSWORD_RULE, STAFF_ROLES } from '../../../../shared
 import { BARCODE_FIELDS, INVOICE_FIELDS, LABEL_SIZES, MANDATORY_INVOICE_FIELDS, MAX_BARCODE_FIELDS, withPrintDefaults } from '../../../../shared/printSettings';
 import { layoutProblems } from '../../../../shared/labelLayout';
 import { T, allowed } from './ctx';
+import { saveLead } from '../../services/salesLeads';
 import { licenseAttention } from '../../services/licenses';
 import { bankErrors, bankFromIfsc, cleanAccountNo, cleanIfsc, composeBankDetails, parseBankDetails, type BankFields } from '../../../../shared/bank';
 import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty, normalizeVendorPhone } from '../../../../shared/contact';
@@ -382,6 +383,23 @@ coreRouter.get(
 
 /* ---------- License billing (owner) — allowed even after expiry ---------- */
 export const billingRouter = Router();
+
+/**
+ * "Talk to sales" from inside the app, for a shop on the trial or whose license ran out (so it lives here, where an
+ * expired shop can still reach): the sales team calls back. Any user of the shop may ask.
+ */
+billingRouter.post('/sales-lead', T(async (db, req, c, res) => {
+  const b = parse(z.object({
+    phone: z.string().trim().max(30).default(''),
+    message: z.string().trim().max(1000).default(''),
+    page: z.string().trim().max(200).default(''),
+  }), req.body);
+  const shop = await one(db, 'SELECT name, phone, city FROM shops WHERE id = $1', [c.shopId]);
+  const lead = await saveLead({ name: c.name, phone: b.phone || shop?.phone || '', email: c.email, business: shop?.name ?? '', city: shop?.city ?? '', message: b.message, source: 'app', page: b.page, shopId: c.shopId, ip: req.ip ?? '' });
+  await audit(db, req, c.shopId, 'create', 'sales_lead', lead.id, {});
+  res.status(201);
+  return { ok: true };
+}));
 
 billingRouter.get(
   '/',

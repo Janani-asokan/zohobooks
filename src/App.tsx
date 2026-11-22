@@ -11,6 +11,7 @@ import SuperAdminLayout from './layouts/SuperAdminLayout';
 import AppLayout from './layouts/AppLayout';
 import SettingsLayout from './layouts/SettingsLayout';
 import { IS_APP } from './lib/platform';
+import { PublicHelp } from './components/PublicHelp';
 
 // Route-level code splitting keeps the first load small. In the CorpusLite phone app (IS_APP, a build-time constant)
 // the web-only pages are left out of the package altogether, which keeps the app small.
@@ -197,6 +198,13 @@ export default function App() {
 
         <Route path="*" element={<RootRedirect />} />
       </Routes>
+      <PublicHelpWhenSignedOut />
     </Suspense>
   );
+}
+
+/** Help → Talk to sales on the landing, sign-in, sign-up and legal pages; signed-in users have Help in the app. */
+function PublicHelpWhenSignedOut() {
+  const { me } = useAuth();
+  return <PublicHelp hidden={!!me} />;
 }
