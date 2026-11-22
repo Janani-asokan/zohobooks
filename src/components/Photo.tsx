@@ -15,12 +15,12 @@ export function HeroArt() {
   return (
     <svg viewBox="0 0 520 520" className="lp-art" role="img" aria-label="Illustration of a tablet showing a GST invoice">
       <defs>
-        <linearGradient id="ha-rose" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#5a1611" /><stop offset="1" stopColor="#d19783" /></linearGradient>
-        <linearGradient id="ha-sage" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#73605b" /><stop offset="1" stopColor="#a39490" /></linearGradient>
+        <linearGradient id="ha-rose" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#0f5a5e" /><stop offset="1" stopColor="#6fbfb5" /></linearGradient>
+        <linearGradient id="ha-sage" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#5c6f70" /><stop offset="1" stopColor="#92a3a3" /></linearGradient>
         <linearGradient id="ha-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#c98a3c" /><stop offset="1" stopColor="#e9c17a" /></linearGradient>
       </defs>
-      <circle cx="260" cy="270" r="210" fill="#ecc4b4" opacity=".45" />
-      <circle cx="260" cy="270" r="160" fill="#f5e3dc" />
+      <circle cx="260" cy="270" r="210" fill="#c6e0d6" opacity=".45" />
+      <circle cx="260" cy="270" r="160" fill="#e3efea" />
       {/* parcel */}
       <g className="lp-bob" style={{ animationDelay: '-1s' }}>
         <rect x="70" y="300" width="120" height="104" rx="12" fill="#d8c3a5" />
@@ -57,12 +57,12 @@ export function HeroArt() {
       </g>
       {/* bag */}
       <g className="lp-bob" style={{ animationDelay: '-3s' }}>
-        <path d="M392 150c0-22 14-36 30-36s30 14 30 36" fill="none" stroke="#5c1410" strokeWidth="8" strokeLinecap="round" />
+        <path d="M392 150c0-22 14-36 30-36s30 14 30 36" fill="none" stroke="#01666b" strokeWidth="8" strokeLinecap="round" />
         <rect x="372" y="150" width="100" height="96" rx="16" fill="url(#ha-rose)" />
         <path d="M402 190l14 14 26-30" fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
       </g>
       {/* sparkles */}
-      <g fill="#a39490"><circle cx="110" cy="160" r="8" className="lp-twinkle" /><circle cx="460" cy="250" r="6" className="lp-twinkle" style={{ animationDelay: '-1.2s' }} /><circle cx="150" cy="440" r="5" className="lp-twinkle" style={{ animationDelay: '-.6s' }} /></g>
+      <g fill="#92a3a3"><circle cx="110" cy="160" r="8" className="lp-twinkle" /><circle cx="460" cy="250" r="6" className="lp-twinkle" style={{ animationDelay: '-1.2s' }} /><circle cx="150" cy="440" r="5" className="lp-twinkle" style={{ animationDelay: '-.6s' }} /></g>
     </svg>
   );
 }

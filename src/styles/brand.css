@@ -1,14 +1,14 @@
 /* ==========================================================================
-   "Oxblood, Taupe & Peach": the component layer on top of the tokens (tokens.css).
+   "Teal & Mint": the component layer on top of the tokens (tokens.css).
    Screen only: printed invoices and labels keep their own colours (print.css, documents.css).
 
    The idea, for people doing billing all day:
-   - One bold element: the navigation rail is deep oxblood, and peach marks where you are. It frames the work
+   - One bold element: the navigation rail is deep teal, and mint marks where you are. It frames the work
      without competing with it.
-   - Everything else is quiet: white cards on porcelain, taupe for secondary text, soft oxblood-tinted shadows.
-   - Motion answers what you did (a button presses in, a menu opens) and never decorates. No wobbling icons,
-     no shine sweeps: calm hands make fewer billing mistakes.
-   - Primary means oxblood; danger means crimson with its own shape (outlined), so the two are never confused.
+   - Everything else is quiet and airy: white cards on a mint-washed page, slate for secondary text.
+   - Motion answers what you did (a button presses in, a menu opens) and never decorates: calm hands make fewer
+     billing mistakes.
+   - Primary means teal; danger means crimson with its own shape (outlined), so the two are never confused.
    ========================================================================== */
 
 @media screen {
@@ -18,22 +18,22 @@
   /* ---------- Navigation rail ---------- */
   .sidebar { background: var(--side-bg); border-right: none; box-shadow: 1px 0 0 var(--side-line); backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--side-ink); }
   .sidebar-brand { border-bottom: 1px solid var(--side-line); color: var(--side-ink); }
-  .sidebar-brand .badge { background: rgba(209, 151, 131, .18); color: var(--side-ink); border: none; }
+  .sidebar-brand .badge { background: rgba(212, 225, 208, .16); color: var(--side-ink); border: none; }
   .sidebar-foot { border-top: 1px solid var(--side-line); }
   .nav-caption { color: var(--side-muted); }
   .sidebar .nav-link { color: var(--side-ink); font-weight: 500; transform: none; }
   .sidebar .nav-link svg { color: var(--side-muted); transition: color .15s; }
   .sidebar .nav-link:hover { background: rgba(255, 255, 255, .06); color: #fff; transform: none; }
-  .sidebar .nav-link:hover svg { color: var(--peach); transform: none; }
+  .sidebar .nav-link:hover svg { color: var(--mint); transform: none; }
   .sidebar .nav-link.active,
   .sidebar.super .nav-link.active { background: var(--side-active); color: #fff; box-shadow: none; }
   .sidebar .nav-link.active::before {
-    content: ''; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 4px; border-radius: 0 4px 4px 0; background: var(--peach);
+    content: ''; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 4px; border-radius: 0 4px 4px 0; background: var(--mint);
   }
-  .sidebar .nav-link.active svg, .sidebar .nav-link.parent-active svg { color: var(--peach); }
+  .sidebar .nav-link.active svg, .sidebar .nav-link.parent-active svg { color: var(--mint); }
   .sidebar .nav-link.parent-active { background: rgba(255, 255, 255, .04); color: #fff; }
   .sidebar .nav-link .chev { color: var(--side-muted); }
-  .sidebar .nav-sub { border-left: 1px solid rgba(209, 151, 131, .28); }
+  .sidebar .nav-sub { border-left: 1px solid rgba(212, 225, 208, .22); }
   .sidebar .nav-sub .nav-link { color: var(--side-muted); }
   .sidebar .nav-sub .nav-link:hover { color: #fff; }
   .sidebar .nav-sub .nav-link.active { background: var(--side-active); color: #fff; }
@@ -53,7 +53,7 @@
   .btn:active:not(:disabled) { transform: scale(.98); }
   .btn-primary { background: var(--accent-grad); color: var(--accent-ink); box-shadow: var(--shadow-rose); }
   .btn-primary::after { display: none; }
-  .btn-primary:hover:not(:disabled) { background: var(--accent-grad); filter: brightness(1.18); transform: none; box-shadow: 0 10px 24px rgba(51, 0, 0, .26); }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-grad); filter: brightness(1.18); transform: none; box-shadow: 0 10px 24px rgba(1, 110, 115, .30); }
   .btn-primary:active:not(:disabled) { transform: scale(.98); filter: brightness(1.05); }
   .qc-btn { background: var(--accent-grad); box-shadow: var(--shadow-rose); }
   .qc-btn:hover { background: var(--accent-grad); filter: brightness(1.18); transform: none; }
@@ -63,20 +63,20 @@
   .btn-danger:hover:not(:disabled) { background: var(--red-600); color: #fff; border-color: var(--red-600); }
   .btn-secondary:hover:not(:disabled) { border-color: var(--brand-300); }
 
-  /* ---------- Focus: a clear peach ring for keyboard users ---------- */
+  /* ---------- Focus: a clear teal ring for keyboard users ---------- */
   :focus-visible { outline: none; box-shadow: var(--focus); }
-  .input:focus, .select:focus, textarea:focus { border-color: var(--peach); box-shadow: var(--ring); }
+  .input:focus, .select:focus, textarea:focus { border-color: var(--teal); box-shadow: var(--ring); }
 
-  /* ---------- Tabs and switches: oxblood marks the current one ---------- */
+  /* ---------- Tabs and switches: teal marks the current one ---------- */
   .tabs button.active { background: var(--accent-grad); color: #fff; box-shadow: var(--shadow-rose); }
   .tabs button:hover:not(.active) { background: var(--brand-50); color: var(--brand-600); }
   .segmented button.active, .seg-sm button.active { color: var(--brand-600); }
-  .filter-chip:hover, .chip-btn:hover { transform: none; border-color: var(--peach); color: var(--brand-600); }
+  .filter-chip:hover, .chip-btn:hover { transform: none; border-color: var(--teal); color: var(--brand-600); }
   .filter-chip.active, .chip-btn.active { background: var(--brand-600); border-color: var(--brand-600); color: #fff; }
 
-  /* ---------- Lists: peach shows what you're on ---------- */
+  /* ---------- Lists: teal shows what you're on ---------- */
   .table tbody tr { transition: background-color .12s ease; }
-  .table tr.clickable:hover td:first-child { box-shadow: inset 3px 0 0 var(--peach); }
+  .table tr.clickable:hover td:first-child { box-shadow: inset 3px 0 0 var(--teal); }
   .table thead th { color: var(--ink-600); }
 
   /* ---------- Calm: no idle animation on empty states or icons ---------- */
@@ -87,27 +87,27 @@
   .num, .amount, .stat-value, .kpi-value { font-variant-numeric: tabular-nums; }
 
   /* ---------- Toasts: a coloured edge says what kind of news it is ---------- */
-  .toast { border-left-color: var(--peach); }
+  .toast { border-left-color: var(--teal); }
   .toast-success { border-left-color: var(--green-600); }
   .toast-error { border-left-color: var(--red-600); }
 
-  /* ---------- Bottom bar on phones: oxblood marks the current tab ---------- */
+  /* ---------- Bottom bar on phones: teal marks the current tab ---------- */
   .bottom-nav a.active, .bottom-nav button.active, .tabbar a.active { color: var(--brand-600); }
 
   /* "Sent" and other in-progress states: warm and neutral (waiting, not wrong), never red like Overdue. */
-  .badge-blue { background: #f6e7e0; color: #5d4c47; }
+  .badge-blue { background: #e6eeec; color: #3f5556; }
 
-  ::selection { background: rgba(209, 151, 131, .38); color: var(--ink-900); }
+  ::selection { background: rgba(1, 143, 150, .20); color: var(--ink-900); }
 }
 
-/* Dark mode: the rail stays the darkest surface, and peach becomes the action colour. */
+/* Dark mode: the rail stays the darkest surface, and light teal becomes the action colour. */
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .btn-primary:hover:not(:disabled), :root:not([data-theme='light']) .qc-btn:hover { filter: brightness(1.06); }
   :root:not([data-theme='light']) .tabs button.active { color: var(--accent-ink); }
-  :root:not([data-theme='light']) .filter-chip.active { background: var(--peach); border-color: var(--peach); color: var(--accent-ink); }
-  :root:not([data-theme='light']) .badge-blue { background: #3a2722; color: #e3c4b8; }
+  :root:not([data-theme='light']) .filter-chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  :root:not([data-theme='light']) .badge-blue { background: #1c2e2e; color: #b4c7c5; }
 }
 :root[data-theme='dark'] .btn-primary:hover:not(:disabled), :root[data-theme='dark'] .qc-btn:hover { filter: brightness(1.06); }
 :root[data-theme='dark'] .tabs button.active { color: var(--accent-ink); }
-:root[data-theme='dark'] .filter-chip.active { background: var(--peach); border-color: var(--peach); color: var(--accent-ink); }
-:root[data-theme='dark'] .badge-blue { background: #3a2722; color: #e3c4b8; }
+:root[data-theme='dark'] .filter-chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+:root[data-theme='dark'] .badge-blue { background: #1c2e2e; color: #b4c7c5; }

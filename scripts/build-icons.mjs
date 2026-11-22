@@ -1,4 +1,4 @@
-// Renders every app icon from one design: the Corpus360 check-mark in peach on oxblood.
+// Renders every app icon from one design: the Corpus360 check-mark in mint on teal.
 // Website: public/icon.svg, favicon.svg, PNG install icons. Phone app (Android): launcher icons in every density
 // (square, round and the adaptive-icon foreground), the adaptive background colour, and the splash screens.
 // Run from the repository root:  node scripts/build-icons.mjs
@@ -6,9 +6,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
-const OXBLOOD = '#330000';
-const OXBLOOD_2 = '#5A1611';
-const PEACH = '#D19783';
+// Teal background (deep enough for the mint mark to stand out) and the mint mark.
+const OXBLOOD = '#015F64';
+const OXBLOOD_2 = '#017A80';
+const PEACH = '#D4E1D0';
 const MARK = (stroke) => `<path d="M20.21 9.80 A8.5 8.5 0 1 1 14.20 3.79" fill="none" stroke="${PEACH}" stroke-width="${stroke}" stroke-linecap="butt" stroke-linejoin="miter"/><path d="M7.6 11.6 11.4 15.4 21 5.8" fill="none" stroke="${PEACH}" stroke-width="${stroke}" stroke-linecap="butt" stroke-linejoin="miter"/>`;
 const GRAD = `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${OXBLOOD}"/><stop offset="1" stop-color="${OXBLOOD_2}"/></linearGradient></defs>`;
 
@@ -17,13 +18,13 @@ const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${G
 const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="${OXBLOOD}"/>${MARK(3)}</svg>`;
 fs.writeFileSync('public/icon.svg', iconSvg);
 fs.writeFileSync('public/favicon.svg', faviconSvg);
-// Brand files used on light backgrounds: the mark in oxblood.
+// Brand files used on light backgrounds: the mark in deep teal.
 for (const f of ['corpus360-mark.svg', 'corpus360-lockup.svg', 'corpus360-wordmark.svg']) {
   const p = path.join('public/brand', f);
-  if (fs.existsSync(p)) fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/#A9475A/gi, OXBLOOD));
+  if (fs.existsSync(p)) fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/#A9475A|#330000/gi, '#016E73'));
 }
 
-/** A square picture: full-bleed or rounded oxblood, with the mark taking `mark` of the width. */
+/** A square picture: full-bleed or rounded teal, with the mark taking `mark` of the width. */
 const square = (size, { radius = 0, circle = false, mark = 0.62, transparent = false } = {}) => {
   const m = Math.round(size * mark);
   const bg = transparent ? '' : `<div style="position:absolute;inset:0;border-radius:${circle ? '50%' : radius + 'px'};background:linear-gradient(135deg, ${OXBLOOD}, ${OXBLOOD_2})"></div>`;
@@ -48,7 +49,7 @@ await shot(square(180, { mark: 0.6 }), 180, 180, 'public/apple-touch-icon.png');
 await shot(square(512, { mark: 0.5 }), 512, 512, 'public/icon-512-maskable.png'); // mark inside the safe zone
 
 // Android launcher icons. Legacy square and round icons, and the adaptive foreground (108dp canvas, with the mark
-// inside the 66dp safe circle; Android draws the oxblood background colour behind it).
+// inside the 66dp safe circle; Android draws the teal background colour behind it).
 const RES = 'mobile/android/app/src/main/res';
 const DENSITY = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
 for (const [d, k] of Object.entries(DENSITY)) {
@@ -60,7 +61,7 @@ for (const [d, k] of Object.entries(DENSITY)) {
 fs.writeFileSync(`${RES}/values/ic_launcher_background.xml`,
   `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">${OXBLOOD}</color>\n</resources>`);
 
-// Splash screens: oxblood with the peach mark in the middle, at the size each existing file already has.
+// Splash screens: teal with the mint mark in the middle, at the size each existing file already has.
 for (const dir of fs.readdirSync(RES).filter((x) => x.startsWith('drawable'))) {
   const file = path.join(RES, dir, 'splash.png');
   if (!fs.existsSync(file)) continue;

@@ -19,7 +19,7 @@ interface Person {
 }
 interface Summary { headline: string; people: Array<{ name: string; summary: string; flag: string | null }>; followUps: string[] }
 
-const COLORS = ['#8a3a30', '#5d4c47', '#b07a2f', '#6b5ca5', '#2f7d9a', '#a2465a', '#54463a'];
+const COLORS = ['#018f96', '#3f5556', '#b07a2f', '#6b5ca5', '#2f7d9a', '#a2465a', '#54463a'];
 const time = (s: string) => new Date(s).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 const hm = (m: number) => `${Math.floor(m / 60)}h ${m % 60}m`;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);

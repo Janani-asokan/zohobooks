@@ -17,16 +17,16 @@ import { Hint } from '@/components/kit';
 import { fmtDate, money, moneyShort, todayISO } from '@/lib/format';
 
 export const EXPENSE_CATEGORIES: Array<{ name: string; icon: typeof Zap; color: string }> = [
-  { name: 'Rent', icon: Home, color: '#8a3a30' },
-  { name: 'Salaries & Wages', icon: Users, color: '#73605b' },
+  { name: 'Rent', icon: Home, color: '#018f96' },
+  { name: 'Salaries & Wages', icon: Users, color: '#5c6f70' },
   { name: 'Electricity', icon: Zap, color: '#c98a3c' },
-  { name: 'Internet & Phone', icon: Wifi, color: '#5c1410' },
-  { name: 'Fuel & Travel', icon: Fuel, color: '#d19783' },
+  { name: 'Internet & Phone', icon: Wifi, color: '#01666b' },
+  { name: 'Fuel & Travel', icon: Fuel, color: '#6fbfb5' },
   { name: 'Repairs & Maintenance', icon: Wrench, color: '#54463a' },
   { name: 'Office Supplies', icon: PenTool, color: '#8fa088' },
-  { name: 'Marketing', icon: Megaphone, color: '#dfae9c' },
+  { name: 'Marketing', icon: Megaphone, color: '#a9d2c6' },
   { name: 'Bank Charges', icon: Landmark, color: '#7a6656' },
-  { name: 'Professional Fees', icon: Briefcase, color: '#5a1611' },
+  { name: 'Professional Fees', icon: Briefcase, color: '#0f5a5e' },
   { name: 'Food & Refreshments', icon: Coffee, color: '#d4a05a' },
   { name: 'Other', icon: MoreHorizontal, color: '#b3a596' },
 ];

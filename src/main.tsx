@@ -26,7 +26,7 @@ import './styles/theme.css';
 import './styles/documents.css';
 import './styles/print.css';
 import './styles/app.css';
-import './styles/oxblood.css';
+import './styles/brand.css';
 
 // On a phone: printing, downloads and outside links go through the app (no-op on the website).
 installNativeBridges();
