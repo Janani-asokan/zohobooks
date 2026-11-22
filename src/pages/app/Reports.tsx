@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Percent, Printer, Download, FileJson, Info, Landmark } from 'lucide-react';
 import { api, download } from '@/api/client';
+import { ExportMenu } from '@/components/ExportMenu';
+import type { ReportTable } from '@/lib/report';
 import { useInvoices } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
@@ -74,6 +76,48 @@ export default function Reports() {
     { id: 'sales', label: 'Monthly sales', icon: BarChart3 },
   ];
 
+  const per = monthName(period);
+  const gstin = g1.data?.gstin ? ` · GSTIN ${g1.data.gstin}` : '';
+  const g1Table = (): ReportTable | null => g1.data ? {
+    title: 'GSTR-1 summary', subtitle: `${per}${gstin}`, filename: `GSTR1_summary_${period}`,
+    columns: [{ label: 'Section' }, { label: 'Count', align: 'right' }, { label: 'Taxable value', money: true }, { label: 'GST', money: true }],
+    rows: [
+      { cells: ['B2B invoices (4A)', g1.data.b2b.invoices, g1.data.b2b.taxable, g1.data.b2b.tax] },
+      { cells: ['B2C large, inter-state (5)', g1.data.b2cl.invoices, g1.data.b2cl.taxable, null] },
+      { cells: ['B2C others (7)', null, g1.data.b2cs.taxable, g1.data.b2cs.tax] },
+      { cells: ['Credit notes, registered (9B)', g1.data.cdnr.notes, null, null] },
+      { cells: ['Nil-rated / exempt / non-GST (8)', null, sum(g1.data.nil, (n) => n.expt_amt + n.nil_amt), null] },
+      { cells: ['Documents issued (13)', g1.data.docs.invoices?.totnum ?? 0, null, null] },
+    ],
+  } : null;
+  const g3Table = (): ReportTable | null => g3.data ? {
+    title: 'GSTR-3B summary', subtitle: `${per}${gstin}`, filename: `GSTR3B_summary_${period}`,
+    columns: [{ label: 'Section' }, { label: 'Taxable', money: true }, { label: 'IGST', money: true }, { label: 'CGST', money: true }, { label: 'SGST', money: true }],
+    rows: [
+      { cells: ['3.1(a) Outward taxable', g3.data.sup_details.osup_det.txval, g3.data.sup_details.osup_det.iamt, g3.data.sup_details.osup_det.camt, g3.data.sup_details.osup_det.samt] },
+      { cells: ['3.1(c) Nil / exempt', g3.data.sup_details.osup_nil_exmp.txval, null, null, null] },
+      { cells: ['4(A)(5) Input tax credit', null, g3.data.itc_elg.itc_avl.iamt, g3.data.itc_elg.itc_avl.camt, g3.data.itc_elg.itc_avl.samt] },
+      { cells: ['Tax payable (cash)', null, g3.data.payable.iamt, g3.data.payable.camt, g3.data.payable.samt], kind: 'total' },
+    ],
+    note: g3.data.note,
+  } : null;
+  const hsnTable = (): ReportTable | null => hsn.data ? {
+    title: 'HSN / SAC summary', subtitle: `${per}${gstin}`, filename: `HSN_summary_${period}`, landscape: true,
+    columns: [{ label: 'HSN/SAC' }, { label: 'Description' }, { label: 'Rate %', align: 'right' }, { label: 'Qty', align: 'right' }, { label: 'Unit' }, { label: 'Taxable', money: true }, { label: 'IGST', money: true }, { label: 'CGST', money: true }, { label: 'SGST', money: true }],
+    rows: [
+      ...hsn.data.map((h) => ({ cells: [h.hsn, h.description, h.rate, h.qty, h.unit, h.taxable, h.igst, h.cgst, h.sgst] })),
+      { cells: ['Total', '', null, null, '', sum(hsn.data, (h) => h.taxable), sum(hsn.data, (h) => h.igst), sum(hsn.data, (h) => h.cgst), sum(hsn.data, (h) => h.sgst)], kind: 'total' as const },
+    ],
+  } : null;
+  const salesTable = (): ReportTable => ({
+    title: 'Monthly sales', subtitle: `FY ${fy}`, filename: `Monthly_sales_FY${fy}`,
+    columns: [{ label: 'Month' }, { label: 'Invoices', align: 'right' }, { label: 'Net sales', money: true }, { label: 'GST', money: true }, { label: 'Total', money: true }],
+    rows: [
+      ...months.map((x) => ({ cells: [x.label, x.count, x.net, x.tax, x.total] })),
+      { cells: ['Total', sum(months, (x) => x.count), sum(months, (x) => x.net), sum(months, (x) => x.tax), sum(months, (x) => x.total)], kind: 'total' as const },
+    ],
+  });
+
   const dl = (url: string, name: string, what: string) => download(url, name).then(() => toast('success', `${what} downloaded`, 'Upload it on the GST portal’s offline tool / returns page.')).catch((e) => toast('error', e.message));
 
   return (
@@ -102,7 +146,7 @@ export default function Reports() {
         {tab === 'sales' && (
           <div className="stack">
             <div className="card">
-              <div className="card-header"><div><h3>Monthly sales (incl. tax)</h3><p>{sum(months, (x) => x.count)} invoices · {money(sum(months, (x) => x.total))}</p></div></div>
+              <div className="card-header"><div><h3>Monthly sales (incl. tax)</h3><p>{sum(months, (x) => x.count)} invoices · {money(sum(months, (x) => x.total))}</p></div><ExportMenu size="sm" table={salesTable} /></div>
               <div className="card-body"><AreaChart name="Monthly sales" labels={months.map((x) => x.label)} values={months.map((x) => x.total)} format={moneyShort} /></div>
             </div>
             <div className="card table-wrap">
@@ -124,7 +168,10 @@ export default function Reports() {
               <div className="card">
                 <div className="card-header">
                   <div><h3>GSTR-1 · outward supplies</h3><p>Invoice-level details of sales</p></div>
-                  <button className="btn btn-primary btn-sm" onClick={() => dl(`/shop/gst/gstr1?period=${period}&download=1`, `GSTR1_${period}.json`, 'GSTR-1 JSON')}><FileJson size={14} /> Download JSON</button>
+                  <div className="row" style={{ gap: 6 }}>
+                    <ExportMenu size="sm" table={g1Table} disabled={!g1.data} />
+                    <button className="btn btn-primary btn-sm" onClick={() => dl(`/shop/gst/gstr1?period=${period}&download=1`, `GSTR1_${period}.json`, 'GSTR-1 JSON')}><FileJson size={14} /> JSON</button>
+                  </div>
                 </div>
                 <div className="table-wrap">
                   {g1.data ? (
@@ -144,7 +191,10 @@ export default function Reports() {
               <div className="card">
                 <div className="card-header">
                   <div><h3>GSTR-3B · summary return</h3><p>Liability, input credit &amp; tax payable</p></div>
-                  <button className="btn btn-secondary btn-sm" onClick={() => dl(`/shop/gst/gstr3b?period=${period}&download=1`, `GSTR3B_${period}.json`, 'GSTR-3B summary')}><Download size={14} /> JSON</button>
+                  <div className="row" style={{ gap: 6 }}>
+                    <ExportMenu size="sm" table={g3Table} disabled={!g3.data} />
+                    <button className="btn btn-secondary btn-sm" onClick={() => dl(`/shop/gst/gstr3b?period=${period}&download=1`, `GSTR3B_${period}.json`, 'GSTR-3B summary')}><Download size={14} /> JSON</button>
+                  </div>
                 </div>
                 <div className="table-wrap">
                   {g3.data ? (
@@ -163,7 +213,7 @@ export default function Reports() {
               </div>
             </div>
             <div className="card table-wrap">
-              <div className="card-header"><div><h3>HSN / SAC summary (GSTR-1 table 12)</h3><p>{monthName(period)}</p></div></div>
+              <div className="card-header"><div><h3>HSN / SAC summary (GSTR-1 table 12)</h3><p>{monthName(period)}</p></div><ExportMenu size="sm" table={hsnTable} disabled={!hsn.data} /></div>
               <table className="table">
                 <thead><tr><th>HSN/SAC</th><th>Description</th><th className="num">Rate</th><th className="num">Qty</th><th className="num">Taxable</th><th className="num">IGST</th><th className="num">CGST</th><th className="num">SGST</th></tr></thead>
                 <tbody>

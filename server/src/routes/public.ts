@@ -98,3 +98,22 @@ publicRouter.post(
     res.status(201).json({ ok: true });
   }),
 );
+
+/** A report file shared on WhatsApp (Reports → Export → WhatsApp): opened by its unguessable link for 7 days. */
+publicRouter.get(
+  '/files/:token',
+  rateLimit('public-file', 30, 60_000),
+  h(async (req, res) => {
+    if (!/^[0-9a-f]{48}$/.test(req.params.token!)) throw notFound('File');
+    const [f] = await query('SELECT filename, mime, data FROM shared_files WHERE token = $1 AND expires_at > now()', [req.params.token]);
+    if (!f) throw notFound('File (the link may have expired)');
+    noIndex(res);
+    res.setHeader('Content-Type', f.mime);
+    // Only a PDF opens in the browser; spreadsheets download. Nothing in the file can run scripts on our site.
+    res.setHeader('Content-Disposition', `${f.mime === 'application/pdf' ? 'inline' : 'attachment'}; filename="${String(f.filename).replace(/"/g, '')}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.send(f.data);
+  }),
+);

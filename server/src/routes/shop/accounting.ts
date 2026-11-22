@@ -7,6 +7,12 @@ import { badRequest, h, HttpError, notFound, parse } from '../../http';
 import { nextSeq, platformConfig } from '../../services/common';
 import { accountsWithBalances, balanceSheet, cashFlow, chartOfAccounts, fyStartFor, generalLedger, profitAndLoss, trialBalance } from '../../services/ledger';
 import { htmlPdf } from '../../services/pdf';
+import crypto from 'node:crypto';
+import { config } from '../../config';
+import { query } from '../../db';
+import { sendMail } from '../../mailer';
+import { toCsv } from '../../../../shared/csv';
+import { buildXlsx } from '../../../../shared/xlsx';
 import { ACCOUNT_SUBTYPES, ACCOUNT_TYPES } from '../../../../shared/accounting';
 import { r2 } from '../../../../shared/calc';
 import { T } from './ctx';
@@ -227,18 +233,10 @@ const pdfBody = z.object({
   note: z.string().max(500).default(''),
 });
 
-/** Any report as a PDF: the client sends the table it shows; the server lays it out with the business header. */
-accountingRouter.post(
-  '/reports/pdf',
-  perm('reports.read'),
-  h(async (req, res) => {
-    const c = userCtx(req);
-    const b = parse(pdfBody, req.body);
-    const org = await withTenant(c.shopId, async (db) => {
-      await audit(db, req, c.shopId, 'export_pdf', 'report', b.title);
-      return one(db, 'SELECT company_name, gstin, address, state FROM organizations WHERE shop_id = $1', [c.shopId]);
-    });
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+type ReportBody = { title: string; subtitle: string; note: string; columns: Array<{ label: string; align: 'left' | 'right' }>; rows: Array<{ cells: string[]; kind: string }> };
+/** A report laid out for the PDF: the business header, the table, and who made it when. */
+function reportHtml(org: any, b: ReportBody, by: string) {
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
       * { box-sizing: border-box; } body { font: 10.5px/1.45 "Inter", "Segoe UI", Arial, sans-serif; color: #111; margin: 0; font-variant-numeric: tabular-nums; }
       header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid #111; padding-bottom: 8px; margin-bottom: 12px; }
       h1 { font-size: 16px; margin: 0 0 2px; } .org { font-weight: 600; font-size: 12px; } .muted { color: #555; }
@@ -253,8 +251,22 @@ accountingRouter.post(
       <table><thead><tr>${b.columns.map((col) => `<th class="${col.align === 'right' ? 'r' : ''}">${esc(col.label)}</th>`).join('')}</tr></thead>
       <tbody>${b.rows.map((r) => `<tr class="${r.kind}">${b.columns.map((col, i) => `<td class="${col.align === 'right' ? 'r' : ''}">${esc(r.cells[i] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>
       ${b.note ? `<p class="note">${esc(b.note)}</p>` : ''}
-      <p class="note">Generated ${esc(new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }))} by ${esc(c.name)}</p>
+      <p class="note">Generated ${esc(new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }))} by ${esc(by)}</p>
     </body></html>`;
+}
+
+/** Any report as a PDF: the client sends the table it shows; the server lays it out with the business header. */
+accountingRouter.post(
+  '/reports/pdf',
+  perm('reports.read'),
+  h(async (req, res) => {
+    const c = userCtx(req);
+    const b = parse(pdfBody, req.body);
+    const org = await withTenant(c.shopId, async (db) => {
+      await audit(db, req, c.shopId, 'export_pdf', 'report', b.title);
+      return one(db, 'SELECT company_name, gstin, address, state FROM organizations WHERE shop_id = $1', [c.shopId]);
+    });
+    const html = reportHtml(org, b, c.name);
     let pdf: Buffer;
     try { pdf = await htmlPdf(html, b.landscape); } catch (e) {
       console.error('[pdf]', (e as Error).message);
@@ -267,3 +279,83 @@ accountingRouter.post(
   }),
 );
 
+
+/* ======================= Email or WhatsApp a report ======================= */
+
+const shareBody = z.object({
+  format: z.enum(['pdf', 'xlsx', 'csv']),
+  via: z.enum(['email', 'link']),
+  to: z.string().trim().max(160).default(''),
+  cc: z.string().trim().max(160).default(''),
+  message: z.string().trim().max(2000).default(''),
+  filename: z.string().trim().min(1).max(120),
+  title: z.string().min(1).max(120),
+  subtitle: z.string().max(200).default(''),
+  landscape: z.boolean().default(false),
+  note: z.string().max(500).default(''),
+  columns: z.array(z.object({ label: z.string().max(60), align: z.enum(['left', 'right']).optional(), money: z.boolean().optional() })).min(1).max(16),
+  rows: z.array(z.object({ cells: z.array(z.union([z.string().max(500), z.number(), z.null()])).max(16), kind: z.enum(['row', 'group', 'sub', 'total']).default('row') })).max(5000),
+});
+const isEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+const inr2 = (v: string | number | null) => (typeof v === 'number' ? new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) : v ?? '');
+const MIME = { pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'text/csv; charset=utf-8' } as const;
+export const SHARE_DAYS = 7;
+
+/** The report as a file in the chosen format: the same rows the screen shows. */
+async function reportFile(b: z.infer<typeof shareBody>, org: any, by: string): Promise<Buffer> {
+  if (b.format === 'csv') {
+    const cols = b.columns.map((col, i) => ({ key: String(i), label: col.label }));
+    const rows = b.rows.map((r) => Object.fromEntries(r.cells.map((v, i) => [String(i), typeof v === 'number' ? v.toFixed(2) : v ?? ''])));
+    return Buffer.from('\uFEFF' + toCsv(rows, cols), 'utf8');
+  }
+  if (b.format === 'xlsx') {
+    return Buffer.from(buildXlsx({ name: b.title, title: [b.title, b.subtitle], columns: b.columns.map((col) => ({ label: col.label, money: col.money })),
+      rows: b.rows.map((r) => ({ cells: r.cells, bold: r.kind !== 'row' })) }));
+  }
+  const html = reportHtml(org, { ...b, columns: b.columns.map((col) => ({ label: col.label, align: col.align ?? (col.money ? 'right' : 'left') })),
+    rows: b.rows.map((r) => ({ cells: r.cells.map((v) => String(inr2(v))), kind: r.kind })) }, by);
+  try { return await htmlPdf(html, b.landscape); } catch (e) {
+    console.error('[pdf]', (e as Error).message);
+    throw new HttpError(503, 'Could not create the PDF right now. Try Excel or CSV, or use Print → Save as PDF.', 'pdf_unavailable');
+  }
+}
+
+/**
+ * Email a report (PDF, Excel or CSV attached) to someone, or keep it behind a 7-day link to send on WhatsApp
+ * (WhatsApp links can't carry a file).
+ */
+accountingRouter.post(
+  '/reports/share',
+  perm('reports.read'),
+  h(async (req, res) => {
+    const c = userCtx(req);
+    const b = parse(shareBody, req.body);
+    if (b.via === 'email') {
+      if (!isEmail(b.to)) throw badRequest('Enter the email address to send it to');
+      if (b.cc && !isEmail(b.cc)) throw badRequest('Enter a valid Cc email');
+    }
+    const org = await withTenant(c.shopId, (db) => one(db, 'SELECT company_name, gstin, address, state FROM organizations WHERE shop_id = $1', [c.shopId]));
+    const file = await reportFile(b, org, c.name);
+    if (file.length > 10 * 1024 * 1024) throw new HttpError(413, 'This report is too large to send. Pick a shorter date range.', 'too_large');
+    const filename = `${b.filename.replace(/[^\w.-]+/g, '-')}.${b.format}`;
+    const business = org?.company_name || 'our business';
+    if (b.via === 'email') {
+      const sent = await sendMail({
+        kind: 'report', to: b.to, cc: b.cc || undefined,
+        subject: `${b.title}${b.subtitle ? ` (${b.subtitle})` : ''} from ${business}`,
+        text: [b.message, `Please find the ${b.title} attached${b.subtitle ? ` for ${b.subtitle}` : ''}.`, `Regards,\n${c.name}\n${business}`].filter(Boolean).join('\n\n'),
+        attachments: [{ filename, content: file, contentType: MIME[b.format] }],
+      });
+      await withTenant(c.shopId, (db) => audit(db, req, c.shopId, 'email_report', 'report', b.title, { to: b.to, format: b.format, sent }));
+      res.json({ status: sent ? 'sent' : 'skipped', detail: sent ? `Emailed ${b.to} with ${filename}` : 'Email is not set up on the server yet, so nothing was sent.' });
+      return;
+    }
+    const token = crypto.randomBytes(24).toString('hex');
+    await query('DELETE FROM shared_files WHERE expires_at < now()');
+    await query(`INSERT INTO shared_files (shop_id, token, filename, mime, data, title, created_by_name, expires_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7, now() + make_interval(days => $8))`, [c.shopId, token, filename, MIME[b.format], file, b.title, c.name, SHARE_DAYS]);
+    await withTenant(c.shopId, (db) => audit(db, req, c.shopId, 'share_report', 'report', b.title, { format: b.format }));
+    const url = `${config.appUrl}/api/public/files/${token}`;
+    res.json({ url, text: `${b.title}${b.subtitle ? ` (${b.subtitle})` : ''} from ${business}:\n${url}\n(Link works for ${SHARE_DAYS} days.)`, expiresInDays: SHARE_DAYS });
+  }),
+);

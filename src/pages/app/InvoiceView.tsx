@@ -1,13 +1,14 @@
 import { PUBLIC_ORIGIN } from '@/lib/platform';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy, Check, FileSpreadsheet, Sheet } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBankAccounts, useBranches, useInvoice, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { billPrint, billPrintName, sameBill, shopBill, preparePrint, printInvoice, printRoute, setBillPrinter, type BillPrinter, type PrintPaper, type Roll } from '@/lib/printInvoice';
 import { withPrintDefaults } from '../../../shared/printSettings';
 import type { InvoiceDetail, Organization } from '@/api/types';
-import { downloadInvoicePdf, lastPdfFailure } from '@/lib/report';
+import { downloadInvoicePdf, exportCsv, exportXlsx, lastPdfFailure, type ReportTable } from '@/lib/report';
+import { SendReport } from '@/components/ExportMenu';
 import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { ConfirmModal, EmptyState, Field, Modal, Segmented } from '@/components/ui';
@@ -81,6 +82,7 @@ export default function InvoiceView() {
   const cancelMut = useMut((reason: string) => api.post(`/shop/invoices/${id}/cancel`, { reason }), keys, { success: 'Invoice cancelled — stock restored' });
   const delMut = useMut(() => api.del(`/shop/invoices/${id}`), keys, { success: 'Draft deleted' });
   const issueMut = useMut((b: Record<string, unknown>) => api.put(`/shop/invoices/${id}`, b), keys, { success: 'Invoice issued' });
+  const [sendXl, setSendXl] = useState(false);
   const mailMut = useMut((b: typeof mail) => api.post<{ status: string; detail: string }>(`/shop/invoices/${id}/email`, b), [['invoice']], { silentError: true });
   const refsMut = useMut((b: typeof refs) => api.put(`/shop/invoices/${id}/gst-refs`, b), keys, { silentError: true });
   const aiOn = useAiEnabled();
@@ -177,6 +179,7 @@ export default function InvoiceView() {
                   )}
                   {inv.balance > 0 && aiOn && (canSell || me.can('payments.write')) && <button className="dropdown-item" onClick={() => { close(); setAiRemind(true); }}><Sparkles size={16} /> Write a reminder with AI</button>}
                   {canSell && <button className="dropdown-item" onClick={() => { close(); setMail({ to: inv.customer.email, cc: '', message: '' }); setMailOpen(true); }}><Mail size={16} /> Email invoice with PDF</button>}
+                  {me.can('reports.read') && <button className="dropdown-item" onClick={() => { close(); setSendXl(true); }}><FileSpreadsheet size={16} /> Email as Excel or CSV</button>}
                   <a className="dropdown-item" href={`mailto:${inv.customer.email}?subject=${encodeURIComponent(`Invoice ${inv.number} from ${org.companyName}`)}&body=${encodeURIComponent(whatsappText(inv, org))}`} onClick={close}><ExternalLink size={16} /> Email from my mail app</a>
                   {inv.balance > 0 && canSell && (
                     <button className="dropdown-item" onClick={() => { close(); remind.mutate('email', { onSuccess: (r) => toast(r.status === 'sent' ? 'success' : 'info', r.status === 'sent' ? 'Reminder emailed' : 'Reminder not emailed', r.detail) }); }}><Send size={16} /> Email reminder (from server)</button>
@@ -207,6 +210,8 @@ export default function InvoiceView() {
                 })}
                 <div className="dropdown-sep" />
                 <button className="dropdown-item" disabled={pdfBusy} onClick={() => { close(); downloadPdf(printCfg.invoice.paper); }}><Download size={16} /> Download PDF</button>
+                <button className="dropdown-item" onClick={() => { close(); exportXlsx(invoiceTable(inv)); }}><FileSpreadsheet size={16} /> Download Excel</button>
+                <button className="dropdown-item" onClick={() => { close(); exportCsv(invoiceTable(inv)); }}><Sheet size={16} /> Download CSV</button>
                 <Link className="dropdown-item" to={printRoute(inv.id, printCfg.invoice.paper)} onClick={close}><ExternalLink size={16} /> Open print view</Link>
                 {me.can('admin') && <><div className="dropdown-sep" /><button className="dropdown-item" onClick={() => { close(); navigate('/app/print-settings'); }}><Pencil size={16} /> Invoice layout settings</button></>}
               </>
@@ -347,6 +352,7 @@ export default function InvoiceView() {
         {inv.amountPaid > 0 && <p className="field-error" style={{ marginTop: 10 }}>Remove the recorded payments first.</p>}
       </Modal>
 
+      {sendXl && <SendReport via="email" table={invoiceTable(inv)} onClose={() => setSendXl(false)} />}
       <Modal open={mailOpen} onClose={() => setMailOpen(false)} title="Email invoice" subtitle={`${inv.number} goes as a PDF attachment, with a link to view it online.`}
         footer={<><button className="btn btn-secondary" onClick={() => setMailOpen(false)}>Cancel</button><button className="btn btn-primary" disabled={mailMut.isPending || !mail.to} onClick={() => mailMut.mutate(mail, {
           onSuccess: (r) => { setMailOpen(false); toast(r.status === 'sent' ? 'success' : 'info', r.status === 'sent' ? 'Invoice emailed' : 'Email not sent', r.detail); },
@@ -429,4 +435,29 @@ function AiReminder({ invoiceId, phone, onClose, onSent }: { invoiceId: string; 
       </div>
     </Modal>
   );
+}
+
+/** The invoice as a table for Excel and CSV: one row per line, then the totals, the same figures as the PDF. */
+function invoiceTable(inv: InvoiceDetail): ReportTable {
+  const tax = inv.interState ? [['IGST', inv.igst]] as const : [['CGST', inv.cgst], ['SGST', inv.sgst]] as const;
+  const blank = ['', '', '', '', '', ''];
+  const total = (label: string, v: number, kind: 'sub' | 'total' = 'sub') => ({ cells: [label, ...blank, v] as Array<string | number | null>, kind });
+  return {
+    title: `Invoice ${inv.number ?? 'draft'}`,
+    subtitle: `${inv.customer.companyName || inv.customer.name} · ${inv.date}${inv.customer.gstin ? ` · GSTIN ${inv.customer.gstin}` : ''}`,
+    filename: `Invoice_${(inv.number ?? 'draft').replace(/[^\w-]+/g, '-')}`,
+    columns: [{ label: 'Item' }, { label: 'HSN/SAC' }, { label: 'Qty', align: 'right' }, { label: 'Unit' }, { label: 'Rate', money: true }, { label: 'Discount %', align: 'right' }, { label: 'GST %', align: 'right' }, { label: 'Amount', money: true }],
+    rows: [
+      ...inv.lines.map((l) => ({ cells: [l.name, l.hsn, l.qty, l.unit, l.rate, l.discount, l.taxRate, l.amount] as Array<string | number | null> })),
+      total('Sub total', inv.subTotal),
+      ...(inv.discount ? [total('Discount', -inv.discount)] : []),
+      ...tax.map(([k, v]) => total(k, v)),
+      ...(inv.tcs ? [total('TCS', inv.tcs)] : []),
+      ...(inv.roundOff ? [total('Round off', inv.roundOff)] : []),
+      total('Total', inv.total, 'total'),
+      ...(inv.amountPaid ? [total('Paid', inv.amountPaid)] : []),
+      ...(inv.balance && inv.status === 'Issued' ? [total('Balance due', inv.balance)] : []),
+    ],
+    note: `Place of supply: ${inv.placeOfSupply}${inv.reverseCharge ? ' · Reverse charge' : ''}`,
+  };
 }
