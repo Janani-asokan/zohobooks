@@ -11,7 +11,7 @@ import { fmtDate, money } from '@/lib/format';
 
 interface Level { key: string; name: string; description: string; monthly: number; yearly: number }
 interface ShopFeature {
-  key: string; name: string; group: string; summary: string; includes: string[]; levels: Level[];
+  key: string; name: string; group: string; summary: string; includes: string[]; levels: Level[]; retired?: string | null;
   on: boolean; level: string | null; source: string | null; endsOn: string | null; requested: { level: string; at: string } | null;
 }
 interface HistoryRow { id: string; feature: string; level: string; status: string; source: string; startsOn: string; endsOn: string | null; monthlyPrice: number | null; createdAt: string }
@@ -76,6 +76,7 @@ export default function Features() {
                       : f.requested ? <Badge tone="violet"><Clock size={12} /> Asked {fmtDate(String(f.requested.at).slice(0, 10))}</Badge> : <Badge tone="gray">Off</Badge>}
                   </div>
                   <p className="small muted">{f.summary}</p>
+                  {f.retired && <p className="small" style={{ color: 'var(--amber-700)', margin: '4px 0 0' }}>{f.retired}</p>}
                   <ul className="feature-includes">{f.includes.map((i) => <li key={i}><Check size={14} /> {i}</li>)}</ul>
                   <div className="feature-price">
                     {f.levels.length > 1 ? <span className="small muted">From </span> : null}

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { copyFeatures } from '../../services/features';
+import { copyFeatures, loadEntitlements } from '../../services/features';
+import { capacityOf } from '../../../../shared/features';
 import { perm } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, query, tx } from '../../db';
-import { badRequest, forbidden, parse } from '../../http';
+import { HttpError, badRequest, forbidden, parse } from '../../http';
 import { GRANTABLE, ROLE_PERMISSIONS, STAFF_ROLES, rolePermissions, type StaffRole } from '../../../../shared/permissions';
 import { T } from './ctx';
 
@@ -114,7 +115,13 @@ adminRouter.post(
     }), req.body);
     const home = await one(db, 'SELECT * FROM shops WHERE id = $1', [c.shopId]);
     const owned = await query("SELECT count(*)::int AS n FROM user_shops WHERE user_id = $1 AND role = 'Owner'", [c.id]);
-    if (owned[0].n >= 9) throw badRequest('You can manage up to 10 organisations from one login');
+    // Each extra business comes with the "Another business" add-on (+1, +2 or +3), bought on this business.
+    const allowed = capacityOf(await loadEntitlements(c.shopId, db), 'extra_business');
+    if (owned[0].n >= allowed) {
+      throw new HttpError(402, allowed
+        ? `Your “Another business” add-on covers ${allowed} extra business${allowed > 1 ? 'es' : ''}. Choose a bigger pack in Settings → Features & add-ons to add more.`
+        : 'Running another business from this login needs the “Another business” add-on (Settings → Features & add-ons).', 'plan_limit');
+    }
     const shop = await tx(async (t) => {
       const s = await one(t, `INSERT INTO shops (name, owner_name, email, phone, city, plan_id, license_start, license_end) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, [
         b.companyName, home.owner_name, home.email, b.phone || home.phone, b.state, home.plan_id, home.license_start, home.license_end,

@@ -96,6 +96,7 @@ export async function shopFeatureHistory(shopId: string) {
 export async function requestFeature(shopId: string, feature: string, level: string, by: string, note = '') {
   const f = checkLevel(feature, level);
   if (!f.available) throw badRequest(`${f.name} is coming soon and can’t be requested yet`);
+  if (f.retired && !(await loadEntitlements(shopId))[feature]) throw badRequest(f.retired);
   const [cur] = await query(`SELECT level, source FROM shop_features WHERE shop_id = $1 AND feature_key = $2 AND ${ACTIVE}`, [shopId, feature]);
   if (cur && cur.level === level && cur.source !== 'trial') throw badRequest(`${f.name} is already on`); // a trial may ask to keep it
   const r = await query(`INSERT INTO shop_features (shop_id, feature_key, level, status, source, monthly_price, note, requested_by)
@@ -136,7 +137,7 @@ export async function endFeature(db: Db, shopId: string, feature: string, by: st
 
 /** A new shop tries the given features (every available one when not given) for `days` days. */
 export async function grantTrial(db: Db, shopId: string, days: number, by: string, only?: string[]) {
-  for (const f of FEATURES.filter((x) => x.available && (!only || only.includes(x.key)))) {
+  for (const f of FEATURES.filter((x) => x.available && !x.retired && !x.capacity && (!only || only.includes(x.key)))) {
     await db.query(`INSERT INTO shop_features (shop_id, feature_key, level, status, source, starts_on, ends_on, monthly_price, note, decided_by)
       VALUES ($1,$2,$3,'active','trial',current_date,current_date + $4::int,0,$5,$6) ON CONFLICT DO NOTHING`,
     [shopId, f.key, f.levels[f.levels.length - 1]!.key, days, `${days}-day trial`, by]);
@@ -147,7 +148,7 @@ export async function grantTrial(db: Db, shopId: string, days: number, by: strin
 export async function copyFeatures(db: Db, fromShopId: string, toShopId: string, by: string) {
   await db.query(`INSERT INTO shop_features (shop_id, feature_key, level, status, source, starts_on, ends_on, monthly_price, note, decided_by)
     SELECT $2, feature_key, level, 'active', source, current_date, ends_on, monthly_price, 'Same as the owner''s first organisation', $3
-    FROM shop_features WHERE shop_id = $1 AND ${ACTIVE} ON CONFLICT DO NOTHING`, [fromShopId, toShopId, by]);
+    FROM shop_features WHERE shop_id = $1 AND ${ACTIVE} AND NOT (feature_key = ANY($4)) ON CONFLICT DO NOTHING`, [fromShopId, toShopId, by, FEATURES.filter((f) => f.capacity).map((f) => f.key)]);
 }
 
 /** Saves the catalogue's default prices for any feature or level that has none yet, so the console shows them. */

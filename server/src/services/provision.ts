@@ -66,7 +66,7 @@ export async function provisionShop(req: Request | null, s: NewShop) {
     if (s.businessType && !template) throw badRequest('Unknown business type');
     if (features === 'trial') await grantTrial(db, shop.id, FEATURE_TRIAL_DAYS, by, template?.features);
     else {
-      const keys = features === 'all' ? FEATURES.filter((f) => f.available).map((f) => f.key) : features;
+      const keys = features === 'all' ? FEATURES.filter((f) => f.available && !f.retired && !f.capacity).map((f) => f.key) : features;
       for (const key of keys) {
         const f = FEATURES.find((x) => x.key === key);
         if (!f) throw badRequest(`Unknown feature ${key}`);

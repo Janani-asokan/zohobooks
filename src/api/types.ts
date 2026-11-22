@@ -28,7 +28,7 @@ export interface Organization {
   businessType: string; itemFields: ItemField[]; invoiceFields: ItemField[]; units: string[]; tradeDetails: Record<string, string>;
 }
 export interface TaxSlab { id: string; name: string; rate: number; active: boolean }
-export interface Branch { id: string; name: string; address: string; phone: string; isPrimary: boolean; gstin: string; state: string; managerUserId: string | null }
+export interface Branch { id: string; kind?: 'store' | 'warehouse'; name: string; address: string; phone: string; isPrimary: boolean; gstin: string; state: string; managerUserId: string | null }
 
 export interface Item {
   id: string; type: 'Goods' | 'Services'; name: string; sku: string; barcode: string; aliases?: string[]; unit: string; hsn: string; cost: number | null;

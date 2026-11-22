@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { hashPassword, perm, todayISO } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, query, tx, type Db } from '../../db';
+import { loadEntitlements } from '../../services/features';
+import { capacityOf } from '../../../../shared/features';
 import { badRequest, conflict, HttpError, notFound, parse } from '../../http';
 import { getOrg, planLimits, requireRow } from '../../services/common';
 import { createOrder, razorpayEnabled, verifySignature } from '../../integrations/razorpay';
@@ -206,13 +208,32 @@ coreRouter.put(
 coreRouter.get('/tax-slabs', T(async (db) => (await many(db, 'SELECT * FROM tax_slabs ORDER BY rate')).map((s) => ({ id: s.id, name: s.name, rate: Number(s.rate), active: s.active }))));
 
 /* ---------- Branches ---------- */
-const serializeBranch = (b: any) => ({ id: b.id, name: b.name, address: b.address, phone: b.phone, isPrimary: b.is_primary, gstin: b.gstin ?? '', state: b.state ?? '', managerUserId: b.manager_user_id ?? null });
+const serializeBranch = (b: any) => ({ id: b.id, kind: (b.kind ?? 'store') as 'store' | 'warehouse', name: b.name, address: b.address, phone: b.phone, isPrimary: b.is_primary, gstin: b.gstin ?? '', state: b.state ?? '', managerUserId: b.manager_user_id ?? null });
 const branchBody = z.object({ name: z.string().trim().min(1, 'Branch name is required').max(100), address: z.string().max(300).default(''), phone: z.string().trim().max(30, VENDOR_PHONE_RULE).default('').refine(isValidVendorPhoneOrEmpty, VENDOR_PHONE_RULE).transform((v) => normalizeVendorPhone(v) ?? ''),
   /** A branch in another state has its own GST registration; transfers between different GSTINs are taxable supplies. */
   gstin: z.string().trim().toUpperCase().max(15).default('').refine((v) => v === '' || GSTIN_RE.test(v), 'Invalid GSTIN (e.g. 33AABCA1234F1Z5)'),
   state: z.string().trim().max(60).default(''),
   /** Gets the receipt code when stock is sent to this branch. */
-  managerUserId: z.string().uuid().nullable().default(null) });
+  managerUserId: z.string().uuid().nullable().default(null),
+  /** A store bills customers; a warehouse only holds stock (needs the "More warehouses" add-on). */
+  kind: z.enum(['store', 'warehouse']).default('store') });
+
+/**
+ * Stores: the plan's branch limit plus the "More stores" add-on. Warehouses: the "More warehouses" add-on.
+ * `excludeId` leaves out the branch being edited (changing its type).
+ */
+async function checkBranchRoom(db: Db, shopId: string, kind: 'store' | 'warehouse', excludeId: string | null = null) {
+  const lim = await planLimits(db, shopId);
+  const ent = await loadEntitlements(shopId, db);
+  const n = (await one(db, 'SELECT count(*)::int AS n FROM branches WHERE shop_id = $1 AND kind = $2 AND id IS DISTINCT FROM $3', [shopId, kind, excludeId]))!.n;
+  if (kind === 'store') {
+    const max = lim.max_branches + capacityOf(ent, 'extra_stores');
+    if (n >= max) throw new HttpError(402, `Your ${lim.name} plan allows ${max} store${max > 1 ? 's' : ''}. Add the “More stores” add-on (Settings → Features & add-ons) to open more.`, 'plan_limit');
+  } else {
+    const max = capacityOf(ent, 'extra_warehouses');
+    if (n >= max) throw new HttpError(402, max ? `You have ${max} warehouse${max > 1 ? 's' : ''} in your add-on. Choose a bigger “More warehouses” pack to add more.` : 'Warehouses come with the “More warehouses” add-on (Settings → Features & add-ons).', 'plan_limit');
+  }
+}
 
 /** The receiving manager must be an active login of this shop with an email. */
 async function checkManager(db: Db, shopId: string, id: string | null) {
@@ -227,11 +248,9 @@ coreRouter.post(
   perm('admin'),
   T(async (db, req, c) => {
     const b = parse(branchBody, req.body);
-    const lim = await planLimits(db, c.shopId);
-    const n = await one(db, 'SELECT count(*)::int AS n FROM branches WHERE shop_id = $1', [c.shopId]);
-    if (n.n >= lim.max_branches) throw new HttpError(402, `Your ${lim.name} plan allows ${lim.max_branches} branch${lim.max_branches > 1 ? 'es' : ''}. Upgrade to add more.`, 'plan_limit');
+    await checkBranchRoom(db, c.shopId, b.kind);
     await checkManager(db, c.shopId, b.managerUserId);
-    const row = await one(db, 'INSERT INTO branches (shop_id, name, address, phone, gstin, state, manager_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [c.shopId, b.name, b.address, b.phone, b.gstin, b.state, b.managerUserId]);
+    const row = await one(db, 'INSERT INTO branches (shop_id, name, address, phone, gstin, state, manager_user_id, kind) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *', [c.shopId, b.name, b.address, b.phone, b.gstin, b.state, b.managerUserId, b.kind]);
     await audit(db, req, c.shopId, 'create', 'branch', row.id, { name: b.name });
     return serializeBranch(row);
   }),
@@ -242,11 +261,15 @@ coreRouter.put(
   T(async (db, req, c) => {
     const cur = await requireRow(db, 'branches', c.shopId, req.params.id!, 'Branch');
     // Fields left out keep their value (older screens don't send GSTIN, state or manager).
-    const b = parse(branchBody.extend({ isPrimary: z.boolean().optional() }), { gstin: cur.gstin, state: cur.state, managerUserId: cur.manager_user_id, ...req.body });
+    const b = parse(branchBody.extend({ isPrimary: z.boolean().optional() }), { gstin: cur.gstin, state: cur.state, managerUserId: cur.manager_user_id, kind: cur.kind, ...req.body });
+    if (b.kind !== cur.kind) {
+      if (cur.is_primary || b.isPrimary) throw new HttpError(400, 'The main branch must be a store.', 'bad_request');
+      await checkBranchRoom(db, c.shopId, b.kind, cur.id);
+    }
     if (b.isPrimary) await db.query('UPDATE branches SET is_primary = false WHERE shop_id = $1', [c.shopId]);
     await checkManager(db, c.shopId, b.managerUserId);
-    const row = await one(db, 'UPDATE branches SET name=$3, address=$4, phone=$5, is_primary = coalesce($6, is_primary), gstin=$7, state=$8, manager_user_id=$9 WHERE shop_id=$1 AND id=$2 RETURNING *',
-      [c.shopId, cur.id, b.name, b.address, b.phone, b.isPrimary ?? null, b.gstin, b.state, b.managerUserId]);
+    const row = await one(db, 'UPDATE branches SET name=$3, address=$4, phone=$5, is_primary = coalesce($6, is_primary), gstin=$7, state=$8, manager_user_id=$9, kind=$10 WHERE shop_id=$1 AND id=$2 RETURNING *',
+      [c.shopId, cur.id, b.name, b.address, b.phone, b.isPrimary ?? null, b.gstin, b.state, b.managerUserId, b.kind]);
     await audit(db, req, c.shopId, 'update', 'branch', cur.id, b);
     return serializeBranch(row);
   }),

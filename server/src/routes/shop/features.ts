@@ -5,7 +5,7 @@ import { audit } from '../../audit';
 import { badRequest, parse } from '../../http';
 import { query } from '../../db';
 import { aiBalance } from '../../services/aiUsage';
-import { FEATURES } from '../../../../shared/features';
+import { offeredTo } from '../../../../shared/features';
 import { cancelRequest, loadEntitlements, priceList, requestFeature, shopFeatureHistory } from '../../services/features';
 import { T } from './ctx';
 
@@ -18,11 +18,11 @@ featuresRouter.get(
   T(async (_db, _req, c) => {
     const [prices, ent, history] = await Promise.all([priceList(), loadEntitlements(c.shopId), shopFeatureHistory(c.shopId)]);
     return {
-      features: FEATURES.filter((f) => f.available).map((f) => {
+      features: offeredTo(ent).map((f) => {
         const current = history.find((h) => h.feature === f.key && h.status === 'active' && h.live);
         const request = history.find((h) => h.feature === f.key && h.status === 'requested');
         return {
-          key: f.key, name: f.name, group: f.group, summary: f.summary, includes: f.includes,
+          key: f.key, name: f.name, group: f.group === 'Grow' ? 'Grow your business' : f.group, summary: f.summary, includes: f.includes, retired: f.retired ?? null,
           levels: f.levels.map((l) => ({ ...l, ...prices.find((p) => p.feature === f.key && p.level === l.key)! })),
           on: !!ent[f.key],
           level: ent[f.key] ?? null,

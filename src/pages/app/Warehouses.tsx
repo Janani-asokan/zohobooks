@@ -12,7 +12,7 @@ import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty } from '../../../shared/co
 import { INDIAN_STATES } from '../../../shared/gst';
 import { VendorPhoneInput } from '@/components/QuickAdd';
 
-const blank = { name: '', address: '', phone: '', isPrimary: false, gstin: '', state: '', managerUserId: null as string | null };
+const blank = { kind: 'store' as 'store' | 'warehouse', name: '', address: '', phone: '', isPrimary: false, gstin: '', state: '', managerUserId: null as string | null };
 
 /** Warehouses (branches): where stock is kept, what each holds and what it is worth. */
 export default function Warehouses() {
@@ -41,8 +41,8 @@ export default function Warehouses() {
             return (
               <div key={b.id} className="card wh-card">
                 <div className="row between">
-                  <div className="row" style={{ gap: 8 }}><Warehouse size={18} className="muted" /><strong>{b.name}</strong>{b.isPrimary && <Badge tone="blue" plain><Star size={11} /> Main</Badge>}</div>
-                  {canEdit && <button className="icon-btn" aria-label={`Edit ${b.name}`} onClick={() => { setErr({}); setForm({ id: b.id, name: b.name, address: b.address, phone: b.phone, isPrimary: b.isPrimary, gstin: b.gstin, state: b.state, managerUserId: b.managerUserId }); }}><Pencil size={15} /></button>}
+                  <div className="row" style={{ gap: 8 }}><Warehouse size={18} className="muted" /><strong>{b.name}</strong><Badge tone="gray" plain>{b.kind === 'warehouse' ? 'Warehouse' : 'Store'}</Badge>{b.isPrimary && <Badge tone="blue" plain><Star size={11} /> Main</Badge>}</div>
+                  {canEdit && <button className="icon-btn" aria-label={`Edit ${b.name}`} onClick={() => { setErr({}); setForm({ id: b.id, kind: b.kind ?? 'store', name: b.name, address: b.address, phone: b.phone, isPrimary: b.isPrimary, gstin: b.gstin, state: b.state, managerUserId: b.managerUserId }); }}><Pencil size={15} /></button>}
                 </div>
                 <div className="small muted" style={{ whiteSpace: 'pre-line', minHeight: 36 }}>{[b.address, b.phone].filter(Boolean).join('\n') || 'No address added'}</div>
                 <div className="small muted">{b.gstin ? `GSTIN ${b.gstin}` : 'Uses the business GSTIN'}{' · '}Transfer codes to {staff.find((u) => u.id === b.managerUserId)?.name ?? (b.managerUserId ? 'manager' : 'branch manager / owner')}</div>
@@ -71,6 +71,12 @@ export default function Warehouses() {
         }}>{save.isPending && <Loader2 size={15} className="spin" />} Save</button></>}>
         {form && (
           <div className="form-grid">
+            <Field label="Type" className="span-all" hint={form.kind === 'warehouse' ? 'Holds stock only; send it to stores with a transfer. Comes with the “More warehouses” add-on.' : 'Bills customers and keeps its own stock. Your plan includes some stores; add more with “More stores”.'}>
+              <div className="segmented">
+                <button type="button" className={form.kind === 'store' ? 'active' : ''} onClick={() => setForm({ ...form, kind: 'store' })}>Store</button>
+                <button type="button" className={form.kind === 'warehouse' ? 'active' : ''} disabled={form.isPrimary} onClick={() => setForm({ ...form, kind: 'warehouse' })}>Warehouse</button>
+              </div>
+            </Field>
             <Field label="Name" required error={err.name} className="span-all"><input className={`input ${err.name ? 'invalid' : ''}`} value={form.name} maxLength={100} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Ambattur godown" autoFocus /></Field>
             <Field label="Address" className="span-all"><textarea className="textarea" rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
             <Field label="Phone" error={err.phone} hint="Optional · mobile or landline with STD code"><VendorPhoneInput value={form.phone} invalid={!!err.phone} onChange={(v) => { setForm({ ...form, phone: v }); setErr((x) => ({ ...x, phone: '' })); }} /></Field>

@@ -1,3 +1,4 @@
+import { query } from '../src/db';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { freshDb, login, today } from './helpers';
 
@@ -107,6 +108,12 @@ describe('roles and permissions', () => {
 
 describe('organisations', () => {
   it('creates a second organisation and switches between them with separate data', async () => {
+    // Without the "Another business" add-on, a second business can't be added.
+    const refused = await owner.post('/api/shop/organizations').send({ companyName: 'Aravind Mobiles', state: 'Tamil Nadu' });
+    expect(refused.status).toBe(402);
+    const shopId = (await query("SELECT shop_id FROM users WHERE email = 'owner@shop.com'"))[0].shop_id;
+    await query(`INSERT INTO shop_features (shop_id, feature_key, level, status, source, starts_on, monthly_price, decided_by)
+      VALUES ($1, 'extra_business', 'plus1', 'active', 'paid', current_date, 299, 'test')`, [shopId]);
     const created = await owner.post('/api/shop/organizations').send({ companyName: 'Aravind Mobiles', state: 'Tamil Nadu' });
     expect(created.status).toBe(200);
     const orgs = (await owner.get('/api/auth/orgs')).body;

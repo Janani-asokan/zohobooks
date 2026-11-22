@@ -10,7 +10,7 @@
  *   check that every entry is consistent.
  */
 
-export type FeatureGroup = 'Sales' | 'Purchases' | 'Inventory' | 'Accounting' | 'Staff' | 'AI' | 'Finance';
+export type FeatureGroup = 'Sales' | 'Purchases' | 'Inventory' | 'Accounting' | 'Staff' | 'AI' | 'Finance' | 'Grow';
 
 export interface FeatureLevel { key: string; name: string; description: string }
 
@@ -33,6 +33,13 @@ export interface FeatureDef {
   defaultMonthly: Record<string, number>;
   /** AI credits included per month for each level (AI only). The platform owner can change them. */
   defaultCredits?: Record<string, number>;
+  /**
+   * No longer offered here: hidden from the Features page and the trial for shops that don't have it, and can't be
+   * requested. Shops that already have it keep using it. The text says where it went.
+   */
+  retired?: string;
+  /** Adds capacity (more stores, warehouses or businesses) instead of screens; not part of the free trial. */
+  capacity?: boolean;
 }
 
 const one = (description: string): FeatureLevel[] => [{ key: 'standard', name: 'Standard', description }];
@@ -142,13 +149,57 @@ export const FEATURES: FeatureDef[] = [
   },
   {
     key: 'microfinance', name: 'Microfinance management', group: 'Finance',
+    retired: 'Microfinance is moving to Corpus360 Main Cloud. Shops already using it here keep it.',
     summary: 'Give daily, weekly and monthly loans, collect instalments and track dues and defaulters.',
     includes: ['Borrowers with KYC', 'Loan book with EMI schedules', 'Collector app and receipts', 'Dues, alerts and reports', 'Entries in your books'],
     levels: one('All lending tools'), available: true,
     api: [/^\/lending\//], pages: [/^\/app\/microfinance(\/|$)/],
     defaultMonthly: { standard: 499 },
   },
+  /* ---- Capacity: grow beyond what the plan includes ---- */
+  {
+    key: 'extra_stores', name: 'More stores', group: 'Grow',
+    summary: 'Open more shop branches (stores) than your plan includes, each with its own billing and stock.',
+    includes: ['Bill from every store', 'Stock kept per store', 'Transfers between stores', 'Store-wise reports'],
+    levels: [
+      { key: 'plus1', name: '+1 store', description: 'One more store on top of your plan' },
+      { key: 'plus3', name: '+3 stores', description: 'Three more stores on top of your plan' },
+      { key: 'plus5', name: '+5 stores', description: 'Five more stores on top of your plan' },
+    ],
+    available: true, capacity: true, api: [], pages: [],
+    defaultMonthly: { plus1: 199, plus3: 499, plus5: 799 },
+  },
+  {
+    key: 'extra_warehouses', name: 'More warehouses', group: 'Grow',
+    summary: 'Keep stock in godowns and warehouses that don’t bill customers, and move it to your stores.',
+    includes: ['Warehouse-wise stock', 'Receive purchases into a warehouse', 'Transfers to stores with a receipt code', 'Warehouse stock reports'],
+    levels: [
+      { key: 'plus1', name: '+1 warehouse', description: 'One warehouse' },
+      { key: 'plus3', name: '+3 warehouses', description: 'Three warehouses' },
+      { key: 'plus5', name: '+5 warehouses', description: 'Five warehouses' },
+    ],
+    available: true, capacity: true, api: [], pages: [],
+    defaultMonthly: { plus1: 149, plus3: 399, plus5: 599 },
+  },
+  {
+    key: 'extra_business', name: 'Another business', group: 'Grow',
+    summary: 'Run a completely separate business (its own GSTIN, books and staff) from the same login.',
+    includes: ['Separate GSTIN, invoices and books', 'Switch between businesses in one tap', 'Its own staff and settings', 'Each business on its own plan'],
+    levels: [
+      { key: 'plus1', name: '+1 business', description: 'One more business' },
+      { key: 'plus2', name: '+2 businesses', description: 'Two more businesses' },
+      { key: 'plus3', name: '+3 businesses', description: 'Three more businesses' },
+    ],
+    available: true, capacity: true, api: [], pages: [],
+    defaultMonthly: { plus1: 299, plus2: 549, plus3: 799 },
+  },
 ];
+
+/** How much a capacity add-on adds: 'plus3' → 3; not active → 0. */
+export const capacityOf = (ent: Entitlements, key: string) => Number(/^plus(\d+)$/.exec(ent[key] ?? '')?.[1] ?? 0);
+
+/** Shown on the Features page: everything offered, plus anything retired that this shop still has. */
+export const offeredTo = (ent: Entitlements) => FEATURES.filter((f) => f.available && (!f.retired || !!ent[f.key]));
 
 export const FEATURE_KEYS = FEATURES.map((f) => f.key);
 export type FeatureKey = (typeof FEATURES)[number]['key'];

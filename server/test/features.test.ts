@@ -30,7 +30,8 @@ describe('catalogue', () => {
     for (const f of FEATURES) {
       expect(f.levels.length).toBeGreaterThan(0);
       for (const l of f.levels) expect(typeof f.defaultMonthly[l.key]).toBe('number');
-      if (f.available) expect(f.api.length + f.pages.length).toBeGreaterThan(0);
+      // Every feature unlocks screens or API, except capacity packs (more stores, warehouses, businesses).
+      if (f.available && !f.capacity) expect(f.api.length + f.pages.length).toBeGreaterThan(0);
     }
   });
 
@@ -49,7 +50,7 @@ describe('catalogue', () => {
 
   it('existing shops were given every feature by the migration, and the demo shop has them all', async () => {
     const owner = await login('owner@shop.com', 'owner123');
-    expect(Object.keys(owner.me.shop.features).sort()).toEqual(FEATURES.filter((f) => f.available).map((f) => f.key).sort());
+    expect(Object.keys(owner.me.shop.features).sort()).toEqual(FEATURES.filter((f) => f.available && !f.capacity && !f.retired).map((f) => f.key).sort());
   });
 });
 
@@ -180,7 +181,8 @@ describe('prices', () => {
 describe('new shops', () => {
   it('get a 14-day trial of every feature when none are chosen', async () => {
     const { owner } = await newShop('trial@shop.in');
-    expect(Object.keys(owner.me.shop.features).length).toBe(FEATURES.filter((f) => f.available).length);
+    // Retired features (microfinance) and capacity packs are not part of the trial.
+    expect(Object.keys(owner.me.shop.features).length).toBe(FEATURES.filter((f) => f.available && !f.retired && !f.capacity).length);
     const ends = await query("SELECT DISTINCT ends_on - starts_on AS d FROM shop_features WHERE shop_id = $1", [owner.me.shop.id]);
     expect(ends).toEqual([{ d: 14 }]);
   });
