@@ -25,7 +25,7 @@ interface SalesReport {
 }
 interface Gstr1Summary {
   period: string; gstin: string;
-  b2b: { invoices: number; taxable: number; tax: number }; b2cl: { invoices: number; taxable: number }; b2cs: { taxable: number; tax: number }; cdnr: { notes: number };
+  b2b: { invoices: number; taxable: number; tax: number }; b2cl: { invoices: number; taxable: number }; b2cs: { taxable: number; tax: number }; cdnr: { notes: number }; cdnur?: { notes: number; taxable: number };
   nil: Array<{ sply_ty: string; expt_amt: number; nil_amt: number }>;
   docs: { invoices: { from: string; to: string; totnum: number; cancel: number } | null; creditNotes: { from: string; to: string; totnum: number } | null };
 }
@@ -34,6 +34,7 @@ interface Gstr3b {
   inter_sup: { unreg_details: Array<{ pos: string; txval: number; iamt: number }> };
   itc_elg: { itc_avl: { iamt: number; camt: number; samt: number } };
   payable: { iamt: number; camt: number; samt: number };
+  carryForward?: { iamt: number; camt: number; samt: number };
   note: string;
 }
 interface HsnRow { hsn: string; description: string; unit: string; rate: number; qty: number; taxable: number; igst: number; cgst: number; sgst: number }
@@ -86,6 +87,7 @@ export default function Reports() {
       { cells: ['B2C large, inter-state (5)', g1.data.b2cl.invoices, g1.data.b2cl.taxable, null] },
       { cells: ['B2C others (7)', null, g1.data.b2cs.taxable, g1.data.b2cs.tax] },
       { cells: ['Credit notes, registered (9B)', g1.data.cdnr.notes, null, null] },
+      { cells: ['Credit notes, unregistered (9B CDNUR)', g1.data.cdnur?.notes ?? 0, g1.data.cdnur?.taxable ?? 0, null] },
       { cells: ['Nil-rated / exempt / non-GST (8)', null, sum(g1.data.nil, (n) => n.expt_amt + n.nil_amt), null] },
       { cells: ['Documents issued (13)', g1.data.docs.invoices?.totnum ?? 0, null, null] },
     ],
@@ -98,6 +100,7 @@ export default function Reports() {
       { cells: ['3.1(c) Nil / exempt', g3.data.sup_details.osup_nil_exmp.txval, null, null, null] },
       { cells: ['4(A)(5) Input tax credit', null, g3.data.itc_elg.itc_avl.iamt, g3.data.itc_elg.itc_avl.camt, g3.data.itc_elg.itc_avl.samt] },
       { cells: ['Tax payable (cash)', null, g3.data.payable.iamt, g3.data.payable.camt, g3.data.payable.samt], kind: 'total' },
+      ...(g3.data.carryForward ? [{ cells: ['Credit carried forward', null, g3.data.carryForward.iamt, g3.data.carryForward.camt, g3.data.carryForward.samt] as Array<string | number | null> }] : []),
     ],
     note: g3.data.note,
   } : null;
@@ -181,6 +184,7 @@ export default function Reports() {
                         <tr><td className="strong">B2C large, inter-state (5)</td><td className="num">{g1.data.b2cl.invoices}</td><td className="num">{money(g1.data.b2cl.taxable)}</td><td /></tr>
                         <tr><td className="strong">B2C others (7)</td><td /><td className="num">{money(g1.data.b2cs.taxable)}</td><td className="num muted">GST {money(g1.data.b2cs.tax)}</td></tr>
                         <tr><td className="strong">Credit notes, registered (9B)</td><td className="num">{g1.data.cdnr.notes}</td><td /><td /></tr>
+                        {!!g1.data.cdnur?.notes && <tr><td className="strong">Credit notes, unregistered (9B CDNUR)</td><td className="num">{g1.data.cdnur.notes}</td><td className="num">{money(g1.data.cdnur.taxable)}</td><td /></tr>}
                         <tr><td className="strong">Nil-rated / non-GST (8)</td><td /><td className="num">{money(sum(g1.data.nil, (n) => n.expt_amt + n.nil_amt))}</td><td /></tr>
                         <tr><td className="strong">Documents issued (13)</td><td colSpan={3} className="muted small">{g1.data.docs.invoices ? `${g1.data.docs.invoices.from} → ${g1.data.docs.invoices.to} · ${g1.data.docs.invoices.totnum} issued, ${g1.data.docs.invoices.cancel} cancelled` : 'None'}{g1.data.docs.creditNotes ? ` · ${g1.data.docs.creditNotes.totnum} credit notes` : ''}</td></tr>
                       </tbody>
@@ -205,6 +209,9 @@ export default function Reports() {
                         <tr><td className="strong">3.1(c) Nil / exempt</td><td className="num">{money(g3.data.sup_details.osup_nil_exmp.txval)}</td><td /><td /><td /></tr>
                         <tr><td className="strong">4(A)(5) Input tax credit</td><td /><td className="num" style={{ color: 'var(--green-700)' }}>{money(g3.data.itc_elg.itc_avl.iamt)}</td><td className="num" style={{ color: 'var(--green-700)' }}>{money(g3.data.itc_elg.itc_avl.camt)}</td><td className="num" style={{ color: 'var(--green-700)' }}>{money(g3.data.itc_elg.itc_avl.samt)}</td></tr>
                         <tr style={{ background: 'var(--brand-50)' }}><td className="strong">Tax payable (cash)</td><td /><td className="num strong">{money(g3.data.payable.iamt)}</td><td className="num strong">{money(g3.data.payable.camt)}</td><td className="num strong">{money(g3.data.payable.samt)}</td></tr>
+                        {g3.data.carryForward && g3.data.carryForward.iamt + g3.data.carryForward.camt + g3.data.carryForward.samt > 0 && (
+                          <tr><td className="strong">Credit carried forward</td><td /><td className="num">{money(g3.data.carryForward.iamt)}</td><td className="num">{money(g3.data.carryForward.camt)}</td><td className="num">{money(g3.data.carryForward.samt)}</td></tr>
+                        )}
                       </tbody>
                     </table>
                   ) : <div className="skeleton" style={{ height: 200, margin: 16 }} />}
