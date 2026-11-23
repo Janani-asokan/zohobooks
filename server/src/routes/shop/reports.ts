@@ -1,3 +1,4 @@
+import { istDate } from '../../../../shared/support';
 import { Router } from 'express';
 import { perm, todayISO } from '../../auth';
 import { audit } from '../../audit';
@@ -354,6 +355,16 @@ reportsRouter.get(
     if (has('tally') && (can('accounting.read') || can('reports.read'))) await tile('tally', async () => {
       const r = await one(db, `SELECT max(at) AS last_import FROM audit_log WHERE shop_id = $1 AND action = 'import'`, [c.shopId]);
       add('tally', '/app/accounting/tally', [], r.last_import ? `Last import ${new Date(r.last_import).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}` : 'Export to Tally, or import from Tally and Excel');
+    });
+    if (has('attendance') && can('attendance.manage')) await tile('attendance', async () => {
+      const day = istDate(new Date());
+      const r = await one(db, `SELECT
+          (SELECT count(*) FROM users WHERE shop_id = $1 AND active) AS staff,
+          (SELECT count(DISTINCT user_id) FROM attendance_marks WHERE shop_id = $1 AND day = $2) AS came,
+          (SELECT count(*) FROM (SELECT DISTINCT ON (user_id) kind FROM attendance_marks WHERE shop_id = $1 AND day = $2 ORDER BY user_id, at DESC) x WHERE kind = 'in') AS in_now,
+          (SELECT count(*) FROM attendance_marks WHERE shop_id = $1 AND day = $2 AND outside) AS away`, [c.shopId, day]);
+      add('attendance', '/app/attendance', [{ label: 'Came today', value: Number(r.came), kind: 'count' }, { label: 'In now', value: Number(r.in_now), kind: 'count' }, { label: 'Staff', value: Number(r.staff), kind: 'count' }],
+        Number(r.away) ? `${r.away} check-in${Number(r.away) > 1 ? 's' : ''} away from the shop` : 'Check-ins with location, selfie and fingerprint');
     });
     if (has('field') && (can('field.view') || can('reports.read'))) await tile('field', async () => {
       const r = await one(db, `SELECT
