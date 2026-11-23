@@ -1,0 +1,7 @@
+<en-IN>
+• Validate a GST number: checks it, and fills in the company name, address and state
+• Warns about typos in GST numbers and emails (e.g. gmial.com)
+• Warns when an HSN / SAC code looks wrong
+• Staff attendance with location and selfie
+• Email or WhatsApp any report as PDF, Excel or CSV
+</en-IN>
