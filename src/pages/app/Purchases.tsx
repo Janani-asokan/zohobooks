@@ -1,3 +1,4 @@
+import { BusinessPicker } from '@/components/BusinessPicker';
 import { useEffect, useMemo, useState } from 'react';
 import { ExportMenu } from '@/components/ExportMenu';
 import { billTable } from '@/lib/docPdf';
@@ -5,7 +6,7 @@ import { PdfButton } from '@/components/PdfButton';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, ShoppingBag, CheckCircle2, Loader2, Package, Receipt, AlertTriangle, X, Tag } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
-import { useBankAccounts, useBills, useItems, useMut, useOrg, useTaxSlabs, useVendors } from '@/api/hooks';
+import { useBankAccounts, useBills, useItems, useMut, useOrg, useTaxSlabs, useVendors, useBranches } from '@/api/hooks';
 import { QuickVendorModal, type VendorLite } from '@/components/QuickAdd';
 import { useQueryClient } from '@tanstack/react-query';
 import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
@@ -25,7 +26,7 @@ import { addDays, fmtDate, money, todayISO } from '@/lib/format';
 import { daysUntil } from '@/lib/fy';
 
 type Mode = 'items' | 'amount';
-const blankBill = () => ({ vendorId: '', vendorBillNo: '', date: todayISO(), dueDate: addDays(todayISO(), 30), taxableAmount: '', taxAmount: '', description: '', addStock: true, lines: [emptyPLine()] as PLine[] });
+const blankBill = () => ({ vendorId: '', branchId: '', vendorBillNo: '', date: todayISO(), dueDate: addDays(todayISO(), 30), taxableAmount: '', taxAmount: '', description: '', addStock: true, lines: [emptyPLine()] as PLine[] });
 
 /** Bills — what you owe vendors. Itemised bills can add stock directly; lump-sum bills cover services & utilities. */
 export default function Purchases() {
@@ -48,6 +49,8 @@ export default function Purchases() {
   const org = useOrg().data;
   const [mode, setMode] = useState<Mode>('items');
   const [bill, setBill] = useState(blankBill);
+  const branchList = useBranches().data ?? [];
+  const defaultBranch = me.user.branchId ?? branchList.find((b) => b.isPrimary)?.id ?? branchList[0]?.id ?? '';
   const [payBill, setPayBill] = useState<Bill | null>(null);
   const [payAccount, setPayAccount] = useState('');
   const [payForm, setPayForm] = useState({ amount: '', tdsAmount: '', mode: 'Bank Transfer', reference: '', date: todayISO() });
@@ -187,7 +190,7 @@ export default function Purchases() {
   const save = () => {
     setTouched(true); setServerErr({});
     if (Object.values(errs).some(Boolean)) return;
-    const base = { vendorId: bill.vendorId, vendorBillNo: bill.vendorBillNo, date: bill.date, dueDate: bill.dueDate, description: bill.description };
+    const base = { vendorId: bill.vendorId, branchId: bill.branchId || null, vendorBillNo: bill.vendorBillNo, date: bill.date, dueDate: bill.dueDate, description: bill.description };
     const body = mode === 'items' ? { ...base, lines: toPurchaseInput(bill.lines, { serials: bill.addStock }), addStock: bill.addStock } : { ...base, taxableAmount: Number(bill.taxableAmount), taxAmount: Number(bill.taxAmount || 0) };
     createBill.mutate(body, {
       onSuccess: (b) => {
@@ -275,6 +278,7 @@ export default function Purchases() {
           <Field label="Vendor’s bill number"><input className="input" aria-label="Vendor’s bill number" value={bill.vendorBillNo} onChange={(e) => setBill({ ...bill, vendorBillNo: e.target.value })}
             onKeyDown={(e) => { if (e.key === 'Enter' && mode === 'items') { e.preventDefault(); focusFirstItem(); } }} /></Field>
           <Field label="Description"><input className="input" value={bill.description} onChange={(e) => setBill({ ...bill, description: e.target.value })} placeholder={mode === 'items' ? 'Optional' : 'e.g. Freight charges'} /></Field>
+          <BusinessPicker label="Stock goes into" hint="The store or warehouse that received the goods" branchId={bill.branchId || defaultBranch} onBranch={(b) => setBill({ ...bill, branchId: b })} dirty={bill.lines.some((l) => l.itemId) || !!bill.vendorId} />
           <Field label="Bill date"><input className="input" type="date" value={bill.date} onChange={(e) => setBill({ ...bill, date: e.target.value })} /></Field>
           <Field label="Due date" error={err('dueDate')}>
             <input className="input" type="date" value={bill.dueDate} onChange={(e) => setBill({ ...bill, dueDate: e.target.value })} />

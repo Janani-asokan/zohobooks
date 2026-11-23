@@ -15,12 +15,12 @@ import { useAuth, useShopUser } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { useNotifications, useOrg, useOrgs } from '@/api/hooks';
 import { api, fieldErrors } from '@/api/client';
-import { useToast } from '@/context/ToastContext';
 import { EmptyState, Field, Modal } from '@/components/ui';
 import { GSTIN_RE, INDIAN_STATES } from '../../shared/gst';
 import { useClickOutside } from '@/components/useClickOutside';
 import { useShortcuts } from '@/components/useShortcuts';
 import { useOnline } from '@/components/useOnline';
+import { useSwitchBusiness } from '@/components/BusinessPicker';
 import { OfflineBillsBadge, OfflineSync } from '@/components/OfflineBills';
 import { ReceiptCheck } from '@/components/PrintCheck';
 import { initials } from '@/lib/format';
@@ -76,8 +76,7 @@ function QuickCreate({ me }: { me: ReturnType<typeof useShopUser> }) {
 /** Organisation switcher: every business this login can open, plus adding another one (owner only). */
 function OrgSwitcher({ name, logo, gstin, isAdmin, isOwner }: { name: string; logo?: string; gstin?: string; isAdmin: boolean; isOwner: boolean }) {
   const navigate = useNavigate();
-  const toast = useToast();
-  const { switchOrg } = useAuth();
+  const switchTo = useSwitchBusiness();
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -86,7 +85,8 @@ function OrgSwitcher({ name, logo, gstin, isAdmin, isOwner }: { name: string; lo
   const orgs = useOrgs();
   const go = async (id: string, label: string) => {
     setBusy(id);
-    try { await switchOrg(id); close(); navigate('/app'); toast('success', `Switched to ${label}`); } catch (e) { toast('error', (e as Error).message); } finally { setBusy(null); }
+    // Stays on the same screen in the other business (a single invoice or bill goes back to its list).
+    try { await switchTo(id, label); close(); } finally { setBusy(null); }
   };
   return (
     <div ref={ref} className="topbar-org">
@@ -303,7 +303,7 @@ export default function AppLayout() {
         </header>
         {onDuty && <Link to="/app/field" className="duty-bar no-print" role="status"><span className="fh-dot" /> On duty · sharing location while the app is open · tap to check in or end your day</Link>}
         <main>
-          {lockedFeature && !me.has(lockedFeature.key) ? <FeatureOff feature={lockedFeature} isOwner={me.can('admin')} /> : canOpen(location.pathname, me.can) ? <Outlet /> : (
+          {lockedFeature && !me.has(lockedFeature.key) ? <FeatureOff feature={lockedFeature} isOwner={me.can('admin')} /> : canOpen(location.pathname, me.can) ? <Outlet key={me.shop.id} /> : (
             <div className="page"><div className="card">
               <EmptyState icon={Lock} title="This page isn’t part of your role" text={`Your ${me.user.role} login can’t open this page. Ask the shop owner if you need access.`}
                 action={<Link to="/app" className="btn btn-primary">Go to dashboard</Link>} />

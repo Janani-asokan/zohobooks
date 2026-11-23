@@ -189,5 +189,5 @@ export default function App() {
 /** Help → Talk to sales on the landing, sign-in, sign-up and legal pages; signed-in users have Help in the app. */
 function PublicHelpWhenSignedOut() {
   const { me } = useAuth();
-  return <PublicHelp hidden={!!me} />;
+  return <PublicHelp signedIn={!!me} />;
 }

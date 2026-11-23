@@ -26,6 +26,7 @@ import { QuickBill, type ParsedBill } from '@/components/QuickBill';
 import { useAiEnabled } from '@/components/Assistant';
 import { useScale } from '@/lib/scale';
 import { isWeighed, qtyFromReading } from '../../../shared/scale';
+import { BusinessPicker } from '@/components/BusinessPicker';
 import { formatQty, itemForPlu, parseQty, parseScaleLabel, qtyFromGrams, wholeOnly } from '../../../shared/units';
 import { Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
@@ -607,7 +608,7 @@ export default function Pos() {
               {pickable(customers, customerId).map((c) => <option key={c.id} value={c.id}>{c.companyName || c.name} · {c.phone}</option>)}
             </select>
             {promo.loyaltyOn && !customerId && <div className="pos-phone-find"><CustomerByPhone customers={customers} onPick={setCustomerId} /></div>}
-            {branches.length > 1 && <select className="select" style={{ width: 160 }} value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label="Branch">{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
+            <div style={{ width: 180 }}><BusinessPicker bare label="Billing from" branchId={branchId} onBranch={setBranchId} dirty={cart.length > 0} /></div>
           </div>
           {(() => {
             // One click for the regular who just came back, and their usual items.

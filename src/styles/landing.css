@@ -143,7 +143,7 @@
 }
 @media (max-width: 760px) {
   .lp-nav { padding: 0 16px; gap: 12px; } .lp-links { display: none; } .lp-nav-cta { margin-left: auto; }
-  .lp-nav-cta .lp-pill { height: 38px; padding: 0 14px; } .lp-nav-cta .lp-pill-light { display: none; }
+  .lp-nav-cta .lp-pill { height: 38px; padding: 0 14px; } .lp-nav-cta .lp-pill-help { display: none; } .lp-nav-cta .lp-pill-light { padding: 0 12px; box-shadow: none; border: 1px solid var(--border-strong); }
   .lp-hero { padding: 16px 16px 48px; }
   .lp-float { transform: scale(.86); } .lp-float.f1 { left: 0; } .lp-float.f3 { right: 0; }
   .lp-section { padding: 52px 16px; }
@@ -206,5 +206,19 @@
 .lp-tabs button { white-space: nowrap; }
 
 /* The sign-up band opens the page, right under the menu bar. */
-.lp-band.lp-band-top { width: calc(100% - 12vw); margin: 16px auto 0; }
-@media (max-width: 640px) { .lp-band.lp-band-top { width: auto; margin: 12px 16px 0; } }
+
+/* Help desk for new visitors: right under the menu, before anything else, so it is the first thing seen. */
+.lp-helpdesk { position: relative; z-index: 1; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; width: calc(100% - 12vw); max-width: 1160px; margin: 16px auto 0;
+  padding: 16px 20px; border-radius: 20px; background: #fff7e6; border: 1.5px solid #f2c46d; box-shadow: 0 10px 28px rgba(146, 102, 20, .12); }
+.lp-helpdesk-ic { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: #f2c46d; color: #5c3d00; }
+.lp-helpdesk-text { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 2px; }
+.lp-helpdesk-text strong { font-size: 18px; color: #3d2a00; }
+.lp-helpdesk-text span { font-size: 14px; color: #5c4a22; }
+.lp-helpdesk-cta { display: flex; gap: 10px; flex-wrap: wrap; }
+.lp-pill-help { background: #fff7e6; color: #5c3d00; border: 1.5px solid #f2c46d; cursor: pointer; font: inherit; }
+.lp-pill-help:hover { background: #ffefc9; }
+@media (max-width: 900px) { .lp-pill-help span { display: none; } }
+@media (max-width: 640px) { .lp-helpdesk { width: auto; margin: 12px 16px 0; padding: 14px; } .lp-helpdesk-cta { width: 100%; } .lp-helpdesk-cta > * { flex: 1; justify-content: center; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lp-helpdesk { background: #2a2210; border-color: #8a6a26; } :root:not([data-theme="light"]) .lp-helpdesk-text strong { color: #ffe7b3; } :root:not([data-theme="light"]) .lp-helpdesk-text span { color: #e5d3a8; } }
+.lp button.lp-pill { cursor: pointer; font: inherit; }
+.lp button.lp-pill:not(.lp-pill-help) { border: 0; }

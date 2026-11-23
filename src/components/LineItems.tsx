@@ -136,7 +136,7 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
                     {it && isMeasured(it.unit) && <LooseQtyHelper unit={it.unit} rate={rate} taxRate={it.taxRate} rateIncludesTax={inclusive || !withGst} value={l.qty} onChange={(qty) => set(l.key, { qty })} />}
                     {it?.trackSerials && <SerialField itemId={it.id} branchId={branchId} qty={l.qty} value={l.serials ?? []} onChange={(serials) => set(l.key, { serials })} />}
                     {it && <input className="input input-sm line-note" style={{ marginTop: 6 }} maxLength={300} value={l.note ?? ''} onChange={(e) => set(l.key, { note: e.target.value })}
-                      placeholder={it.trackSerials ? 'Warranty or other details (prints on the bill)' : 'Serial no., warranty or other details (prints on the bill)'} aria-label={`Details for ${it.name}`} />}
+                      placeholder={it.trackSerials ? 'Warranty or other details (prints on the bill)' : isMeasured(it.unit) || it.type === 'Services' ? 'Note (prints on the bill, optional)' : 'Serial no., warranty or other details (prints on the bill)'} aria-label={`Details for ${it.name}`} />}
                   </td>
                   <td><QtyInput value={l.qty} unit={it?.unit ?? ''} onChange={(qty) => set(l.key, { qty })} onKeyDown={enterToNextLine} /></td>
                   <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} value={rate} onChange={(e) => set(l.key, { rate: Math.max(0, Number(e.target.value)) })} onKeyDown={enterToNextLine} aria-label="Rate" />{it && isMeasured(it.unit) && <div className="small muted" style={{ textAlign: 'right' }}>per {it.unit}</div>}</td>

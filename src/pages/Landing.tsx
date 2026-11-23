@@ -1,9 +1,10 @@
+import { openHelpDesk } from '@/components/PublicHelp';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight, Boxes, BarChart3, Check, Camera, Store, Calculator, Users, FileText,
   Sparkles, BellRing, IndianRupee, Send, ChevronDown, Zap, LogIn, ScanLine, Mic, BrainCircuit, MapPinned, RefreshCw, Split, Truck, TrendingUp, MessageCircle, Scale,
-  CloudOff, Keyboard, Smartphone, Tag, Printer, Carrot, ShoppingBasket, ShoppingCart, Pill, Gem, Construction, Wrench, Shirt, Puzzle, Briefcase, type LucideIcon,
+  CloudOff, Keyboard, Smartphone, Tag, Printer, Carrot, ShoppingBasket, ShoppingCart, Pill, Gem, Construction, Wrench, Shirt, Puzzle, Briefcase, Headset, type LucideIcon,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/Logo';
 import { HeroArt, Photo, SceneArt } from '@/components/Photo';
@@ -124,19 +125,21 @@ export default function Landing() {
         <Link to="/" className="lp-logo" aria-label="Corpus360 home"><BrandLogo height={22} /></Link>
         <nav className="lp-links"><a href="#features">Features</a><a href="#counter">Counter</a><a href="#trades">Your trade</a><a href="#screens">See it</a><a href="#compare">Why us</a><a href="#faq">FAQ</a></nav>
         <div className="lp-nav-cta">
+          <button type="button" className="lp-pill lp-pill-help" onClick={openHelpDesk}><Headset size={15} /> <span>Talk to sales</span></button>
           <Link to="/login" className="lp-pill lp-pill-light"><LogIn size={15} /> Login</Link>
           <Link to="/signup" className="lp-pill lp-pill-rose">Sign up free</Link>
         </div>
       </header>
 
-      <section className="lp-band lp-band-top">
-        <div>
-          <h2>Ready to make billing easy?</h2>
-          <p>Create your shop in a minute and try every feature free. No card needed.</p>
+      <section className="lp-helpdesk" aria-label="Help desk">
+        <span className="lp-helpdesk-ic"><Headset size={22} /></span>
+        <div className="lp-helpdesk-text">
+          <strong>New here? Talk to our team, free.</strong>
+          <span>A live demo, help choosing a plan, GST setup and moving your items from another software. Call, WhatsApp or ask us to call you.</span>
         </div>
-        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-          <Link to="/signup" className="lp-pill lp-pill-light lg">Create your shop <ArrowRight size={18} /></Link>
-          <Link to="/login" className="lp-pill lp-pill-rose lg">Open the demo</Link>
+        <div className="lp-helpdesk-cta">
+          <button type="button" className="lp-pill lp-pill-rose" onClick={openHelpDesk}><Headset size={16} /> Talk to our team</button>
+          <Link to="/signup" className="lp-pill lp-pill-light">Start free trial <ArrowRight size={16} /></Link>
         </div>
       </section>
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { GstinField, fillEmpty } from '@/components/GstinField';
+import { BusinessPicker } from '@/components/BusinessPicker';
 import { LicenseGatePrompt, isLicenseBlock, type LicenseBlock, type LicenseChoice } from '@/components/LicenseGatePrompt';
 import { StockOverridePrompt, type StockBlock } from '@/components/StockOverridePrompt';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -293,9 +294,7 @@ function Form({ existing }: { existing?: Invoice }) {
             <Field label="Invoice #" hint={existing?.number ? 'Invoice numbers are permanent' : me.platform.autoResetInvoiceNumbering ? 'Assigned when issued · resets every 1 April' : 'Assigned when issued · continuous'}>
               <input className="input" readOnly value={number} style={{ fontWeight: 600, fontFamily: 'ui-monospace, Menlo, monospace' }} />
             </Field>
-            <Field label="Branch" hint="Stock is taken from this branch">
-              <select className="select" value={branchId} onChange={(e) => setBranchId(e.target.value)}>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
-            </Field>
+            <BusinessPicker label="Billing from" hint="Stock is taken from here. Pick another business to bill from it." branchId={branchId} onBranch={setBranchId} dirty={lines.some((l) => l.itemId)} />
             <Field label="Invoice date" required>
               <input className="input" type="date" value={date} onChange={(e) => { setDate(e.target.value); setDueDate(addDays(e.target.value, terms)); }} disabled={isIssued} />
             </Field>
