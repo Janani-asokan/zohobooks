@@ -279,7 +279,7 @@ export default function Purchases() {
             onKeyDown={(e) => { if (e.key === 'Enter' && mode === 'items') { e.preventDefault(); focusFirstItem(); } }} /></Field>
           <Field label="Description"><input className="input" value={bill.description} onChange={(e) => setBill({ ...bill, description: e.target.value })} placeholder={mode === 'items' ? 'Optional' : 'e.g. Freight charges'} /></Field>
           <BusinessPicker label="Stock goes into" hint="The store or warehouse that received the goods" branchId={bill.branchId || defaultBranch} onBranch={(b) => setBill({ ...bill, branchId: b })} dirty={bill.lines.some((l) => l.itemId) || !!bill.vendorId} />
-          <Field label="Bill date"><input className="input" type="date" value={bill.date} onChange={(e) => setBill({ ...bill, date: e.target.value })} /></Field>
+          <Field label="Bill date"><input className="input" type="date" value={bill.date} max={new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10)} onChange={(e) => setBill({ ...bill, date: e.target.value })} /></Field>
           <Field label="Due date" error={err('dueDate')}>
             <input className="input" type="date" value={bill.dueDate} onChange={(e) => setBill({ ...bill, dueDate: e.target.value })} />
             <div className="suggest">{[0, 15, 30, 45].map((d) => <button key={d} type="button" onClick={() => setBill({ ...bill, dueDate: addDays(bill.date, d) })}>{d === 0 ? 'On receipt' : `Net ${d}`}</button>)}</div>

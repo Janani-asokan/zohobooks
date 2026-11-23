@@ -1,3 +1,4 @@
+import { QtyInput } from './QtyInput';
 import { Fragment, useEffect, useState } from 'react';
 import { Plus, ScanBarcode, Trash2 } from 'lucide-react';
 import { findByCode } from '../../shared/barcode';
@@ -124,7 +125,7 @@ export function PurchaseLinesEditor({ lines, onChange, items, error, withSerials
                       </div>
                     </div>
                   </td>
-                  <td className="num"><input className="input num" type="number" min={0} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} onKeyDown={enterToNextLine} aria-label="Quantity" /></td>
+                  <td className="num"><QtyInput value={Number(l.qty) || 0} unit={items.find((i) => i.id === l.itemId)?.unit ?? ''} onChange={(q) => upd(l.key, { qty: String(q) })} onKeyDown={enterToNextLine} /></td>
                   <td className="num"><input className="input num" type="number" min={0} value={l.rate} onChange={(e) => upd(l.key, { rate: e.target.value })} onKeyDown={enterToNextLine} aria-label="Rate" /></td>
                   <td className="num muted">{l.itemId ? `${l.taxRate}%` : '—'}</td>
                   <td className="num strong">{l.itemId ? money(Number(l.qty || 0) * Number(l.rate || 0)) : <span className="muted">—</span>}</td>

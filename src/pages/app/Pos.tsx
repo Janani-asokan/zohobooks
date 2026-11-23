@@ -27,7 +27,10 @@ import { useAiEnabled } from '@/components/Assistant';
 import { useScale } from '@/lib/scale';
 import { isWeighed, qtyFromReading } from '../../../shared/scale';
 import { BusinessPicker } from '@/components/BusinessPicker';
-import { formatQty, itemForPlu, parseQty, parseScaleLabel, qtyFromGrams, wholeOnly } from '../../../shared/units';
+
+/** Items on the bill as a cashier counts them: 3 phones are 3, 250 g of carrots is 1 (not 0.25). */
+const itemCount = (lines: Array<{ qty: number; it: { unit: string } }>) => lines.reduce((n, l) => n + (isMeasured(l.it.unit) || !Number.isInteger(l.qty) ? 1 : l.qty), 0);
+import { formatQty, isMeasured, itemForPlu, parseQty, parseScaleLabel, qtyFromGrams, wholeOnly } from '../../../shared/units';
 import { Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
@@ -457,7 +460,7 @@ export default function Pos() {
   const holdCurrent = () => {
     if (!cart.length) return;
     const who = customer ? customer.companyName || customer.name : 'Walk-in';
-    holdBill(me.shop.id, { cart, customerId, disc, mode }, `${who} · ${lines.reduce((n, l) => n + l.qty, 0)} items`, totals.total);
+    holdBill(me.shop.id, { cart, customerId, disc, mode }, `${who} · ${itemCount(lines)} items`, totals.total);
     setHeld(heldBills(me.shop.id));
     reset();
     toast('success', 'Bill held', 'Serve the next customer. F6 on an empty bill brings it back.');
@@ -596,7 +599,7 @@ export default function Pos() {
 
       {lines.length > 0 && (
         <button type="button" className="pos-jump" onClick={() => document.getElementById('pos-bill')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
-          <span>{lines.reduce((n, l) => n + l.qty, 0)} item{lines.reduce((n, l) => n + l.qty, 0) === 1 ? '' : 's'} · View bill</span><strong>{money(totals.total)}</strong>
+          <span>{itemCount(lines)} item{itemCount(lines) === 1 ? '' : 's'} · View bill</span><strong>{money(totals.total)}</strong>
         </button>
       )}
       <section className="pos-panel card" id="pos-bill">

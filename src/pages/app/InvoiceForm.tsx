@@ -207,6 +207,9 @@ function Form({ existing }: { existing?: Invoice }) {
     setTouched(true);
     setServerErr({});
     if (Object.values(errs).some(Boolean)) return toast('error', 'Please fix the highlighted fields');
+    // A ₹0 line on an issued bill is almost always a missed price; ask once (free samples are fine).
+    const free = lines.filter((l) => l.itemId && (l.rate ?? 0) === 0);
+    if (mode !== 'draft' && !overrideCreditLimit && free.length && !window.confirm(`${free.length === 1 ? 'One item has' : `${free.length} items have`} a rate of ₹0. Issue the invoice with ${free.length === 1 ? 'it' : 'them'} free?`)) return;
     const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit, ...lic, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount,
       ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
       extra: Object.fromEntries(invFields.filter((x) => (invExtra[x.key] ?? '').trim()).map((x) => [x.key, invExtra[x.key]!.trim()])) };
@@ -296,7 +299,7 @@ function Form({ existing }: { existing?: Invoice }) {
             </Field>
             <BusinessPicker label="Billing from" hint="Stock is taken from here. Pick another business to bill from it." branchId={branchId} onBranch={setBranchId} dirty={lines.some((l) => l.itemId)} />
             <Field label="Invoice date" required>
-              <input className="input" type="date" value={date} onChange={(e) => { setDate(e.target.value); setDueDate(addDays(e.target.value, terms)); }} disabled={isIssued} />
+              <input className="input" type="date" value={date} max={new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10)} onChange={(e) => { setDate(e.target.value); setDueDate(addDays(e.target.value, terms)); }} disabled={isIssued} />
             </Field>
             <div className="form-grid" style={{ gap: 12 }}>
               <Field label="Terms"><select className="select" value={terms} onChange={(e) => { const d = Number(e.target.value); setTerms(d); setDueDate(addDays(date, d)); }}>{TERMS.map((t) => <option key={t.days} value={t.days}>{t.label}</option>)}</select></Field>

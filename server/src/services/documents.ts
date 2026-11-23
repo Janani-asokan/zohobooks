@@ -1,4 +1,5 @@
 import { qtyProblem } from '../../../shared/units';
+import { istDate } from '../../../shared/support';
 import crypto from 'node:crypto';
 import { takePrintSnapshot } from './printSnapshot';
 import { cleanExtra } from '../../../shared/templates';
@@ -335,8 +336,15 @@ async function gateLicenses(db: Db, req: Request | null, shopId: string, input: 
   }
 }
 
+/** A bill someone types with a date ahead lands in the wrong GST month (and the wrong day book). India time decides "today". */
+const noFutureDate = (date: string) => {
+  if (date > istDate(new Date())) throw badRequest('The invoice date is in the future. Use today’s date, or the date the goods or service were supplied.', { date: 'Can’t be in the future' });
+};
+
 export async function createInvoice(db: Db, req: Request | null, shopId: string, input: InvoiceInput, opts: { issue: boolean; source?: 'app' | 'pos' | 'recurring'; recurringId?: string; device?: DeviceNumber; madeOffline?: boolean }) {
   const source = opts.source ?? 'app';
+  // Only for bills people make; system-made ones (licence renewals, recurring runs) carry their own dates.
+  if (req && source !== 'recurring') noFutureDate(input.date);
   let gate: LicenseGate | null = null;
   if (opts.issue) {
     const g = await gateLicenses(db, req, shopId, input, source, !!opts.madeOffline);
@@ -418,6 +426,7 @@ async function saveDeliveryFields(db: Db, shopId: string, id: string, input: Inv
 }
 
 export async function updateInvoice(db: Db, req: Request, shopId: string, id: string, input: InvoiceInput, issueNow: boolean) {
+  noFutureDate(input.date);
   const inv = await lockInvoice(db, shopId, id);
   if (inv.status === 'Cancelled') throw conflict('Cancelled invoices can’t be edited');
   if (inv.status === 'Issued' && (Number(inv.amount_paid) > 0 || Number(inv.amount_credited) > 0))

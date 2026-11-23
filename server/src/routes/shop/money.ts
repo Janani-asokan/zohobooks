@@ -1,3 +1,4 @@
+import { istDate } from '../../../../shared/support';
 import { Router } from 'express';
 import { z } from 'zod';
 import type { Request } from 'express';
@@ -74,6 +75,7 @@ moneyRouter.post(
     );
     await requireRow(db, 'vendors', c.shopId, b.vendorId, 'Vendor');
     if (b.dueDate < b.date) throw badRequest('Due date can’t be before bill date', { dueDate: 'Due date can’t be before bill date' });
+    if (b.date > istDate(new Date())) throw badRequest('The bill date is in the future. Use the date printed on the vendor’s bill.', { date: 'Can’t be in the future' });
     const lines = b.lines.length ? await buildPurchaseLines(db, c.shopId, b.lines, { withSerials: b.addStock }) : [];
     const t = lines.length ? purchaseTotals(lines) : { sub: b.taxableAmount, tax: b.taxAmount, total: b.taxableAmount + b.taxAmount };
     if (!(t.sub > 0)) throw badRequest('Enter the bill amount or add items', { taxableAmount: 'Enter the bill amount' });

@@ -139,7 +139,11 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
                       placeholder={it.trackSerials ? 'Warranty or other details (prints on the bill)' : isMeasured(it.unit) || it.type === 'Services' ? 'Note (prints on the bill, optional)' : 'Serial no., warranty or other details (prints on the bill)'} aria-label={`Details for ${it.name}`} />}
                   </td>
                   <td><QtyInput value={l.qty} unit={it?.unit ?? ''} onChange={(qty) => set(l.key, { qty })} onKeyDown={enterToNextLine} /></td>
-                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} value={rate} onChange={(e) => set(l.key, { rate: Math.max(0, Number(e.target.value)) })} onKeyDown={enterToNextLine} aria-label="Rate" />{it && isMeasured(it.unit) && <div className="small muted" style={{ textAlign: 'right' }}>per {it.unit}</div>}</td>
+                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} value={rate} onChange={(e) => set(l.key, { rate: Math.max(0, Number(e.target.value)) })} onKeyDown={enterToNextLine} aria-label="Rate" />{it && isMeasured(it.unit) && <div className="small muted" style={{ textAlign: 'right' }}>per {it.unit}</div>}
+                    {it && rate === 0 && <div className="small" style={{ textAlign: 'right', color: 'var(--amber-700)' }}>Free item?</div>}
+                    {it && rate > 0 && it.cost != null && it.cost > 0 && (inclusive ? rate / (1 + it.taxRate / 100) : rate) < it.cost && (
+                      <div className="small" style={{ textAlign: 'right', color: 'var(--amber-700)' }} title={`Cost ₹${it.cost}`}>Below cost ₹{it.cost}</div>
+                    )}</td>
                   <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} max={100} value={l.discount} onChange={(e) => set(l.key, { discount: Math.min(100, Math.max(0, Number(e.target.value))) })} onKeyDown={enterToNextLine} aria-label="Discount" /></td>
                   <td className="num">{withGst && it ? <span className="chip">{it.taxRate}%</span> : <span className="muted small">—</span>}</td>
                   <td className="num strong">{l.itemId ? money(lineAmount({ qty: l.qty, rate, discount: l.discount, taxRate: 0 })) : <span className="muted">—</span>}</td>

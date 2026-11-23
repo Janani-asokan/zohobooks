@@ -1,0 +1,7 @@
+<en-IN>
+• Sell loose goods by weight: type 200g or half kg, tap 250 g / 1 kg, or "₹50 worth"
+• Weighing-scale barcode labels are read at the counter
+• Pieces are billed in whole numbers only
+• Pick which shop, warehouse or business you bill from
+• Warnings for ₹0 rates, prices below cost and future dates
+</en-IN>

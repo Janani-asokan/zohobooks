@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { vi, beforeAll, describe, expect, it } from 'vitest';
 import { query, withTenant } from '../src/db';
 import { runRecurring } from '../src/jobs';
 import { freshDb, login, today } from './helpers';
@@ -17,6 +17,12 @@ beforeAll(async () => {
   customers = (await owner.get('/api/shop/customers')).body;
 });
 
+/** Runs a step "in" June 2027 (bills can't be dated ahead), signed in afresh since the clock jumps past the session. */
+async function in2027<T>(fn: () => Promise<T>): Promise<T> {
+  const was = owner;
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2027-06-01T06:00:00Z') });
+  try { owner = await login('owner@shop.com', 'owner123'); return await fn(); } finally { vi.useRealTimers(); owner = was; }
+}
 const newInvoice = (over: Record<string, unknown> = {}) =>
   owner.post('/api/shop/invoices').send({ customerId: walkin().id, date: today(), dueDate: today(), lines: [{ itemId: goods().id, qty: 1, tier: 'SP1' }], withGst: true, ...over });
 
@@ -30,7 +36,8 @@ describe('invoice numbering', () => {
   });
 
   it('restarts at 0001 in a new financial year', async () => {
-    const res = await newInvoice({ date: '2027-04-02', dueDate: '2027-04-10' });
+    // Bills can't be dated ahead, so this runs "in" June 2027.
+    const res = await in2027(() => newInvoice({ date: '2027-04-02', dueDate: '2027-04-10' }));
     expect(res.body.number).toBe('INV-2027-28-0001');
     expect(res.body.fy).toBe('2027-28');
   });
@@ -39,7 +46,7 @@ describe('invoice numbering', () => {
     const sa = await login('admin@ledgerly.in', 'admin123');
     await sa.put('/api/platform/config').send({ autoResetInvoiceNumbering: false });
     const a = await newInvoice();
-    const b = await newInvoice({ date: '2027-05-01', dueDate: '2027-05-01' });
+    const b = await in2027(() => newInvoice({ date: '2027-05-01', dueDate: '2027-05-01' }));
     expect(a.body.number).toBe('INV-0001');
     expect(b.body.number).toBe('INV-0002');
     await sa.put('/api/platform/config').send({ autoResetInvoiceNumbering: true });
@@ -167,5 +174,17 @@ describe('plans, recurring and public links', () => {
     expect(res.body.invoice.number).toBe(inv.number);
     expect(res.body.org.upiId).toBe('aravindstore@okhdfcbank');
     expect((await request(app).get('/api/public/invoices/' + 'a'.repeat(36))).status).toBe(404);
+  });
+});
+
+describe('dates', () => {
+  it('an invoice someone types can’t be dated ahead', async () => {
+    const owner = await login('owner@shop.com', 'owner123');
+    const customerId = (await owner.get('/api/shop/customers')).body[0].id;
+    const item = (await owner.get('/api/shop/items')).body.find((i: any) => i.type === 'Services');
+    const ahead = new Date(Date.now() + 3 * 86400_000).toISOString().slice(0, 10);
+    const r = await owner.post('/api/shop/invoices').send({ customerId, date: ahead, dueDate: ahead, withGst: true, issue: false, lines: [{ itemId: item.id, qty: 1, discount: 0 }] });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatch(/future/);
   });
 });
