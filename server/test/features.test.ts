@@ -50,8 +50,7 @@ describe('catalogue', () => {
 
   it('existing shops were given every feature by the migration, and the demo shop has them all', async () => {
     const owner = await login('owner@shop.com', 'owner123');
-    // Every add-on new shops can get, plus microfinance: retired for new shops, but the demo shop already used it.
-    expect(Object.keys(owner.me.shop.features).sort()).toEqual([...FEATURES.filter((f) => f.available && !f.capacity && !f.retired).map((f) => f.key), 'microfinance'].sort());
+    expect(Object.keys(owner.me.shop.features).sort()).toEqual(FEATURES.filter((f) => f.available && !f.capacity && !f.retired).map((f) => f.key).sort());
   });
 });
 
@@ -66,7 +65,7 @@ describe('a shop without add-ons', () => {
     expect(so.body.code).toBe('feature_off');
     expect(so.body.details.feature).toBe('quotes_orders');
     expect(so.body.error).toMatch(/Settings → Features/);
-    for (const url of ['/api/shop/vendors', '/api/shop/stock/adjustments', '/api/shop/accounting/accounts', '/api/shop/field/me', '/api/shop/lending/settings', '/api/shop/recurring'])
+    for (const url of ['/api/shop/vendors', '/api/shop/stock/adjustments', '/api/shop/accounting/accounts', '/api/shop/field/me', '/api/shop/recurring'])
       expect((await basic.get(url)).status, url).toBe(403);
     expect((await basic.post('/api/shop/pos/sale').send({})).status).toBe(403);
   });
@@ -84,7 +83,7 @@ describe('asking for a feature and turning it on', () => {
     const quotes = list.features.find((f: { key: string }) => f.key === 'quotes_orders');
     expect(quotes.on).toBe(false);
     expect(quotes.levels[0].monthly).toBeGreaterThan(0);
-    expect(list.features.some((f: { key: string }) => f.key === 'microfinance')).toBe(false); // retired here: not offered to shops without it
+    expect(list.features.some((f: { key: string }) => f.key === 'microfinance')).toBe(false); // removed from the product
 
     expect((await basic.post('/api/shop/features/quotes_orders/request').send({ level: 'standard' })).status).toBe(200);
     const again = await basic.post('/api/shop/features/quotes_orders/request').send({ level: 'standard' });
@@ -130,7 +129,7 @@ describe('asking for a feature and turning it on', () => {
 
   it('a level that does not exist and a feature that is not offered are refused', async () => {
     expect((await basic.post('/api/shop/features/pos/request').send({ level: 'gold' })).status).toBe(400);
-    expect((await basic.post('/api/shop/features/microfinance/request').send({ level: 'standard' })).status).toBe(400); // not offered
+    expect((await basic.post('/api/shop/features/microfinance/request').send({ level: 'standard' })).status).toBeGreaterThanOrEqual(400); // removed
   });
 });
 
@@ -182,7 +181,7 @@ describe('prices', () => {
 describe('new shops', () => {
   it('get a 14-day trial of every feature when none are chosen', async () => {
     const { owner } = await newShop('trial@shop.in');
-    // Retired features (microfinance) and capacity packs are not part of the trial.
+    // Capacity packs are not part of the trial.
     expect(Object.keys(owner.me.shop.features).length).toBe(FEATURES.filter((f) => f.available && !f.retired && !f.capacity).length);
     const ends = await query("SELECT DISTINCT ends_on - starts_on AS d FROM shop_features WHERE shop_id = $1", [owner.me.shop.id]);
     expect(ends).toEqual([{ d: 14 }]);

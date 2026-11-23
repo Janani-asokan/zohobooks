@@ -147,15 +147,6 @@ export const FEATURES: FeatureDef[] = [
     defaultMonthly: { standard: 299, plus: 999 },
     defaultCredits: { standard: 600, plus: 2500 },
   },
-  {
-    key: 'microfinance', name: 'Microfinance management', group: 'Finance',
-    retired: 'Microfinance is moving to Corpus360 Main Cloud. Shops already using it here keep it.',
-    summary: 'Give daily, weekly and monthly loans, collect instalments and track dues and defaulters.',
-    includes: ['Borrowers with KYC', 'Loan book with EMI schedules', 'Collector app and receipts', 'Dues, alerts and reports', 'Entries in your books'],
-    levels: one('All lending tools'), available: true,
-    api: [/^\/lending\//], pages: [/^\/app\/microfinance(\/|$)/],
-    defaultMonthly: { standard: 499 },
-  },
   /* ---- Capacity: grow beyond what the plan includes ---- */
   {
     key: 'extra_stores', name: 'More stores', group: 'Grow',

@@ -54,16 +54,6 @@ const DataTransfer = IS_APP ? WebOnly : lazy(() => import('./pages/app/DataTrans
 const FieldDay = IS_APP ? WebOnly : lazy(() => import('./pages/app/FieldDay'));
 const Attendance = lazy(() => import('./pages/app/Attendance'));
 const FieldTeam = IS_APP ? WebOnly : lazy(() => import('./pages/app/FieldTeam'));
-const LendingHome = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/LendingHome'));
-const Borrowers = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/Borrowers'));
-const BorrowerView = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/BorrowerView'));
-const Loans = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/Loans'));
-const LoanNew = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/LoanNew'));
-const LoanView = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/LoanView'));
-const Collections = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/Collections'));
-const Planner = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/Planner'));
-const LendingReports = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/LendingReports'));
-const LendingSettings = IS_APP ? WebOnly : lazy(() => import('./pages/app/microfinance/LendingSettings'));
 const StockSummary = lazy(() => import('./pages/app/StockSummary'));
 const Banking = IS_APP ? WebOnly : lazy(() => import('./pages/app/Banking'));
 const Reports = IS_APP ? WebOnly : lazy(() => import('./pages/app/Reports'));
@@ -171,16 +161,7 @@ export default function App() {
             <Route path="accounting/accounts" element={<Accounts />} />
             <Route path="accounting/journals" element={<Journals />} />
             <Route path="accounting/ledger" element={<Ledger />} />
-            <Route path="microfinance" element={<LendingHome />} />
-            <Route path="microfinance/borrowers" element={<Borrowers />} />
-            <Route path="microfinance/borrowers/:id" element={<BorrowerView />} />
-            <Route path="microfinance/loans" element={<Loans />} />
-            <Route path="microfinance/loans/new" element={<LoanNew />} />
-            <Route path="microfinance/loans/:id" element={<LoanView />} />
-            <Route path="microfinance/collections" element={<Collections />} />
-            <Route path="microfinance/planner" element={<Planner />} />
-            <Route path="microfinance/reports" element={<LendingReports />} />
-            <Route path="microfinance/settings" element={<LendingSettings />} />
+            <Route path="microfinance/*" element={<Navigate to="/app" replace />} />
             <Route path="licenses" element={<Licenses />} />
             <Route path="licenses/:id" element={<LicenseDetail />} />
             <Route path="reports" element={<ReportsHome />} />

@@ -7,7 +7,6 @@ import { FEATURES, capacityOf, offeredTo } from '../../shared/features';
 let shopId = '';
 const grant = (key: string, level: string) => query(`INSERT INTO shop_features (shop_id, feature_key, level, status, source, starts_on, monthly_price, decided_by)
   VALUES ($1, $2, $3, 'active', 'paid', current_date, 0, 'test')`, [shopId, key, level]);
-const end = (key: string) => query("UPDATE shop_features SET status = 'ended' WHERE shop_id = $1 AND feature_key = $2", [shopId, key]);
 
 beforeAll(async () => {
   await freshDb();
@@ -19,35 +18,26 @@ describe('catalogue rules', () => {
     expect(capacityOf({ extra_stores: 'plus3' }, 'extra_stores')).toBe(3);
     expect(capacityOf({}, 'extra_stores')).toBe(0);
     const keys = (ent: Record<string, string>) => offeredTo(ent).map((f) => f.key);
-    expect(keys({})).not.toContain('microfinance');
-    expect(keys({ microfinance: 'standard' })).toContain('microfinance');
+    expect(keys({ microfinance: 'standard' })).not.toContain('microfinance'); // removed from the product
     expect(keys({})).toEqual(expect.arrayContaining(['extra_stores', 'extra_warehouses', 'extra_business']));
     expect(FEATURES.filter((f) => f.capacity).every((f) => f.api.length === 0 && f.pages.length === 0)).toBe(true);
   });
 });
 
-describe('microfinance is retired here', () => {
-  it('a shop without it can’t see or ask for it, and a new shop’s trial doesn’t include it', async () => {
-    await end('microfinance');
+describe('microfinance is removed', () => {
+  it('no shop sees it, even one that had it; its screens and API are gone; a new shop’s trial doesn’t include it', async () => {
+    await grant('microfinance', 'standard'); // an old purchase row
     const owner = await login('owner@shop.com', 'owner123');
+    expect(owner.me.shop.features.microfinance).toBeUndefined();
     const list = (await owner.get('/api/shop/features')).body.features.map((f: { key: string }) => f.key);
     expect(list).not.toContain('microfinance');
-    const r = await owner.post('/api/shop/features/microfinance/request').send({ level: 'standard' });
-    expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/Main Cloud/);
-
+    expect((await owner.get('/api/shop/lending/settings')).status).toBe(404);
     const su = await request(app).post('/api/auth/signup').set('X-Requested-With', 'ledgerly').send({ shopName: 'New Trial Shop', ownerName: 'Trial Owner', email: 'trial@example.com', phone: '9840011111', city: 'Chennai', password: 'Sunrise#2026' });
     expect(su.status, JSON.stringify(su.body)).toBe(201);
     const trial = (await query("SELECT feature_key FROM shop_features f JOIN shops s ON s.id = f.shop_id WHERE s.name = 'New Trial Shop'")).map((x) => x.feature_key);
     expect(trial).not.toContain('microfinance');
     expect(trial).not.toContain('extra_stores');
     expect(trial).toContain('pos');
-  });
-
-  it('a shop that already has it keeps it', async () => {
-    await grant('microfinance', 'standard');
-    const owner = await login('owner@shop.com', 'owner123');
-    expect((await owner.get('/api/shop/features')).body.features.some((f: { key: string; on: boolean }) => f.key === 'microfinance' && f.on)).toBe(true);
   });
 });
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { hsnNote } from '../../../shared/gst';
+import { isMeasured, wholeOnly } from '../../../shared/units';
 import '@/styles/gstin.css';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Camera, Package, Wrench, Trash2, Wand2, Sparkles, Loader2, CheckCircle2, Circle, Percent, Info, Boxes, Tag, ScanBarcode } from 'lucide-react';
@@ -441,7 +442,9 @@ export default function ItemForm() {
                   <button type="button" className="btn btn-soft btn-sm addon-btn" onClick={() => set('sku', skuFrom(draft.name, draft.brand))} title="Generate from name & brand"><Wand2 size={14} /> Auto</button>
                 </div>
               </Field>
-              <Field label="Unit" hint="How you count it on invoices">
+              <Field label="Unit" hint={isMeasured(draft.unit)
+                ? `Sold loose: bills take 200 g, half ${draft.unit}, or “₹50 worth”. For weighing-scale labels, set the scale’s item code as this item’s SKU.`
+                : wholeOnly(draft.unit) ? `Counted in whole ${draft.unit}. For loose goods pick kg, g, ltr or mtr.` : 'How you count it on invoices'}>
                 <select className="select" value={draft.unit} onChange={(ev) => set('unit', ev.target.value)}>{units.map((u) => <option key={u}>{u}</option>)}</select>
               </Field>
               {draft.type === 'Goods' && (
@@ -470,7 +473,7 @@ export default function ItemForm() {
               <Field label="Cost price" required error={e('cost')} hint="What you pay per unit">
                 <div className="input-addon"><span>₹</span><input className={`input ${e('cost') ? 'invalid' : ''}`} type="number" min={0} value={draft.cost} onChange={(ev) => set('cost', ev.target.value)} placeholder="0.00" aria-label="Cost price" /></div>
               </Field>
-              <Field label="Selling price" required error={e('sp1')} hint={marginOf(sp1) !== null ? <span className={`margin-chip ${marginOf(sp1)! < 0 ? 'bad' : marginOf(sp1)! < 10 ? 'low' : 'good'}`}>{marginOf(sp1)! < 0 ? 'Loss' : 'Margin'} {marginOf(sp1)}% · {money(sp1 - cost)}/unit</span> : 'What the customer pays per unit'}>
+              <Field label="Selling price" required error={e('sp1')} hint={marginOf(sp1) !== null ? <span className={`margin-chip ${marginOf(sp1)! < 0 ? 'bad' : marginOf(sp1)! < 10 ? 'low' : 'good'}`}>{marginOf(sp1)! < 0 ? 'Loss' : 'Margin'} {marginOf(sp1)}% · {money(sp1 - cost)}/unit</span> : `What the customer pays per ${draft.unit || 'unit'}`}>
                 {/* One price: the SP2 / SP3 levels are kept equal to it. */}
                 <div className="input-addon"><span>₹</span><input className={`input ${e('sp1') ? 'invalid' : ''}`} type="number" min={0} value={draft.sp1} onChange={(ev) => setDraft((d) => ({ ...d, sp1: ev.target.value, sp2: ev.target.value, sp3: ev.target.value }))} placeholder="0.00" aria-label="Selling price" /></div>
               </Field>

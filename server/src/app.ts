@@ -30,7 +30,6 @@ import { fieldRouter } from './routes/shop/field';
 import { attendanceRouter } from './routes/shop/attendance';
 import { gstinRouter } from './routes/shop/gstin';
 import { briefingRouter } from './routes/shop/briefing';
-import { lendingRouter } from './routes/shop/lending';
 import { inventoryRouter } from './routes/shop/inventory';
 import { accountingRouter } from './routes/shop/accounting';
 import { adminRouter } from './routes/shop/admin';
@@ -112,7 +111,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), featureGate, aiContext, shopOutboundCtx, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, appDevicesRouter, supportRouter, licensesRouter, transfersRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, attendanceRouter, gstinRouter, briefingRouter, lendingRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), featureGate, aiContext, shopOutboundCtx, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, appDevicesRouter, supportRouter, licensesRouter, transfersRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, attendanceRouter, gstinRouter, briefingRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

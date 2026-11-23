@@ -1,3 +1,4 @@
+import { qtyProblem } from '../../../../shared/units';
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -39,6 +40,8 @@ export async function buildPurchaseLines(db: Db, shopId: string, input: z.infer<
     if (!it) throw badRequest('One of the selected items no longer exists');
     if (opts.withSerials && l.serials?.some((x) => x.trim()) && !it.track_serials)
       throw badRequest(`${it.name} doesn’t keep serial / IMEI numbers. Turn on “Track serial numbers” on the item first, or clear the numbers on this line.`, { lines: `${it.name} doesn’t keep serial numbers` });
+    const bad = qtyProblem(it.name, l.qty, it.unit);
+    if (bad) throw badRequest(bad, { lines: bad });
     const rate = r2(l.rate ?? Number(it.cost));
     return { id: crypto.randomUUID(), itemId: it.id, name: it.name, type: it.type, unit: it.unit, hsn: it.hsn, qty: l.qty, rate, taxRate: l.taxRate ?? Number(it.tax_rate), amount: lineAmount({ qty: l.qty, rate, taxRate: 0 }), received: 0, ...(opts.withSerials && l.serials?.length ? { serials: l.serials } : {}) };
   });

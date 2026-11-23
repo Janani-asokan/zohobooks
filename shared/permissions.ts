@@ -1,5 +1,7 @@
 export const STAFF_ROLES = ['Manager', 'Accountant', 'Sales Staff', 'Warehouse', 'Collector', 'Compliance Manager', 'Viewer'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
+/** Roles offered when adding or changing staff. Collector (for the removed microfinance module) stays valid for old users only. */
+export const HIRABLE_ROLES = STAFF_ROLES.filter((r) => r !== 'Collector');
 export type UserRole = 'Owner' | StaffRole;
 
 export const PERMISSIONS = {
@@ -49,7 +51,6 @@ export const PERMISSION_GROUPS: Array<{ module: string; permissions: Permission[
   { module: 'Accounting', permissions: ['banking.read', 'banking.write', 'accounting.read', 'accounting.write'] },
   { module: 'Reports', permissions: ['reports.read'] },
   { module: 'Warehouse licences', permissions: ['licenses.read', 'licenses.write', 'licenses.override'] },
-  { module: 'Microfinance management', permissions: ['lending.read', 'lending.write', 'lending.collect'] },
   { module: 'Staff', permissions: ['field.view', 'attendance.manage'] },
   { module: 'Administration', permissions: ['audit.read', 'admin'] },
 ];

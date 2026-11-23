@@ -67,3 +67,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
 // The phone app ships its files inside the app; only the website uses the service worker.
 if (!IS_APP) registerServiceWorker();
+
+// Scrolling the page with the mouse over a focused number box would quietly change it (a rate of 950 becomes 949):
+// let the wheel scroll the page instead.
+document.addEventListener('wheel', () => {
+  const el = document.activeElement;
+  if (el instanceof HTMLInputElement && el.type === 'number') el.blur();
+}, { passive: true });

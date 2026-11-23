@@ -1,7 +1,7 @@
 import { IS_APP } from '@/lib/platform';
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Boxes, Landmark, BarChart3, Settings, FileText, UserRound, ClipboardList, Receipt, Wallet,
-  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, HandCoins, Calculator, ReceiptIndianRupee, FileBarChart2, Settings2, type LucideIcon, Puzzle, TrendingUp, Gift, Tag, Headset, ShieldCheck, Fingerprint } from 'lucide-react';
+  Truck, Package, ScanLine, BookOpen, NotebookPen, History, Wallet as WalletIcon, Landmark as Bank, FileSignature, SlidersHorizontal, ArrowLeftRight, Warehouse, Repeat, IndianRupee, FileMinus, Building2, Printer, Users, Wrench, BrainCircuit, RefreshCw, MapPin, MapPinned, type LucideIcon, Puzzle, TrendingUp, Gift, Tag, Headset, ShieldCheck, Fingerprint } from 'lucide-react';
 import type { NavItem } from './Sidebar';
 import { featureForPage } from '../../shared/features';
 import type { PaletteAction } from './CommandPalette';
@@ -14,16 +14,16 @@ const CHILD_ICONS: Record<string, LucideIcon> = {
   'Credit Notes': FileMinus, 'Offers & loyalty': Gift, 'Recurring Invoices': Repeat, 'Point of Sale': ScanLine, 'My Day (field)': MapPin, 'Field Team': MapPinned, Vendors: Truck, 'Purchase Orders': ClipboardList,
   Bills: Receipt, 'Barcode labels': Tag, 'Payments Made': IndianRupee, Expenses: WalletIcon, Items: Package, Warehouses: Warehouse, 'Warehouse licences': ShieldCheck, 'Stock Adjustments': SlidersHorizontal,
   Transfers: ArrowLeftRight, 'Smart Reorder': BrainCircuit, 'Stock Summary': Boxes, 'Chart of Accounts': BookOpen, 'Manual Journals': NotebookPen, 'General Ledger': BookOpen, Banking: Bank, 'Tally & Import': RefreshCw,
-  'Today’s rates': TrendingUp, 'Microfinance overview': LayoutDashboard, Borrowers: Users, 'Loan book': HandCoins, Collections: ReceiptIndianRupee, 'EMI planner': Calculator, 'Microfinance reports': FileBarChart2, 'Microfinance settings': Settings2,
+  'Today’s rates': TrendingUp,
 };
 
 /** Sidebar information architecture. Order and grouping follow how a shop actually works through a day. */
-/** lending: the owner switched microfinance on. has: the shop has an add-on feature (shared/features.ts). */
-export interface NavFlags { lending: boolean; has?: (feature: string) => boolean; dailyRates?: boolean }
+/** has: the shop has an add-on feature (shared/features.ts). */
+export interface NavFlags { has?: (feature: string) => boolean; dailyRates?: boolean }
 
 /** Links to pages of add-on features the shop doesn't have are left out of the sidebar, + New menu and palette. */
 /** Pages that are on the website only, left out of the CorpusLite phone app (shop essentials only). */
-const WEB_ONLY = /^\/app\/(sales\/(quotes|orders|challans|credit-notes|recurring|offers)|field|microfinance|banking|accounting|inventory\/reorder|reports\/gst|features|team|billing|audit)(\/|$|\?)/;
+const WEB_ONLY = /^\/app\/(sales\/(quotes|orders|challans|credit-notes|recurring|offers)|field|banking|accounting|inventory\/reorder|reports\/gst|features|team|billing|audit)(\/|$|\?)/;
 /** In the phone app: pages that are only on the website (their links are left out of the app). */
 export const isWebOnly = (to: string) => IS_APP && WEB_ONLY.test(to);
 const featureOk = (to: string, has?: (feature: string) => boolean) => {
@@ -32,7 +32,7 @@ const featureOk = (to: string, has?: (feature: string) => boolean) => {
   return !f || !has || has(f.key);
 };
 
-export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavItem[] {
+export function buildNav(can: Can, flags: NavFlags = {}): NavItem[] {
   const items: NavItem[] = [{ label: 'Dashboard', icon: LayoutDashboard, to: '/app', end: true }];
   items.push({
     label: 'Sales', icon: ShoppingCart,
@@ -83,20 +83,6 @@ export function buildNav(can: Can, flags: NavFlags = { lending: false }): NavIte
     ...(can('accounting.read') || can('reports.read') || can('customers.write') || can('items.write') ? [{ label: 'Tally & Import', to: '/app/accounting/tally' }] : []),
   ];
   if (accounting.length) items.push({ label: 'Accounting', icon: Landmark, children: accounting });
-  if (flags.lending && (can('lending.read') || can('lending.collect'))) {
-    items.push({
-      label: 'Microfinance', icon: HandCoins,
-      children: [
-        { label: 'Microfinance overview', to: '/app/microfinance', end: true },
-        ...(can('lending.read') ? [{ label: 'Borrowers', to: '/app/microfinance/borrowers' }] : []),
-        { label: 'Loan book', to: '/app/microfinance/loans' },
-        { label: 'Collections', to: '/app/microfinance/collections' },
-        { label: 'EMI planner', to: '/app/microfinance/planner' },
-        ...(can('lending.read') ? [{ label: 'Microfinance reports', to: '/app/microfinance/reports' }] : []),
-        ...(can('lending.write') ? [{ label: 'Microfinance settings', to: '/app/microfinance/settings' }] : []),
-      ],
-    });
-  }
   items.push({ label: 'Attendance', icon: Fingerprint, to: '/app/attendance' }); // shown only when the shop has the add-on
   if (can('reports.read')) items.push({ label: 'Reports', icon: BarChart3, to: '/app/reports' });
   if (can('admin')) items.push({ label: 'Settings', icon: Settings, to: '/app/organization' });
@@ -136,15 +122,9 @@ export function buildCreate(can: Can, has?: (feature: string) => boolean): Array
 }
 
 /** Command palette actions: everything in the sidebar plus the create shortcuts. */
-export function buildActions(can: Can, flags: NavFlags = { lending: false }): PaletteAction[] {
+export function buildActions(can: Can, flags: NavFlags = {}): PaletteAction[] {
   const out: PaletteAction[] = [];
   const add = (cond: boolean, group: string, label: string, icon: LucideIcon, to: string, keywords = '', meta?: string) => cond && featureOk(to, flags.has) && out.push({ group, label, icon, to, keywords, meta });
-  const lend = flags.lending;
-  add(lend && can('lending.write'), 'Create', 'Give a loan', HandCoins, '/app/microfinance/loans/new', 'microfinance lending finance loan disburse daily emi');
-  add(lend && can('lending.write'), 'Create', 'New borrower', Users, '/app/microfinance/borrowers?new=1', 'lending customer register aadhaar');
-  add(lend && (can('lending.collect') || can('lending.write')), 'Create', 'Collect a loan payment', ReceiptIndianRupee, '/app/microfinance/collections', 'lending collection instalment receipt');
-  add(lend && (can('lending.read') || can('lending.collect')), 'Go to', 'Microfinance overview', HandCoins, '/app/microfinance', 'microfinance lending loans finance dues overdue');
-  add(lend && can('lending.read'), 'Go to', 'Microfinance reports', FileBarChart2, '/app/microfinance/reports', 'defaulters collection cash flow');
   add(can('sales.write'), 'Create', 'New invoice', FileText, '/app/sales/invoices/new', 'bill sale gst', 'N');
   add(can('customers.write'), 'Create', 'New customer', UserRound, '/app/sales/customers?new=1', 'client party');
   add(can('items.write'), 'Create', 'New item', Package, '/app/items/new', 'product goods sku');
@@ -227,9 +207,6 @@ const ROUTE_RULES: Array<[RegExp, (can: Can) => boolean]> = [
   [/^\/app\/licenses/, (can) => can('licenses.read')],
   [/^\/app\/inventory\/pricing/, (can) => can('items.write')],
   [/^\/app\/audit/, (can) => can('audit.read') || can('admin')],
-  [/^\/app\/microfinance\/(borrowers|reports)/, (can) => can('lending.read')],
-  [/^\/app\/microfinance\/(loans\/new|settings)/, (can) => can('lending.write')],
-  [/^\/app\/microfinance(\/|$)/, (can) => can('lending.read') || can('lending.collect')],
 ];
 export function canOpen(pathname: string, can: Can): boolean {
   const rule = ROUTE_RULES.find(([re]) => re.test(pathname));

@@ -32,7 +32,6 @@ export const DEMO_ACCOUNTS: Array<{ label: string; email: string; password: stri
   { label: 'Sales staff', email: 'sales@shop.com', password: 'sales123', kind: 'user' },
   { label: 'Accountant', email: 'accounts@shop.com', password: 'accounts123', kind: 'user' },
   { label: 'Warehouse', email: 'warehouse@shop.com', password: 'warehouse123', kind: 'user' },
-  { label: 'Loan collector', email: 'collector@shop.com', password: 'collector123', kind: 'user' },
 ];
 
 /** Demo mode on an existing database: put the demo logins back on their simple passwords. */
@@ -48,12 +47,6 @@ export async function resetDemoPasswords() {
         await query(`INSERT INTO users (shop_id, name, email, password_hash, role, branch_id)
           SELECT u.shop_id, 'Murugan P', $1, $2, 'Warehouse', u.branch_id FROM users u WHERE lower(u.email) = 'owner@shop.com' AND u.role = 'Owner'`, [a.email, hash]);
     }
-  }
-  // The microfinance demo arrived later too: give the demo shop its lending book once.
-  const owner = (await query("SELECT shop_id, branch_id FROM users WHERE lower(email) = 'owner@shop.com' AND role = 'Owner'"))[0];
-  if (owner && !(await query('SELECT 1 FROM users WHERE lower(email) = $1', ['collector@shop.com'])).length) {
-    const { seedLending } = await import('./seedLending');
-    await withTenant(owner.shop_id, (db) => seedLending(db, owner.shop_id, owner.branch_id, 'collector123'));
   }
 }
 
@@ -77,10 +70,6 @@ export async function seed({ quiet = false } = {}) {
     shopName: 'Aravind Computer Store', ownerName: 'Aravind Kumar', email: 'owner@shop.com', phone: '+91 98400 12345', city: 'Chennai',
     planId: 'premium', years: 1, password: pw('owner123'), mustChangePassword: false, licenseStart: day(-120), features: 'all',
   });
-  // Microfinance is retired for new shops ('all' leaves it out), but the demo shop has a lending book, as shops that
-  // already used it keep it.
-  await query(`INSERT INTO shop_features (shop_id, feature_key, level, status, source, starts_on, monthly_price, decided_by)
-    VALUES ($1, 'microfinance', 'standard', 'active', 'complimentary', current_date, 0, 'seed')`, [demo.id]);
   for (const [i, [name, owner, email, city, plan, start]] of others.entries()) {
     const s = await provisionShop(null, { shopName: name, ownerName: owner, email, phone: `+91 98${String(41000000 + i * 1234567).slice(0, 8)}`, city, planId: plan, years: 1, password: pw('welcome123'), mustChangePassword: true, licenseStart: day(start), features: 'all' });
     if (name === 'Annapoorna Sweets') await query('UPDATE shops SET active = false WHERE id = $1', [s.id]);
@@ -284,8 +273,6 @@ export async function seed({ quiet = false } = {}) {
        VALUES ($1,'BrightPath AMC (monthly)',$2,'monthly',$3,$4,$5,true,15,$6,true)`,
       [shopId, cust[4], day(-60), day(5), JSON.stringify([{ itemId: ids[8], qty: 1, tier: 'SP2', discount: 0 }]), head],
     );
-    const { seedLending } = await import('./seedLending');
-    await seedLending(db, shopId, head, pw('collector123'));
   });
   await tx(async (db) => db.query("INSERT INTO audit_log (shop_id, actor_type, actor_name, action, entity) VALUES (NULL,'system','System','seed','database')"));
   log(`[seed] done — today ${todayISO()}`);
@@ -293,7 +280,7 @@ export async function seed({ quiet = false } = {}) {
   else {
     log('  Super admin : admin@ledgerly.in / admin123');
     log('  Shop owner  : owner@shop.com / owner123');
-    log('  Staff       : manager@shop.com / manager123 · sales@shop.com / sales123 · accounts@shop.com / accounts123 · warehouse@shop.com / warehouse123 · collector@shop.com / collector123');
+    log('  Staff       : manager@shop.com / manager123 · sales@shop.com / sales123 · accounts@shop.com / accounts123 · warehouse@shop.com / warehouse123');
   }
 }
 

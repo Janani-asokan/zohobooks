@@ -6,7 +6,7 @@ import { perm } from '../../auth';
 import { audit } from '../../audit';
 import { many, one, query, tx } from '../../db';
 import { HttpError, badRequest, forbidden, parse } from '../../http';
-import { GRANTABLE, ROLE_PERMISSIONS, STAFF_ROLES, rolePermissions, type StaffRole } from '../../../../shared/permissions';
+import { GRANTABLE, ROLE_PERMISSIONS, STAFF_ROLES, HIRABLE_ROLES, rolePermissions, type StaffRole } from '../../../../shared/permissions';
 import { T } from './ctx';
 
 export const adminRouter = Router();
@@ -19,7 +19,7 @@ adminRouter.get(
   T(async (db, _req, c) => {
     const custom = new Map((await query('SELECT role, permissions, updated_at FROM role_permissions WHERE shop_id = $1', [c.shopId])).map((r) => [r.role, r]));
     const counts = new Map((await many(db, 'SELECT role, count(*)::int AS n FROM users WHERE shop_id = $1 AND active GROUP BY role', [c.shopId])).map((r) => [r.role, r.n]));
-    return STAFF_ROLES.map((role) => ({
+    return HIRABLE_ROLES.map((role) => ({
       role,
       permissions: rolePermissions(role, custom.get(role)?.permissions ?? null),
       defaults: ROLE_PERMISSIONS[role],

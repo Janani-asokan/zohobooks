@@ -1,0 +1,14 @@
+/* Quantity that knows its unit */
+.qty-box { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.qty-field { position: relative; display: flex; align-items: center; }
+.qty-field .input { text-align: right; padding-right: 36px; width: 100%; }
+.qty-field.invalid .input { border-color: var(--red-600); }
+.qty-unit { position: absolute; right: 8px; font-size: 11px; color: var(--ink-400); pointer-events: none; max-width: 30px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qty-err { font-size: 11px; line-height: 1.3; color: var(--red-600); text-align: right; }
+.qty-read { font-size: 11px; color: var(--ink-500); text-align: right; }
+.loose-help { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
+.loose-chip { display: inline-flex; align-items: center; gap: 2px; height: 24px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink-700); font: inherit; font-size: 12px; cursor: pointer; }
+.loose-chip:hover { border-color: var(--brand-500); color: var(--brand-700); }
+.loose-chip.on { background: var(--brand-50); border-color: var(--brand-500); color: var(--brand-700); font-weight: 600; }
+.loose-worth { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.loose-worth input { width: 64px; height: 24px; border: 1px solid var(--brand-500); border-radius: 6px; padding: 0 6px; font: inherit; font-size: 12px; background: var(--surface); color: var(--ink-900); }

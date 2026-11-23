@@ -9,6 +9,8 @@ import { type Item, type LineInput, type PriceTier } from '@/api/types';
 import { ItemPicker } from './ItemPicker';
 import { SerialField } from './SerialField';
 import { findByCode } from '../../shared/barcode';
+import { QtyInput, LooseQtyHelper } from './QtyInput';
+import { formatQty, isMeasured, itemForPlu, parseScaleLabel, qtyFromGrams, roundQty } from '../../shared/units';
 
 /** Editable line held in form state (key is client-only). */
 export interface DraftLine extends LineInput {
@@ -67,12 +69,20 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
   };
 
   const addByBarcode = (code: string) => {
-    const it = findByCode(items, code);
     setScan('');
+    // An item's own barcode wins; otherwise a weighing-scale label ("2…" + item code + weight) is read.
+    let it = findByCode(items, code);
+    let qty = 1;
+    if (!it) {
+      const label = parseScaleLabel(code);
+      const byPlu = label ? itemForPlu(items, label.plu) : undefined;
+      if (label && byPlu) { it = byPlu; qty = qtyFromGrams(label.grams, byPlu.unit); }
+      else if (label) return toast('error', 'Scale label for an unknown item', `Item code ${label.plu}: put it in the item’s SKU so the label is recognised.`);
+    }
     if (!it) return toast('error', 'No item with that barcode', code);
-    const existing = lines.find((l) => l.itemId === it.id);
-    if (existing) return set(existing.key, { qty: existing.qty + 1 });
-    const fresh: DraftLine = { ...emptyLine(defaultTier), itemId: it.id, rate: priceFor(it, defaultTier, inclusive) };
+    const existing = lines.find((l) => l.itemId === it!.id);
+    if (existing) return set(existing.key, { qty: roundQty(existing.qty + qty) });
+    const fresh: DraftLine = { ...emptyLine(defaultTier), itemId: it.id, qty, rate: priceFor(it, defaultTier, inclusive) };
     const blankIdx = lines.findIndex((l) => !l.itemId);
     onChange(withTrailingBlank(blankIdx >= 0 ? lines.map((l, i) => (i === blankIdx ? { ...fresh, key: l.key } : l)) : [...lines, fresh], (l) => !l.itemId, () => emptyLine(defaultTier)));
   };
@@ -92,7 +102,7 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
           <thead>
             <tr>
               <th style={{ minWidth: 260 }}>Item details</th>
-              <th style={{ width: 90 }} className="num">Qty</th>
+              <th style={{ width: 112 }} className="num">Qty</th>
               <th style={{ width: 130 }} className="num">{inclusive ? "Rate incl. GST" : "Rate (₹)"}</th>
               <th style={{ width: 90 }} className="num">Disc %</th>
               <th style={{ width: 80 }} className="num">Tax</th>
@@ -116,19 +126,20 @@ export function LineItemsEditor({ lines, onChange, defaultTier, withGst, invalid
                       <div className="small muted" style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
                         {it.type === 'Goods' ? (
                           <span style={short ? { color: 'var(--red-600)', fontWeight: 600 } : undefined}>
-                            {short && <AlertTriangle size={12} style={{ verticalAlign: -2 }} />} {Math.max(0, branchStock)} {it.unit} in stock{branchId ? ' at this branch' : ''}{short ? ': more can’t be billed here' : ''}
+                            {short && <AlertTriangle size={12} style={{ verticalAlign: -2 }} />} {branchStock > 0 ? formatQty(branchStock, it.unit) : `No ${it.unit}`} in stock{branchId ? ' here' : ''}{short ? ' · record the purchase first, or the owner can bill it with a reason' : ''}
                           </span>
                         ) : `Service · per ${it.unit}`}
                         {it.hsn && <span>· {it.type === 'Goods' ? 'HSN' : 'SAC'} {it.hsn}</span>}
                         {it.trackBatches && <span>· batch-tracked (FEFO)</span>}
                       </div>
                     )}
+                    {it && isMeasured(it.unit) && <LooseQtyHelper unit={it.unit} rate={rate} taxRate={it.taxRate} rateIncludesTax={inclusive || !withGst} value={l.qty} onChange={(qty) => set(l.key, { qty })} />}
                     {it?.trackSerials && <SerialField itemId={it.id} branchId={branchId} qty={l.qty} value={l.serials ?? []} onChange={(serials) => set(l.key, { serials })} />}
                     {it && <input className="input input-sm line-note" style={{ marginTop: 6 }} maxLength={300} value={l.note ?? ''} onChange={(e) => set(l.key, { note: e.target.value })}
                       placeholder={it.trackSerials ? 'Warranty or other details (prints on the bill)' : 'Serial no., warranty or other details (prints on the bill)'} aria-label={`Details for ${it.name}`} />}
                   </td>
-                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={1} value={l.qty} onChange={(e) => set(l.key, { qty: Math.max(0, Number(e.target.value)) })} onKeyDown={enterToNextLine} aria-label="Quantity" /></td>
-                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} value={rate} onChange={(e) => set(l.key, { rate: Math.max(0, Number(e.target.value)) })} onKeyDown={enterToNextLine} aria-label="Rate" /></td>
+                  <td><QtyInput value={l.qty} unit={it?.unit ?? ''} onChange={(qty) => set(l.key, { qty })} onKeyDown={enterToNextLine} /></td>
+                  <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} value={rate} onChange={(e) => set(l.key, { rate: Math.max(0, Number(e.target.value)) })} onKeyDown={enterToNextLine} aria-label="Rate" />{it && isMeasured(it.unit) && <div className="small muted" style={{ textAlign: 'right' }}>per {it.unit}</div>}</td>
                   <td><input className="input" style={{ textAlign: 'right' }} type="number" min={0} max={100} value={l.discount} onChange={(e) => set(l.key, { discount: Math.min(100, Math.max(0, Number(e.target.value))) })} onKeyDown={enterToNextLine} aria-label="Discount" /></td>
                   <td className="num">{withGst && it ? <span className="chip">{it.taxRate}%</span> : <span className="muted small">—</span>}</td>
                   <td className="num strong">{l.itemId ? money(lineAmount({ qty: l.qty, rate, discount: l.discount, taxRate: 0 })) : <span className="muted">—</span>}</td>

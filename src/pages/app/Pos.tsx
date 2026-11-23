@@ -26,6 +26,7 @@ import { QuickBill, type ParsedBill } from '@/components/QuickBill';
 import { useAiEnabled } from '@/components/Assistant';
 import { useScale } from '@/lib/scale';
 import { isWeighed, qtyFromReading } from '../../../shared/scale';
+import { formatQty, itemForPlu, parseQty, parseScaleLabel, qtyFromGrams, wholeOnly } from '../../../shared/units';
 import { Thumb } from '@/components/kit';
 import { money } from '@/lib/format';
 import { isInterState } from '../../../shared/gst';
@@ -236,6 +237,7 @@ export default function Pos() {
       clear();
       if (!l) return void beep(false);
       if (byId.get(l.itemId)?.trackSerials) { beep(false); return toast('error', 'Scan each phone’s IMEI', 'Items with IMEI / serial numbers are added one scan at a time.'); }
+      if (wholeOnly(byId.get(l.itemId)?.unit ?? '') && !Number.isInteger(p.qty)) { beep(false); return toast('error', 'Whole numbers only', `${byId.get(l.itemId)?.name} is sold in whole ${byId.get(l.itemId)?.unit}.`); }
       setQty(l.itemId, p.qty); beep(true);
       return;
     }
@@ -244,7 +246,16 @@ export default function Pos() {
     const target = exact ?? (typed && shown.length && searchText.length >= 2 ? shown[Math.min(hl, shown.length - 1)] : undefined);
     if (target) {
       if (target.trackSerials && p.qty !== 1) { clear(); beep(false); return toast('error', 'Scan each phone’s IMEI', 'Items with IMEI / serial numbers are added one scan at a time.'); }
+      if (wholeOnly(target.unit) && !Number.isInteger(p.qty)) { clear(); beep(false); return toast('error', `${target.name} is sold in whole ${target.unit}`, 'Type a whole number, like 2*.'); }
       add(target, p.qty); clear(); return;
+    }
+    // A weighing-scale label: "2…" with the item's code and the weight packed in (only when it isn't an item's own barcode).
+    const label = parseScaleLabel(p.code);
+    if (label) {
+      const it = itemForPlu(items, label.plu);
+      clear();
+      if (!it) { beep(false); return toast('error', 'Scale label for an unknown item', `Item code ${label.plu}: put it in the item’s SKU so the label is recognised.`); }
+      add(it, qtyFromGrams(label.grams, it.unit)); beep(true); return;
     }
     // Not an item code: maybe the IMEI / serial number of a phone in stock. Scanning it puts that exact phone on the bill.
     clear();
@@ -644,16 +655,22 @@ export default function Pos() {
                 <div className="small muted">{money(unit(l.it))}{withGst ? ` · GST ${l.it.taxRate}%${inclusive ? ' incl.' : ''}` : ''}
                 </div>
                 {lo && <div className="offer-tags"><span className="offer-tag"><Gift size={11} /> {lo.name} −{lo.value}%</span></div>}
-                {l.qty > have && <div className="small" style={{ color: 'var(--amber-700, #a15c07)' }} role="status"><AlertTriangle size={12} style={{ verticalAlign: -2 }} /> Only {Math.max(have, 0)} {l.it.unit} in stock</div>}
+                {l.qty > have && <div className="small" style={{ color: 'var(--amber-700, #a15c07)' }} role="status"><AlertTriangle size={12} style={{ verticalAlign: -2 }} /> Only {have > 0 ? formatQty(have, l.it.unit) : `0 ${l.it.unit}`} in stock</div>}
+                {l.qty > 0 && l.qty < 1 && l.it.unit && formatQty(l.qty, l.it.unit) !== `${l.qty} ${l.it.unit}` && <div className="small muted">{formatQty(l.qty, l.it.unit)}</div>}
               </div>
               <div className="row" style={{ gap: 6 }}>
                 <button className="qty-btn" tabIndex={-1} onClick={() => { setQty(l.itemId, l.qty - 1); focusScan(); }} aria-label="Decrease">−</button>
                 {/* Typed quantity is applied on Enter or when leaving the box, so clearing it to retype never removes the item. */}
-                <input key={`${l.itemId}-${l.qty}`} className="input" style={{ width: 56, height: 30, textAlign: 'center', padding: 0 }} type="number" min={0} step="any" defaultValue={l.qty} aria-label="Quantity" readOnly={!!l.serials || touch}
+                <input key={`${l.itemId}-${l.qty}`} className="input" style={{ width: 56, height: 30, textAlign: 'center', padding: 0 }} defaultValue={l.qty} aria-label="Quantity" readOnly={!!l.serials || touch}
                   onClick={() => { if (touch && !l.serials) setPad({ kind: 'qty', itemId: l.itemId }); }} inputMode={touch ? 'none' : 'decimal'}
                   title={l.serials ? 'One per IMEI / serial number: scan another to add one' : 'Type the quantity, Enter'}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else { (e.target as HTMLInputElement).value = String(l.qty); focusScan(); } } }}
-                  onBlur={(e) => { const n = Number(e.target.value); if (!l.serials && n > 0 && n !== l.qty) setQty(l.itemId, Math.round(n * 1000) / 1000); else e.target.value = String(l.qty); if (e.relatedTarget === null) focusScan(); }} />
+                  onBlur={(e) => {
+                    const r = parseQty(e.target.value, l.it.unit || 'pcs');
+                    if (!l.serials && 'qty' in r && r.qty !== l.qty) setQty(l.itemId, r.qty);
+                    else { if ('error' in r && e.target.value.trim() && Number(e.target.value) !== l.qty) toast('error', r.error); e.target.value = String(l.qty); }
+                    if (e.relatedTarget === null) focusScan();
+                  }} />
                 <button className="qty-btn" tabIndex={-1} onClick={() => { if (l.serials) setImeiFor(l.it); else setQty(l.itemId, l.qty + 1); focusScan(); }} aria-label="Increase">+</button>
                 {scale.connected && scale.reading && isWeighed(l.it.unit) && <button className="qty-btn" title="Use the scale reading" aria-label="Use weight" onClick={() => setQty(l.itemId, qtyFromReading(scale.reading!.kg, l.it.unit))}><Scale size={13} /></button>}
               </div>
@@ -760,7 +777,7 @@ export default function Pos() {
         )}
       </Modal>
 
-      <NumPad open={!!pad} decimals={!(pad?.kind === 'qty' && byId.get(pad.itemId)?.trackSerials)}
+      <NumPad open={!!pad} decimals={!(pad?.kind === 'qty' && (byId.get(pad.itemId)?.trackSerials || wholeOnly(byId.get(pad.itemId)?.unit ?? '')))}
         title={pad?.kind === 'cash' ? `Cash given · bill ${money(totals.total)}` : pad?.kind === 'disc' ? `Bill discount (${disc.kind === 'percent' ? '%' : '₹'})` : `Quantity · ${pad?.kind === 'qty' ? byId.get(pad.itemId)?.name ?? '' : ''}`}
         initial={pad?.kind === 'cash' ? tendered : pad?.kind === 'disc' ? String(disc.value || '') : pad?.kind === 'qty' ? String(cart.find((l) => l.itemId === pad.itemId)?.qty ?? '') : ''}
         quick={pad?.kind === 'cash' ? cashSuggestions(totals.total) : undefined}

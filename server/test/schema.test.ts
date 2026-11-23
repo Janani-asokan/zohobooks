@@ -223,7 +223,7 @@ describe.skipIf(!hasPgTools)('backups', () => {
       try {
         const a = await counts(live);
         const b = await counts(restored);
-        expect(Object.values(a).reduce((x, y) => x + y, 0)).toBeGreaterThan(500); // the demo data, not empty tables
+        expect(Object.values(a).reduce((x, y) => x + y, 0)).toBeGreaterThan(300); // the demo data, not empty tables
         expect(b).toEqual(a);
       } finally { await live.end(); await restored.end(); }
     } finally {

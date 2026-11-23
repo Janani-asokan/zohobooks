@@ -1,11 +1,10 @@
 import { isWebOnly } from '@/layouts/nav';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { usePageOk } from '@/components/FeatureOff';
 import { useMemo, useState } from 'react';
-import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays, Receipt, Landmark, Sparkles, HandCoins, Puzzle } from 'lucide-react';
+import { Check, X, IndianRupee, Clock4, FileText, PackageX, UserPlus, PackagePlus, ScanLine, ArrowRight, Wallet, AlertTriangle, Users, BarChart3, CalendarDays, Receipt, Landmark, Sparkles, Puzzle } from 'lucide-react';
 import { useCustomers, useDashboard, useInvoices, useItems, useOrg, useStaff, useVendors } from '@/api/hooks';
 import { useLocalFlag } from '@/components/kit';
-import { useLendingDashboard } from '@/api/lending';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { useShopUser } from '@/context/AuthContext';
@@ -20,12 +19,7 @@ import { fmtDate, money, moneyShort } from '@/lib/format';
 const pctChange = (cur: number, prev: number) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : cur > 0 ? 100 : null);
 const STATUS_COLORS = { Paid: '#2e7d32', 'Partially Paid': '#b06a14', Sent: '#92a3a3', Overdue: '#c62828' } as const;
 
-/** Staff who only work on loans (collectors) start on the lending screen instead of the shop dashboard. */
 export default function Home() {
-  const me = useShopUser();
-  const org = useOrg().data;
-  const shopWork = (['sales.write', 'reports.read', 'items.write', 'purchases.read', 'accounting.read'] as const).some((p) => me.can(p));
-  if (org?.lendingEnabled && !shopWork && (me.can('lending.collect') || me.can('lending.read'))) return <Navigate to="/app/microfinance" replace />;
   return <ShopHome />;
 }
 
@@ -129,7 +123,6 @@ function ShopHome() {
         <StatCard label="Sales this month" value={d ? money(d.thisMonthSales) : '—'} icon={IndianRupee} tone="green" trend={d ? { pct: pctChange(d.thisMonthSales, d.lastMonthToDate), label: 'vs same days last month' } : undefined} foot={d && `Last month ${money(d.lastMonthSales)}`} />
       </div>
 
-      <LendingSummary />
       <AddonTiles />
 
       <div className="dash-row mt-16">
@@ -278,54 +271,22 @@ function GettingStarted() {
   );
 }
 
-/**
- * A shop that also runs microfinance sees both on one dashboard, with the same login: the shop's sales above, the
- * lending book here. Each keeps its own records (loans never mix with invoices); this only shows them side by side.
- */
-function LendingSummary() {
-  const me = useShopUser();
-  const org = useOrg().data;
-  const on = !isWebOnly('/app/microfinance') && !!org?.lendingEnabled && me.has('microfinance') && (me.can('lending.read') || me.can('lending.collect'));
-  const q = useLendingDashboard(on);
-  if (!on) return null;
-  const t = q.data?.totals;
-  return (
-    <section className="card mt-16 lending-summary" aria-label="Microfinance summary">
-      <div className="card-header">
-        <div><h3 className="row" style={{ gap: 8 }}><HandCoins size={17} /> Microfinance</h3><p className="small muted">Loans and collections, kept separate from the shop’s sales</p></div>
-        <Link to="/app/microfinance" className="btn btn-secondary btn-sm">Open microfinance <ArrowRight size={14} /></Link>
-      </div>
-      {q.isError ? <p className="small muted" style={{ padding: '0 var(--sp-5) var(--sp-4)' }}>Microfinance figures couldn’t load just now.</p> : (
-        <div className="stat-grid" style={{ padding: '0 var(--sp-4) var(--sp-4)' }}>
-          <StatCard label="Active loans" value={t ? String(t.activeLoans) : '—'} icon={HandCoins} tone="violet" foot={t && `${t.closedLoans} closed`} />
-          <StatCard label="Outstanding" value={t ? money(t.outstanding) : '—'} icon={Wallet} tone="amber" foot={t && (t.overdueLoans ? <Link to="/app/microfinance/collections" style={{ color: 'var(--red-600)', fontWeight: 600 }}>{money(t.overdueAmount)} overdue · {t.overdueLoans} loan{t.overdueLoans === 1 ? '' : 's'}</Link> : 'Nothing overdue')} />
-          <StatCard label="Collected today" value={t ? money(t.todayCollection) : '—'} icon={IndianRupee} tone="green" foot={t && `This month ${money(t.monthCollection)}`} />
-          <StatCard label="Given this month" value={t ? money(t.monthDisbursed) : '—'} icon={Landmark} tone="blue" foot={t && (t.defaulters ? `${t.defaulters} defaulter${t.defaulters === 1 ? '' : 's'}` : t.pendingVerification ? `${t.pendingVerification} borrower${t.pendingVerification === 1 ? '' : 's'} to verify` : 'No defaulters')} />
-        </div>
-      )}
-    </section>
-  );
-}
 
 interface AddonTile { key: string; name: string; link: string; figures: Array<{ label: string; value: number; kind: 'money' | 'count' }>; note?: string }
 
 /**
  * Every add-on the business has bought gets a tile with today's figures, so a shop that runs two or more (POS and
- * loyalty, purchases and field sales, retail and microfinance…) sees all of them here with the same login.
+ * loyalty, purchases and field sales…) sees all of them here with the same login.
  */
 function AddonTiles() {
-  const me = useShopUser();
-  const org = useOrg().data;
   const q = useQuery({ queryKey: ['dashboard', 'addons'], queryFn: () => api.get<AddonTile[]>('/shop/dashboard/addons'), refetchInterval: 120_000 });
   const tiles = q.data ?? [];
-  // Microfinance, once switched on, has its own section above; it still counts as one of the business's add-ons.
-  const lendingAbove = !!org?.lendingEnabled && me.has('microfinance') && (me.can('lending.read') || me.can('lending.collect'));
-  const total = tiles.length + (lendingAbove ? 1 : 0);
+  const total = tiles.length;
   if (!tiles.length) return null;
   return (
     <section className="card mt-16 addon-tiles" aria-label="Your add-ons">
       <div className="card-header">
-        <div><h3 className="row" style={{ gap: 8 }}><Puzzle size={17} /> Your add-ons</h3><p className="small muted">{total} add-on{total === 1 ? '' : 's'} on this business, today’s figures from each{lendingAbove ? ' (microfinance is in its own section above)' : ''}</p></div>
+        <div><h3 className="row" style={{ gap: 8 }}><Puzzle size={17} /> Your add-ons</h3><p className="small muted">{total} add-on{total === 1 ? '' : 's'} on this business, today’s figures from each</p></div>
         {!isWebOnly('/app/features') && <Link to="/app/features" className="btn btn-ghost btn-sm">Manage add-ons</Link>}
       </div>
       <div className="addon-grid">

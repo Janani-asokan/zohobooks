@@ -1,3 +1,4 @@
+import { qtyProblem } from '../../../shared/units';
 import crypto from 'node:crypto';
 import { takePrintSnapshot } from './printSnapshot';
 import { cleanExtra } from '../../../shared/templates';
@@ -79,6 +80,8 @@ export async function buildLines(db: Db, shopId: string, input: LineInput[], bra
     const it = byId.get(l.itemId);
     if (!it) throw badRequest('One of the selected items no longer exists');
     if (it.is_group) throw badRequest(`${it.name} has variants. Pick a size or colour instead.`);
+    const bad = qtyProblem(it.name, l.qty, it.unit);
+    if (bad) throw badRequest(bad, { lines: bad });
     const batch = l.batchNo ? batchInfo.get(`${it.id}|${l.batchNo}`) : undefined;
     const tierPrice = l.tier === 'SP1' ? (batch?.price ?? branchPrice.get(it.id) ?? Number(it.sp1)) : l.tier === 'SP2' ? it.sp2 : it.sp3;
     const line: StoredLine = {

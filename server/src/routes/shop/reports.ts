@@ -281,7 +281,7 @@ reportsRouter.get(
 );
 
 /**
- * One live tile per add-on the shop has bought, so a business that runs two or more (POS and microfinance, say) sees
+ * One live tile per add-on the shop has bought, so a business that runs two or more (POS and loyalty, say) sees
  * each of them on the dashboard. Only add-ons the shop has, and only figures this login may see. Each figure reads
  * that add-on's own records.
  */
@@ -379,9 +379,6 @@ reportsRouter.get(
       const topups = Number((await one(db, `SELECT coalesce(sum(credits), 0) AS t FROM ai_topups WHERE shop_id = $1 AND status = 'granted' AND month = date_trunc('month', current_date)::date`, [c.shopId])).t);
       add('ai', '/app/features?f=ai', [{ label: 'AI credits left this month', value: Math.max(0, Math.round(included + topups - used)), kind: 'count' }, { label: 'Used', value: Math.round(used), kind: 'count' }]);
     });
-    // Microfinance has its own section on the dashboard when it is switched on; until then, a tile says how.
-    if (has('microfinance') && (can('lending.read') || can('lending.write')) && !(await one(db, 'SELECT lending_enabled FROM organizations WHERE shop_id = $1', [c.shopId]))?.lending_enabled)
-      add('microfinance', '/app/microfinance/settings', [], 'Bought, not switched on yet: open Microfinance settings to start');
     return tiles;
   }),
 );

@@ -3,7 +3,7 @@ import { templateByKey } from '../../shared/templates';
 import { featureForPage } from '../../shared/features';
 import { FeatureOff } from '@/components/FeatureOff';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, UserRound, LogOut, Lock, HandCoins, ReceiptIndianRupee, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2, Headset } from 'lucide-react';
+import { LayoutDashboard, Package, UserRound, LogOut, Lock, Menu, Search, Building2, Users, Plus, Bell, FileText, Keyboard, WifiOff, Printer, RotateCcw, ChevronDown, Check, Loader2, Headset } from 'lucide-react';
 import { buildActions, buildCreate, buildNav, canOpen } from './nav';
 import { CommandPalette } from './CommandPalette';
 import { resetHints } from '@/components/kit';
@@ -198,14 +198,11 @@ export default function AppLayout() {
   const [paletteUsed, setPaletteUsed] = useState(false);
   useEffect(() => { if (palette) setPaletteUsed(true); }, [palette]);
   const canSell = me.can('sales.write');
-  // Staff who only handle loans (collectors) get lending shortcuts in the phone bar instead of shop ones.
-  const lendingOnly = !!org.data?.lendingEnabled && me.has('microfinance') && !(['sales.write', 'customers.write', 'items.write', 'reports.read'] as const).some((p) => me.can(p)) && (me.can('lending.collect') || me.can('lending.read'));
 
-  const lendingOn = !!org.data?.lendingEnabled && me.has('microfinance');
   const dailyRates = !!(org.data?.businessType && templateByKey(org.data.businessType)?.dailyRates);
-  const nav = useMemo(() => buildNav(me.can, { lending: lendingOn, has: me.has, dailyRates }), [me, lendingOn, dailyRates]);
+  const nav = useMemo(() => buildNav(me.can, { has: me.has, dailyRates }), [me, dailyRates]);
   const location = useLocation();
-  const actions = useMemo(() => buildActions(me.can, { lending: lendingOn, has: me.has }), [me, lendingOn]);
+  const actions = useMemo(() => buildActions(me.can, { has: me.has }), [me]);
   const lockedFeature = featureForPage(location.pathname);
 
   useShortcuts({
@@ -313,14 +310,6 @@ export default function AppLayout() {
             </div></div>
           )}
         </main>
-        {lendingOnly ? (
-          <nav className="bottom-nav no-print" aria-label="Quick navigation">
-            <NavLink to="/app/microfinance" end><LayoutDashboard size={20} />Home</NavLink>
-            <NavLink to="/app/microfinance/collections"><ReceiptIndianRupee size={20} />Collect</NavLink>
-            <NavLink to="/app/microfinance/loans"><HandCoins size={20} />Loans</NavLink>
-            <button onClick={() => sb.setMobileOpen(true)}><Menu size={20} />More</button>
-          </nav>
-        ) : (
           <nav className="bottom-nav no-print" aria-label="Quick navigation">
             <NavLink to="/app" end><LayoutDashboard size={20} />Home</NavLink>
             <NavLink to="/app/sales/invoices"><FileText size={20} />Invoices</NavLink>
@@ -328,7 +317,6 @@ export default function AppLayout() {
             <NavLink to="/app/items"><Package size={20} />Items</NavLink>
             <button onClick={() => sb.setMobileOpen(true)}><Menu size={20} />More</button>
           </nav>
-        )}
       </div>
       <ShortcutsModal open={shortcuts} onClose={() => setShortcuts(false)} />
       {paletteUsed && <CommandPalette open={palette} onClose={() => setPalette(false)} actions={actions} />}

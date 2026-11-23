@@ -10,7 +10,7 @@ import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Badge, Field, Modal, PageHeader, Toggle } from '@/components/ui';
 import { EMAIL_RE, initials } from '@/lib/format';
-import { PERMISSIONS, ROLE_PERMISSIONS, STAFF_ROLES, isStrongPassword, PASSWORD_RULE, type StaffRole } from '../../../shared/permissions';
+import { PERMISSIONS, ROLE_PERMISSIONS, STAFF_ROLES, HIRABLE_ROLES, isStrongPassword, PASSWORD_RULE, type StaffRole } from '../../../shared/permissions';
 import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty } from '../../../shared/contact';
 import { VendorPhoneInput } from '@/components/QuickAdd';
 
@@ -94,7 +94,7 @@ export default function Team() {
                   <td><div className="name-cell"><span className="avatar">{initials(s.name)}</span><div><div className="title">{s.name}{s.id === me.user.id && <span className="muted"> (you)</span>}</div><div className="sub">{s.email}</div></div></div></td>
                   <td>{s.role === 'Owner' ? <Badge tone="violet" plain>Owner</Badge> : (
                     <select className="select" style={{ height: 32, width: 150 }} value={s.role} onChange={(e) => patchStaff.mutate({ id: s.id, b: { role: e.target.value } }, { onSuccess: () => toast('success', 'Role updated', `${s.name} → ${e.target.value}. They’ll be asked to sign in again.`) })} aria-label={`Role for ${s.name}`}>
-                      {STAFF_ROLES.map((r) => <option key={r}>{r}</option>)}
+                      {(s.role === 'Collector' ? STAFF_ROLES : HIRABLE_ROLES).map((r) => <option key={r}>{r}</option>)}
                     </select>
                   )}</td>
                   <td className="muted">{bName(s.branchId)}</td>
@@ -143,7 +143,7 @@ export default function Team() {
         <div className="form-grid">
           <Field label="Full name" required error={err('name')}><input className={`input ${err('name') ? 'invalid' : ''}`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
           <Field label="Email" required error={err('email')}><input className={`input ${err('email') ? 'invalid' : ''}`} value={form.email} disabled={!!staffModal?.id} onChange={(e) => setForm({ ...form, email: e.target.value.trim() })} /></Field>
-          <Field label="Role" hint={`${ROLE_PERMISSIONS[form.role].length} of ${Object.keys(PERMISSIONS).length} permissions — see the Roles tab`}><select className="select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as StaffRole })}>{STAFF_ROLES.map((r) => <option key={r}>{r}</option>)}</select></Field>
+          <Field label="Role" hint={`${ROLE_PERMISSIONS[form.role].length} of ${Object.keys(PERMISSIONS).length} permissions — see the Roles tab`}><select className="select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as StaffRole })}>{HIRABLE_ROLES.map((r) => <option key={r}>{r}</option>)}</select></Field>
           <Field label="Branch"><select className="select" value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
           {!staffModal?.id && (
             <Field label="Temporary password" required error={err('password')} className="span-all">

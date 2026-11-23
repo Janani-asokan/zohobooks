@@ -403,3 +403,7 @@ a.glance:hover { background: var(--ink-50); text-decoration: none; }
 .combo-meta { font-size: var(--fs-12); color: var(--ink-500); margin-top: 2px; }
 .combo-empty { padding: var(--sp-3); color: var(--ink-500); font-size: var(--fs-13); }
 .combo-input, .combo-input:focus, .combo-input:focus-visible { border: none; outline: none; box-shadow: none; padding: 0; }
+
+/* Number boxes without the tiny up/down arrows: they are easy to hit by mistake and too small to use on a phone. */
+input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }

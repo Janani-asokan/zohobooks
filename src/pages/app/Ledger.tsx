@@ -22,9 +22,10 @@ const SOURCE: Record<string, { label: string; link?: (id: string) => string }> =
   expense: { label: 'Expense', link: () => '/app/purchases/expenses' },
   bank: { label: 'Bank transaction', link: () => '/app/banking' },
   journal: { label: 'Journal', link: () => '/app/accounting/journals' },
-  loan: { label: 'Loan given', link: (id) => `/app/microfinance/loans/${id}` },
-  loan_receipt: { label: 'Loan receipt', link: () => '/app/microfinance/collections' },
-  loan_charge: { label: 'Late charge', link: () => '/app/microfinance/loans' },
+  // Entries from the microfinance module (now removed) stay in the books, without a screen to open.
+  loan: { label: 'Loan given' },
+  loan_receipt: { label: 'Loan receipt' },
+  loan_charge: { label: 'Late charge' },
   stock: { label: 'Stock' },
   opening: { label: 'Opening balance' },
 };
