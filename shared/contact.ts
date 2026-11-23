@@ -41,3 +41,20 @@ export function normalizeVendorPhone(input: string | null | undefined): string |
   return /^0[2-5]\d{9}$/.test(d) ? d : null;
 }
 export const isValidVendorPhoneOrEmpty = (v: string | null | undefined) => normalizeVendorPhone(v) !== null;
+
+/** Common mistypes of the big email providers' domains → the right one. */
+const DOMAIN_FIX: Record<string, string> = {
+  'gmial.com': 'gmail.com', 'gmai.com': 'gmail.com', 'gmal.com': 'gmail.com', 'gmail.co': 'gmail.com', 'gmail.con': 'gmail.com', 'gamil.com': 'gmail.com',
+  'gnail.com': 'gmail.com', 'gmaill.com': 'gmail.com', 'gmail.cm': 'gmail.com', 'gmail.om': 'gmail.com', 'gmail.in': 'gmail.com', 'gmail.come': 'gmail.com',
+  'yaho.com': 'yahoo.com', 'yahoo.co': 'yahoo.com', 'yahooo.com': 'yahoo.com', 'yahoo.con': 'yahoo.com', 'yhaoo.com': 'yahoo.com', 'yahoo.co.i': 'yahoo.co.in',
+  'hotmal.com': 'hotmail.com', 'hotmai.com': 'hotmail.com', 'hotmail.co': 'hotmail.com', 'hotmail.con': 'hotmail.com',
+  'outlok.com': 'outlook.com', 'outlook.co': 'outlook.com', 'outlook.con': 'outlook.com', 'rediffmal.com': 'rediffmail.com', 'redifmail.com': 'rediffmail.com',
+  'icloud.co': 'icloud.com', 'iclod.com': 'icloud.com',
+};
+/** "Did you mean …?" for an email whose domain looks mistyped (e.g. name@gmial.com → name@gmail.com), else null. */
+export function emailSuggestion(v: string): string | null {
+  const m = /^([^@\s]+)@([^@\s]+)$/.exec(v.trim().toLowerCase());
+  if (!m) return null;
+  const fix = DOMAIN_FIX[m[2]!] ?? (/\.(con|cmo|cm|om|comm|come)$/.test(m[2]!) ? m[2]!.replace(/\.(con|cmo|cm|om|comm|come)$/, '.com') : null);
+  return fix && fix !== m[2] ? `${m[1]}@${fix}` : null;
+}

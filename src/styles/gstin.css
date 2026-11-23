@@ -1,0 +1,17 @@
+/* GST number with Validate */
+.gstin-wrap { display: flex; flex-direction: column; gap: 8px; }
+.gstin-row { display: flex; gap: 8px; }
+.gstin-input { flex: 1; min-width: 0; font-family: ui-monospace, Menlo, monospace; letter-spacing: .04em; text-transform: uppercase; }
+.gstin-btn { flex: none; white-space: nowrap; }
+.gstin-note { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; padding: 8px 10px; border-radius: 8px; }
+.gstin-note svg { flex: none; margin-top: 1px; }
+.gstin-note.bad { background: var(--red-50); color: var(--red-600); }
+.gstin-note.warn { background: var(--amber-50); color: var(--amber-700); }
+.gstin-card { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--green-600); background: var(--green-50); }
+.gstin-card.bad { border-color: var(--red-600); background: var(--red-50); }
+.gstin-card-head { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.gstin-card-head svg { color: var(--green-700); }
+.gstin-card.bad .gstin-card-head svg { color: var(--red-600); }
+.gstin-dup { display: flex; gap: 6px; align-items: center; color: var(--amber-700); font-weight: 600; margin-top: 4px; }
+.email-fix { display: block; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--amber-700); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.email-fix strong { text-decoration: underline; }

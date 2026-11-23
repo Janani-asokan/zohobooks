@@ -1,3 +1,4 @@
+import { EmailFix } from '@/components/EmailFix';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
@@ -160,6 +161,7 @@ export default function Signup() {
           <Field label="Email" required error={e('email')}>
             <div className="input-group"><span className="lead"><Mail size={16} /></span>
               <input className={`input ${e('email') ? 'invalid' : ''}`} type="email" value={f.email} onChange={(x) => set('email')(x.target.value)} placeholder="you@company.com" autoComplete="email" style={{ height: 40 }} /></div>
+            <EmailFix value={f.email} onChange={(v) => set('email')(v)} />
           </Field>
           <Field label="Mobile number" required error={e('phone')}>
             <div className="input-group"><span className="lead"><Phone size={16} /></span>

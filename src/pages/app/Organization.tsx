@@ -4,13 +4,14 @@ import { api, fieldErrors } from '@/api/client';
 import { useMut, useOrg } from '@/api/hooks';
 import type { Organization as Org } from '@/api/types';
 import { useToast } from '@/context/ToastContext';
+import { GstinField, fillEmpty } from '@/components/GstinField';
 import { Field, PageHeader, Toggle } from '@/components/ui';
 import { BusinessTypeCard } from '@/components/BusinessType';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { useQr, upiLink } from '@/components/qr';
 import { EMAIL_RE, initials } from '@/lib/format';
 import { readLogo } from '@/lib/image';
-import { GSTIN_RE, INDIAN_STATES, gstinMatchesState } from '../../../shared/gst';
+import { GSTIN_RE, INDIAN_STATES, gstinMatchesState, stateFromCode } from '../../../shared/gst';
 import { bankErrors, bankFromIfsc, cleanAccountNo, composeBankDetails } from '../../../shared/bank';
 import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty } from '../../../shared/contact';
 import { VendorPhoneInput } from '@/components/QuickAdd';
@@ -94,9 +95,13 @@ function OrgForm({ initial }: { initial: Org }) {
 
               <div className="section-title mt-24">Business details</div>
               <div className="form-grid">
+                <div className="span-all">
+                  <GstinField value={org.gstin} error={e('gstin')} label="GSTIN (required to charge GST and file returns)"
+                    onChange={(g) => setOrg((o) => ({ ...o, gstin: g, state: (g.length >= 2 && stateFromCode(g.slice(0, 2))) || o.state }))}
+                    onFill={(d) => setOrg((o) => ({ ...o, legalName: fillEmpty(o.legalName, d.legalName), companyName: fillEmpty(o.companyName, d.tradeName || d.legalName), address: fillEmpty(o.address, d.address), state: d.state || o.state }))} />
+                </div>
                 <Field label="Company name" required error={e('companyName')}><input className={`input ${e('companyName') ? 'invalid' : ''}`} value={org.companyName} onChange={(ev) => setOrg({ ...org, companyName: ev.target.value })} /></Field>
                 <Field label="Legal name"><input className="input" value={org.legalName} onChange={(ev) => setOrg({ ...org, legalName: ev.target.value })} /></Field>
-                <Field label="GSTIN" error={e('gstin')} hint="Required to charge GST and file returns"><input className={`input ${e('gstin') ? 'invalid' : ''}`} maxLength={15} value={org.gstin} onChange={(ev) => setOrg({ ...org, gstin: ev.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '') })} style={{ fontFamily: 'ui-monospace, Menlo, monospace' }} /></Field>
                 <Field label="State" hint="Determines CGST+SGST vs IGST"><select className="select" value={org.state} onChange={(ev) => setOrg({ ...org, state: ev.target.value })}>{INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}</select></Field>
                 <Field label="Email" error={e('email')}><input className={`input ${e('email') ? 'invalid' : ''}`} value={org.email} onChange={(ev) => setOrg({ ...org, email: ev.target.value })} /></Field>
                 <Field label="Phone" error={e('phone')} hint="10-digit mobile or landline with STD code"><VendorPhoneInput value={org.phone} invalid={!!e('phone')} onChange={(v) => setOrg({ ...org, phone: v })} /></Field>

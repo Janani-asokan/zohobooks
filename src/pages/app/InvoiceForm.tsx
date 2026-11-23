@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { GstinField, fillEmpty } from '@/components/GstinField';
 import { LicenseGatePrompt, isLicenseBlock, type LicenseBlock, type LicenseChoice } from '@/components/LicenseGatePrompt';
 import { StockOverridePrompt, type StockBlock } from '@/components/StockOverridePrompt';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -344,6 +345,16 @@ function Form({ existing }: { existing?: Invoice }) {
                     <Field label="Name"><input className="input" value={shipTo.name} maxLength={120} onChange={(e) => setShipTo({ ...shipTo, name: e.target.value })} /></Field>
                     <Field label="State"><select className="select" value={shipTo.state} onChange={(e) => setShipTo({ ...shipTo, state: e.target.value })}><option value="">Select</option>{INDIAN_STATES.map((st) => <option key={st}>{st}</option>)}</select></Field>
                     <Field label="Address" className="span-all"><textarea className="textarea" rows={2} maxLength={500} value={shipTo.address} onChange={(e) => setShipTo({ ...shipTo, address: e.target.value })} /></Field>
+                    <div className="span-all">
+                      <GstinField value={shipTo.gstin ?? ''} label="GSTIN of the delivery address (optional)" optionalHint="If the goods go to another registered business"
+                        onChange={(g) => setShipTo((t) => (t ? { ...t, gstin: g } : t))}
+                        onFill={(d) => setShipTo((t) => {
+                          if (!t) return t;
+                          // The name starts as the customer's; a registered delivery address gets its own name.
+                          const defaultName = !t.name.trim() || t.name === (customer?.companyName || customer?.name);
+                          return { ...t, name: defaultName && (d.tradeName || d.legalName) ? d.tradeName || d.legalName : t.name, address: fillEmpty(t.address, d.address), state: d.state || t.state };
+                        })} />
+                    </div>
                   </div>
                 )}
               </div>

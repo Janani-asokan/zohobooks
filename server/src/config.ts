@@ -58,6 +58,15 @@ export const config = {
     template: env.WHATSAPP_TEMPLATE ?? '', templateLang: env.WHATSAPP_TEMPLATE_LANG ?? 'en', version: env.WHATSAPP_API_VERSION ?? 'v21.0',
   } : null,
   /**
+   * GSTIN lookup (Validate next to a GST number fills in the legal name and address). Any provider that returns the
+   * GST portal's taxpayer record (lgnm, tradeNam, sts, pradr …) works. GSTIN_LOOKUP_URL holds {gstin} and, if the
+   * key goes in the address, {key}; otherwise the key is sent in the header GSTIN_LOOKUP_KEY_HEADER (default x-api-key).
+   * Without it, Validate still checks the number offline (format, state, PAN, check digit).
+   */
+  gstLookup: env.GSTIN_LOOKUP_URL ? {
+    url: env.GSTIN_LOOKUP_URL, key: env.GSTIN_LOOKUP_KEY ?? '', keyHeader: env.GSTIN_LOOKUP_KEY_HEADER ?? 'x-api-key',
+  } : null,
+  /**
    * Demo mode: the well-known demo passwords (owner123, admin123 …) work and the login page lists them.
    * On by default whenever demo data is seeded; set DEMO_SIMPLE_PASSWORDS=0 to turn it off.
    */

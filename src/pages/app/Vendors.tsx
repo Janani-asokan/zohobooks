@@ -6,9 +6,10 @@ import { api, fieldErrors } from '@/api/client';
 import { useBills, useMut, usePurchaseOrders, useVendors } from '@/api/hooks';
 import { useShopUser } from '@/context/AuthContext';
 import { EmptyState, Field, Modal, PageHeader, SearchInput, StatCard } from '@/components/ui';
+import { GstinField, fillEmpty } from '@/components/GstinField';
 import { Hint, Thumb } from '@/components/kit';
 import { money, todayISO } from '@/lib/format';
-import { GSTIN_RE, INDIAN_STATES } from '../../../shared/gst';
+import { GSTIN_RE, INDIAN_STATES, stateFromCode } from '../../../shared/gst';
 import { PartyStatement } from '@/components/PartyStatement';
 import { Attachments, attachFile } from '@/components/Attachments';
 import { SmartUpload, type PendingFile } from '@/components/SmartUpload';
@@ -143,8 +144,12 @@ export default function Vendors() {
           {vendFile && <div className="small muted" style={{ marginTop: 6 }}>{vendFile.file.name} will be kept on the vendor.</div>}
         </div>
         <div className="form-grid">
-          <Field label="Vendor name" required error={err('name')} className="span-all"><input className={`input ${err('name') ? 'invalid' : ''}`} value={vendor.name} onChange={(e) => setVendor({ ...vendor, name: e.target.value })} autoFocus placeholder="e.g. Sri Balaji Distributors" /></Field>
-          <Field label="GSTIN" error={err('gstin')} hint="Needed to claim input tax credit"><input className={`input mono ${err('gstin') ? 'invalid' : ''}`} value={vendor.gstin} maxLength={15} onChange={(e) => setVendor({ ...vendor, gstin: e.target.value.toUpperCase() })} /></Field>
+          <div className="span-all">
+            <GstinField value={vendor.gstin} error={err('gstin')} forWhat="vendor" label="GSTIN (needed to claim input tax credit)" optionalHint="Type or paste it, then Validate fills the name and state"
+              onChange={(g) => setVendor((v) => ({ ...v, gstin: g, state: (g.length >= 2 && stateFromCode(g.slice(0, 2))) || v.state }))}
+              onFill={(d) => setVendor((v) => ({ ...v, name: fillEmpty(v.name, d.legalName || d.tradeName), state: d.state || v.state }))} />
+          </div>
+          <Field label="Vendor name" required error={err('name')} className="span-all"><input className={`input ${err('name') ? 'invalid' : ''}`} value={vendor.name} onChange={(e) => setVendor({ ...vendor, name: e.target.value })} placeholder="e.g. Sri Balaji Distributors" /></Field>
           <Field label="State"><select className="select" value={vendor.state} onChange={(e) => setVendor({ ...vendor, state: e.target.value })}>{INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}</select></Field>
           <Field label="Phone" error={err('phone')} hint="Optional · mobile or landline with STD code"><VendorPhoneInput value={vendor.phone} invalid={!!err('phone')} onChange={(v) => setVendor({ ...vendor, phone: v })} /></Field>
           <Field label="Email" error={err('email')} hint="Optional"><EmailInput value={vendor.email} invalid={!!err('email')} onChange={(v) => setVendor({ ...vendor, email: v })} /></Field>

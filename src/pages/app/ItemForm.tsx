@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { hsnNote } from '../../../shared/gst';
+import '@/styles/gstin.css';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Camera, Package, Wrench, Trash2, Wand2, Sparkles, Loader2, CheckCircle2, Circle, Percent, Info, Boxes, Tag, ScanBarcode } from 'lucide-react';
 import { api, fieldErrors } from '@/api/client';
@@ -483,6 +485,7 @@ export default function ItemForm() {
             </div>
             <Field label={draft.type === 'Goods' ? 'HSN code' : 'SAC code'} error={e('hsn')} hint="Needed for the GSTR-1 HSN summary. Find it on your purchase bill." className="mt-16" >
               <input className={`input ${e('hsn') ? 'invalid' : ''}`} style={{ maxWidth: 260 }} value={draft.hsn} onChange={(ev) => set('hsn', ev.target.value.replace(/\D/g, ''))} placeholder={draft.type === 'Goods' ? 'e.g. 8471' : 'e.g. 9987'} maxLength={8} inputMode="numeric" />
+              {hsnNote(draft.hsn, draft.type) && <div className="gstin-note warn" style={{ maxWidth: 520, marginTop: 6 }}>{hsnNote(draft.hsn, draft.type)}</div>}
             </Field>
           </Section>
 

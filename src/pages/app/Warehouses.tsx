@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { GstinField, fillEmpty } from '@/components/GstinField';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Warehouse, Pencil, Loader2, Star, ArrowLeftRight, SlidersHorizontal } from 'lucide-react';
@@ -9,7 +10,7 @@ import { useShopUser } from '@/context/AuthContext';
 import { Badge, EmptyState, Field, Modal, PageHeader, Toggle } from '@/components/ui';
 import { money } from '@/lib/format';
 import { VENDOR_PHONE_RULE, isValidVendorPhoneOrEmpty } from '../../../shared/contact';
-import { INDIAN_STATES } from '../../../shared/gst';
+import { INDIAN_STATES, stateFromCode } from '../../../shared/gst';
 import { VendorPhoneInput } from '@/components/QuickAdd';
 
 const blank = { kind: 'store' as 'store' | 'warehouse', name: '', address: '', phone: '', isPrimary: false, gstin: '', state: '', managerUserId: null as string | null };
@@ -87,7 +88,11 @@ export default function Warehouses() {
               </select>
             </Field>
             <Field label="State"><select className="select" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })}><option value="">Same as the business</option>{INDIAN_STATES.map((st) => <option key={st}>{st}</option>)}</select></Field>
-            <Field label="GSTIN of this branch" error={err.gstin} hint="Only if it is registered separately (another state)"><input className="input" value={form.gstin} maxLength={15} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} /></Field>
+            <div className="span-all">
+              <GstinField value={form.gstin} error={err.gstin} label="GSTIN of this branch (only if registered separately, e.g. in another state)" optionalHint="Leave empty to use the business GSTIN"
+                onChange={(g) => setForm((f) => (f ? { ...f, gstin: g, state: (g.length >= 2 && stateFromCode(g.slice(0, 2))) || f.state } : f))}
+                onFill={(d) => setForm((f) => (f ? { ...f, state: d.state || f.state, address: fillEmpty(f.address, d.address) } : f))} />
+            </div>
             <div className="toggle-row span-all"><div><div className="strong">Main warehouse</div><div className="small muted">Used by default on new invoices, bills and opening stock.</div></div><Toggle checked={form.isPrimary} onChange={(v) => setForm({ ...form, isPrimary: v })} /></div>
           </div>
         )}

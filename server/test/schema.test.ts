@@ -36,6 +36,7 @@ const NO_RLS = new Set(['users', 'user_shops', 'public_links', 'role_permissions
   'ai_usage', 'ai_topups', // platform billing of AI credits, written outside the shop transaction
   'email_log', 'api_calls', // platform logs of outgoing emails and API calls, read by the super admin across shops
   'wa_conversations', // WhatsApp support inbox: a message arrives before its shop is known
+  'gstin_lookups', // public GST register data cached for every shop (Validate next to a GST number)
   'shared_files', // report files shared on WhatsApp: opened by an unguessable token before the shop is known (like public_links)
   'sales_leads', // Talk to sales: most leads are visitors with no shop yet; read only by the super admin
 ]);

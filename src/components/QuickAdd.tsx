@@ -4,9 +4,11 @@ import { api, fieldErrors } from '@/api/client';
 import { useMut } from '@/api/hooks';
 import type { Customer } from '@/api/types';
 import { Field, Modal, Segmented } from '@/components/ui';
+import { GstinField, fillEmpty } from '@/components/GstinField';
+import { EmailFix as EmailFixLocal } from './EmailFix';
 import { GSTIN_RE, INDIAN_STATES, gstinMatchesState, stateFromCode } from '../../shared/gst';
 import { MOBILE_RULE, isValidMobileOrEmpty, normalizeMobile } from '../../shared/phone';
-import { EMAIL_RULE, VENDOR_PHONE_RULE, isValidEmailOrEmpty, isValidVendorPhoneOrEmpty, normalizeEmail, normalizeVendorPhone } from '../../shared/contact';
+import { emailSuggestion, EMAIL_RULE, VENDOR_PHONE_RULE, isValidEmailOrEmpty, isValidVendorPhoneOrEmpty, normalizeEmail, normalizeVendorPhone } from '../../shared/contact';
 
 /** Vendor phone: a mobile or a landline with STD code; tidied when the user moves on. */
 export function VendorPhoneInput({ id, value, onChange, invalid }: { id?: string; value: string; onChange: (v: string) => void; invalid?: boolean }) {
@@ -18,11 +20,17 @@ export function VendorPhoneInput({ id, value, onChange, invalid }: { id?: string
 
 /** Email input: spaces dropped, lower-cased when the user moves on. */
 export function EmailInput({ id, value, onChange, invalid }: { id?: string; value: string; onChange: (v: string) => void; invalid?: boolean }) {
+  const fix = emailSuggestion(value);
   return (
-    <input id={id} className={`input ${invalid ? 'invalid' : ''}`} type="email" inputMode="email" autoComplete="email" maxLength={120} value={value} placeholder="accounts@supplier.in"
-      onChange={(e) => onChange(e.target.value.replace(/\s/g, ''))} onBlur={() => { const m = normalizeEmail(value); if (m) onChange(m); }} />
+    <>
+      <input id={id} className={`input ${invalid ? 'invalid' : ''}`} type="email" inputMode="email" autoComplete="email" maxLength={120} value={value} placeholder="accounts@supplier.in"
+        onChange={(e) => onChange(e.target.value.replace(/\s/g, ''))} onBlur={() => { const m = normalizeEmail(value); if (m) onChange(m); }} />
+      <EmailFixLocal value={value} onChange={onChange} fix={fix} />
+    </>
   );
 }
+
+export { EmailFix } from './EmailFix';
 
 /** Mobile number input: digits, spaces and +91 only; tidied to "+91 98765 43210" when the cashier moves on. */
 export function MobileInput({ id, value, onChange, invalid, autoFocus }: { id?: string; value: string; onChange: (v: string) => void; invalid?: boolean; autoFocus?: boolean }) {
@@ -68,11 +76,12 @@ export function QuickCustomerModal({ open, onClose, onCreated, defaultState }: {
         </Field>
         {biz && (
           <>
-            <Field label="Company name" required error={e('companyName')}><input id="qc-company" className={`input ${e('companyName') ? 'invalid' : ''}`} value={f.companyName} onChange={(ev) => setF({ ...f, companyName: ev.target.value })} autoFocus /></Field>
-            <Field label="GST number (GSTIN)" required error={e('gstin')}>
-              <input id="qc-gstin" className={`input ${e('gstin') ? 'invalid' : ''}`} maxLength={15} value={f.gstin}
-                onChange={(ev) => { const g = ev.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''); const st = g.length >= 2 ? stateFromCode(g.slice(0, 2)) : ''; setF({ ...f, gstin: g, state: st || f.state }); }} />
-            </Field>
+            <div className="span-all">
+              <GstinField value={f.gstin} required error={e('gstin')} forWhat="customer"
+                onChange={(g) => setF((x) => ({ ...x, gstin: g, state: (g.length >= 2 && stateFromCode(g.slice(0, 2))) || x.state }))}
+                onFill={(d) => setF((x) => ({ ...x, companyName: fillEmpty(x.companyName, d.legalName || d.tradeName), state: d.state || x.state }))} />
+            </div>
+            <Field label="Company name" required error={e('companyName')} className="span-all"><input id="qc-company" className={`input ${e('companyName') ? 'invalid' : ''}`} value={f.companyName} onChange={(ev) => setF({ ...f, companyName: ev.target.value })} /></Field>
           </>
         )}
         <Field label={biz ? 'Contact person' : 'Name'} required error={e('name')}><input id="qc-name" className={`input ${e('name') ? 'invalid' : ''}`} value={f.name} onChange={(ev) => setF({ ...f, name: ev.target.value })} autoFocus={!biz} /></Field>
@@ -112,11 +121,12 @@ export function QuickVendorModal({ open, onClose, onCreated, defaultState }: { o
     <Modal open={open} onClose={close} title="New vendor" subtitle="Saved and picked on this bill. You stay where you are."
       footer={<><button className="btn btn-secondary" onClick={close}>Cancel</button><button className="btn btn-primary" disabled={create.isPending} onClick={save}>{create.isPending && <Loader2 size={15} className="spin" />} Save vendor</button></>}>
       <div className="form-grid cols-2">
-        <Field label="Vendor name" required error={e('name')} className="span-all"><input id="qv-name" className={`input ${e('name') ? 'invalid' : ''}`} value={f.name} onChange={(ev) => setF({ ...f, name: ev.target.value })} autoFocus /></Field>
-        <Field label="GSTIN" error={e('gstin')} hint="Optional · for input tax credit">
-          <input id="qv-gstin" className={`input ${e('gstin') ? 'invalid' : ''}`} maxLength={15} value={f.gstin}
-            onChange={(ev) => { const g = ev.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''); const st = g.length >= 2 ? stateFromCode(g.slice(0, 2)) : ''; setF({ ...f, gstin: g, state: st || f.state }); }} />
-        </Field>
+        <div className="span-all">
+          <GstinField value={f.gstin} error={e('gstin')} forWhat="vendor" label="GSTIN (optional, for input tax credit)" optionalHint="Type or paste it, then Validate fills the name"
+            onChange={(g) => setF((x) => ({ ...x, gstin: g, state: (g.length >= 2 && stateFromCode(g.slice(0, 2))) || x.state }))}
+            onFill={(d) => setF((x) => ({ ...x, name: fillEmpty(x.name, d.legalName || d.tradeName), state: d.state || x.state }))} />
+        </div>
+        <Field label="Vendor name" required error={e('name')} className="span-all"><input id="qv-name" className={`input ${e('name') ? 'invalid' : ''}`} value={f.name} onChange={(ev) => setF({ ...f, name: ev.target.value })} /></Field>
         <Field label="Phone" error={e('phone')} hint="Optional · mobile or landline"><VendorPhoneInput id="qv-phone" value={f.phone} invalid={!!e('phone')} onChange={(v) => setF({ ...f, phone: v })} /></Field>
         <Field label="Email" error={e('email')} hint="Optional"><EmailInput id="qv-email" value={f.email} invalid={!!e('email')} onChange={(v) => setF({ ...f, email: v })} /></Field>
         <Field label="State" className="span-all"><select id="qv-state" className="select" value={f.state} onChange={(ev) => setF({ ...f, state: ev.target.value })}>{INDIAN_STATES.map((s) => <option key={s}>{s}</option>)}</select></Field>

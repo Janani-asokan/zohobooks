@@ -9,6 +9,8 @@ import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Badge, ConfirmModal, EmptyState, Field, Modal, PageHeader, Pagination, SearchInput, usePagination } from '@/components/ui';
 import { CsvImport } from '@/components/CsvImport';
+import { GstinField, fillEmpty } from '@/components/GstinField';
+import { EmailFix } from '@/components/QuickAdd';
 import { EMAIL_RE, initials, money } from '@/lib/format';
 import { GSTIN_RE, INDIAN_STATES, gstinMatchesState } from '../../../shared/gst';
 import { Hint } from '@/components/kit';
@@ -101,8 +103,6 @@ export default function Customers() {
       create.mutate(clean, { onSuccess: (c) => { toast('success', 'Customer added', `${c.companyName || c.name} · ${c.customId}`); setModal(null); if (custFile) void attachFile('customer', c.id, custFile.file.name, custFile.dataUrl).catch(() => undefined); }, onError });
     }
   };
-
-  const gstStateCode = draft.gstin.slice(0, 2);
 
   return (
     <div className="page">
@@ -252,11 +252,11 @@ export default function Customers() {
 
           {draft.type === 'Business' && (
             <>
-              <Field label="Company name" required error={e('companyName')}>
+              <GstinField value={draft.gstin} required error={e('gstin')} forWhat="customer"
+                onChange={(g) => setDraft((d) => ({ ...d, gstin: g }))}
+                onFill={(f) => setDraft((d) => ({ ...d, companyName: fillEmpty(d.companyName, f.legalName || f.tradeName), address: fillEmpty(d.address, f.address), state: f.state || d.state }))} />
+              <Field label="Company name" required error={e('companyName')} hint="Filled in by Validate; edit if they bill under another name">
                 <input className={`input ${e('companyName') ? 'invalid' : ''}`} value={draft.companyName} onChange={(ev) => setDraft({ ...draft, companyName: ev.target.value })} placeholder="e.g. Nila Textiles" />
-              </Field>
-              <Field label="GST number (GSTIN)" required error={e('gstin')} hint={GSTIN_RE.test(draft.gstin) ? `State code ${gstStateCode}` : '15-character GSTIN'}>
-                <input className={`input ${e('gstin') ? 'invalid' : ''}`} value={draft.gstin} maxLength={15} onChange={(ev) => setDraft({ ...draft, gstin: ev.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '') })} placeholder="33AABCA1234F1Z5" style={{ fontFamily: 'ui-monospace, Menlo, monospace', letterSpacing: '.04em' }} />
               </Field>
             </>
           )}
@@ -271,6 +271,7 @@ export default function Customers() {
           </Field>
           <Field label="Email" error={e('email')}>
             <input className={`input ${e('email') ? 'invalid' : ''}`} value={draft.email} onChange={(ev) => setDraft({ ...draft, email: ev.target.value })} placeholder="name@example.com" />
+            <EmailFix value={draft.email} onChange={(v) => setDraft((d) => ({ ...d, email: v }))} />
           </Field>
           <Field label="State (place of supply)" hint={draft.state && draft.state !== orgState ? 'Inter-state → IGST applies' : 'Intra-state → CGST + SGST'}>
             <select className="select" value={draft.state} onChange={(ev) => setDraft({ ...draft, state: ev.target.value })}>

@@ -55,12 +55,18 @@ export const FEATURE_LABELS: Record<string, string> = {
   support_template: 'WhatsApp template (after 24 hours)',
   support_read: 'WhatsApp read receipt',
   support_media: 'Open a photo or file sent on WhatsApp',
+  gstin_lookup: 'Look up a GST number (legal name, address, status)',
 };
 
 const EMAIL_FEATURES = ['signup_code', 'sales_lead', 'report', 'welcome', 'password_reset', 'password_reset_admin', 'workspace_ready', 'shop_closed', 'invoice',
   'payment_reminder', 'transfer_code', 'licence_expiry', 'warehouse_licence_alert', 'ai_credits_alert', 'test_email'];
 
 export const INTEGRATIONS: Integration[] = [
+  {
+    key: 'gstin', name: 'GSTIN lookup', what: 'Fills in the legal name and address when someone taps Validate next to a GST number', side: 'server', host: 'GSTIN_LOOKUP_URL',
+    settings: ['GSTIN_LOOKUP_URL', 'GSTIN_LOOKUP_KEY', 'GSTIN_LOOKUP_KEY_HEADER'], features: ['gstin_lookup'],
+    note: 'Optional. Each number is looked up once and kept for 30 days. Without it, the number is still checked offline.',
+  },
   {
     key: 'brevo', name: 'Brevo', what: 'Sends all emails (first choice)', side: 'server', host: 'api.brevo.com',
     settings: ['BREVO_API_KEY', 'MAIL_FROM'], features: EMAIL_FEATURES, docs: 'https://developers.brevo.com/reference/sendtransacemail',
