@@ -1,0 +1,4 @@
+- Weak internet at the counter: bills are saved on the phone straight away instead of waiting, and sent by themselves when the connection is back.
+- "Save offline now" if a bill takes long to send, so the customer never waits.
+- Warning when the phone's clock is wrong.
+- Signing out or switching business tells you about bills not sent yet.
