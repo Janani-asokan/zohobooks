@@ -27,8 +27,13 @@ fi
 IMAGE=ghcr.io/janani-asokan/zohobooks-server
 PULLED=0
 if [ "$NEEDS_BUILD" = 1 ]; then
+  # The newest commit may only touch what GitHub doesn't build an image for (the phone app, docs): then the image of
+  # the last commit that changed the server is the same thing.
+  BASE=$(git log -1 --format=%H "$REMOTE" -- . ':!mobile' ':!e2e' ':!docs' ':!*.md' ':!.env.app' ':!.github/workflows/corpuslite.yml' 2>/dev/null)
   if docker pull -q "$IMAGE:$REMOTE" >/dev/null 2>&1; then
     PULLED=1; echo "downloaded the ready-made image for $REMOTE"
+  elif [ -n "$BASE" ] && [ "$BASE" != "$REMOTE" ] && docker pull -q "$IMAGE:$BASE" >/dev/null 2>&1; then
+    PULLED=1; docker tag "$IMAGE:$BASE" "$IMAGE:$REMOTE"; echo "downloaded the ready-made image for $BASE (later commits don't change the server)"
   else
     RUN=$(curl -fsS -m 15 "https://api.github.com/repos/Janani-asokan/zohobooks/actions/workflows/server-image.yml/runs?head_sha=$REMOTE&per_page=1" 2>/dev/null \
       | python3 -c 'import json,sys; r=(json.load(sys.stdin).get("workflow_runs") or [{}])[0]; print(r.get("status","none"), r.get("conclusion") or "")' 2>/dev/null || echo "unknown")
