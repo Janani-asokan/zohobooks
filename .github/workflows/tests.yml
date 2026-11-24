@@ -20,7 +20,8 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # 24.04: the PDF tests' browser isn't offered for newer Ubuntu yet.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:
@@ -36,7 +37,7 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci --no-audit --no-fund
       - name: Browser for the PDF tests
-        run: npx playwright install --with-deps chromium-headless-shell || npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium-headless-shell || npx playwright install --with-deps chromium || true
       - name: Earlier days' reports and history
         run: |
           git clone -q --depth 1 -b test-reports "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" reports \
