@@ -1,12 +1,15 @@
 /**
- * CorpusLite: this phone's own GST invoice series (spec: a series per phone). The phone registers once while online
+ * CorpusLite: this phone's (or Windows PC's) own GST invoice series (spec: a series per phone). The phone registers once while online
  * and gets a code (A1, A2 …). Every bill it makes is numbered CODE/FY/0001, 0002 … by the phone itself, so the
  * final invoice number prints at the counter even with no internet. The server checks each number is used once.
  * A number is only used up when the bill is saved (online) or kept on the phone (offline), so failed tries leave no gap.
  */
 import { api } from '@/api/client';
 import { fyLabel } from '../../shared/fy';
-import { IS_APP } from './platform';
+import { IS_APP, IS_DESKTOP } from './platform';
+
+/** Phones and the Windows app number their own counter bills, so the final GST number prints even offline. */
+const OWN_SERIES = IS_APP || IS_DESKTOP;
 
 interface Device { code: string; fy: string; fyStartMonth: number; next: number }
 const DEV_ID = 'c360.app.deviceId';
@@ -21,11 +24,11 @@ export function deviceClientId(): string {
   } catch { return 'unknown-device'; }
 }
 const todayIndia = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-const deviceName = () => { const ua = navigator.userAgent; return /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android phone' : 'Device'; };
+const deviceName = () => { const ua = navigator.userAgent; return /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android phone' : IS_DESKTOP ? 'Windows PC' : 'Device'; };
 
 /** Registers this phone (or refreshes it): run while online. Keeps the higher of the phone's and the server's next number. */
 export async function registerDevice(shopId: string): Promise<Device | null> {
-  if (!IS_APP || !navigator.onLine) return read(shopId);
+  if (!OWN_SERIES || !navigator.onLine) return read(shopId);
   try {
     const r = await api.post<Device & { name: string }>('/shop/app/device', { clientId: deviceClientId(), name: deviceName() });
     const cur = read(shopId);
@@ -37,7 +40,7 @@ export async function registerDevice(shopId: string): Promise<Device | null> {
 }
 /** The number the next bill gets (not used up yet). Null until the phone has registered once. */
 export function peekNumber(shopId: string): { clientId: string; seq: number; number: string } | null {
-  if (!IS_APP) return null;
+  if (!OWN_SERIES) return null;
   const d = read(shopId);
   if (!d) return null;
   const fy = fyLabel(todayIndia(), d.fyStartMonth);

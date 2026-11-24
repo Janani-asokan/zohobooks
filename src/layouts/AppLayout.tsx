@@ -19,9 +19,10 @@ import { EmptyState, Field, Modal } from '@/components/ui';
 import { GSTIN_RE, INDIAN_STATES } from '../../shared/gst';
 import { useClickOutside } from '@/components/useClickOutside';
 import { useShortcuts } from '@/components/useShortcuts';
-import { useOnline } from '@/components/useOnline';
+import { useNet } from '@/lib/net';
 import { useSwitchBusiness } from '@/components/BusinessPicker';
-import { OfflineBillsBadge, OfflineSync } from '@/components/OfflineBills';
+import { OfflineBillsBadge, OfflineSync, okToSignOut } from '@/components/OfflineBills';
+import { WindowsDownload } from '@/components/WindowsDownload';
 import { ReceiptCheck } from '@/components/PrintCheck';
 import { initials } from '@/lib/format';
 import { AssistantButton } from '@/components/Assistant';
@@ -190,7 +191,7 @@ export default function AppLayout() {
   const org = useOrg();
   const navigate = useNavigate();
   const sb = useSidebarState('ledgerly.app.sidebar');
-  const online = useOnline();
+  const net = useNet();
   const onDuty = useFieldTracker(me.has('field'));
   const [shortcuts, setShortcuts] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -245,9 +246,10 @@ export default function AppLayout() {
       <div className="shell-main">
         <OfflineSync />
         <ReceiptCheck />
-        {!online && (
+        {net !== 'online' && (
           <div className="offline-bar no-print" role="status">
-            <WifiOff size={15} /> {t('shell.offline')}
+            <WifiOff size={15} /> {t(net === 'offline' ? 'shell.offline' : 'shell.weak')}
+            {me.has('pos') && me.can('sales.write') && !location.pathname.startsWith('/app/pos') && <Link to="/app/pos" className="offline-bar-link">{t('shell.openPos')}</Link>}
           </div>
         )}
         <header className="topbar no-print">
@@ -290,10 +292,11 @@ export default function AppLayout() {
                   <button className="dropdown-item" onClick={() => { close(); setShortcuts(true); }}>
                     <Keyboard size={16} /> {t('shell.shortcuts')} <span className="kbd" style={{ marginLeft: 'auto' }}>?</span>
                   </button>
+                  <WindowsDownload variant="menu" onClick={close} />
                   <div className="dropdown-sep" />
                   <PrefsMenu />
                   <div className="dropdown-sep" />
-                  <button className="dropdown-item danger" onClick={async () => { await logout(); navigate('/login'); }}>
+                  <button className="dropdown-item danger" onClick={async () => { if (!(await okToSignOut(me.shop.id))) return; await logout(); navigate('/login'); }}>
                     <LogOut size={16} /> {t('shell.signOut')}
                   </button>
                 </>

@@ -68,16 +68,17 @@ describe('offline counter bills', () => {
   });
 
   it('refuses what can’t be trusted from an offline device, with a clear reason', async () => {
+    // A device clock running ahead: the sale is real (it already reached us), so it is dated today, not refused.
     const future = await sale({ clientRef: ref('future'), madeAt: new Date(Date.now() + 3 * 86_400_000).toISOString() });
-    expect(future.status).toBe(400);
-    expect(future.body.error).toMatch(/future/);
+    expect(future.status).toBe(200);
+    expect(future.body.invoice.date).toBe(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date()));
     const old = await sale({ clientRef: ref('old'), madeAt: new Date(Date.now() - 40 * 86_400_000).toISOString() });
     expect(old.status).toBe(400);
     expect(old.body.error).toMatch(/30 days/);
     expect((await sale({ clientRef: 'bad ref!', madeAt: hoursAgo(1) })).status).toBe(400);
     // Nothing half-saved from a refused bill: sending it again (fixed) works and is one invoice.
     const clientRef = ref('fixme');
-    expect((await sale({ clientRef, madeAt: new Date(Date.now() + 3 * 86_400_000).toISOString() })).status).toBe(400);
+    expect((await sale({ clientRef, madeAt: new Date(Date.now() - 40 * 86_400_000).toISOString() })).status).toBe(400);
     const ok = await sale({ clientRef, madeAt: hoursAgo(1) });
     expect(ok.status).toBe(200);
     expect(ok.body.duplicate).toBeUndefined();

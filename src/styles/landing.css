@@ -222,3 +222,8 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .lp-helpdesk { background: #2a2210; border-color: #8a6a26; } :root:not([data-theme="light"]) .lp-helpdesk-text strong { color: #ffe7b3; } :root:not([data-theme="light"]) .lp-helpdesk-text span { color: #e5d3a8; } }
 .lp button.lp-pill { cursor: pointer; font: inherit; }
 .lp button.lp-pill:not(.lp-pill-help) { border: 0; }
+/* Download for Windows */
+.lp-pill-win { color: #fff; background: #1f2a37; box-shadow: 0 6px 18px rgba(15, 23, 42, .18); }
+.lp-pill-win:hover { color: #fff; background: #0f172a; transform: translateY(-2px); }
+.lp-cta .lp-pill-win { height: 52px; padding: 0 24px; font-size: 15px; }
+.lp-foot-links a svg { vertical-align: -2px; }

@@ -11,7 +11,7 @@ import { ThermalReceipt, printReceipt, receiptFromInvoice, type ReceiptData } fr
 import { isNetworkError, newClientRef, offlineRef, saveBill } from '@/lib/offlineQueue';
 import { peekNumber, takeNumber } from '@/lib/deviceSeries';
 import { IS_APP, cacheUpdate, PUBLIC_ORIGIN } from '@/lib/platform';
-import { useOnline } from '@/components/useOnline';
+import { clockSkew, netWeak, noteNetFailure, useNet } from '@/lib/net';
 import { OfflineBillsModal, useOfflineBills } from '@/components/OfflineBills';
 import { withPrintDefaults, type PaperSize } from '../../../shared/printSettings';
 import type { Invoice, Item, PriceTier } from '@/api/types';
@@ -83,7 +83,9 @@ export default function Pos() {
   const [done, setDone] = useState<{ invoice: Invoice; change: number } | null>(null);
   // A bill saved on this device because the internet was down: its receipt is printed from what the counter worked out.
   const [offDone, setOffDone] = useState<{ ref: string; receipt: ReceiptData; change: number; phone?: string } | null>(null);
-  const online = useOnline();
+  const net = useNet();
+  // Offline bills are dated by this device's clock: a clock that is off by more than 10 minutes gets a warning.
+  const skewMin = Math.round(clockSkew() / 60_000);
   const offBills = useOfflineBills();
   const [showOff, setShowOff] = useState(false);
   const [skip, setSkip] = useState<string[]>([]);
@@ -382,7 +384,11 @@ export default function Pos() {
     else chargeRef.current?.focus();
   };
 
-  const sale = useMut((b: Record<string, unknown>) => api.post<{ invoice: Invoice; change: number }>('/shop/pos/sale', b), SALES_KEYS, { silentError: true });
+  // The customer is waiting: give up after 10 s (not the usual 25) and keep the bill on this device instead.
+  const sale = useMut((b: Record<string, unknown>) => api.post<{ invoice: Invoice; change: number }>('/shop/pos/sale', b, { timeoutMs: 10_000 }), SALES_KEYS, { silentError: true });
+  /** The bill being sent right now. Once it is settled (saved online, or kept offline) a late reply is ignored. */
+  const inFlight = useRef<{ clientRef: string; body: Record<string, unknown>; dn: ReturnType<typeof peekNumber>; settled: boolean } | null>(null);
+  const [slow, setSlow] = useState(false);
   // A second Enter while the receipt opens must never charge the same bill again.
   const charging = useRef(false);
   const checking = useRef(new Set<string>());
@@ -390,7 +396,7 @@ export default function Pos() {
   const onBill = useRef(new Set<string>());
   useEffect(() => { onBill.current = new Set(cart.flatMap((l) => l.serials ?? []).map((x) => x.toLowerCase())); }, [cart]);
   const charge = () => {
-    if (!lines.length || sale.isPending || charging.current || done || offDone) return;
+    if (!lines.length || (inFlight.current && !inFlight.current.settled) || charging.current || done || offDone) return;
     if (mode === 'Cash' && tendered && Number(tendered) < totals.total) return toast('error', 'Cash tendered is less than the bill total');
     const parts = (['Cash', 'UPI', 'Card'] as const).filter((m) => Number(split[m]) > 0).map((m) => ({ mode: m, amount: Number(split[m]), reference: m === 'Cash' ? '' : reference }));
     if (mode === 'Split' && (parts.length < 2 || Math.abs(splitLeft) > 0.5)) return toast('error', parts.length < 2 ? 'Enter at least two payment parts' : splitLeft > 0 ? `₹${splitLeft} still to collect` : `Parts are ₹${-splitLeft} more than the bill`);
@@ -408,18 +414,37 @@ export default function Pos() {
     const dn = peekNumber(me.shop.id);
     if (dn) Object.assign(body, { deviceNumber: { clientId: dn.clientId, seq: dn.seq } });
     charging.current = true;
-    if (!navigator.onLine) return void saveOffline(clientRef, body, dn).then((saved) => { if (!saved) charging.current = false; });
+    // No internet, or it failed a moment ago (weak data, router down): don't make the customer wait, keep it here.
+    if (!navigator.onLine || netWeak()) return void saveOffline(clientRef, body, dn).then((saved) => { if (!saved) charging.current = false; });
+    const flight = { clientRef, body, dn, settled: false };
+    inFlight.current = flight;
+    // Still sending after 4 s: offer "Save offline now" so the counter can hand over the receipt.
+    const slowT = window.setTimeout(() => { if (!flight.settled) setSlow(true); }, 4000);
+    const settle = () => { flight.settled = true; window.clearTimeout(slowT); setSlow(false); };
     sale.mutate({ ...body, clientRef }, {
-      onSuccess: (r) => { if (dn) takeNumber(me.shop.id, dn.seq); setDone(r); countSold(); const m = { customerId: r.invoice.customerId ?? '', branchId }; memory.save(m); setLastSaved(m); },
-      onSettled: (_r, e) => { if (e && !isNetworkError(e)) charging.current = false; },
+      onSuccess: (r) => { if (flight.settled) return; settle(); if (dn) takeNumber(me.shop.id, dn.seq); setDone(r); countSold(); const m = { customerId: r.invoice.customerId ?? '', branchId }; memory.save(m); setLastSaved(m); },
       // The internet dropped while charging: keep the bill on this device and carry on.
       onError: (e) => {
+        if (flight.settled) return;
+        settle();
         if (isNetworkError(e)) return void saveOffline(clientRef, body, dn).then((saved) => { if (!saved) charging.current = false; });
+        charging.current = false;
         // Short at this branch: show what is short; the owner can sell anyway with a reason.
         if (e instanceof ApiError && e.code === 'insufficient_stock') return setStockBlock({ block: { message: e.message, details: (e.details ?? {}) as StockBlock['details'] }, body: Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'deviceNumber')) });
         toast('error', (e as Error).message);
       },
     });
+  };
+  /**
+   * "Save offline now": the bill is taking long (slow internet). Keep it on this device with the same bill ID, so
+   * if the slow request did reach the server, sending it again later finds it there and it is never saved twice.
+   */
+  const saveOfflineNow = () => {
+    const f = inFlight.current;
+    if (!f || f.settled) return;
+    f.settled = true; setSlow(false);
+    noteNetFailure();
+    void saveOffline(f.clientRef, f.body, f.dn).then((saved) => { if (!saved) { charging.current = false; f.settled = false; } });
   };
   /** Keeps the bill on this device, prints its receipt, and lets the counter carry on. Sent automatically later. */
   const saveOffline = async (clientRef: string, body: Record<string, unknown>, dn: ReturnType<typeof peekNumber> = null): Promise<boolean> => {
@@ -433,11 +458,11 @@ export default function Pos() {
       lines: lines.map((l, i) => ({ name: l.it.name, description: l.it.description, detail: l.note?.trim() || undefined, hsn: l.it.hsn, qty: l.qty, unit: l.it.unit, rate: unit(l.it), mrp: l.it.mrp ?? null, taxRate: l.it.taxRate, amount: lineAmount(fl[i] ?? calc[i]!) })),
       withGst, interState: inter, subTotal: totals.subTotal, discount: totals.discount, cgst: totals.cgst, sgst: totals.sgst, igst: totals.igst, roundOff: totals.roundOff,
       total: totals.total, amountPaid: totals.total, paymentMode: mode, offers: promo.on ? priced.applied : [],
-      note: dn ? 'Saved on this phone. It goes to the server by itself when the internet is back.' : 'Saved offline. The GST invoice number is given when this bill is sent.',
+      note: dn ? `Saved on this ${IS_APP ? 'phone' : 'computer'}. It goes to the server by itself when the internet is back.` : 'Saved offline. The GST invoice number is given when this bill is sent.',
     };
     try {
       await saveBill({ clientRef, shopId: me.shop.id, userId: me.user.id, madeAt, body, expectedTotal: totals.total, status: 'waiting', attempts: 0,
-        summary: { customer: receipt.customer.name, items: lines.length, mode } });
+        summary: { customer: receipt.customer.name, items: lines.length, mode }, ref: receipt.number });
     } catch {
       toast('error', 'Could not save the bill on this device', 'This browser is blocking storage (private window?). Use a normal window to bill offline.');
       return false;
@@ -522,11 +547,19 @@ export default function Pos() {
   return (
     <div className="pos">
       <section className="pos-panel card" style={{ padding: 14 }}>
-        {(!online || offBills.waiting.length > 0 || offBills.failed.length > 0) && (
+        {Math.abs(skewMin) > 10 && (
+          <div className="pos-offline" role="alert">
+            <AlertTriangle size={16} />
+            <span style={{ flex: 1 }}>This {IS_APP ? 'phone' : 'computer'}’s clock is {Math.abs(skewMin) >= 120 ? `${Math.round(Math.abs(skewMin) / 60)} hours` : `${Math.abs(skewMin)} minutes`} {skewMin > 0 ? 'ahead' : 'behind'}. Set the right date and time (turn on “Set time automatically”), or bills made offline get the wrong date.</span>
+          </div>
+        )}
+        {(net !== 'online' || offBills.waiting.length > 0 || offBills.failed.length > 0) && (
           <div className="pos-offline" role="status">
             <CloudOff size={16} />
             <span style={{ flex: 1 }}>
-              {!online ? 'No internet. Keep billing: bills are saved on this device and sent when the connection is back.' : 'Internet is back. Sending bills made offline…'}
+              {net === 'offline' ? 'No internet. Keep billing: bills are saved on this device and sent when the connection is back.'
+                : net === 'weak' ? 'The internet is very slow or not working. Bills are saved on this device straight away and sent when it’s back.'
+                : 'Internet is back. Sending bills made offline…'}
               {offBills.waiting.length > 0 && <strong> {offBills.waiting.length} waiting.</strong>}
               {offBills.failed.length > 0 && <strong style={{ color: 'var(--red-700)' }}> {offBills.failed.length} need{offBills.failed.length === 1 ? 's' : ''} attention.</strong>}
             </span>
@@ -686,7 +719,7 @@ export default function Pos() {
                 <button className="icon-btn sm danger" tabIndex={-1} onClick={() => { setQty(l.itemId, 0); focusScan(); }} aria-label="Remove"><Trash2 size={13} /></button>
               </div>
               {/* Always open: serial no., warranty… for this line, printed on the bill. Scanning keeps the cursor in the scan box. */}
-              <input className="input pos-note" data-note={l.itemId} maxLength={300} value={l.note ?? ''} placeholder="Serial no., warranty… (prints on the bill)" aria-label={`Details for ${l.it.name}`}
+              <input className="input pos-note" data-note={l.itemId} maxLength={300} value={l.note ?? ''} placeholder={isMeasured(l.it.unit) || l.it.type === 'Services' ? 'Note (prints on the bill, optional)' : 'Serial no., warranty… (prints on the bill)'} aria-label={`Details for ${l.it.name}`}
                 onChange={(e) => setNote(l.itemId, e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); focusScan(); } }} />
             </div>
@@ -750,9 +783,15 @@ export default function Pos() {
             </div>
           )}
           {mode === 'Card' && <Field label="Card slip / approval no. (optional)"><input className="input" value={reference} onChange={(e) => setReference(e.target.value)} /></Field>}
-          <button ref={chargeRef} className="btn btn-primary btn-lg btn-block pos-charge" disabled={!lines.length || sale.isPending} onClick={charge} title="Enter in the scan box, then Enter again · End · Ctrl+Enter">
-            {sale.isPending ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />} Charge {money(totals.total)}
+          <button ref={chargeRef} className="btn btn-primary btn-lg btn-block pos-charge" disabled={!lines.length || (sale.isPending && !!inFlight.current && !inFlight.current.settled)} onClick={charge} title="Enter in the scan box, then Enter again · End · Ctrl+Enter">
+            {sale.isPending && inFlight.current && !inFlight.current.settled ? <Loader2 size={18} className="spin" /> : <CheckCircle2 size={18} />} Charge {money(totals.total)}
           </button>
+          {slow && (
+            <div className="pos-slow" role="status">
+              <span>The internet is slow. Don’t keep the customer waiting:</span>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={saveOfflineNow}><CloudOff size={15} /> Save offline now</button>
+            </div>
+          )}
         </div>
       </section>
 

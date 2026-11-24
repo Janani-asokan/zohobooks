@@ -4,6 +4,15 @@ WORKDIR /src
 COPY tools/print-helper/ ./
 RUN go test ./... && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H=windowsgui" -o /out/Corpus360PrintHelper.exe .
 
+# ---- Windows app installer (Electron + NSIS, built on Linux; offered on the website as "Download for Windows") ----
+FROM node:22-bookworm-slim AS desktop
+WORKDIR /desktop
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY desktop/package.json desktop/package-lock.json ./
+RUN ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --no-audit --no-fund
+COPY desktop/ ./
+RUN npm run dist && mv dist/CorpusLite-Setup-*.exe /CorpusLite-Setup.exe
+
 # ---- build ----
 FROM node:20-bookworm-slim AS build
 WORKDIR /app
@@ -29,6 +38,7 @@ RUN apt-get update \
 ENV CHROMIUM_PATH=/usr/bin/chromium
 COPY --from=build /app/dist ./dist
 COPY --from=helper /out/Corpus360PrintHelper.exe ./dist/downloads/Corpus360PrintHelper.exe
+COPY --from=desktop /CorpusLite-Setup.exe ./dist/downloads/CorpusLite-Setup.exe
 COPY --from=build /app/server/package.json ./server/package.json
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/server/migrations ./server/migrations

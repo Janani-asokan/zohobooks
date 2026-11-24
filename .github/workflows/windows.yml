@@ -21,16 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm, cache-dependency-path: desktop/package-lock.json }
       - run: npm ci --no-audit --no-fund
-      # The installer step uses electron-builder's NSIS download; fetch it once so it is in the cache.
-      - name: Get NSIS
-        shell: bash
-        run: |
-          D="$LOCALAPPDATA/electron-builder/Cache/nsis/nsis-3.0.4.1"
-          if [ ! -d "$D" ]; then
-            mkdir -p "$D" && curl -fsSL -o nsis.7z https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z
-            7z x -y -o"$D" nsis.7z >/dev/null
-          fi
-          echo "NSIS_HOME=$D" >> "$GITHUB_ENV"
       - run: npm run dist
       - uses: actions/upload-artifact@v4
         with:

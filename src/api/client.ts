@@ -5,6 +5,7 @@ export class ApiError extends Error {
 }
 
 import { API_BASE, IS_APP, appToken, cacheGet, cachePut } from '@/lib/platform';
+import { noteNetFailure, noteNetOk } from '@/lib/net';
 
 type Json = object;
 
@@ -14,12 +15,15 @@ export const apiHeaders = (json: boolean): Record<string, string> => {
   return { 'X-Requested-With': 'ledgerly', ...(json ? { 'Content-Type': 'application/json' } : {}), ...(IS_APP ? { 'X-Client': 'corpuslite' } : {}), ...(t ? { Authorization: `Bearer ${t}` } : {}) };
 };
 
-async function request<T>(method: string, url: string, body?: Json): Promise<T> {
+/** `timeoutMs`: give up sooner (the counter's bill: the customer is waiting, and the bill can be kept offline). */
+export interface RequestOpts { timeoutMs?: number }
+
+async function request<T>(method: string, url: string, body?: Json, opts: RequestOpts = {}): Promise<T> {
   let res: Response;
   // A stalled connection (weak mobile data, a captive Wi-Fi page) would otherwise leave the screen spinning for ever:
   // give up after 25 s (60 s for uploads and reads that build files) and treat it like being offline.
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), /extract|attachments|import|export|pdf/.test(url) ? 60_000 : 25_000);
+  const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? (/extract|attachments|import|export|pdf/.test(url) ? 60_000 : 25_000));
   try {
     res = await fetch(API_BASE + '/api' + url, {
       method,
@@ -30,11 +34,17 @@ async function request<T>(method: string, url: string, body?: Json): Promise<T> 
     });
   } catch {
     clearTimeout(timer);
+    noteNetFailure();
     // The phone app works offline: a screen opens with the last copy it saw (shop data, items, customers …).
     if (IS_APP && method === 'GET') { const c = await cacheGet<T>(url); if (c) return c.data; }
     throw new ApiError(0, navigator.onLine ? 'Can’t reach the server. Please try again.' : 'You’re offline. Changes can’t be saved until you reconnect.', 'network');
   }
   clearTimeout(timer);
+  // The service worker answers "offline" itself (503 + code network) when it has nothing cached: not a real reply.
+  // The service worker answers for the server when the network fails (x-offline: its "you're offline" reply, or the
+  // last copy it kept): that is not a sign the connection is back.
+  if (res.headers.get('x-offline')) noteNetFailure();
+  else noteNetOk(res.headers.get('date'));
   const text = await res.text();
   const data = text ? safeJson(text) : null;
   if (!res.ok) {
@@ -56,7 +66,7 @@ const safeJson = (t: string) => {
 
 export const api = {
   get: <T>(url: string) => request<T>('GET', url),
-  post: <T>(url: string, body: Json = {}) => request<T>('POST', url, body),
+  post: <T>(url: string, body: Json = {}, opts?: RequestOpts) => request<T>('POST', url, body, opts),
   put: <T>(url: string, body: Json) => request<T>('PUT', url, body),
   patch: <T>(url: string, body: Json) => request<T>('PATCH', url, body),
   del: <T>(url: string) => request<T>('DELETE', url),

@@ -1,10 +1,13 @@
 // CorpusLite for Windows: the full corpus360lite.com app in its own window, always the latest version.
-const { app, BrowserWindow, shell, session, Menu, dialog } = require('electron');
+const { app, BrowserWindow, shell, session, Menu, dialog, ipcMain } = require('electron');
 const path = require('path');
 
 const SITE = 'https://corpus360lite.com';
 const HOST = new URL(SITE).host;
 let win;
+// Bills made offline that haven't reached the server yet (the counter page reports the count).
+let pending = 0;
+ipcMain.on('pending-bills', (_e, n) => { pending = Math.max(0, Number(n) || 0); });
 
 const isOurs = (url) => { try { const u = new URL(url); return u.protocol === 'https:' && (u.host === HOST || u.host.endsWith('.' + HOST)); } catch { return false; } };
 
@@ -24,6 +27,16 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true },
   });
   win.once('ready-to-show', () => { win.maximize(); win.show(); });
+  // Closing with bills still waiting: they are safe on this PC, but say so, and offer to keep the app open to send them.
+  win.on('close', (e) => {
+    if (!pending) return;
+    const r = dialog.showMessageBoxSync(win, {
+      type: 'warning', buttons: ['Keep open to send them', 'Close anyway'], defaultId: 0, cancelId: 0,
+      message: `${pending} bill${pending === 1 ? '' : 's'} made offline ${pending === 1 ? 'is' : 'are'} not sent yet`,
+      detail: 'They are saved safely on this computer and will be sent the next time you open CorpusLite with the internet on.',
+    });
+    if (r === 0) e.preventDefault();
+  });
 
   // Links to other sites (WhatsApp, email, maps, payment pages) open in the normal browser or app.
   win.webContents.setWindowOpenHandler(({ url }) => {

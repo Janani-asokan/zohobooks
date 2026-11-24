@@ -4,6 +4,7 @@ import { useBranches, useOrgs } from '@/api/hooks';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Field } from '@/components/ui';
+import { unsentBills } from '@/lib/offlineQueue';
 
 /**
  * Where a page lands after switching business: the same screen in the other business. A screen that shows one
@@ -17,13 +18,17 @@ export function pathAfterSwitch(pathname: string) {
 
 /** Switches to another business and stays on the same kind of screen (the page reloads its data for that business). */
 export function useSwitchBusiness() {
-  const { switchOrg } = useAuth();
+  const { switchOrg, me } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const toast = useToast();
   return async (id: string, name: string) => {
     try {
+      // Bills made offline in this business are sent only while it is open: say so before leaving it.
+      const fromShop = me?.kind === 'user' ? me.shop : null;
+      const left = fromShop ? (await unsentBills(fromShop.id)).length : 0;
       await switchOrg(id);
+      if (left && fromShop) toast('info', `${left} offline bill${left === 1 ? '' : 's'} from ${fromShop.name} still to send`, `They are safe on this device and go out when you open ${fromShop.name} again with the internet on.`);
       navigate(pathAfterSwitch(pathname), { replace: true });
       toast('success', `Now working in ${name}`, 'Items, customers, stock and payments are this business’s own.');
     } catch (e) { toast('error', (e as Error).message); }

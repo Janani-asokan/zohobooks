@@ -46,6 +46,8 @@ const dict = {
   'shell.notifications': { en: 'Notifications', hi: 'सूचनाएं', ta: 'அறிவிப்புகள்' },
   'shell.noNotifications': { en: 'You’re all caught up', hi: 'कोई नई सूचना नहीं', ta: 'புதிய அறிவிப்புகள் இல்லை' },
   'shell.offline': { en: 'You’re offline, showing saved data. Counter billing (POS) keeps working; other changes wait until you reconnect.', hi: 'आप ऑफ़लाइन हैं, सहेजा गया डेटा दिख रहा है। काउंटर बिलिंग (POS) चलती रहेगी; बाकी बदलाव दोबारा जुड़ने पर होंगे।', ta: 'இணைப்பு இல்லை, சேமித்த தரவு காட்டப்படுகிறது. கவுண்டர் பில்லிங் (POS) தொடரும்; மற்ற மாற்றங்கள் மீண்டும் இணைந்ததும் செய்யலாம்.' },
+  'shell.weak': { en: 'The internet is very slow or not working, showing saved data. Counter billing (POS) keeps working; other changes may not save until it’s back.', hi: 'इंटरनेट बहुत धीमा है या काम नहीं कर रहा, सहेजा गया डेटा दिख रहा है। काउंटर बिलिंग (POS) चलती रहेगी; बाकी बदलाव इंटरनेट लौटने पर सेव होंगे।', ta: 'இணையம் மிகவும் மெதுவாக உள்ளது அல்லது இயங்கவில்லை, சேமித்த தரவு காட்டப்படுகிறது. கவுண்டர் பில்லிங் (POS) தொடரும்; மற்ற மாற்றங்கள் இணையம் திரும்பியதும் சேமிக்கப்படும்.' },
+  'shell.openPos': { en: 'Open counter billing', hi: 'काउंटर बिलिंग खोलें', ta: 'கவுண்டர் பில்லிங் திற' },
   'shell.theme': { en: 'Theme', hi: 'थीम', ta: 'தீம்' },
   'shell.language': { en: 'Language', hi: 'भाषा', ta: 'மொழி' },
   'shell.shortcuts': { en: 'Keyboard shortcuts', hi: 'कीबोर्ड शॉर्टकट', ta: 'விசைப்பலகை குறுக்குவழிகள்' },

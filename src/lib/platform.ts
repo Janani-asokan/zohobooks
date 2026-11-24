@@ -26,3 +26,10 @@ export async function cacheGet<T>(url: string): Promise<{ data: T; at: number } 
 export async function cacheClear() { try { const db = await open(); db.transaction(STORE, 'readwrite').objectStore(STORE).clear(); } catch { /* */ } }
 /** Patch a cached list in place (stock after an offline sale), so screens show what the phone knows. */
 export async function cacheUpdate<T>(url: string, fn: (v: T) => T) { const c = await cacheGet<T>(url); if (c) await cachePut(url, fn(c.data)); }
+
+/** Running inside the CorpusLite Windows app (desktop/preload.js puts corpusDesktop on the page). */
+export const IS_DESKTOP: boolean = typeof window !== 'undefined' && !!(window as unknown as { corpusDesktop?: unknown }).corpusDesktop;
+/** The Windows installer, built with the server (Dockerfile "desktop" stage) and served by the website. */
+export const WINDOWS_DOWNLOAD = '/downloads/CorpusLite-Setup.exe';
+/** Offer the Windows app: on computers in a browser, not inside the phone or Windows app, not on phones / tablets. */
+export const offerWindowsApp = (): boolean => !IS_APP && !IS_DESKTOP && typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);

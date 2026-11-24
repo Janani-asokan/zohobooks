@@ -7,4 +7,5 @@ backups
 .env
 mobile
 dist-app
-desktop
+desktop/node_modules
+desktop/dist

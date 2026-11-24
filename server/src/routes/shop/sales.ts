@@ -718,9 +718,11 @@ salesRouter.post(
     if (offline) {
       const made = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(b.madeAt!));
       const oldest = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-      if (made > today) throw badRequest('This bill is dated in the future. Check the date and time on this device.');
       if (made < oldest) throw badRequest('This offline bill is more than 30 days old, so it can’t be added automatically. Enter it as an invoice.');
-      today = made;
+      // A bill "from the future" means the device clock is ahead: the sale happened before it reached us, so it is
+      // dated today (refusing it would lose a real sale the customer has already paid for).
+      if (made > today) b.madeAt = new Date().toISOString();
+      else today = made;
       // Points can't be redeemed without checking the customer's balance online.
       if (b.redeemPoints) throw badRequest('Loyalty points can’t be redeemed on a bill made offline');
     }

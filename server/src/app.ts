@@ -100,6 +100,8 @@ export function createApp() {
       res.setHeader('Access-Control-Allow-Origin', o);
       res.setHeader('Vary', 'Origin');
       res.setHeader('Access-Control-Allow-Headers', 'content-type, x-requested-with, authorization, x-client');
+      // The app compares its clock with the server's (offline bills are dated by the device clock).
+      res.setHeader('Access-Control-Expose-Headers', 'Date');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
       res.setHeader('Access-Control-Max-Age', '600');
       if (req.method === 'OPTIONS') return res.status(204).end();
@@ -129,6 +131,8 @@ export function createApp() {
         else if (p.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       },
     }));
+    // A missing download must not fall through to the web page (it would save the page as an .exe).
+    app.get('/downloads/*', (_req, res) => { res.status(404).type('text/plain').send('This download is not ready yet. Please try again in a few minutes.'); });
     app.get('*', (_req, res) => res.sendFile(index));
   }
   app.use(errorHandler);

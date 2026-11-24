@@ -16,6 +16,8 @@ export interface OfflineBill {
   body: Record<string, unknown>; // what /shop/pos/sale takes
   expectedTotal: number; // total shown and collected at the counter
   summary: { customer: string; items: number; mode: string };
+  /** The number printed on the customer's receipt (the device's own GST number, or the OFF- reference). */
+  ref?: string;
   status: 'waiting' | 'sending' | 'failed' | 'saved';
   attempts: number;
   lastError?: string;
@@ -67,6 +69,11 @@ export const allBills = async (): Promise<OfflineBill[]> => ((await tx('readonly
 export const saveBill = async (b: OfflineBill) => { await tx('readwrite', (s) => s.put(b)); changed(); };
 export const removeBill = async (clientRef: string) => { await tx('readwrite', (s) => s.delete(clientRef)); changed(); };
 
+/** This business's bills on this device that haven't reached the server yet (waiting, sending or refused). */
+export async function unsentBills(shopId?: string): Promise<OfflineBill[]> {
+  try { return (await allBills()).filter((b) => b.status !== 'saved' && (!shopId || b.shopId === shopId)); } catch { return []; }
+}
+
 /** Network trouble (worth retrying later) as opposed to the server refusing the bill. */
 export const isNetworkError = (e: unknown) => e instanceof ApiError ? e.code === 'network' || e.status === 0 || e.status === 502 || e.status === 503 || e.status === 504 : e instanceof TypeError;
 
@@ -90,7 +97,7 @@ export function syncBills(shopId: string, opts: { retryFailed?: string } = {}) {
         if (b.status === 'failed' && opts.retryFailed !== b.clientRef) continue;
         await saveBill({ ...b, status: 'sending' });
         try {
-          const r = await api.post<{ invoice: { id: string; number: string | null; total: number } }>('/shop/pos/sale', { ...b.body, clientRef: b.clientRef, madeAt: b.madeAt });
+          const r = await api.post<{ invoice: { id: string; number: string | null; total: number } }>('/shop/pos/sale', { ...b.body, clientRef: b.clientRef, madeAt: b.madeAt }, { timeoutMs: 20_000 });
           const done: OfflineBill = { ...b, status: 'saved', attempts: b.attempts + 1, invoiceId: r.invoice.id, invoiceNumber: r.invoice.number ?? undefined, savedTotal: r.invoice.total, savedAt: new Date().toISOString(), lastError: undefined };
           await saveBill(done);
           saved.push(done);
