@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { many, withTenant } from '../src/db';
+import { many, query, withTenant, type Db } from '../src/db';
 import { freshDb, login } from './helpers';
 
 let ownerA: Awaited<ReturnType<typeof login>>;
@@ -41,11 +41,16 @@ describe('tenant isolation', () => {
   });
 
   it('row-level security hides other shops even if a query forgets its filter', async () => {
-    const rows = await withTenant(shopB, (db) => many(db, 'SELECT id FROM invoices'));
+    // A database superuser skips row-level security, and the test database may be run as one: check as an ordinary
+    // role, the way the rules apply to every non-superuser connection.
+    await query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rls_check') THEN CREATE ROLE rls_check NOLOGIN NOSUPERUSER NOBYPASSRLS; END IF; END $$`);
+    await query('GRANT USAGE ON SCHEMA public TO rls_check; GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA public TO rls_check');
+    const asApp = <T,>(fn: (db: Db) => Promise<T>) => withTenant(shopB, async (db) => { await db.query('SET LOCAL ROLE rls_check'); return fn(db); });
+    const rows = await asApp((db) => many(db, 'SELECT id FROM invoices'));
     expect(rows).toHaveLength(0);
-    await expect(withTenant(shopB, (db) => db.query("INSERT INTO customers (shop_id, custom_id, type, name) SELECT shop_id, 'X-1', 'Individual', 'x' FROM organizations WHERE company_name = 'Aravind Computer Store'"))).resolves.toBeDefined();
+    await expect(asApp((db) => db.query("INSERT INTO customers (shop_id, custom_id, type, name) SELECT shop_id, 'X-1', 'Individual', 'x' FROM organizations WHERE company_name = 'Aravind Computer Store'"))).resolves.toBeDefined();
     // the SELECT inside saw no rows of shop A, so nothing was inserted into A
-    const leaked = await withTenant(shopB, (db) => many(db, "SELECT * FROM customers WHERE custom_id = 'X-1'"));
+    const leaked = await asApp((db) => many(db, "SELECT * FROM customers WHERE custom_id = 'X-1'"));
     expect(leaked).toHaveLength(0);
   });
 

@@ -1,4 +1,5 @@
-import { IS_APP } from '@/lib/platform';
+import { speechEngine, startListening, type Listening } from '@/lib/speech';
+import { useItems } from '@/api/hooks';
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Mic, MicOff, Sparkles, Wand2 } from 'lucide-react';
 import { api } from '@/api/client';
@@ -15,10 +16,8 @@ export interface ParsedBill {
   notes: string | null;
 }
 
-// The Web Speech API is Chrome/Edge/Safari only, and prefixed in Chrome.
-type Recognition = { lang: string; interimResults: boolean; continuous: boolean; start: () => void; stop: () => void; onresult: ((e: any) => void) | null; onend: (() => void) | null; onerror: ((e: any) => void) | null };
-// The Android app's WebView has no speech service, so voice is offered only in browsers.
-const SpeechRecognition = (!IS_APP && typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) as (new () => Recognition) | undefined;
+// Voice: the browser's own speech service, or the on-PC recogniser in the Windows app (lib/speech).
+const SpeechRecognition = speechEngine();
 const LANGS = [['en-IN', 'English'], ['hi-IN', 'हिन्दी'], ['ta-IN', 'தமிழ்'], ['te-IN', 'తెలుగు'], ['kn-IN', 'ಕನ್ನಡ'], ['ml-IN', 'മലയാളം'], ['mr-IN', 'मराठी'], ['gu-IN', 'ગુજરાતી'], ['bn-IN', 'বাংলা']] as const;
 
 /** Type or say the bill in plain words ("3 Logitech mouse and a Dell monitor for Nila Textiles, 5% off, UPI"); AI fills the form. */
@@ -30,21 +29,25 @@ export function QuickBill({ context, onApply, compact, bare }: { context: 'invoi
   const [listening, setListening] = useState(false);
   const [lang, setLang] = useState(() => { try { return localStorage.getItem('c360.voice.lang') ?? 'en-IN'; } catch { return 'en-IN'; } });
   const [last, setLast] = useState<ParsedBill | null>(null);
-  const rec = useRef<Recognition | null>(null);
+  const rec = useRef<Listening | null>(null);
+  const items = useItems().data ?? [];
   useEffect(() => () => rec.current?.stop(), []);
 
-  const listen = () => {
+  const listen = async () => {
     if (!SpeechRecognition) return toast('info', 'Voice needs Chrome, Edge or Safari', 'You can still type the bill.');
     if (listening) { rec.current?.stop(); return; }
-    const r = new SpeechRecognition();
-    r.lang = lang; r.interimResults = true; r.continuous = false;
     const before = text ? `${text.trim()} ` : '';
-    r.onresult = (e) => setText(before + Array.from(e.results as ArrayLike<any>).map((x: any) => x[0].transcript).join(' '));
-    r.onerror = (e) => { if (e.error === 'not-allowed') toast('error', 'Microphone blocked', 'Allow the microphone for this site in the browser.'); };
-    r.onend = () => setListening(false);
-    rec.current = r;
-    setListening(true);
-    r.start();
+    let said = '';
+    try {
+      setListening(true);
+      rec.current = await startListening({
+        lang, continuous: false, words: items.map((i) => i.name),
+        onPartial: (p) => setText(before + [said, p].filter(Boolean).join(' ')),
+        onFinal: (t) => { said = [said, t].filter(Boolean).join(' '); setText(before + said); },
+        onError: (m) => toast('error', 'Voice stopped', m),
+        onEnd: () => setListening(false),
+      });
+    } catch (e) { setListening(false); toast('error', 'Voice can’t start', (e as Error).message); }
   };
 
   const fill = async () => {
@@ -72,7 +75,7 @@ export function QuickBill({ context, onApply, compact, bare }: { context: 'invoi
           {!bare && <strong>Type or speak the bill</strong>}
           {!compact && <div className="small muted">e.g. “3 Logitech mouse aur ek Dell monitor for Nila Textiles, 5% off, UPI”.{!bare && ' AI finds your items and customer.'}</div>}
         </div>
-        {SpeechRecognition && (
+        {SpeechRecognition === 'web' && (
           <select className="select qb-lang" value={lang} aria-label="Voice language" onChange={(e) => { setLang(e.target.value); try { localStorage.setItem('c360.voice.lang', e.target.value); } catch { /* private mode */ } }}>
             {LANGS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
@@ -81,7 +84,7 @@ export function QuickBill({ context, onApply, compact, bare }: { context: 'invoi
       <div className="qb-row">
         <textarea className="textarea" rows={compact ? 1 : 2} value={text} maxLength={1500} aria-label="Bill in your words" placeholder={compact ? '2 pen drive, 1 USB cable, cash…' : 'Items, quantities, customer, discount, payment…'}
           onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void fill(); } }} />
-        <button type="button" className={`icon-btn qb-mic ${listening ? 'on' : ''}`} onClick={listen} aria-label={listening ? 'Stop listening' : 'Speak the bill'} title={listening ? 'Stop' : 'Speak'}>{listening ? <MicOff size={17} /> : <Mic size={17} />}</button>
+        <button type="button" className={`icon-btn qb-mic ${listening ? 'on' : ''}`} onClick={() => void listen()} aria-label={listening ? 'Stop listening' : 'Speak the bill'} title={listening ? 'Stop' : 'Speak'}>{listening ? <MicOff size={17} /> : <Mic size={17} />}</button>
         <button type="button" className="btn btn-primary" onClick={() => void fill()} disabled={busy || text.trim().length < 2}>{busy ? <Loader2 size={15} className="spin" /> : <Sparkles size={15} />} Fill</button>
       </div>
       {listening && <div className="small qb-listening"><span className="qb-dot" /> Listening… speak the items, then pause.</div>}

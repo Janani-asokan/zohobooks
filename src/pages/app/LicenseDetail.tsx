@@ -1,3 +1,4 @@
+import { askText } from '@/components/AskDialog';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -26,7 +27,7 @@ export default function LicenseDetail() {
   const q = useQuery({ queryKey: ['license', id], queryFn: () => api.get<Detail>(`/shop/licenses/${id}`) });
   const [action, setAction] = useState<Action>(null);
   const remove = useMut(() => api.del(`/shop/licenses/${id}`), [['licenses']], { success: 'Licence deleted' });
-  const revoke = useMut((oid: string) => api.post(`/shop/licenses/${id}/overrides/${oid}/revoke`, { reason: window.prompt('Why is this grace period withdrawn? (at least 10 characters)') ?? '' }), [['license', id], ['licenses']], { success: 'Grace period withdrawn' });
+  const revoke = useMut(async (oid: string) => api.post(`/shop/licenses/${id}/overrides/${oid}/revoke`, { reason: (await askText('Why is this grace period withdrawn? (at least 10 characters)')) ?? '' }), [['license', id], ['licenses']], { success: 'Grace period withdrawn' });
   if (!q.data) return <div className="page"><div className="skeleton" style={{ height: 300 }} /></div>;
   const { license: l, overrides, alerts, invoices } = q.data;
   const w = me.can('licenses.write');

@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => ({
     {
       name: 'offline-precache', apply: 'build' as const,
       generateBundle(_o: unknown, bundle: Record<string, { fileName: string }>) {
-        const files = Object.values(bundle).map((f) => f.fileName).filter((f) => f.startsWith('assets/') && /\.(js|css|woff2?)$/.test(f)).map((f) => `/${f}`);
+        const files = Object.values(bundle).map((f) => f.fileName).filter((f) => f.startsWith('assets/') && /\.(js|css|woff2?)$/.test(f) && !/vosk/i.test(f)).map((f) => `/${f}`); // vosk: the Windows app's speech engine, loaded there only
         (this as unknown as { emitFile: (f: { type: 'asset'; fileName: string; source: string }) => void }).emitFile({ type: 'asset', fileName: 'precache.json', source: JSON.stringify(files) });
       },
     },

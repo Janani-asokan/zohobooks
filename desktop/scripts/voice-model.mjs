@@ -9,6 +9,14 @@ const out = new URL('../build/voice/en-in.tar.gz', import.meta.url);
 if (fs.existsSync(out)) { console.log('voice model: already there'); process.exit(0); }
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'vosk-'));
 const zip = path.join(work, `${NAME}.zip`);
+// A ready copy on this project's voice-model branch first (fast, and works where alphacephei.com is blocked).
+const ready = await fetch('https://raw.githubusercontent.com/Janani-asokan/zohobooks/voice-model/en-in.tar.gz').catch(() => null);
+if (ready?.ok) {
+  fs.mkdirSync(new URL('../build/voice/', import.meta.url), { recursive: true });
+  fs.writeFileSync(out, Buffer.from(await ready.arrayBuffer()));
+  console.log('voice model: from the voice-model branch,', fs.statSync(out).size, 'bytes');
+  process.exit(0);
+}
 const res = await fetch(`https://alphacephei.com/vosk/models/${NAME}.zip`);
 if (!res.ok) throw new Error(`voice model download failed: ${res.status}`);
 fs.writeFileSync(zip, Buffer.from(await res.arrayBuffer()));

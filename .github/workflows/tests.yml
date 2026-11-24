@@ -1,0 +1,60 @@
+# Every automated test (533+ test cases across every feature), every night and after every change, with an Excel
+# report: Summary per feature, every test case with Pass / Fail, and the history of every day's run. The workbooks
+# are kept on the test-reports branch: open reports/latest.xlsx there, or a day's test-report-YYYY-MM-DD.xlsx.
+name: Tests
+
+on:
+  push:
+    branches: [claude/blissful-hamilton-n7kcit, main]
+    paths-ignore: ['mobile/**', 'docs/**', '*.md', 'desktop/**']
+  schedule:
+    - cron: '47 20 * * *' # 02:17 IST every night
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: ledgerly, POSTGRES_PASSWORD: ledgerly, POSTGRES_DB: ledgerly_test }
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U ledgerly" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://ledgerly:ledgerly@localhost:5432/ledgerly_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - name: Browser for the PDF tests
+        run: npx playwright install --with-deps chromium-headless-shell || npx playwright install --with-deps chromium
+      - name: Earlier days' reports and history
+        run: |
+          git clone -q --depth 1 -b test-reports "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" reports \
+            || (mkdir -p reports && cd reports && git init -q -b test-reports && git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}")
+      - name: Run every test and write the report
+        id: run
+        run: npx tsx scripts/test-report.mjs
+        continue-on-error: true
+      - name: Keep the report on the test-reports branch
+        if: always()
+        run: |
+          cd reports && rm -f results.json
+          git add -A
+          git -c user.name=tests -c user.email=tests@users.noreply.github.com commit -qm "Test report $(date -u +%F) for ${GITHUB_SHA::7}" || exit 0
+          git push -q origin test-reports
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: test-report, path: reports/*.xlsx, retention-days: 90 }
+      - name: Fail when a test failed
+        if: steps.run.outcome == 'failure'
+        run: exit 1

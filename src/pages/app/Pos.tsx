@@ -23,6 +23,8 @@ import { useShortcuts } from '@/components/useShortcuts';
 import { applyBillAdjustments, computeTotals, lineAmount, type BillDiscount } from '@/lib/calc';
 import { priceFor } from '@/components/LineItems';
 import { QuickBill, type ParsedBill } from '@/components/QuickBill';
+import { VoiceBar } from '@/components/VoiceBar';
+import { speechEngine } from '@/lib/speech';
 import { useAiEnabled } from '@/components/Assistant';
 import { useScale } from '@/lib/scale';
 import { isWeighed, qtyFromReading } from '../../../shared/scale';
@@ -45,7 +47,6 @@ import { CustomerByPhone, OffersSummary, PointsBox, usePromo } from '@/component
 import { payable, pointsEarned, priceBill } from '../../../shared/offers';
 
 type CartLine = CounterLine;
-interface SpeechLike { lang: string; interimResults: boolean; maxAlternatives: number; start: () => void; onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null }
 
 /** Fast counter billing: scan → cart → charge. Each sale is an issued invoice with its payment. */
 export default function Pos() {
@@ -355,28 +356,20 @@ export default function Pos() {
     }
     void processInput(code, false);
   };
-  /** Voice: say the item ("two dal pack", "5 rice"); one clear match goes on the bill, otherwise the matches show. */
-  const listen = () => {
-    const SR = (window as unknown as { SpeechRecognition?: new () => SpeechLike; webkitSpeechRecognition?: new () => SpeechLike }).SpeechRecognition ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechLike }).webkitSpeechRecognition;
-    if (!SR) return toast('info', 'Voice needs Chrome, Edge or Safari', 'Scan, type or tap the item instead.');
-    if (!navigator.onLine) return toast('info', 'Voice needs the internet', 'Scan, type or tap the item instead.');
-    const r = new SR();
-    r.lang = 'en-IN'; r.interimResults = false; r.maxAlternatives = 1;
-    r.onresult = (ev) => {
-      const said = String(ev.results?.[0]?.[0]?.transcript ?? '').trim();
-      const words: Record<string, string> = { one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10', a: '1', an: '1' };
-      const m = /^(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\s+(.+)$/i.exec(said);
-      const qty = m ? Number(words[m[1]!.toLowerCase()] ?? m[1]) : 1;
-      const name = (m ? m[2]! : said).replace(/[.?!]$/, '');
-      const s = name.toLowerCase();
-      const hits = items.filter((i) => [i.name, String(i.extra?.localName ?? '')].some((v) => v.toLowerCase().includes(s)));
-      if (hits.length === 1) { add(hits[0]!, qty); toast('success', `Added ${qty} × ${hits[0]!.name}`); }
-      else { setQ(name); focusScan(); if (!hits.length) { beep(false); toast('error', `Nothing matches “${name}”`); } }
-    };
-    r.onerror = () => toast('error', 'Didn’t catch that', 'Try again, or scan / type / tap the item.');
-    r.onend = () => setListening(false);
-    setListening(true);
-    r.start();
+  /** Voice billing: what was added by voice, newest last, so "remove last" can take it off again. */
+  const voiceAdds = useRef<Array<{ itemId: string; qty: number }>>([]);
+  const voiceAdd = (itemId: string, qty: number) => {
+    const it = items.find((i) => i.id === itemId);
+    if (!it) return;
+    if (it.trackSerials) { setImeiFor(it); return; } // each phone's IMEI is scanned
+    voiceAdds.current.push({ itemId, qty });
+    beep(true); setLastId(itemId);
+    setCart((c) => (c.some((l) => l.itemId === itemId) ? c.map((l) => (l.itemId === itemId ? { ...l, qty: Math.round((l.qty + qty) * 1000) / 1000 } : l)) : [...c, { itemId, qty }]));
+  };
+  const voiceUndo = () => {
+    const last = voiceAdds.current.pop();
+    if (!last) return;
+    setCart((c) => c.flatMap((l) => (l.itemId !== last.itemId ? [l] : l.qty - last.qty > 0.0005 ? [{ ...l, qty: Math.round((l.qty - last.qty) * 1000) / 1000 }] : [])));
   };
   /** After the last scan: Cash goes to the amount given, other modes straight to Charge. */
   const goPay = () => {
@@ -567,11 +560,12 @@ export default function Pos() {
           </div>
         )}
         <OfflineBillsModal open={showOff} onClose={() => setShowOff(false)} />
+        {listening && <VoiceBar items={items} autoStart onStop={() => setListening(false)} onAdd={voiceAdd} onUndo={voiceUndo} aiOn={aiOn} onAi={applyQuick} />}
         <div className="row" style={{ gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
           <div className="input-group" style={{ flex: 1, minWidth: 240 }}>
             <span className="lead" style={{ color: 'var(--brand-600)' }}>{q ? <Search size={17} /> : <ScanBarcode size={17} />}</span>
             <input ref={scanRef} className="input" style={{ height: 46, fontSize: 14 }} placeholder="Scan, type a name or code (F2)" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onScanKey} aria-label="Scan or search items" autoComplete="off" spellCheck={false} />
-            {!IS_APP && <button type="button" className={`input-side ${listening ? 'on' : ''}`} onClick={listen} title="Say the item (e.g. “two rice”)" aria-label="Voice: say the item"><Mic size={17} /></button>}
+            {speechEngine() && <button type="button" className={`input-side ${listening ? 'on' : ''}`} onClick={() => setListening(!listening)} title="Voice billing: keep talking, items go on the bill" aria-label="Voice billing" aria-pressed={listening}><Mic size={17} /></button>}
           </div>
           <button type="button" className={`btn ${camOn ? 'btn-soft active' : 'btn-secondary'} cam-btn`} onClick={() => { setCamOn(!camOn); focusScan(); }} title="Scan with this device’s camera" aria-pressed={camOn}><Camera size={16} /> {camOn ? 'Camera on' : 'Camera'}</button>
           <Segmented value={kind} onChange={setKind} options={[{ value: 'all', label: 'All' }, { value: 'Goods', label: 'Goods', icon: Package }, { value: 'Services', label: 'Services', icon: Wrench }]} />

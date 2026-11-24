@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { GstinField, fillEmpty } from '@/components/GstinField';
 import { BusinessPicker } from '@/components/BusinessPicker';
 import { LicenseGatePrompt, isLicenseBlock, type LicenseBlock, type LicenseChoice } from '@/components/LicenseGatePrompt';
@@ -18,6 +18,8 @@ import { BillOptionsCard, convertRates, LineItemsEditor, priceFor, TaxModeToggle
 import { useShortcuts } from '@/components/useShortcuts';
 import { SmartUpload, type FillRow, type PendingFile } from '@/components/SmartUpload';
 import { QuickBill, type ParsedBill } from '@/components/QuickBill';
+import { VoiceBar } from '@/components/VoiceBar';
+import { speechEngine } from '@/lib/speech';
 import { useAiEnabled } from '@/components/Assistant';
 import { attachFile } from '@/components/Attachments';
 import { useDocLines } from '@/lib/docLines';
@@ -198,6 +200,17 @@ function Form({ existing }: { existing?: Invoice }) {
     if (b.billDiscount || b.pricesIncludeTax !== null) setBillOpts((o) => ({ pricesIncludeTax: b.pricesIncludeTax ?? o.pricesIncludeTax, billDiscount: b.billDiscount ?? o.billDiscount }));
     if (b.notes) setNotes((n) => [n, b.notes].filter(Boolean).join('\n'));
   };
+  // Continuous voice billing: each item said goes on the invoice at once; "remove last" takes it off again.
+  const [voiceOn, setVoiceOn] = useState(false);
+  const voiceAdds = useRef<string[]>([]);
+  const voiceAdd = (itemId: string, qty: number) => {
+    const it = items.find((i) => i.id === itemId);
+    if (!it) return;
+    const line = { ...emptyLine('SP1'), itemId, qty, rate: priceFor(it, 'SP1', withGst && billOpts.pricesIncludeTax) };
+    voiceAdds.current.push(line.key);
+    setLines((ls) => [...ls.filter((l) => l.itemId), line]);
+  };
+  const voiceUndo = () => { const k = voiceAdds.current.pop(); if (k) setLines((ls) => ls.filter((l) => l.key !== k)); };
   const [newCust, setNewCust] = useState(false);
   const [quick, setQuick] = useState<null | 'speak' | 'file'>(null);
   const [creditPrompt, setCreditPrompt] = useState<{ mode: 'issue' | 'issue-pay'; message: string; lic: LicenseChoice } | null>(null);
@@ -320,11 +333,13 @@ function Form({ existing }: { existing?: Invoice }) {
         <div className="card-body" style={{ borderTop: '1px solid var(--border)', paddingTop: 18 }}>
           <div className="row between" style={{ flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
             <TaxModeToggle withGst={withGst} onChange={setWithGst} disabled={gstBlocked} />
+            {speechEngine() && !voiceOn && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setVoiceOn(true)} title="Keep talking: items go on the invoice as you say them"><Mic size={15} /> Voice billing</button>}
             <span className="row small muted" style={{ gap: 6 }}>
               <Info size={14} />
               {gstBlocked ?? (withGst ? (interState ? 'Inter-state supply → IGST' : 'Intra-state supply → CGST + SGST') : 'Totals shown without any tax')}
             </span>
           </div>
+          {voiceOn && <VoiceBar items={items} autoStart onStop={() => setVoiceOn(false)} onAdd={voiceAdd} onUndo={voiceUndo} aiOn={aiOn} onAi={applyQuick} />}
           <LineItemsEditor lines={lines} onChange={setLines} defaultTier="SP1" withGst={withGst} invalidKeys={touched ? invalidLines : undefined} branchId={branchId} inclusive={withGst && billOpts.pricesIncludeTax}
             onFinish={busy ? undefined : () => setFinishAsk(true)} />
           {touched && errs.lines && <div className="field-error" style={{ marginTop: 8 }}>{errs.lines}</div>}

@@ -57,17 +57,20 @@ export function createApp() {
   // X-Forwarded-Proto; "trust proxy" above makes req.secure read it) get HSTS and upgrade-insecure-requests. Plain-http
   // requests (the server's IP address, the PDF renderer on 127.0.0.1) don't: there the browser would rewrite every
   // script request to https, nothing answers, and the page stays blank.
-  const securityHeaders = (https: boolean) => helmet({
+  const securityHeaders = (https: boolean, desktop = false) => helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", 'https://checkout.razorpay.com'],
+        // wasm-unsafe-eval: voice billing's speech recogniser in the Windows app runs as WebAssembly in a worker.
+        // The Windows app only (it says so in its user agent): its speech engine builds small functions at run time.
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'", ...(desktop ? ["'unsafe-eval'"] : []), 'https://checkout.razorpay.com'],
+        workerSrc: ["'self'", 'blob:'],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         // Map tiles for the field staff map (OpenStreetMap).
         imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.de'],
         // The Corpus360 Print Helper on the shop's own PC (label printing straight to the printer).
-        connectSrc: ["'self'", 'https://api.razorpay.com', 'https://lumberjack.razorpay.com', 'http://127.0.0.1:17361'],
+        connectSrc: ["'self'", 'blob:', 'https://api.razorpay.com', 'https://lumberjack.razorpay.com', 'http://127.0.0.1:17361'],
         frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
         mediaSrc: ["'self'", 'blob:'],
         ...(https ? {} : { upgradeInsecureRequests: null }),
@@ -80,7 +83,12 @@ export function createApp() {
   });
   const httpsHeaders = securityHeaders(true);
   const httpHeaders = securityHeaders(false);
-  app.use((req, res, next) => (req.secure ? httpsHeaders : httpHeaders)(req, res, next));
+  const desktopHttps = securityHeaders(true, true);
+  const desktopHttp = securityHeaders(false, true);
+  app.use((req, res, next) => {
+    const desktop = /CorpusLiteDesktop\//.test(req.get('user-agent') ?? '');
+    return (req.secure ? (desktop ? desktopHttps : httpsHeaders) : (desktop ? desktopHttp : httpHeaders))(req, res, next);
+  });
   // Meta's WhatsApp webhook: before the JSON parser and the session/CSRF checks (it signs the raw body instead).
   app.use('/api/webhooks/whatsapp', whatsappWebhookRouter);
   // Uploads (files sent as base64) get a larger body limit than everything else.

@@ -9,3 +9,4 @@ dist-app
 
 # Built app files handed to the user (never committed)
 release/
+reports/

@@ -91,7 +91,7 @@ export function GstinField({ value, onChange, onFill, forWhat, label = 'GST numb
               </>
             ) : (
               <>
-                <div className="gstin-card-head"><BadgeCheck size={16} /><strong>Number looks right</strong></div>
+                <div className="gstin-card-head"><BadgeCheck size={16} /><strong>{shown.lookup === 'not_found' ? 'Not in the GST register' : 'Format is correct'}</strong></div>
                 <div className="small muted">{shown.check.state} · {shown.check.holder} · PAN {shown.check.pan}</div>
                 {shown.lookup === 'not_found' && <div className="small strong">The GST register has no such number. Check it with the customer.</div>}
                 {(shown.lookup === 'off' || shown.lookup === 'failed') && (

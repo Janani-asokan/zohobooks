@@ -1,3 +1,4 @@
+import { askText } from '@/components/AskDialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -398,8 +399,8 @@ export default function Workbench({ reprintOf, onOpenTab }: { reprintOf?: JobRow
         {lines.length > 0 && <>
           <div className="lb-bulk" style={{ marginTop: 4 }} aria-label="Quantity for every line">
             <span className="small muted">All lines:</span>
-            <button type="button" className="btn btn-soft btn-sm" onClick={() => { const n = Number(window.prompt('Set every line to how many labels?', '1')); if (n >= 0) setLines((ls) => ls.map((l) => ({ ...l, qty: clamp(n) }))); }}>Set to N</button>
-            <button type="button" className="btn btn-soft btn-sm" onClick={() => { const n = Number(window.prompt('Multiply every line by?', '2')); if (n > 0) setLines((ls) => ls.map((l) => ({ ...l, qty: clamp(l.qty * n) }))); }}>× N</button>
+            <button type="button" className="btn btn-soft btn-sm" onClick={() => void askText('Set every line to how many labels?', '1').then((v) => { const n = Number(v); if (v !== null && v.trim() !== '' && n >= 0) setLines((ls) => ls.map((l) => ({ ...l, qty: clamp(n) }))); })}>Set to N</button>
+            <button type="button" className="btn btn-soft btn-sm" onClick={() => void askText('Multiply every line by?', '2').then((v) => { const n = Number(v); if (n > 0) setLines((ls) => ls.map((l) => ({ ...l, qty: clamp(l.qty * n) }))); })}>× N</button>
             <button type="button" className="btn btn-soft btn-sm" onClick={() => setLines((ls) => ls.map((l) => ({ ...l, qty: clamp(l.onHand) })))} title="Negative stock counts as 0">One per piece in stock</button>
             {lines.some((l) => l.received != null) && <button type="button" className="btn btn-soft btn-sm" onClick={() => setLines((ls) => ls.map((l) => ({ ...l, qty: clamp(l.received ?? l.qty) })))}>Use received</button>}
             <button type="button" className="btn btn-soft btn-sm" onClick={() => setLines((ls) => ls.map((l) => ({ ...l, qty: stock.across })))}>One row each</button>
