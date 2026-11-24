@@ -1,0 +1,4 @@
+- Works fully offline: new invoices, payments, customers, items, suppliers and purchase bills are saved on the phone and sent by themselves when the internet is back, in the right order and never twice.
+- Offline changes list shows everything waiting to be sent.
+- The sign-in page remembers your email.
+- GST number Validate: a "Find on GST portal" shortcut when automatic lookup isn't available.
