@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock, CheckCircle2, Headset, Phone, Settings2, UserCheck, XCircle, AlertTriangle, MessageCircle, Send, Bot, UserRound, Bell, BellOff, Sparkles, Mail } from 'lucide-react';
 import { playChime, unlockChime } from '@/lib/chime';
+import { useLeadSummary } from '@/components/super/LeadAlert';
 import { ApiError } from '@/api/client';
 import { useToast } from '@/context/ToastContext';
 import { api } from '@/api/client';
@@ -32,7 +33,8 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en
 
 /** Customer care console: staff see every shop's call-back, check the shop's account, call, and record what happened. */
 export default function SuperSupport() {
-  const [view, setView] = useState<(typeof VIEWS)[number][0] | 'live' | 'whatsapp' | 'leads'>('upcoming');
+  // ?view=leads (from the new-leads alert or the lead email) opens that tab.
+  const [view, setView] = useState<(typeof VIEWS)[number][0] | 'live' | 'whatsapp' | 'leads'>(() => (new URLSearchParams(window.location.search).get('view') === 'leads' ? 'leads' : 'upcoming'));
   // Polled while the console is open: keeps this agent "online" for live chat and shows waiting chats on every tab.
   const live = useQuery({ queryKey: ['platform', 'support', 'live'], queryFn: () => api.get<LiveList>('/platform/support/live'), refetchInterval: 5000, refetchIntervalInBackground: true });
   const waiting = live.data?.waiting ?? 0;
@@ -476,6 +478,7 @@ const SOURCE_LABEL: Record<string, string> = { landing: 'Website', login: 'Sign-
 
 /** "Talk to sales" requests from visitors and from shops that haven't paid: call them, then record how it went. */
 function LeadsTab() {
+  const summary = useLeadSummary();
   const [view, setView] = useState<LeadStatus>('new');
   const [openId, setOpenId] = useState<string | null>(null);
   const list = useQuery({ queryKey: ['platform', 'support', 'leads', view], queryFn: () => api.get<LeadList>(`/platform/support/leads?view=${view}`), refetchInterval: 60_000 });
@@ -483,6 +486,9 @@ function LeadsTab() {
   return (
     <>
       <p className="small muted" style={{ marginTop: 0 }}>People who tapped Help → Talk to sales on the website, and shops on the trial or whose license ended. Call them, then move each lead along.</p>
+      {summary.data?.emailIssue ? (
+        <div className="notice-bar" role="alert" style={{ background: "#fff7e6", color: "#7a5310", border: "1px solid #f3d9a4" }}><AlertTriangle size={16} /> <span><strong>Lead emails aren’t reaching anyone.</strong> {summary.data.emailIssue} New leads still show here, with a sound and a pop-up while this console is open.</span></div>
+      ) : summary.data?.recipients.length ? <p className="small muted">New leads are emailed to {summary.data.recipients.join(', ')}. Leads not marked contacted within 2 hours get a reminder.</p> : null}
       <div className="segmented" style={{ marginBottom: 12 }}>
         {LEAD_TABS.map(([k, l]) => <button key={k} className={view === k ? 'active' : ''} onClick={() => setView(k)}>{l}{k === 'new' && list.data ? ` (${list.data.counts.new})` : ''}</button>)}
       </div>

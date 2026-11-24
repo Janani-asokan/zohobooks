@@ -408,3 +408,8 @@ a.glance:hover { background: var(--ink-50); text-decoration: none; }
 input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .offline-bar-link { margin-left: var(--sp-2); font-weight: 600; text-decoration: underline; color: inherit; }
+.login-known { margin-top: 6px; } .login-known a { font-weight: 600; }
+/* Get the Android app (landing page and account menu) */
+.app-install { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+.app-install figure { margin: 0; text-align: center; }
+.app-install-steps { padding-left: 18px; line-height: 1.6; margin: 0 0 10px; }

@@ -2,6 +2,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { app, freshDb, login } from './helpers';
 import { query } from '../src/db';
+import { devOutbox } from '../src/mailer';
+import { leadRecipients, runLeadReminders } from '../src/services/salesLeads';
 import { isPaidShop, salesContact } from '../../shared/support';
 
 let shopId = '';
@@ -49,10 +51,43 @@ describe('Talk to sales from the public pages', () => {
     expect((await admin.get('/api/platform/support/leads?view=won')).body.leads.some((l: { id: string }) => l.id === lead.id)).toBe(true);
   });
 
-  it('a bot that fills the hidden field gets a polite answer and nothing is saved', async () => {
-    const before = (await query('SELECT count(*)::int AS n FROM sales_leads'))[0].n;
-    expect((await pub().send({ name: 'Bot', phone: '9840000000', website: 'http://spam.example' })).status).toBe(201);
-    expect((await query('SELECT count(*)::int AS n FROM sales_leads'))[0].n).toBe(before);
+  it('the hidden trap field: kept but marked (a browser autofill might have filled it), never emailed or counted', async () => {
+    expect((await pub().send({ name: 'Bot', phone: '9840000001', website: 'http://spam.example' })).status).toBe(201);
+    const [r] = await query("SELECT suspected_spam, notified_to FROM sales_leads WHERE phone = '9840000001'");
+    expect(r).toMatchObject({ suspected_spam: true, notified_to: '' });
+  });
+
+  it('the sales team is told: email to the sales inbox, a confirmation to the visitor, one lead per person a day', async () => {
+    const out = devOutbox(); const from = out.length;
+    const a = await pub().send({ name: 'Ravi', phone: '+91 98400 77777', email: 'ravi@example.com', business: 'Ravi Veg Shop', source: 'landing' });
+    expect(a.status).toBe(201);
+    const mails = out.slice(from);
+    expect(mails.find((m) => m.to === 'sales@corpus360lite.com')?.subject).toMatch(/Ravi Veg Shop/);
+    expect(mails.find((m) => m.to === 'ravi@example.com')?.text).toMatch(/call you within one working day/);
+    // Pressing the button again the same day adds the message to the same lead.
+    await pub().send({ name: 'Ravi', phone: '9840077777', message: 'Also need Tamil invoices', source: 'landing' });
+    const rows = await query("SELECT message, notified_to FROM sales_leads WHERE regexp_replace(phone, '\\D', '', 'g') LIKE '%9840077777'");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ notified_to: 'sales@corpus360lite.com' });
+    expect(rows[0].message).toMatch(/Tamil/);
+    const admin = await login('admin@ledgerly.in', 'admin123');
+    const sum = (await admin.get('/api/platform/support/leads/summary')).body;
+    expect(sum.latest[0].name).toBe('Ravi');
+    expect(sum.recipients).toEqual(['sales@corpus360lite.com']);
+  });
+
+  it('a lead nobody called within 2 hours gets one reminder', async () => {
+    await query("UPDATE sales_leads SET created_at = now() - interval '3 hours' WHERE name = 'Ravi'");
+    const from = devOutbox().length;
+    expect(await runLeadReminders()).toBeGreaterThan(0);
+    expect(devOutbox().slice(from).some((m) => /still waiting for a call/.test(m.subject) && /Ravi/.test(m.text ?? ''))).toBe(true);
+    expect(await runLeadReminders()).toBe(0); // only once
+  });
+
+  it('with no sales or support email, every super admin hears about it', async () => {
+    await query("UPDATE platform_config SET sales_email = '', support_email = '' WHERE id = 1");
+    expect(await leadRecipients()).toContain('admin@ledgerly.in');
+    await query("UPDATE platform_config SET sales_email = 'sales@corpus360lite.com', support_email = 'help@corpus360lite.com' WHERE id = 1");
   });
 
   it('shops can’t read the leads', async () => {
@@ -95,7 +130,7 @@ describe('inside the app', () => {
     // An expired shop can only reach billing, so "call me back" lives there.
     expect((await owner.get('/api/shop/support/contact')).body.code).toBe('license_expired');
     expect((await owner.post('/api/billing/sales-lead').send({ message: 'Renewal please' })).status).toBe(201);
-    const [row] = await query("SELECT * FROM sales_leads WHERE message = 'Renewal please'");
+    const [row] = await query("SELECT * FROM sales_leads WHERE message LIKE '%Renewal please%'"); // joins the shop's earlier lead today
     expect(row.phone).not.toBe(''); // the shop's phone, when none was typed
     await setPlan('premium');
   });

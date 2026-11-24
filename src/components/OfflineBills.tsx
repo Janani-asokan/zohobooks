@@ -11,6 +11,8 @@ import { useNet } from '@/lib/net';
 import { registerDevice } from '@/lib/deviceSeries';
 import { ConfirmModal, Modal } from '@/components/ui';
 import { money } from '@/lib/format';
+import { allChanges, dropChange, onOutboxChange, setOutboxUser, type OutboxEntry } from '@/lib/outbox';
+import { syncOutbox } from '@/lib/outboxSync';
 import { allBills, unsentBills, offlineRef, onQueueChange, removeBill, syncBills, type OfflineBill } from '@/lib/offlineQueue';
 
 /** This business's offline bills on this device, kept up to date. */
@@ -25,6 +27,15 @@ export function useOfflineBills() {
   return { bills, waiting, failed, saved };
 }
 
+/** This business's other saves kept on this device (invoices, payments, customers…), kept up to date. */
+export function useOutbox() {
+  const me = useShopUser();
+  const [list, setList] = useState<OutboxEntry[]>([]);
+  const load = useCallback(() => { allChanges().then((all) => setList(all.filter((e) => e.shopId === me.shop.id))).catch(() => setList([])); }, [me.shop.id]);
+  useEffect(() => { load(); return onOutboxChange(load); }, [load]);
+  return { list, waiting: list.filter((e) => e.status === 'waiting' || e.status === 'sending'), failed: list.filter((e) => e.status === 'failed'), done: list.filter((e) => e.status === 'done') };
+}
+
 /**
  * Sends waiting offline bills: when the app opens, the moment the connection returns, and every 20 seconds while
  * some are waiting. Mounted once in the app shell, so bills go out whatever page the counter is on.
@@ -36,8 +47,29 @@ export function OfflineSync() {
   const online = net === 'online';
   const qc = useQueryClient();
   const toast = useToast();
-  const { waiting } = useOfflineBills();
+  const { waiting: waitingBills } = useOfflineBills();
+  const outbox = useOutbox();
+  const waiting = [...waitingBills, ...outbox.waiting];
+  useEffect(() => { setOutboxUser({ shopId: me.shop.id, userId: me.user.id }); return () => setOutboxUser(null); }, [me.shop.id, me.user.id]);
+  // Something was kept offline: lists show it at once (they include what is waiting to be sent).
+  useEffect(() => {
+    const f = (e: Event) => {
+      const k = (e as CustomEvent<OutboxEntry>).detail.kind.replace('-edit', '');
+      qc.invalidateQueries({ queryKey: [k === 'vendor' ? 'vendors' : k === 'item' ? 'items' : k === 'customer' ? 'customers' : k === 'payment' || k === 'invoice' ? 'invoices' : k === 'bill' ? 'bills' : 'expenses'] });
+    };
+    window.addEventListener('c360:queued', f);
+    return () => window.removeEventListener('c360:queued', f);
+  }, [qc]);
   const run = useCallback(async () => {
+    // Other saves kept offline (invoices, payments, customers, items…), in the order they were made.
+    const o = await syncOutbox(me.shop.id).catch(() => ({ sent: [], failed: [] }));
+    if (o.sent.length) {
+      SALES_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: k }));
+      ['vendors', 'bills', 'expenses', 'billPayments'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      const nums = o.sent.map((e) => e.result?.number).filter(Boolean).slice(0, 4).join(', ');
+      toast('success', `${o.sent.length} change${o.sent.length === 1 ? '' : 's'} made offline ${o.sent.length === 1 ? 'is' : 'are'} now saved`, nums ? `Invoice numbers: ${nums}` : undefined);
+    }
+    if (o.failed.length) toast('error', `${o.failed.length} change${o.failed.length === 1 ? '' : 's'} made offline couldn’t be saved`, `${o.failed[0]!.label}: ${o.failed[0]!.error ?? ''}. Open Offline changes to fix it.`);
     if (!me.can('sales.write')) return;
     const r = await syncBills(me.shop.id).catch(() => ({ saved: [], failed: [] }));
     if (r.saved.length) {
@@ -59,21 +91,26 @@ export function OfflineSync() {
     window.addEventListener('c360:native-error', on);
     return () => window.removeEventListener('c360:native-error', on);
   }, [toast]);
-  // Get the counter ready for an outage while the internet is up: load the billing screen's code and the data it
-  // needs once, so the service worker has them even if the counter has not opened POS yet today.
+  // Get ready for an outage while the internet is up: every screen's code and the data billing needs, so invoices,
+  // payments and counter bills can be made offline even on screens not opened yet today.
   useEffect(() => {
-    if (!online || !me.can('sales.write') || !me.has('pos')) return;
+    if (!online) return;
     const t = window.setTimeout(() => {
-      void import('@/pages/app/Pos').catch(() => undefined);
-      // The camera barcode reader too, so camera billing works offline on browsers without a built-in reader.
-      void import('@zxing/browser').catch(() => undefined);
+      void navigator.serviceWorker?.ready.then((r) => r.active?.postMessage('precache')).catch(() => undefined);
+      const pos = me.can('sales.write') && me.has('pos');
+      if (pos) {
+        void import('@/pages/app/Pos').catch(() => undefined);
+        // The camera barcode reader too, so camera billing works offline on browsers without a built-in reader.
+        void import('@zxing/browser').catch(() => undefined);
+      }
       const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-      for (const u of ['/shop/items', '/shop/customers', '/shop/organization', '/shop/branches', '/shop/print-settings', ...(me.has('offers_loyalty') ? [`/shop/offers/running?date=${date}`, '/shop/loyalty/settings'] : []),
-        // The phone app keeps the rest of the essentials too, so every screen opens offline.
-        ...(IS_APP || IS_DESKTOP ? ['/shop/tax-slabs', '/shop/invoices', '/shop/label/setup', ...(me.can('purchases.read') ? ['/shop/vendors', '/shop/bills', '/shop/purchase-orders'] : [])] : [])])
+      for (const u of ['/shop/items', '/shop/customers', '/shop/organization', '/shop/branches', '/shop/print-settings', '/shop/tax-slabs', '/shop/invoices', '/shop/bank-accounts',
+        ...(me.has('offers_loyalty') ? [`/shop/offers/running?date=${date}`, '/shop/loyalty/settings'] : []),
+        ...(IS_APP ? ['/shop/label/setup'] : []),
+        ...(me.can('purchases.read') ? ['/shop/vendors', '/shop/bills', '/shop/purchase-orders'] : [])])
         void api.get(u).catch(() => undefined);
-      // CorpusLite: register this phone for its own invoice series (and refresh the next number).
-      if (IS_APP || IS_DESKTOP) void registerDevice(me.shop.id);
+      // Phones and the Windows app: register for this device's own counter invoice series (and refresh the next number).
+      if (pos && (IS_APP || IS_DESKTOP)) void registerDevice(me.shop.id);
     }, 4000);
     return () => window.clearTimeout(t);
   }, [online, me]);
@@ -95,13 +132,16 @@ export function OfflineSync() {
 
 /** Top-bar pill: shown only while bills are waiting or need attention. Opens the list. */
 export function OfflineBillsBadge() {
-  const { waiting, failed } = useOfflineBills();
+  const b = useOfflineBills();
+  const o = useOutbox();
+  const waiting = [...b.waiting, ...o.waiting]; const failed = [...b.failed, ...o.failed];
   const online = useNet() === 'online';
   const [open, setOpen] = useState(false);
   if (!waiting.length && !failed.length) return null;
+  const what = (n: number) => (o.waiting.length || o.failed.length ? `change${n === 1 ? '' : 's'}` : `bill${n === 1 ? '' : 's'}`);
   const label = failed.length
-    ? `${failed.length} offline bill${failed.length === 1 ? '' : 's'} need${failed.length === 1 ? 's' : ''} attention`
-    : `${waiting.length} bill${waiting.length === 1 ? '' : 's'} ${online ? 'sending…' : 'saved on this device'}`;
+    ? `${failed.length} offline ${what(failed.length)} need${failed.length === 1 ? 's' : ''} attention`
+    : `${waiting.length} ${what(waiting.length)} ${online ? 'sending…' : 'saved on this device'}`;
   return (
     <>
       <button type="button" className={`offline-pill ${failed.length ? 'bad' : ''}`} onClick={() => setOpen(true)} aria-label={label} title={label}>
@@ -118,18 +158,45 @@ export function OfflineBillsModal({ open, onClose }: { open: boolean; onClose: (
   const me = useShopUser();
   const online = useNet() === 'online';
   const { bills } = useOfflineBills();
+  const outbox = useOutbox();
   const [busy, setBusy] = useState('');
   const [discard, setDiscard] = useState<OfflineBill | null>(null);
+  const [drop, setDrop] = useState<OutboxEntry | null>(null);
+  const retryChange = async (e: OutboxEntry) => { setBusy(e.key); try { await syncOutbox(me.shop.id, { retry: e.key }); } finally { setBusy(''); } };
   const retry = async (b: OfflineBill) => { setBusy(b.clientRef); try { await syncBills(me.shop.id, { retryFailed: b.clientRef }); } finally { setBusy(''); } };
   const shown = [...bills].reverse();
   return (
-    <Modal open={open} onClose={onClose} size="lg" title="Offline bills"
-      subtitle={online ? 'Bills made at the counter without internet. They are sent automatically.' : 'You are offline. Bills are kept safely on this device and sent when the internet is back.'}
+    <Modal open={open} onClose={onClose} size="lg" title="Offline changes"
+      subtitle={online ? 'Bills, invoices, payments and other changes made without internet. They are sent automatically.' : 'You are offline. Changes are kept safely on this device and sent when the internet is back.'}
       footer={<>
-        {bills.some((b) => b.status === 'waiting') && <button className="btn btn-secondary" disabled={busy === 'all' || navigator.onLine === false} onClick={() => { setBusy('all'); window.dispatchEvent(new Event('c360:sync-now')); window.setTimeout(() => setBusy(''), 3000); }}>{busy === 'all' ? <Loader2 size={14} className="spin" /> : <CloudUpload size={14} />} Send now</button>}
+        {(bills.some((b) => b.status === 'waiting') || outbox.waiting.length > 0) && <button className="btn btn-secondary" disabled={busy === 'all' || navigator.onLine === false} onClick={() => { setBusy('all'); window.dispatchEvent(new Event('c360:sync-now')); window.setTimeout(() => setBusy(''), 3000); }}>{busy === 'all' ? <Loader2 size={14} className="spin" /> : <CloudUpload size={14} />} Send now</button>}
         <button className="btn btn-primary" onClick={onClose}>Close</button>
       </>}>
-      {!shown.length ? <p className="muted">No offline bills on this device.</p> : (
+      {outbox.list.length > 0 && (
+        <div className="table-wrap" style={{ marginBottom: 16 }}>
+          <table className="table">
+            <thead><tr><th>Made</th><th>Change</th><th>Status</th><th /></tr></thead>
+            <tbody>
+              {[...outbox.list].reverse().map((e) => (
+                <tr key={e.key}>
+                  <td className="muted">{new Date(e.madeAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                  <td className="strong">{e.status === 'done' && e.result?.id && e.kind === 'invoice' ? <Link to={`/app/sales/invoices/${e.result.id}`} onClick={onClose}>{e.label}{e.result.number ? ` ${e.result.number}` : ''}</Link> : e.label}</td>
+                  <td>
+                    {e.status === 'done' ? <span className="row small" style={{ gap: 4, color: 'var(--green-700)' }}><CheckCircle2 size={14} /> Saved</span>
+                      : e.status === 'failed' ? <span className="small" style={{ color: 'var(--red-600)' }}><AlertTriangle size={13} style={{ verticalAlign: -2 }} /> Not saved: {e.error}</span>
+                        : <span className="row small muted" style={{ gap: 4 }}>{e.status === 'sending' ? <Loader2 size={13} className="spin" /> : <CloudOff size={13} />} {e.status === 'sending' ? 'Sending' : online ? 'Waiting to send' : 'On this device'}{e.error ? ` · ${e.error}` : ''}</span>}
+                  </td>
+                  <td className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+                    {e.status === 'failed' && <button className="btn btn-soft btn-sm" disabled={!online || busy === e.key} onClick={() => void retryChange(e)}>{busy === e.key ? <Loader2 size={13} className="spin" /> : <RotateCcw size={13} />} Try again</button>}
+                    {e.status === 'failed' && <button className="icon-btn danger" aria-label="Discard change" onClick={() => setDrop(e)}><Trash2 size={14} /></button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {!shown.length ? (!outbox.list.length && <p className="muted">Nothing made offline on this device.</p>) : (
         <div className="table-wrap">
           <table className="table">
             <thead><tr><th>Made</th><th>Bill</th><th>Customer</th><th className="num">Total</th><th>Status</th><th /></tr></thead>
@@ -162,6 +229,9 @@ export function OfflineBillsModal({ open, onClose }: { open: boolean; onClose: (
       <ConfirmModal open={!!discard} onClose={() => setDiscard(null)} title="Discard this offline bill?" confirmLabel="Discard bill"
         text={discard ? `${discard.ref ?? offlineRef(discard.clientRef)} for ${money(discard.expectedTotal)} will be removed from this device and never saved. Do this only if you have entered it another way.` : ''}
         onConfirm={() => { if (discard) void removeBill(discard.clientRef); setDiscard(null); }} />
+      <ConfirmModal open={!!drop} onClose={() => setDrop(null)} title="Discard this change?" confirmLabel="Discard"
+        text={drop ? `“${drop.label}” will be removed from this device and never saved. Do this only if you have entered it again another way.` : ''}
+        onConfirm={() => { if (drop) void dropChange(drop.key); setDrop(null); }} />
     </Modal>
   );
 }
@@ -171,7 +241,8 @@ export function OfflineBillsModal({ open, onClose }: { open: boolean; onClose: (
  * next time someone from this business signs in here. Say so, so nobody signs out thinking they were sent.
  */
 export async function okToSignOut(shopId: string): Promise<boolean> {
-  const n = (await unsentBills(shopId)).length;
+  const changes = (await allChanges().catch(() => [] as OutboxEntry[])).filter((e) => e.shopId === shopId && e.status !== 'done').length;
+  const n = (await unsentBills(shopId)).length + changes;
   if (!n) return true;
-  return window.confirm(`${n} bill${n === 1 ? '' : 's'} made offline ${n === 1 ? 'hasn’t' : 'haven’t'} reached the server yet.\n\nThey stay safe on this device and are sent the next time someone from this business signs in here with the internet on. Don’t clear this browser’s data or uninstall the app before then.\n\nSign out anyway?`);
+  return window.confirm(`${n} ${changes ? 'change' : 'bill'}${n === 1 ? '' : 's'} made offline ${n === 1 ? 'hasn’t' : 'haven’t'} reached the server yet.\n\nThey stay safe on this device and are sent the next time someone from this business signs in here with the internet on. Don’t clear this browser’s data or uninstall the app before then.\n\nSign out anyway?`);
 }

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { api, ApiError } from './client';
+import { withPending } from '@/lib/outbox';
 import { useToast } from '@/context/ToastContext';
 import type {
   AuditEntry, BankAccount, BankTxn, Bill, BillPayment, Branch, CreditNote, Customer, Dashboard, Invoice, InvoiceDetail, Item, Notification, Organization,
@@ -16,7 +17,12 @@ const q = <T,>(key: QueryKey, url: string, enabled = true) => ({ queryKey: key, 
 export const useOrg = () => useQuery(q<Organization>(['org'], `${S}/organization`));
 export const useTaxSlabs = () => useQuery({ ...q<TaxSlab[]>(['taxSlabs'], `${S}/tax-slabs`), staleTime: 5 * 60_000 });
 export const useBranches = () => useQuery(q<Branch[]>(['branches'], `${S}/branches`));
-export const useItems = () => useQuery(q<Item[]>(['items'], `${S}/items`));
+export const useItems = () => useQuery({ queryKey: ['items'], queryFn: async () => {
+  const list = await api.get<Item[]>(`${S}/items`);
+  // Items added on this device while offline: their GST rate comes from the (saved) tax slabs.
+  const slabs = await api.get<TaxSlab[]>(`${S}/tax-slabs`).catch(() => [] as TaxSlab[]);
+  return withPending(list, 'item', (b) => ({ taxRate: slabs.find((x) => x.id === b.taxSlabId)?.rate ?? 0 }));
+} });
 /**
  * Items priced for one branch: where a transfer or pricing rule set a selling price at that branch, it replaces the
  * standard price (SP1), so billing screens pre-fill what the branch actually sells at.
@@ -35,7 +41,7 @@ export const useItemFacets = () => useQuery(q<ItemFacets>(['itemFacets'], `${S}/
 export const usePurchaseOrders = (enabled = true) => useQuery(q<PurchaseOrder[]>(['purchaseOrders'], `${S}/purchase-orders`, enabled));
 export const useExpenses = (enabled = true) => useQuery(q<Expense[]>(['expenses'], `${S}/expenses`, enabled));
 export const usePrintSettings = () => useQuery({ ...q<PrintSettings>(['printSettings'], `${S}/print-settings`), staleTime: 5 * 60_000 });
-export const useCustomers = () => useQuery(q<Customer[]>(['customers'], `${S}/customers`));
+export const useCustomers = () => useQuery({ queryKey: ['customers'], queryFn: async () => withPending(await api.get<Customer[]>(`${S}/customers`), 'customer') });
 /** Customers a picker should offer: not archived, plus the one already chosen (so an old draft still shows it). */
 export const pickable = <T extends { id: string; archived?: boolean }>(list: T[], selectedId?: string | null) => list.filter((c) => !c.archived || c.id === selectedId);
 export const useInvoices = () => useQuery(q<Invoice[]>(['invoices'], `${S}/invoices`));
@@ -44,7 +50,7 @@ export const usePayments = () => useQuery(q<PaymentRow[]>(['payments'], `${S}/pa
 export const useCreditNotes = () => useQuery(q<CreditNote[]>(['creditNotes'], `${S}/credit-notes`));
 export const useSalesOrders = (kind: 'order' | 'quote' = 'order', enabled = true) => useQuery(q<SalesOrder[]>(['salesOrders', kind], `${S}/sales-orders?kind=${kind}`, enabled));
 export const useRecurring = () => useQuery(q<Recurring[]>(['recurring'], `${S}/recurring`));
-export const useVendors = (enabled = true) => useQuery(q<Vendor[]>(['vendors'], `${S}/vendors`, enabled));
+export const useVendors = (enabled = true) => useQuery({ queryKey: ['vendors'], queryFn: async () => withPending(await api.get<Vendor[]>(`${S}/vendors`), 'vendor'), enabled });
 export const useBills = (enabled = true) => useQuery(q<Bill[]>(['bills'], `${S}/bills`, enabled));
 export const useBillPayments = () => useQuery(q<BillPayment[]>(['billPayments'], `${S}/bill-payments`));
 export const useStockAdjustments = () => useQuery(q<StockAdjustment[]>(['stockAdjustments'], `${S}/stock/adjustments`));
@@ -85,7 +91,9 @@ export function useMut<TVars, TOut = unknown>(fn: (v: TVars) => Promise<TOut>, i
     mutationFn: fn,
     onSuccess: (out, v) => {
       for (const k of invalidate) qc.invalidateQueries({ queryKey: k });
-      if (opts.success) toast('success', typeof opts.success === 'function' ? opts.success(out, v) : opts.success);
+      // Kept on this device (no internet): say so instead of "saved".
+      if ((out as { offline?: boolean } | null)?.offline) toast('info', 'Saved on this device', 'No internet right now. It is sent to the server by itself when the connection is back.');
+      else if (opts.success) toast('success', typeof opts.success === 'function' ? opts.success(out, v) : opts.success);
     },
     onError: (e) => {
       if (!opts.silentError && !e.details) toast('error', e.message);

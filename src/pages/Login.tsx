@@ -9,6 +9,7 @@ import { api, ApiError } from '@/api/client';
 import { LOGIN_EMAIL_RE as EMAIL_RE } from '@/lib/format';
 import { Field, Modal } from '@/components/ui';
 import { PasswordInput } from '@/components/PasswordInput';
+import { forgetLogin, lastLogin, rememberLogin } from '@/lib/lastLogin';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { LANGS } from '@/i18n';
 import { AuthShell } from './AuthShell';
@@ -24,7 +25,9 @@ export default function Login() {
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
 
-  const [email, setEmail] = useState('');
+  // Signing in again on this device: the email is already filled in, so only the password is needed.
+  const [known, setKnown] = useState(() => lastLogin());
+  const [email, setEmail] = useState(() => known?.email ?? '');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
   const [touched, setTouched] = useState({ email: false, password: false });
@@ -59,6 +62,7 @@ export default function Login() {
     try {
       // The server decides whether this is a Super Admin or a shop account.
       const m = await login(email, password, remember);
+      rememberLogin(email, m.user.name);
       toast('success', 'Welcome back!', m.kind === 'super' ? 'Signed in to the platform console.' : `Signed in to ${m.shop.name}.`);
       navigate(from && from.startsWith(homeFor(m)) ? from : homeFor(m), { replace: true });
     } catch (err) {
@@ -105,11 +109,16 @@ export default function Login() {
         <Field label={t('login.email')} required error={touched.email ? emailErr : ''}>
           <div className="input-group">
             <span className="lead"><Mail size={16} /></span>
-            <input className={`input ${touched.email && emailErr ? 'invalid' : ''}`} type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setTouched((x) => ({ ...x, email: true }))} style={{ height: 40 }} autoFocus />
+            <input className={`input ${touched.email && emailErr ? 'invalid' : ''}`} type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setTouched((x) => ({ ...x, email: true }))} style={{ height: 40 }} autoFocus={!known} />
           </div>
+          {known && email === known.email && (
+            <div className="small muted login-known">
+              Welcome back{known.name ? `, ${known.name}` : ''}. <a href="#" onClick={(e) => { e.preventDefault(); forgetLogin(); setKnown(null); setEmail(''); }}>Not you? Use another email</a>
+            </div>
+          )}
         </Field>
         <Field label={t('login.password')} required error={touched.password ? passErr : ''}>
-          <PasswordInput value={password} onChange={setPassword} invalid={touched.password && !!passErr} />
+          <PasswordInput value={password} onChange={setPassword} invalid={touched.password && !!passErr} autoFocus={!!known} />
         </Field>
         <div className="row between small">
           <label className="row" style={{ gap: 8, cursor: 'pointer', color: 'var(--ink-600)' }}>

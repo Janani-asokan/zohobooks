@@ -22,7 +22,7 @@ import { useShortcuts } from '@/components/useShortcuts';
 import { useNet } from '@/lib/net';
 import { useSwitchBusiness } from '@/components/BusinessPicker';
 import { OfflineBillsBadge, OfflineSync, okToSignOut } from '@/components/OfflineBills';
-import { WindowsDownload } from '@/components/WindowsDownload';
+import { AppDownloads } from '@/components/AppDownloads';
 import { ReceiptCheck } from '@/components/PrintCheck';
 import { initials } from '@/lib/format';
 import { AssistantButton } from '@/components/Assistant';
@@ -292,7 +292,7 @@ export default function AppLayout() {
                   <button className="dropdown-item" onClick={() => { close(); setShortcuts(true); }}>
                     <Keyboard size={16} /> {t('shell.shortcuts')} <span className="kbd" style={{ marginLeft: 'auto' }}>?</span>
                   </button>
-                  <WindowsDownload variant="menu" onClick={close} />
+                  <AppDownloads variant="menu" onClick={close} />
                   <div className="dropdown-sep" />
                   <PrefsMenu />
                   <div className="dropdown-sep" />

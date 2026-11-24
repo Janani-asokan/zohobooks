@@ -16,6 +16,9 @@ import { EMAIL_RE } from '../../../shared/gst';
 import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
 import { platformSupportRouter } from './platformSupport';
 import { platformLogsRouter } from './platformLogs';
+import { appsInfo, setAndroid } from '../services/appDownloads';
+import { fetchTaxpayer, forgetProvider, lookupProvider, type LookupProvider } from '../services/gstinLookup';
+import { checkGstin } from '../../../shared/gst';
 
 /**
  * Super Admin API. Reads/writes only platform tables (shops, plans, config, tax slabs,
@@ -173,6 +176,59 @@ platformRouter.post(
 
 /** Email setup check for the Configuration page: which provider is set, and a test send that reports the provider's error. */
 platformRouter.get('/mail', h(async (_req, res) => res.json(mailStatus())));
+
+/**
+ * GST number lookup (Validate next to a GSTIN fills the company name and address): any provider, set here. Header
+ * values (API keys) are never sent back to the browser, only their names; leave a value empty to keep the saved one.
+ */
+const maskProvider = async () => {
+  const [row] = await query('SELECT gst_lookup FROM platform_config WHERE id = 1');
+  const p = row?.gst_lookup as LookupProvider | null;
+  const env = !p?.url && !!config.gstLookup;
+  return { source: p?.url ? 'settings' : env ? 'env' : null, url: p?.url ?? '', method: p?.method ?? 'GET', headerNames: Object.keys(p?.headers ?? {}), body: p?.body ?? '' };
+};
+platformRouter.get('/gst-lookup', h(async (_req, res) => res.json(await maskProvider())));
+platformRouter.put('/gst-lookup', h(async (req, res) => {
+  const b = parse(z.object({
+    clear: z.boolean().optional(),
+    url: z.string().trim().max(500).default(''), method: z.enum(['GET', 'POST']).default('GET'), body: z.string().max(2000).default(''),
+    headers: z.array(z.object({ name: z.string().trim().regex(/^[A-Za-z0-9-]{1,60}$/, 'Header names use letters, numbers and dashes'), value: z.string().max(500).default('') })).max(6).default([]),
+  }), req.body);
+  if (b.clear) await query('UPDATE platform_config SET gst_lookup = NULL WHERE id = 1');
+  else {
+    if (!/^https:\/\/[^\s]+$/.test(b.url)) throw badRequest('Enter the provider’s https:// address');
+    if (!b.url.includes('{gstin}') && !b.body.includes('{gstin}')) throw badRequest('Put {gstin} where the GST number goes, in the address or the body');
+    const [row] = await query('SELECT gst_lookup FROM platform_config WHERE id = 1');
+    const old = (row?.gst_lookup?.headers ?? {}) as Record<string, string>;
+    const headers = Object.fromEntries(b.headers.map((x) => [x.name, x.value || old[x.name] || '']).filter(([, v]) => v));
+    await query('UPDATE platform_config SET gst_lookup = $1 WHERE id = 1', [JSON.stringify({ url: b.url, method: b.method, headers, body: b.body })]);
+  }
+  forgetProvider();
+  await tx((db) => audit(db, req, null, 'update', 'gst_lookup', 'settings', { cleared: !!b.clear, url: b.clear ? '' : b.url.replace(/[?#].*/, '') }));
+  res.json(await maskProvider());
+}));
+platformRouter.post('/gst-lookup/test', h(async (req, res) => {
+  const { gstin } = parse(z.object({ gstin: z.string().trim().toUpperCase().length(15, 'A GSTIN has 15 characters') }), req.body);
+  if (checkGstin(gstin).status !== 'ok') throw badRequest('That GSTIN has a typo (its check digit doesn’t match). Test with a real one.');
+  const p = await lookupProvider();
+  if (!p) throw badRequest('Save the provider first');
+  try {
+    const r = await fetchTaxpayer(gstin, p);
+    res.json({ ok: !!r.taxpayer, status: r.status, taxpayer: r.taxpayer, reply: JSON.stringify(r.raw)?.slice(0, 1500) ?? '' });
+  } catch (e) { res.json({ ok: false, error: (e as Error).message }); }
+}));
+
+/** Apps on the website: upload the Android APK and/or set its Play Store link. */
+platformRouter.get('/app-downloads', h(async (_req, res) => res.json(await appsInfo())));
+platformRouter.put('/app-downloads/android', h(async (req, res) => {
+  const b = parse(z.object({
+    fileBase64: z.string().max(60_000_000).optional(), fileName: z.string().trim().max(120).optional(), version: z.string().trim().max(20).optional(),
+    playUrl: z.string().trim().max(300).optional(), removeFile: z.boolean().optional(),
+  }), req.body);
+  const r = await setAndroid(req.ctx?.kind === 'super' ? req.ctx.id : null, b);
+  await tx((db) => audit(db, req, null, 'update', 'app_download', 'android', { version: r.android.apk?.version ?? '', playUrl: r.android.playUrl, removed: !!b.removeFile }));
+  res.json(r);
+}));
 
 platformRouter.post(
   '/mail/test',

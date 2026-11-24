@@ -5,7 +5,7 @@
  *   knows the connection is down.
  * - Auth, platform, public links and all writes: never cached.
  */
-const VERSION = 'v61';
+const VERSION = 'v62';
 const SHELL = `ledgerly-shell-${VERSION}`;
 const DATA = `ledgerly-data-${VERSION}`;
 
@@ -22,7 +22,20 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('message', (e) => {
   // Sent on sign-out so another person on this device can't read cached shop data offline.
   if (e.data === 'clear-data') caches.delete(DATA);
+  // Sent once someone is signed in: keep every screen's code, so screens never opened before also work offline.
+  if (e.data === 'precache') e.waitUntil(precacheAll());
 });
+
+async function precacheAll() {
+  try {
+    const list = await fetch('/precache.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : []));
+    const cache = await caches.open(SHELL);
+    for (const url of list) {
+      if (await cache.match(url)) continue;
+      try { const res = await fetch(url); if (res.ok) await cache.put(url, res); } catch { return; } // offline again: next time
+    }
+  } catch { /* best effort */ }
+}
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;

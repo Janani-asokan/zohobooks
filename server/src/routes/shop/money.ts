@@ -38,8 +38,8 @@ moneyRouter.post(
   '/vendors',
   perm('purchases.write'),
   T(async (db, req, c) => {
-    const b = parse(vendorBody, req.body);
-    const v = await one(db, 'INSERT INTO vendors (shop_id, name, gstin, phone, email, state) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *', [c.shopId, b.name, b.gstin, b.phone, b.email, b.state]);
+    const b = parse(vendorBody.extend({ id: z.string().uuid().optional() }), req.body);
+    const v = await one(db, 'INSERT INTO vendors (id, shop_id, name, gstin, phone, email, state) VALUES (coalesce($7::uuid, gen_random_uuid()), $1,$2,$3,$4,$5,$6) RETURNING *', [c.shopId, b.name, b.gstin, b.phone, b.email, b.state, b.id ?? null]);
     await audit(db, req, c.shopId, 'create', 'vendor', v.id, { name: b.name });
     return serializeVendor(v);
   }),

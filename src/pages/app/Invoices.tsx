@@ -11,6 +11,7 @@ import { useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { Badge, EmptyState, PageHeader, Pagination, SearchInput, usePagination } from '@/components/ui';
+import { PendingStrip } from '@/components/PendingStrip';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SavedViewsMenu, useSavedViews } from '@/components/SavedViews';
 import { fmtDate, money, todayISO } from '@/lib/format';
@@ -100,6 +101,7 @@ export default function Invoices() {
         subtitle={me.platform.autoResetInvoiceNumbering ? `Numbering for FY ${fyLabel(new Date(), me.platform.fyStartMonth)} restarts from 0001 every 1 April.` : 'Invoice numbering continues across financial years.'}
         actions={me.can('sales.write') && <Link to="/app/sales/invoices/new" className="btn btn-primary" title="Alt N"><Plus size={16} /> {t('shell.newInvoice')}</Link>}
       />
+      <PendingStrip what={['invoice or payment', 'invoices or payments']} match={(e) => e.kind === 'invoice' || e.kind === 'invoice-edit' || e.kind === 'payment'} />
       <Hint id="invoices" title="Invoicing in three steps">
         <ol><li>Click <strong>New Invoice</strong>, choose the customer and scan or pick items.</li><li>Toggle <strong>GST / Net</strong> — inter-state sales switch to IGST automatically.</li><li>Issue it, then share by WhatsApp, print an A4 copy or send a payment link with UPI QR.</li></ol>
       </Hint>

@@ -26,7 +26,7 @@ gstinRouter.get('/gstin/:gstin', rateLimit('gstin', 60, 10 * 60_000), T(async (d
   const base = { gstin, check, existing: existing ? { id: existing.id, name: existing.name } : null, isYours: !!org?.gstin && org.gstin.toUpperCase() === gstin && forWhat !== null };
   // A number with a wrong check digit can't be in the register: don't spend a (paid) lookup on it.
   if (check.status !== 'ok') return { ...base, lookup: 'skipped' as const, taxpayer: null };
-  if (!lookupOn()) return { ...base, lookup: 'off' as const, taxpayer: null };
+  if (!(await lookupOn())) return { ...base, lookup: 'off' as const, taxpayer: null };
   try {
     const r = await lookupGstin(gstin);
     return { ...base, lookup: r.taxpayer ? 'found' as const : 'not_found' as const, taxpayer: r.taxpayer, cached: r.cached };

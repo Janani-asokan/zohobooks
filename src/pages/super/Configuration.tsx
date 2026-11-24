@@ -9,6 +9,8 @@ import { useToast } from '@/context/ToastContext';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { fyLabel, fyRange } from '@/lib/fy';
 import { fmtDate } from '@/lib/format';
+import { AppDownloadsCard } from '@/components/super/AppDownloadsCard';
+import { GstLookupCard } from '@/components/super/GstLookupCard';
 
 const PREFIX_RE = /^[A-Z]{2,5}$/;
 
@@ -65,6 +67,8 @@ function ConfigForm({ config }: { config: PlatformConfig }) {
 
       <div className="stack">
         <EmailCheck />
+        <GstLookupCard />
+        <AppDownloadsCard />
 
         {/* ---------------- ID Generation ---------------- */}
         <section className="card">

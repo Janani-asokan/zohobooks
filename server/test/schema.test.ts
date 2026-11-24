@@ -38,6 +38,7 @@ const NO_RLS = new Set(['users', 'user_shops', 'public_links', 'role_permissions
   'wa_conversations', // WhatsApp support inbox: a message arrives before its shop is known
   'gstin_lookups', // public GST register data cached for every shop (Validate next to a GST number)
   'shared_files', // report files shared on WhatsApp: opened by an unguessable token before the shop is known (like public_links)
+  'app_downloads', // the Android app offered on the website: a platform file, no shop
   'sales_leads', // Talk to sales: most leads are visitors with no shop yet; read only by the super admin
 ]);
 

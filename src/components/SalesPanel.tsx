@@ -85,7 +85,7 @@ export function SalesPanel({ source, shop, compact }: {
           {!shop && <input className="input" type="email" placeholder="Email (if no phone)" aria-label="Email" value={f.email} maxLength={160} onChange={(e) => setF({ ...f, email: e.target.value })} />}
           <textarea className="textarea" rows={2} placeholder="What would you like to know? (optional)" aria-label="Message" value={f.message} maxLength={1000} onChange={(e) => setF({ ...f, message: e.target.value })} />
           {/* Never shown to people; bots that fill every field give themselves away. */}
-          <input className="sales-hp" tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} name="website" />
+          <input className="sales-hp" tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} name="c360_hp_trap" />
           {err && <div className="small" style={{ color: 'var(--danger)' }} role="alert">{err}</div>}
           <button className="btn btn-primary btn-sm" disabled={!ok || busy}>{busy ? <Loader2 size={14} className="spin" /> : <PhoneCall size={14} />} Call me back</button>
         </form>

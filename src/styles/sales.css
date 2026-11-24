@@ -39,3 +39,8 @@
 @keyframes ph-pulse { 0% { box-shadow: 0 0 0 0 rgba(1, 143, 150, .45); } 70% { box-shadow: 0 0 0 14px rgba(1, 143, 150, 0); } 100% { box-shadow: 0 0 0 0 rgba(1, 143, 150, 0); } }
 @media (prefers-reduced-motion: reduce) { .ph-fab.attn::before { animation: none; } }
 a.ph-fab { text-decoration: none; }
+/* Super admin: new sales leads */
+.lead-pill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: #fff4d6; color: #7a5310; border: 1px solid #f0cf7f; font-size: 13px; font-weight: 600; text-decoration: none !important; animation: lead-pulse 2s ease-in-out infinite; }
+.lead-pill.late { background: #fde8e8; color: #9b1c1c; border-color: #f5b5b5; }
+@keyframes lead-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(240, 180, 60, .45); } 50% { box-shadow: 0 0 0 6px rgba(240, 180, 60, 0); } }
+@media (prefers-reduced-motion: reduce) { .lead-pill { animation: none; } }

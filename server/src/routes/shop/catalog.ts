@@ -113,7 +113,7 @@ catalogRouter.post(
   perm('items.write'),
   T(async (db, req, c) => {
     const b = parse(
-      itemBody.extend({ openingStock: money.default(0), branchId: z.string().uuid().nullable().optional(), batchNo: z.string().max(60).optional(), expiryDate: z.string().optional() }),
+      itemBody.extend({ id: z.string().uuid().optional(), openingStock: money.default(0), branchId: z.string().uuid().nullable().optional(), batchNo: z.string().max(60).optional(), expiryDate: z.string().optional() }),
       req.body,
     );
     const slab = await assertSlab(db, b.taxSlabId);
@@ -121,9 +121,9 @@ catalogRouter.post(
     const extra = await shopExtra(db, c.shopId, b.extra);
     const it = await one(
       db,
-      `INSERT INTO items (shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, track_batches, description, category, brand, image, mrp, track_serials, extra)
-       VALUES ($1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
-      [c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.type === 'Goods' && b.trackBatches, b.description, b.category, b.brand, b.image, b.mrp, b.type === 'Goods' && b.trackSerials, JSON.stringify(extra)],
+      `INSERT INTO items (id, shop_id, type, name, sku, barcode, unit, hsn, cost, sp1, sp2, sp3, tax_slab_id, reorder_level, track_batches, description, category, brand, image, mrp, track_serials, extra)
+       VALUES (coalesce($22::uuid, gen_random_uuid()), $1,$2,$3,upper($4),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
+      [c.shopId, b.type, b.name, b.sku, b.barcode, b.unit, b.hsn, b.cost, b.sp1, b.sp2, b.sp3, b.taxSlabId, b.reorderLevel, b.type === 'Goods' && b.trackBatches, b.description, b.category, b.brand, b.image, b.mrp, b.type === 'Goods' && b.trackSerials, JSON.stringify(extra), b.id ?? null],
     );
     if (b.type === 'Goods' && b.openingStock > 0) {
       const branchId = await primaryBranchId(db, c.shopId, b.branchId);

@@ -11,6 +11,8 @@ import { HttpError, badRequest, h, notFound, parse } from '../http';
 import { bookedPerSlot, expireWaiting, serializeCallback, serializeChat, serializeMsg, supportSettings } from './shop/support';
 import { isSlot, supportSlots, waDigits } from '../../../shared/support';
 import { config } from '../config';
+import { mailConfigured } from '../mailer';
+import { leadRecipients } from '../services/salesLeads';
 import { fetchMedia, markRead, sendTemplate, sendText, waEnabled, windowOpen } from '../services/whatsappCloud';
 
 export const platformSupportRouter = Router();
@@ -192,6 +194,26 @@ platformSupportRouter.get('/leads', h(async (req, res) => {
       count(*) FILTER (WHERE created_at::date = (now() AT TIME ZONE 'Asia/Kolkata')::date)::int AS today,
       count(*) FILTER (WHERE status = 'won')::int AS won FROM sales_leads`));
   res.json({ leads: rows.map(serializeLead), counts });
+}));
+
+/**
+ * The console's lead alert (polled every 30 s): how many are new, which came in last, and whether lead emails are
+ * actually reaching someone, so the sales team can't miss a lead because email isn't set up.
+ */
+platformSupportRouter.get('/leads/summary', h(async (_req, res) => {
+  const counts = await platformTx((db) => one(db, `SELECT count(*) FILTER (WHERE status = 'new' AND NOT suspected_spam)::int AS new,
+      count(*) FILTER (WHERE status = 'new' AND NOT suspected_spam AND created_at < now() - interval '2 hours')::int AS overdue FROM sales_leads`));
+  const latest = await platformTx((db) => many(db, `SELECT id, name, business, phone, created_at FROM sales_leads
+      WHERE status = 'new' AND NOT suspected_spam ORDER BY created_at DESC LIMIT 5`));
+  const last = await platformTx((db) => one(db, "SELECT status, error, created_at FROM email_log WHERE kind = 'sales_lead' ORDER BY created_at DESC LIMIT 1"));
+  const recipients = await leadRecipients();
+  const issue = !mailConfigured() ? 'Email isn’t set up on the server, so lead emails can’t be sent. New leads only show here.'
+    : !recipients.length ? 'No sales or support email is set: add one in Customer care → Hours & contacts.'
+      : last && last.status !== 'sent' ? `The last lead email wasn’t delivered (${last.error || last.status}). Check the email settings.` : '';
+  res.json({
+    new: counts.new, overdue: counts.overdue, recipients, emailIssue: issue,
+    latest: latest.map((r) => ({ id: r.id, name: r.name, business: r.business, phone: r.phone, createdAt: r.created_at })),
+  });
 }));
 
 platformSupportRouter.patch('/leads/:id', h(async (req, res) => {

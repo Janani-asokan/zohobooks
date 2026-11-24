@@ -1,3 +1,4 @@
+import { appsInfo } from '../services/appDownloads';
 import { Router } from 'express';
 import { rateLimit } from '../auth';
 import { query, withTenant } from '../db';
@@ -78,6 +79,9 @@ publicRouter.get(
  * A hidden field ("website") that people never see catches form-filling bots: the request looks accepted but
  * nothing is saved.
  */
+/** Apps to download from the website (landing page buttons). */
+publicRouter.get('/apps', h(async (_req, res) => { res.setHeader('Cache-Control', 'public, max-age=300'); res.json(await appsInfo()); }));
+
 publicRouter.post(
   '/sales-leads',
   rateLimit('sales-lead', 5, 10 * 60_000),
@@ -93,8 +97,8 @@ publicRouter.post(
       page: z.string().trim().max(200).default(''),
       website: z.string().max(200).default(''),
     }), req.body);
-    if (b.website) { res.status(201).json({ ok: true }); return; }
-    await saveLead({ ...b, ip: req.ip ?? '' });
+    // The hidden trap field: bots fill it. A browser's autofill can too, so the lead is kept (marked) rather than lost.
+    await saveLead({ ...b, ip: req.ip ?? '', suspectedSpam: !!b.website });
     res.status(201).json({ ok: true });
   }),
 );

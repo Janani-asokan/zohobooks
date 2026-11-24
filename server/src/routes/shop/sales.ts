@@ -27,6 +27,8 @@ export const salesRouter = Router();
 /* ======================= Customers ======================= */
 const customerBody = z
   .object({
+    /** Made on the device when the customer was added offline, so bills made for them offline point to it. */
+    id: z.string().uuid().optional(),
     type: z.enum(['Individual', 'Business']),
     name: z.string().trim().min(1, 'Name is required').max(150),
     companyName: z.string().trim().max(150).default(''),
@@ -81,9 +83,9 @@ export async function insertCustomer(db: Db, shopId: string, b: z.infer<typeof c
   const n = await nextSeq(db, shopId, 'customer', 1000);
   return one(
     db,
-    `INSERT INTO customers (shop_id, custom_id, type, name, company_name, gstin, email, phone, state, address, tier, credit_limit)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id, custom_id`,
-    [shopId, `${cfg.prefix}-${n}`, b.type, b.name, b.type === 'Business' ? b.companyName : '', b.type === 'Business' ? b.gstin : '', b.email, b.phone, b.state || orgState, b.address, b.tier, b.creditLimit ?? 0],
+    `INSERT INTO customers (id, shop_id, custom_id, type, name, company_name, gstin, email, phone, state, address, tier, credit_limit)
+     VALUES (coalesce($13::uuid, gen_random_uuid()), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id, custom_id`,
+    [shopId, `${cfg.prefix}-${n}`, b.type, b.name, b.type === 'Business' ? b.companyName : '', b.type === 'Business' ? b.gstin : '', b.email, b.phone, b.state || orgState, b.address, b.tier, b.creditLimit ?? 0, b.id ?? null],
   );
 }
 
@@ -433,7 +435,10 @@ salesRouter.post(
   T(async (db, req, c) => {
     const b = parse(invoiceInput.extend({ issue: z.boolean().default(true) }), req.body);
     if (b.salesOrderId) await requireRow(db, 'sales_orders', c.shopId, b.salesOrderId, 'Sales order');
-    return createInvoice(db, req, c.shopId, b, { issue: b.issue });
+    // Made on a device without internet and sent later (header X-Made-Offline-At): like a counter bill made offline,
+    // the goods were already handed over, so stock and licence checks are recorded rather than blocking it.
+    const madeOffline = !!req.get('x-made-offline-at') && !!req.get('idempotency-key');
+    return createInvoice(db, req, c.shopId, b, { issue: b.issue, madeOffline });
   }),
 );
 salesRouter.put(

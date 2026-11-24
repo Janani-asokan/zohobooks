@@ -28,6 +28,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   password_reset_admin: 'Password reset link (sent by super admin)',
   workspace_ready: 'New shop ready (created by super admin)',
   sales_lead: 'New sales lead (Talk to sales)',
+  sales_lead_ack: 'Sales lead: confirmation to the visitor',
   report: 'Report emailed (PDF, Excel or CSV)',
   shop_closed: 'Shop closed notice',
   invoice: 'Invoice email with PDF',
@@ -58,7 +59,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   gstin_lookup: 'Look up a GST number (legal name, address, status)',
 };
 
-const EMAIL_FEATURES = ['signup_code', 'sales_lead', 'report', 'welcome', 'password_reset', 'password_reset_admin', 'workspace_ready', 'shop_closed', 'invoice',
+const EMAIL_FEATURES = ['signup_code', 'sales_lead', 'sales_lead_ack', 'report', 'welcome', 'password_reset', 'password_reset_admin', 'workspace_ready', 'shop_closed', 'invoice',
   'payment_reminder', 'transfer_code', 'licence_expiry', 'warehouse_licence_alert', 'ai_credits_alert', 'test_email'];
 
 export const INTEGRATIONS: Integration[] = [

@@ -1,3 +1,5 @@
+import { pruneIdempotencyKeys } from './idempotency';
+import { runLeadReminders } from './services/salesLeads';
 import { runAccountDeletions } from './services/accountDeletion';
 import { pruneOutboundLogs } from './services/outbound';
 import { config } from './config';
@@ -115,12 +117,15 @@ export function startJobs() {
     safe('recurring', runRecurring)();
     safe('reminders', runReminders)();
     safe('license', runLicenseReminders)();
+    // Sales leads nobody has called within 2 hours: one reminder to the sales inbox.
+    safe('lead-reminders', runLeadReminders)();
     // Warehouse licences: statuses, 90/60/30/7/0-day reminders, renewal invoices. Idempotent, so hourly is safe.
     safe('warehouse-licenses', () => runLicenseJob())();
     // Shops closed by their owner: wipe login details once the restore window has passed.
     safe('account-deletions', runAccountDeletions)();
     // Email and API-call logs older than their keep periods (EMAIL_LOG_DAYS, API_LOG_DAYS).
     safe('outbound-logs', pruneOutboundLogs)();
+    safe('idempotency-keys', pruneIdempotencyKeys)();
     safe('sessions', () => query("DELETE FROM sessions WHERE expires_at < now(); DELETE FROM password_resets WHERE expires_at < now() - interval '7 days'; DELETE FROM signup_verifications WHERE expires_at < now() - interval '1 day' OR verified_at < now() - interval '1 day'"))();
   };
   setTimeout(hourly, 10_000);

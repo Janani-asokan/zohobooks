@@ -212,10 +212,19 @@ function Form({ existing }: { existing?: Invoice }) {
     if (mode !== 'draft' && !overrideCreditLimit && free.length && !window.confirm(`${free.length === 1 ? 'One item has' : `${free.length} items have`} a rate of ₹0. Issue the invoice with ${free.length === 1 ? 'it' : 'them'} free?`)) return;
     const body = { customerId, date, dueDate, branchId: branchId || null, lines: toInput(lines), withGst, reverseCharge, tcsRate, notes, terms: docTerms, shipTo: shipTo && (shipTo.name || shipTo.address) ? shipTo : null, salesOrderId: fromSO?.id ?? existing?.salesOrderId ?? null, issue: mode !== 'draft', overrideCreditLimit, ...lic, pricesIncludeTax: withGst && billOpts.pricesIncludeTax, billDiscount: billOpts.billDiscount,
       ...(promo.on ? { skipOffers: skip, redeemPoints: redeem ? redeem.points : 0 } : {}),
-      extra: Object.fromEntries(invFields.filter((x) => (invExtra[x.key] ?? '').trim()).map((x) => [x.key, invExtra[x.key]!.trim()])) };
+      extra: Object.fromEntries(invFields.filter((x) => (invExtra[x.key] ?? '').trim()).map((x) => [x.key, invExtra[x.key]!.trim()])),
+      // Shown in Offline changes if this is kept on the device (the server ignores it).
+      offlineLabel: `${mode === 'draft' ? 'Draft invoice' : existing ? `Changes to ${existing.number ?? 'draft'}` : 'Invoice'} for ${customer ? customer.companyName || customer.name : 'customer'}` };
     const remember = () => { try { localStorage.setItem(lastKey, JSON.stringify({ customerId, branchId })); } catch { /* private window */ } };
-    const onSuccess = (inv: Invoice & { licenseWarnings?: Array<{ label: string; licenseNumber: string; statusLabel: string; daysToExpiry: number }> }) => {
+    const onSuccess = (inv: Invoice & { offline?: boolean; licenseWarnings?: Array<{ label: string; licenseNumber: string; statusLabel: string; daysToExpiry: number }> }) => {
       remember();
+      // No internet: the invoice is kept on this device and gets its number when it reaches the server.
+      if (inv.offline) {
+        if (mode === 'issue-pay') toast('info', 'Record the payment once it is sent', 'The invoice is saved on this device; open it after the internet is back to record the payment.');
+        if (invFile) toast('info', 'Attach the file again later', 'Files can’t be kept offline.');
+        navigate(existing ? `/app/sales/invoices/${existing.id}` : '/app/sales/invoices');
+        return;
+      }
       toast('success', inv.status === 'Draft' ? 'Draft saved' : existing?.status === 'Issued' ? 'Invoice updated' : 'Invoice issued', inv.number ?? undefined);
       for (const w of inv.licenseWarnings ?? []) toast('info', `${w.label} ${w.licenseNumber}: ${w.statusLabel.toLowerCase()}`, w.daysToExpiry >= 0 ? `Expires in ${w.daysToExpiry} days. Renew it to keep billing.` : 'Renew it before the grace period ends, or invoices will be blocked.');
       if (invFile) void attachFile('invoice', inv.id, invFile.file.name, invFile.dataUrl).catch(() => undefined);

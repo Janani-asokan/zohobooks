@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, BadgeCheck, Loader2, ShieldCheck, XCircle } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, ExternalLink, Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import { api } from '@/api/client';
 import { Field } from '@/components/ui';
 import { checkGstin, type GstinCheck } from '../../shared/gst';
@@ -94,8 +94,14 @@ export function GstinField({ value, onChange, onFill, forWhat, label = 'GST numb
                 <div className="gstin-card-head"><BadgeCheck size={16} /><strong>Number looks right</strong></div>
                 <div className="small muted">{shown.check.state} · {shown.check.holder} · PAN {shown.check.pan}</div>
                 {shown.lookup === 'not_found' && <div className="small strong">The GST register has no such number. Check it with the customer.</div>}
-                {shown.lookup === 'off' && <div className="small muted">State filled in. Name and address lookup isn’t switched on yet, so please type them.</div>}
-                {shown.lookup === 'failed' && <div className="small muted">The GST register couldn’t be reached just now; type the name and address, or try Validate again.</div>}
+                {(shown.lookup === 'off' || shown.lookup === 'failed') && (
+                  <>
+                    <div className="small muted">{shown.lookup === 'off' ? 'State filled in. To get the registered name and address, look the number up on the GST portal (free), then type them below.' : 'The GST register couldn’t be reached just now. Try Validate again, or look it up on the GST portal.'}</div>
+                    <button type="button" className="btn btn-soft btn-sm gstin-portal" onClick={() => { void navigator.clipboard?.writeText(shown.gstin).catch(() => undefined); window.open('https://services.gst.gov.in/services/searchtp', '_blank', 'noopener'); }}>
+                      <ExternalLink size={14} /> Find on GST portal <span className="muted">(number copied: paste it there)</span>
+                    </button>
+                  </>
+                )}
               </>
             )}
             {shown.existing && <div className="small gstin-dup"><AlertTriangle size={14} /> Already saved as {forWhat} “{shown.existing.name}”.</div>}

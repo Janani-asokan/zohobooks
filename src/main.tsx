@@ -42,10 +42,16 @@ installTableCards();
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      // Offline, still ask: the service worker (website, Windows app) or the phone's own copy answers with the saved
+      // data. The library's default would wait for the internet and leave a screen opened offline empty.
+      networkMode: 'offlineFirst',
       staleTime: 30_000,
       refetchOnWindowFocus: true,
       retry: (count, e) => !(e instanceof ApiError && e.status >= 400 && e.status < 500) && count < 2,
     },
+    // Saves always run: offline, the API keeps them on this device (lib/outbox) and the screen carries on. The
+    // default held every save until the internet came back, so the button just kept spinning.
+    mutations: { networkMode: 'always' },
   },
 });
 

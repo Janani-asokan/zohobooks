@@ -1,3 +1,4 @@
+import { PendingStrip } from '@/components/PendingStrip';
 import { PUBLIC_ORIGIN } from '@/lib/platform';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -126,7 +127,7 @@ export default function InvoiceView() {
     if (!(amount > 0)) return setPayErr({ amount: 'Enter the amount received' });
     if (amount + tds > inv.balance + 0.009) return setPayErr({ amount: `More than the balance due (${money(inv.balance)})` });
     payMut.mutate({ amount, tdsAmount: tds, mode: pay.mode, reference: pay.reference, date: pay.date, accountId: pay.accountId || null }, {
-      onSuccess: () => { setPayOpen(false); toast('success', 'Payment recorded', `${money(amount)} via ${pay.mode}`); },
+      onSuccess: (r) => { setPayOpen(false); if (!(r as { offline?: boolean } | null)?.offline) toast('success', 'Payment recorded', `${money(amount)} via ${pay.mode}`); },
       onError: (e) => { setPayErr(fieldErrors(e)); toast('error', e.message); },
     });
   };
@@ -148,6 +149,7 @@ export default function InvoiceView() {
 
   return (
     <div className="page" style={{ maxWidth: 1240 }}>
+      <PendingStrip what={['change to this invoice', 'changes to this invoice']} match={(e) => e.url.includes(inv.id)} />
       <div className="row between no-print" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div className="row">
           <button className="icon-btn" onClick={() => navigate('/app/sales/invoices')} aria-label="Back"><ArrowLeft size={18} /></button>

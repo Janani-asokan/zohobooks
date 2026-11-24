@@ -4,6 +4,8 @@ import { Sidebar, useSidebarState, type NavItem } from './Sidebar';
 import { ProfileMenu } from './ProfileMenu';
 import { PrefsMenu } from './PrefsMenu';
 import { useAuth } from '@/context/AuthContext';
+import { LeadAlert } from '@/components/super/LeadAlert';
+import '@/styles/sales.css';
 import { usePrefs } from '@/context/PrefsContext';
 
 export default function SuperAdminLayout() {
@@ -54,6 +56,7 @@ export default function SuperAdminLayout() {
             <div className="org-sub">Platform-wide controls</div>
           </div>
           <div className="topbar-actions">
+            <LeadAlert />
             <span className="badge badge-violet desktop-only">Super Admin</span>
             <ProfileMenu name={me!.user.name} sub="Platform owner" email={me!.user.email}>
               {(close) => (

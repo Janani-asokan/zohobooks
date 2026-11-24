@@ -7,7 +7,7 @@ import {
   CloudOff, Keyboard, Smartphone, Tag, Printer, Carrot, ShoppingBasket, ShoppingCart, Pill, Gem, Construction, Wrench, Shirt, Puzzle, Briefcase, Headset, type LucideIcon,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/Logo';
-import { WindowsDownload } from '@/components/WindowsDownload';
+import { AppDownloads } from '@/components/AppDownloads';
 import { HeroArt, Photo, SceneArt } from '@/components/Photo';
 import { BUSINESS_TEMPLATES } from '../../shared/templates';
 import '@/styles/landing.css';
@@ -151,7 +151,7 @@ export default function Landing() {
           <p className="lp-sub">Corpus360 is a simple app for GST invoices, stock and accounts. Make a bill in seconds, even when the internet drops, upload a photo of a purchase bill to fill it in, and always know what is in your shop.</p>
           <div className="lp-cta">
             <Link to="/signup" className="lp-pill lp-pill-rose lg">Start free trial <ArrowRight size={18} /></Link>
-            <WindowsDownload />
+            <AppDownloads variant="hero" />
             <a href="#how" className="lp-play"><span><Zap size={16} /></span> See how it works</a>
           </div>
           <ul className="lp-facts">
@@ -290,7 +290,7 @@ export default function Landing() {
       <footer className="lp-foot">
         <BrandLogo height={18} />
         <span>© {new Date().getFullYear()} Corpus360 · Billing and stock, made easy.</span>
-        <span className="lp-foot-links"><a href="#features">Features</a><a href="#faq">FAQ</a><Link to="/signup">Sign up</Link><WindowsDownload variant="link" /><Link to="/login"><Users size={13} /> Login</Link></span>
+        <span className="lp-foot-links"><a href="#features">Features</a><a href="#faq">FAQ</a><Link to="/signup">Sign up</Link><AppDownloads variant="footer" /><Link to="/login"><Users size={13} /> Login</Link></span>
       </footer>
     </div>
   );

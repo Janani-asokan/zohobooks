@@ -15,3 +15,4 @@
 .gstin-dup { display: flex; gap: 6px; align-items: center; color: var(--amber-700); font-weight: 600; margin-top: 4px; }
 .email-fix { display: block; margin-top: 4px; padding: 0; border: 0; background: none; color: var(--amber-700); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
 .email-fix strong { text-decoration: underline; }
+.gstin-portal { margin-top: 6px; align-self: flex-start; } .gstin-portal .muted { font-weight: 400; }

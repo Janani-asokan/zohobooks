@@ -2,7 +2,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { freshDb, login } from './helpers';
 import { query } from '../src/db';
 import { config } from '../src/config';
-import { parseTaxpayer } from '../src/services/gstinLookup';
+import { forgetProvider, parseTaxpayer } from '../src/services/gstinLookup';
 import { checkGstin, gstinCheckDigit, hsnNote } from '../../shared/gst';
 import { emailSuggestion } from '../../shared/contact';
 
@@ -17,7 +17,7 @@ const RECORD = {
 };
 
 beforeAll(async () => { await freshDb(); });
-afterEach(() => { vi.unstubAllGlobals(); (config as any).gstLookup = null; });
+afterEach(async () => { vi.unstubAllGlobals(); (config as any).gstLookup = null; await query('UPDATE platform_config SET gst_lookup = NULL WHERE id = 1'); forgetProvider(); });
 
 describe('checking a GSTIN offline', () => {
   it('computes the check digit the GST network uses', () => {
@@ -45,7 +45,7 @@ describe('Validate in the app', () => {
   });
 
   it('with a lookup service: fills name and address from the register, once per 30 days', async () => {
-    (config as any).gstLookup = { url: 'https://gst.example/verify?gstNo={gstin}&key_secret={key}', key: 'k', keyHeader: 'x-api-key' };
+    (config as any).gstLookup = { url: 'https://gst.example/verify?gstNo={gstin}&key_secret={key}', key: 'k', keyHeader: 'x-api-key' }; forgetProvider();
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (u: string) => { calls.push(String(u)); return new Response(JSON.stringify(RECORD), { status: 200, headers: { 'content-type': 'application/json' } }); }));
     const owner = await login('owner@shop.com', 'owner123');
@@ -61,7 +61,7 @@ describe('Validate in the app', () => {
   });
 
   it('a mistyped number is not sent to the paid lookup; a service failure still gives the offline answer', async () => {
-    (config as any).gstLookup = { url: 'https://gst.example/{gstin}', key: 'k', keyHeader: 'x-api-key' };
+    (config as any).gstLookup = { url: 'https://gst.example/{gstin}', key: 'k', keyHeader: 'x-api-key' }; forgetProvider();
     const f = vi.fn(async () => new Response('busy', { status: 503 }));
     vi.stubGlobal('fetch', f);
     const owner = await login('owner@shop.com', 'owner123');
@@ -92,5 +92,36 @@ describe('other gentle checks', () => {
     expect(hsnNote('847', 'Goods')).toMatch(/4, 6 or 8/);
     expect(hsnNote('8471', 'Services')).toMatch(/start with 99/);
     expect(hsnNote('9983', 'Goods')).toMatch(/for services/);
+  });
+
+  it('reads providers that use plain field names instead of the portal record', () => {
+    const t = parseTaxpayer({ GSTIN: REAL, valid: true, legal_name_of_business: 'UBER INDIA SYSTEMS PRIVATE LIMITED', trade_name_of_business: 'Uber India', gst_in_status: 'Active',
+      date_of_registration: '2017-07-01', constitution_of_business: 'Private Limited Company', taxpayer_type: 'Regular',
+      principal_place_address: '602, Peninsula Business Park, Lower Parel, Mumbai, Maharashtra, 400013', principal_place_split_address: { city: 'Mumbai', district: 'Mumbai', pincode: '400013' } }, REAL);
+    expect(t).toMatchObject({ legalName: 'UBER INDIA SYSTEMS PRIVATE LIMITED', tradeName: 'Uber India', status: 'Active', city: 'Mumbai', pincode: '400013', state: 'Maharashtra' });
+    expect(t!.address).toMatch(/Lower Parel/);
+  });
+
+  it('the super admin sets a provider (POST with key headers) and tests it; keys are never sent back', async () => {
+    const admin = await login('admin@ledgerly.in', 'admin123');
+    expect((await admin.put('/api/platform/gst-lookup').send({ url: 'https://api.example/gst', method: 'POST', body: '{}' })).status).toBe(400); // no {gstin}
+    const saved = await admin.put('/api/platform/gst-lookup').send({ url: 'https://api.example/verification/gstin', method: 'POST', body: '{"GSTIN": "{gstin}"}',
+      headers: [{ name: 'x-client-id', value: 'id-1' }, { name: 'x-client-secret', value: 'secret-1' }] });
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+    expect(saved.body).toMatchObject({ source: 'settings', headerNames: ['x-client-id', 'x-client-secret'] });
+    expect(JSON.stringify(saved.body)).not.toMatch(/secret-1/);
+    // Saving again with empty values keeps the saved keys.
+    await admin.put('/api/platform/gst-lookup').send({ url: 'https://api.example/verification/gstin', method: 'POST', body: '{"GSTIN": "{gstin}"}', headers: [{ name: 'x-client-id', value: '' }, { name: 'x-client-secret', value: '' }] });
+    const seen: Array<{ url: string; init: RequestInit }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (u: string, init: RequestInit) => { seen.push({ url: String(u), init }); return new Response(JSON.stringify({ legal_name_of_business: 'BLUE DART EXPRESS LIMITED', gst_in_status: 'Active' }), { status: 200, headers: { 'content-type': 'application/json' } }); }));
+    const t = await admin.post('/api/platform/gst-lookup/test').send({ gstin: '29AAGCB7383J1Z4' });
+    expect(t.body).toMatchObject({ ok: true, taxpayer: { legalName: 'BLUE DART EXPRESS LIMITED', state: 'Karnataka' } });
+    expect(seen[0]!.init.method).toBe('POST');
+    expect(seen[0]!.init.body).toBe('{"GSTIN": "29AAGCB7383J1Z4"}');
+    expect((seen[0]!.init.headers as Record<string, string>)['x-client-secret']).toBe('secret-1');
+    // Shops now get the name filled in.
+    const owner = await login('owner@shop.com', 'owner123');
+    expect((await owner.get('/api/shop/gstin/29AAGCB7383J1Z4?for=customer')).body).toMatchObject({ lookup: 'found', taxpayer: { legalName: 'BLUE DART EXPRESS LIMITED' } });
+    expect((await owner.put('/api/platform/gst-lookup').send({ clear: true })).status).toBeGreaterThanOrEqual(401);
   });
 });

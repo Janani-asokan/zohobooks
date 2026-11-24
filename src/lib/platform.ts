@@ -31,5 +31,3 @@ export async function cacheUpdate<T>(url: string, fn: (v: T) => T) { const c = a
 export const IS_DESKTOP: boolean = typeof window !== 'undefined' && !!(window as unknown as { corpusDesktop?: unknown }).corpusDesktop;
 /** The Windows installer, built with the server (Dockerfile "desktop" stage) and served by the website. */
 export const WINDOWS_DOWNLOAD = '/downloads/CorpusLite-Setup.exe';
-/** Offer the Windows app: on computers in a browser, not inside the phone or Windows app, not on phones / tablets. */
-export const offerWindowsApp = (): boolean => !IS_APP && !IS_DESKTOP && typeof navigator !== 'undefined' && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);

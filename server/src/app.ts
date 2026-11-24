@@ -11,6 +11,8 @@ import { auditWrites } from './audit';
 import { authRouter } from './routes/auth';
 import { platformRouter } from './routes/platform';
 import { publicRouter } from './routes/public';
+import { idempotency } from './idempotency';
+import { ANDROID_PATH, androidFile } from './services/appDownloads';
 import { catalogRouter } from './routes/shop/catalog';
 import { labelsRouter } from './routes/shop/labels';
 import { appDevicesRouter } from './routes/shop/appDevices';
@@ -85,7 +87,7 @@ export function createApp() {
   const smallJson = express.json({ limit: '3mb' });
   const uploadJson = express.json({ limit: '15mb' });
   const dataJson = express.json({ limit: '32mb' }); // Tally master exports and big item lists
-  app.use((req, res, next) => (/^\/api\/shop\/(tally\/(preview|import)|data-import)$/.test(req.path) ? dataJson : /^\/api\/shop\/(extract|attachments)$/.test(req.path) ? uploadJson : smallJson)(req, res, next));
+  app.use((req, res, next) => (/^\/api\/shop\/(tally\/(preview|import)|data-import)$|^\/api\/platform\/app-downloads\//.test(req.path) ? dataJson : /^\/api\/shop\/(extract|attachments)$/.test(req.path) ? uploadJson : smallJson)(req, res, next));
 
   app.get('/api/health', async (_req, res) => {
     await query('SELECT 1');
@@ -99,7 +101,7 @@ export function createApp() {
     if (o && config.appOrigins.includes(o)) {
       res.setHeader('Access-Control-Allow-Origin', o);
       res.setHeader('Vary', 'Origin');
-      res.setHeader('Access-Control-Allow-Headers', 'content-type, x-requested-with, authorization, x-client');
+      res.setHeader('Access-Control-Allow-Headers', 'content-type, x-requested-with, authorization, x-client, idempotency-key, x-made-offline-at');
       // The app compares its clock with the server's (offline bills are dated by the device clock).
       res.setHeader('Access-Control-Expose-Headers', 'Date');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -113,9 +115,22 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), featureGate, aiContext, shopOutboundCtx, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, appDevicesRouter, supportRouter, licensesRouter, transfersRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, attendanceRouter, gstinRouter, briefingRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), idempotency, featureGate, aiContext, shopOutboundCtx, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, appDevicesRouter, supportRouter, licensesRouter, transfersRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, attendanceRouter, gstinRouter, briefingRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
+
+  // The Android app the super admin uploaded (kept in the database, so it survives every update of the server).
+  app.get(ANDROID_PATH, async (req, res, next) => {
+    try {
+      const f = await androidFile();
+      if (!f) { res.status(404).type('text/plain').send('The Android app isn’t available for download yet.'); return; }
+      if (req.headers['if-none-match'] === `"${f.sha256}"`) { res.status(304).end(); return; }
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+      res.setHeader('Content-Disposition', `attachment; filename="CorpusLite-${f.version || 'app'}.apk"`);
+      res.setHeader('ETag', `"${f.sha256}"`); res.setHeader('Cache-Control', 'no-cache');
+      res.send(f.file);
+    } catch (e) { next(e); }
+  });
 
   // Production: serve the built SPA with history-API fallback.
   const index = path.join(config.staticDir, 'index.html');
