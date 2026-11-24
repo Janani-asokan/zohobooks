@@ -1,0 +1,19 @@
+# Fetches the voice billing speech model (also fetched by the Windows installer build) and keeps it as a download,
+# for testing the recogniser outside the installer.
+name: Voice model
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/blissful-hamilton-n7kcit]
+    paths: ['desktop/scripts/voice-model.mjs', '.github/workflows/voice-model.yml']
+jobs:
+  model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - working-directory: desktop
+        run: ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --no-audit --no-fund && node scripts/voice-model.mjs
+      - uses: actions/upload-artifact@v4
+        with: { name: voice-model-en-in, path: desktop/build/voice/en-in.tar.gz, retention-days: 30 }
