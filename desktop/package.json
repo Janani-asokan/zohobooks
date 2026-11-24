@@ -1,0 +1,40 @@
+{
+  "name": "corpuslite-desktop",
+  "productName": "CorpusLite",
+  "version": "1.3.1",
+  "description": "CorpusLite GST billing for Windows",
+  "author": "Corpus360",
+  "homepage": "https://corpus360lite.com",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win dir --x64 && node scripts/exe-info.mjs && node scripts/installer.mjs"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8",
+    "resedit": "^2.0.3"
+  },
+  "build": {
+    "appId": "in.corpus360.lite",
+    "productName": "CorpusLite",
+    "copyright": "Corpus360",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "offline.html",
+      "build/icon.png",
+      "build/icon.ico"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "artifactName": "CorpusLite-Setup-${version}.${ext}",
+      "signAndEditExecutable": false
+    }
+  }
+}
