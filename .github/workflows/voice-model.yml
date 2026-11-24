@@ -6,6 +6,8 @@ on:
   push:
     branches: [claude/blissful-hamilton-n7kcit]
     paths: ['desktop/scripts/voice-model.mjs', '.github/workflows/voice-model.yml']
+permissions:
+  contents: write
 jobs:
   model:
     runs-on: ubuntu-latest
@@ -17,3 +19,10 @@ jobs:
         run: ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --no-audit --no-fund && node scripts/voice-model.mjs
       - uses: actions/upload-artifact@v4
         with: { name: voice-model-en-in, path: desktop/build/voice/en-in.tar.gz, retention-days: 30 }
+      # Also kept on its own branch (never merged), so builds and tests can fetch it with plain git.
+      - name: Keep on the voice-model branch
+        run: |
+          mkdir /tmp/vm && cp desktop/build/voice/en-in.tar.gz /tmp/vm/ && cd /tmp/vm
+          git init -q -b voice-model && git add en-in.tar.gz
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "Vosk small en-in 0.4 (repacked)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" voice-model
