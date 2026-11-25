@@ -12,6 +12,13 @@
 	reverse_proxy app:10000
 }
 
+# Other domains of the business (REDIRECT_ADDRESSES in site.env, e.g. corpus360.in): each gets its own certificate
+# and sends visitors to the main address, path included, so logins, offline data, links and the apps all stay on
+# one address. Until it is set this block only answers a name that is never used.
+{$REDIRECT_ADDRESSES:http://redirect.localhost} {
+	redir https://{$PRIMARY_HOST:localhost}{uri} permanent
+}
+
 # The server's own IP address keeps working over plain http (handy while DNS changes spread).
 :80 {
 	reverse_proxy app:10000

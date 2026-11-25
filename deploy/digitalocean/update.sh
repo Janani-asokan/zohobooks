@@ -61,5 +61,10 @@ elif [ "$NEEDS_BUILD" = 1 ]; then $DC build app || { echo "build failed"; exit 1
 else echo "only app/docs changes: no rebuild"; fi
 /usr/local/bin/corpus360-restore || echo "database copy not done yet"
 $DC up -d
+# Caddy reads its Caddyfile and site.env (domains) only when it starts: restart it when they changed, or on --force.
+# Certificates are kept in its volume, so this takes a second.
+if [ "${1:-}" = "--force" ] || echo "$CHANGED" | grep -qE '^deploy/digitalocean/(Caddyfile|site\.env)$'; then
+  $DC up -d --force-recreate caddy && echo "web server reloaded (domains / Caddyfile)"
+fi
 docker image prune -f >/dev/null
 echo "$(date -Is) running $(git -C "$ROOT/src" rev-parse --short HEAD)"
