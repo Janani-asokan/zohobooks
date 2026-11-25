@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { Router, type Request } from 'express';
 import { z } from 'zod';
+import { EMAIL_RE } from '../../../shared/gst';
 import { loadEntitlements } from '../services/features';
 import { burnPasswordCheck, permissionsFor, resolveUserCtx, clearSessionCookie, createSession, hashPassword, randomToken, rateLimit, sha256, todayISO, verifyPassword } from '../auth';
 import { audit } from '../audit';
@@ -412,6 +413,33 @@ authRouter.post(
     if (ctx.kind === 'user') {
       await withTenant(ctx.shopId, (db) => audit(db, req, ctx.shopId, 'change_password', 'user', ctx.id));
     }
+    res.json(await mePayload(req));
+  }),
+);
+
+/**
+ * A super admin changes their sign-in email (the console's My account). Needs the current password; the new email
+ * must not be any other sign-in (super admin or shop user). Other sessions are signed out.
+ */
+authRouter.post(
+  '/change-email',
+  rateLimit('change-email', 10, 15 * 60_000),
+  h(async (req, res) => {
+    const ctx = req.ctx;
+    if (!ctx) throw new HttpError(401, 'Not signed in', 'unauthenticated');
+    if (ctx.kind !== 'super') throw new HttpError(403, 'Shop logins change their email through the shop owner', 'forbidden');
+    const body = parse(z.object({ password: z.string().min(1).max(200), email: z.string().trim().toLowerCase().max(160) }), req.body);
+    if (!EMAIL_RE.test(body.email)) throw new HttpError(400, 'Enter a valid email', 'bad_request', { email: 'Enter a valid email' });
+    const [row] = await query('SELECT password_hash, email FROM super_admins WHERE id = $1', [ctx.id]);
+    if (!(await verifyPassword(body.password, row.password_hash))) throw new HttpError(400, 'Current password is incorrect', 'bad_request', { password: 'Current password is incorrect' });
+    if (row.email.toLowerCase() === body.email) throw new HttpError(400, 'That is already your email', 'bad_request', { email: 'That is already your email' });
+    const [taken] = await query('SELECT 1 FROM super_admins WHERE lower(email) = $1 AND id <> $2 UNION ALL SELECT 1 FROM users WHERE lower(email) = $1 LIMIT 1', [body.email, ctx.id]);
+    if (taken) throw new HttpError(409, 'Another login already uses this email', 'conflict', { email: 'Another login already uses this email' });
+    await query('UPDATE super_admins SET email = $2 WHERE id = $1', [ctx.id, body.email]);
+    await query('DELETE FROM sessions WHERE principal_id = $1 AND token_hash <> $2', [ctx.id, req.sessionHash ?? '']);
+    await query("INSERT INTO audit_log (shop_id, actor_type, actor_id, actor_name, action, entity, entity_id, details, ip) VALUES (NULL, 'super', $1::uuid, $2, 'change_email', 'super_admin', $1::text, $3, $4)",
+      [ctx.id, ctx.name, JSON.stringify({ from: row.email, to: body.email }), req.ip ?? '']);
+    ctx.email = body.email;
     res.json(await mePayload(req));
   }),
 );

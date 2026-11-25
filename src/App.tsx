@@ -74,6 +74,7 @@ const Licenses = lazy(() => import('./pages/app/Licenses'));
 const LicenseDetail = lazy(() => import('./pages/app/LicenseDetail'));
 const SuperSupport = lazy(() => import('./pages/super/Support'));
 const SuperLogs = lazy(() => import('./pages/super/Logs'));
+const SuperMyAccount = lazy(() => import('./pages/super/MyAccount'));
 const Account = lazy(() => import('./pages/app/Account'));
 const BarcodeLabels = lazy(() => import('./pages/app/BarcodeLabels'));
 
@@ -115,6 +116,7 @@ export default function App() {
             <Route path="activity" element={<Activity />} />
             <Route path="support" element={<SuperSupport />} />
             <Route path="logs" element={<SuperLogs />} />
+            <Route path="account" element={<SuperMyAccount />} />
           </Route>
         </Route>
 

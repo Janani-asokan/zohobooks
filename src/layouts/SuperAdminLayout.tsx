@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, LogOut, Menu, Settings2, ShieldCheck, Layers, History, Puzzle, Headset, ScrollText } from 'lucide-react';
+import { LayoutDashboard, LogOut, Menu, Settings2, ShieldCheck, Layers, History, Puzzle, Headset, ScrollText, KeyRound } from 'lucide-react';
 import { Sidebar, useSidebarState, type NavItem } from './Sidebar';
 import { ProfileMenu } from './ProfileMenu';
 import { PrefsMenu } from './PrefsMenu';
@@ -61,6 +61,9 @@ export default function SuperAdminLayout() {
             <ProfileMenu name={me!.user.name} sub="Platform owner" email={me!.user.email}>
               {(close) => (
                 <>
+                  <button className="dropdown-item" onClick={() => { close(); navigate('/super-admin/account'); }}>
+                    <KeyRound size={16} /> My account (email & password)
+                  </button>
                   <button className="dropdown-item" onClick={() => { close(); navigate('/super-admin/configuration'); }}>
                     <Settings2 size={16} /> {t('nav.configuration')}
                   </button>
