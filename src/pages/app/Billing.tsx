@@ -3,14 +3,14 @@ import { isPaidShop } from '../../../shared/support';
 import '@/styles/sales.css';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, ShieldCheck, Users, GitBranch, FileText, Loader2, AlertTriangle, CheckCircle2, Phone } from 'lucide-react';
+import { CreditCard, ShieldCheck, Loader2, AlertTriangle, CheckCircle2, Phone } from 'lucide-react';
 import { api, ApiError } from '@/api/client';
 import { useAuth, useShopUser } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Badge, PageHeader } from '@/components/ui';
 import { fmtDate, money } from '@/lib/format';
 import { daysUntil } from '@/lib/fy';
-import { LicenseCard } from '@/components/LicenseCard';
+import { LicenseCard, PlanLicenseCard } from '@/components/LicenseCard';
 import { LicenseIncludes, licenseOf } from '@/components/LicenseWelcome';
 import '@/styles/license.css';
 
@@ -115,18 +115,12 @@ export default function Billing() {
           <div className="card">
             <div className="card-header"><div><h3>Choose a plan</h3><p>Renewal extends from your current expiry date</p></div></div>
             <div className="card-body">
-              <div className="radio-cards" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(180px, 1fr))` }}>
+              <div className="lic-picks" role="radiogroup" aria-label="Plans">
                 {(data?.plans ?? []).map((p) => (
-                  <div key={p.id} className={`radio-card ${chosen?.id === p.id ? 'active' : ''}`} onClick={() => setPlanId(p.id)} role="radio" aria-checked={chosen?.id === p.id} tabIndex={0}>
-                    <span className="dot" />
-                    <div>
-                      <strong>{p.name} · {money(p.pricePerYear)}/yr</strong>
-                      <span className="row" style={{ gap: 10, marginTop: 4, flexWrap: 'wrap' }}><Users size={12} /> {p.maxUsers} users <GitBranch size={12} /> {p.maxBranches} branches <FileText size={12} /> {p.maxInvoicesPerMonth ?? 'Unlimited'} invoices</span>
-                    </div>
-                  </div>
+                  <PlanLicenseCard key={p.id} plan={p} shopId={me.shop.id} shopName={me.shop.name} selected={chosen?.id === p.id} current={data?.planId === p.id && !me.shop.licenseExpired} onSelect={() => setPlanId(p.id)} />
                 ))}
               </div>
-              <div className="row" style={{ gap: 10, marginTop: 16 }}>
+              <div className="row" style={{ gap: 10, marginTop: 22 }}>
                 <span className="small muted">Term</span>
                 <div className="segmented">{[1, 2, 3].map((y) => <button key={y} className={years === y ? 'active' : ''} onClick={() => setYears(y)}>{y} year{y > 1 ? 's' : ''}</button>)}</div>
                 <strong style={{ marginLeft: 'auto', fontSize: 16 }}>{chosen ? money(chosen.pricePerYear * years) : '—'}</strong>

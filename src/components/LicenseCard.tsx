@@ -69,3 +69,42 @@ export function LicenseCard({ l, compact }: { l: LicenseInfo; compact?: boolean 
     </div>
   );
 }
+
+/**
+ * A plan to choose, shown as the small licence card the business would get: edition colour, price, seats and
+ * the business's own name already on it. Selected: lifted, with a ring and a tick.
+ */
+export function PlanLicenseCard({ plan, shopId, shopName, selected, current, onSelect }: {
+  plan: { id: string; name: string; pricePerYear: number; maxUsers: number; maxBranches: number; maxInvoicesPerMonth: number | null };
+  shopId: string; shopName: string; selected: boolean; current?: boolean; onSelect: () => void;
+}) {
+  const tier = plan.id === 'premium' ? 'premium' : plan.id === 'trial' ? 'trial' : 'standard';
+  const price = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(plan.pricePerYear);
+  return (
+    <button type="button" className={`lic-pick ${selected ? 'on' : ''}`} onClick={onSelect} role="radio" aria-checked={selected}
+      aria-label={`${plan.name} licence, ${price} a year, ${plan.maxUsers} users, ${plan.maxBranches} branches`}>
+      <div className={`lic-card lic-${tier} mini`}>
+        <div className="lic-shine" aria-hidden="true" />
+        <div className="lic-top">
+          <span className="lic-brand">corpus<b>360</b></span>
+          <span className="lic-edition">{plan.name}</span>
+        </div>
+        <div className="lic-mid">
+          <span className="lic-chip" aria-hidden="true"><i /><i /><i /><i /></span>
+          <span className="lic-price">{price}<small>/yr</small></span>
+        </div>
+        <div className="lic-number">{licenseNumber(shopId, plan.id)}</div>
+        <div className="lic-bottom">
+          <div className="lic-holder"><small>Licensed to</small><strong>{shopName}</strong></div>
+        </div>
+        <div className="lic-perks">
+          <span><Users size={11} /> {plan.maxUsers} users</span>
+          <span><GitBranch size={11} /> {plan.maxBranches} {plan.maxBranches === 1 ? 'branch' : 'branches'}</span>
+          <span>{plan.maxInvoicesPerMonth ? `${plan.maxInvoicesPerMonth} invoices/mo` : 'Unlimited invoices'}</span>
+        </div>
+      </div>
+      <span className="lic-pick-tick" aria-hidden="true"><BadgeCheck size={18} /></span>
+      {current && <span className="lic-pick-current">Your plan</span>}
+    </button>
+  );
+}

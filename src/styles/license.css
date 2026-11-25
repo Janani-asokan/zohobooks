@@ -58,3 +58,23 @@
 .lic-facts { display: grid; gap: 10px; }
 .lic-facts small { display: block; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-500); }
 .lic-facts strong { font-size: 15px; color: var(--ink-900); }
+
+/* Choose a plan: each plan as the small licence card you'd get */
+.lic-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+.lic-pick { position: relative; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; font: inherit; border-radius: 16px; transition: transform .2s, box-shadow .2s; }
+.lic-pick:hover { transform: translateY(-3px); }
+.lic-pick:focus-visible { outline: 3px solid var(--brand-500); outline-offset: 3px; }
+.lic-pick .lic-card.mini { max-width: none; padding: 14px 16px; border-radius: 14px; gap: 3px; box-shadow: 0 8px 20px rgba(8, 30, 34, .18); opacity: .88; filter: saturate(.85); transition: opacity .2s, filter .2s, box-shadow .2s; }
+.lic-pick.on .lic-card.mini { opacity: 1; filter: none; box-shadow: 0 0 0 3px var(--surface, #fff), 0 0 0 6px var(--brand-500), 0 16px 32px rgba(8, 30, 34, .3); }
+.lic-pick.on { transform: translateY(-3px); }
+.lic-card.mini .lic-brand { font-size: 14px; }
+.lic-card.mini .lic-edition { font-size: 10.5px; padding: 2px 8px; }
+.lic-card.mini .lic-chip { width: 32px; height: 24px; padding: 4px; }
+.lic-card.mini .lic-number { font-size: 12px; letter-spacing: 1.2px; }
+.lic-card.mini .lic-holder strong { font-size: 12px; max-width: 220px; }
+.lic-card.mini .lic-perks span { font-size: 10px; padding: 1px 7px; }
+.lic-price { font-size: 18px; font-weight: 800; letter-spacing: .2px; }
+.lic-price small { font-size: 11px; font-weight: 500; opacity: .8; margin-left: 2px; }
+.lic-pick-tick { position: absolute; top: -9px; right: -9px; width: 28px; height: 28px; border-radius: 50%; display: none; place-items: center; background: var(--brand-600); color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); z-index: 3; }
+.lic-pick.on .lic-pick-tick { display: grid; }
+.lic-pick-current { position: absolute; bottom: -10px; left: 14px; z-index: 3; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface, #fff); color: var(--brand-700); box-shadow: 0 1px 4px rgba(0, 0, 0, .15); }
