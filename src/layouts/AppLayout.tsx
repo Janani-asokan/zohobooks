@@ -23,6 +23,7 @@ import { useNet } from '@/lib/net';
 import { useSwitchBusiness } from '@/components/BusinessPicker';
 import { OfflineBillsBadge, OfflineSync, okToSignOut } from '@/components/OfflineBills';
 import { AppDownloads } from '@/components/AppDownloads';
+import { LicenseWelcome } from '@/components/LicenseWelcome';
 import { ReceiptCheck } from '@/components/PrintCheck';
 import { initials } from '@/lib/format';
 import { AssistantButton } from '@/components/Assistant';
@@ -245,6 +246,7 @@ export default function AppLayout() {
       {sb.mobileOpen && <div className="scrim" onClick={() => sb.setMobileOpen(false)} />}
       <div className="shell-main">
         <OfflineSync />
+        <LicenseWelcome />
         <ReceiptCheck />
         {net !== 'online' && (
           <div className="offline-bar no-print" role="status">

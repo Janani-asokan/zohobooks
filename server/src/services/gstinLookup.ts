@@ -70,7 +70,39 @@ export function parseTaxpayer(reply: unknown, gstin: string): Taxpayer | null {
   };
 }
 
-export interface LookupProvider { url: string; method: 'GET' | 'POST'; headers: Record<string, string>; body: string }
+/** Any provider by its address, or Sandbox (sandbox.co.in): API key + secret; the sign-in token is fetched and renewed here. */
+export interface LookupProvider {
+  kind?: 'custom' | 'sandbox';
+  url: string; method: 'GET' | 'POST'; headers: Record<string, string>; body: string;
+  sandbox?: { apiKey: string; apiSecret: string; env: 'live' | 'test' };
+}
+const SANDBOX = { live: 'https://api.sandbox.co.in', test: 'https://test-api.sandbox.co.in' } as const;
+let sandboxToken: { key: string; token: string; until: number } | null = null;
+
+/** Sandbox's access token (valid a day): fetched with the key and secret, kept, and fetched again before it runs out. */
+async function sandboxAuth(s: NonNullable<LookupProvider['sandbox']>, fresh = false) {
+  const id = `${s.env}:${s.apiKey}`;
+  if (!fresh && sandboxToken?.key === id && sandboxToken.until > Date.now()) return sandboxToken.token;
+  const res = await trackedFetch('gstin', 'gstin_lookup', `${SANDBOX[s.env]}/authenticate`, {
+    method: 'POST', headers: { accept: 'application/json', 'x-api-key': s.apiKey, 'x-api-secret': s.apiSecret, 'x-api-version': '1.0' }, signal: AbortSignal.timeout(12_000),
+  });
+  const body = await res.json().catch(() => null) as Record<string, any> | null;
+  const token = body?.access_token ?? body?.data?.access_token;
+  if (!res.ok || typeof token !== 'string') throw new Error(`Sandbox refused the API key and secret (HTTP ${res.status}${body?.message ? `: ${body.message}` : ''}). Check them in Super admin → Configuration.`);
+  sandboxToken = { key: id, token, until: Date.now() + 20 * 3600_000 };
+  return token;
+}
+
+/** Sandbox's GSTIN search: the GST portal's record comes back inside data.data (lgnm, tradeNam, sts, pradr…). */
+async function sandboxSearch(gstin: string, s: NonNullable<LookupProvider['sandbox']>, retried = false): Promise<{ res: Response; raw: any }> {
+  const token = await sandboxAuth(s, retried);
+  const res = await trackedFetch('gstin', 'gstin_lookup', `${SANDBOX[s.env]}/gst/compliance/public/gstin/search`, {
+    method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json', authorization: token, 'x-api-key': s.apiKey, 'x-api-version': '1.0' },
+    body: JSON.stringify({ gstin }), signal: AbortSignal.timeout(12_000),
+  });
+  if ((res.status === 401 || res.status === 403) && !retried) return sandboxSearch(gstin, s, true); // token expired early
+  return { res, raw: await res.json().catch(() => null) };
+}
 
 let cache: { at: number; p: LookupProvider | null } | null = null;
 /** The provider: Super admin's setting, else the environment variables, else none. Re-read at most once a minute. */
@@ -78,7 +110,7 @@ export async function lookupProvider(): Promise<LookupProvider | null> {
   if (cache && Date.now() - cache.at < 60_000) return cache.p;
   const [row] = await query<{ gst_lookup: LookupProvider | null }>('SELECT gst_lookup FROM platform_config WHERE id = 1').catch(() => [] as Array<{ gst_lookup: LookupProvider | null }>);
   const env = config.gstLookup;
-  const p: LookupProvider | null = row?.gst_lookup?.url ? row.gst_lookup
+  const p: LookupProvider | null = row?.gst_lookup?.url || row?.gst_lookup?.kind === 'sandbox' ? row!.gst_lookup
     : env ? { url: env.url.replace('{key}', encodeURIComponent(env.key)), method: 'GET', headers: env.key && !env.url.includes('{key}') ? { [env.keyHeader]: env.key } : {}, body: '' } : null;
   cache = { at: Date.now(), p };
   return p;
@@ -88,18 +120,24 @@ export const lookupOn = async () => !!(await lookupProvider());
 
 /** Asks the provider (no cache). Returns the record, null when it says there is no such number, or throws. */
 export async function fetchTaxpayer(gstin: string, p: LookupProvider): Promise<{ taxpayer: Taxpayer | null; raw: unknown; status: number }> {
-  const fill = (v: string) => v.replaceAll('{gstin}', gstin);
-  const url = fill(p.url).replace(/\{gstin_enc\}/g, encodeURIComponent(gstin));
-  const headers: Record<string, string> = { accept: 'application/json', ...Object.fromEntries(Object.entries(p.headers ?? {}).map(([k, v]) => [k, fill(v)])) };
-  const init: RequestInit = { method: p.method, headers, signal: AbortSignal.timeout(12_000) };
-  if (p.method === 'POST' && p.body) { init.body = fill(p.body); if (!Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')) headers['content-type'] = 'application/json'; }
-  const res = await trackedFetch('gstin', 'gstin_lookup', url, init);
-  const raw = await res.json().catch(() => null);
+  let res: Response; let raw: any;
+  if (p.kind === 'sandbox' && p.sandbox) ({ res, raw } = await sandboxSearch(gstin, p.sandbox));
+  else {
+    const fill = (v: string) => v.replaceAll('{gstin}', gstin);
+    const url = fill(p.url).replace(/\{gstin_enc\}/g, encodeURIComponent(gstin));
+    const headers: Record<string, string> = { accept: 'application/json', ...Object.fromEntries(Object.entries(p.headers ?? {}).map(([k, v]) => [k, fill(v)])) };
+    const init: RequestInit = { method: p.method, headers, signal: AbortSignal.timeout(12_000) };
+    if (p.method === 'POST' && p.body) { init.body = fill(p.body); if (!Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')) headers['content-type'] = 'application/json'; }
+    res = await trackedFetch('gstin', 'gstin_lookup', url, init);
+    raw = await res.json().catch(() => null);
+  }
+  // The GST portal's own "not found" (status_cd 0, or an error object) comes back as a successful reply.
+  const portalNo = raw && typeof raw === 'object' && /("status_cd"\s*:\s*"?0"?)|no\s*records?\s*found|invalid\s*gstin/i.test(JSON.stringify(raw).slice(0, 3000));
   if (res.status === 401 || res.status === 403) throw new Error('The GST lookup service refused the key (check it in Super admin → Configuration)');
   if (res.status === 402 || res.status === 429) throw new Error('The GST lookup service has no credits left or is busy');
   if (!res.ok && res.status !== 404 && res.status !== 422) throw new Error(`The GST lookup service answered HTTP ${res.status}`);
   const taxpayer = res.ok ? parseTaxpayer(raw, gstin) : null;
-  if (res.ok && !taxpayer && raw && !/not\s*found|invalid|no\s*record|does\s*not\s*exist/i.test(JSON.stringify(raw).slice(0, 2000))) {
+  if (res.ok && !taxpayer && raw && !portalNo && !/not\s*found|invalid|no\s*record|does\s*not\s*exist/i.test(JSON.stringify(raw).slice(0, 2000))) {
     throw new Error('The GST lookup service sent a reply we couldn’t read');
   }
   return { taxpayer, raw, status: res.status };

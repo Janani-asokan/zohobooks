@@ -5,7 +5,7 @@ import { api } from '@/api/client';
 import { Badge, Field } from '@/components/ui';
 import { useToast } from '@/context/ToastContext';
 
-interface Saved { source: 'settings' | 'env' | null; url: string; method: 'GET' | 'POST'; headerNames: string[]; body: string }
+interface Saved { source: 'settings' | 'env' | null; kind: 'custom' | 'sandbox'; url: string; method: 'GET' | 'POST'; headerNames: string[]; body: string; sandbox: { env: 'live' | 'test'; keyEnd: string; hasSecret: boolean } | null }
 interface TestResult { ok: boolean; status?: number; error?: string; reply?: string; taxpayer?: { legalName: string; tradeName: string; status: string; address: string } | null }
 
 /**
@@ -18,17 +18,22 @@ export function GstLookupCard() {
   const qc = useQueryClient();
   const toast = useToast();
   const [f, setF] = useState({ url: '', method: 'GET' as 'GET' | 'POST', body: '', headers: [{ name: 'x-api-key', value: '' }] });
+  const [kind, setKind] = useState<'sandbox' | 'custom'>('sandbox');
+  const [sb, setSb] = useState({ apiKey: '', apiSecret: '', env: 'live' as 'live' | 'test' });
   const [busy, setBusy] = useState('');
   const [gstin, setGstin] = useState('');
   const [test, setTest] = useState<TestResult | null>(null);
   const s = q.data;
   useEffect(() => {
-    if (s?.source === 'settings') setF({ url: s.url, method: s.method, body: s.body, headers: s.headerNames.length ? s.headerNames.map((name) => ({ name, value: '' })) : [{ name: 'x-api-key', value: '' }] });
+    if (s?.source === 'settings') setKind(s.kind);
+    if (s?.sandbox) setSb((x) => ({ ...x, env: s.sandbox!.env }));
+    if (s?.source === 'settings' && s.kind === 'custom') setF({ url: s.url, method: s.method, body: s.body, headers: s.headerNames.length ? s.headerNames.map((name) => ({ name, value: '' })) : [{ name: 'x-api-key', value: '' }] });
   }, [s]);
   const save = async (clear = false) => {
     setBusy(clear ? 'clear' : 'save');
     try {
-      await api.put('/platform/gst-lookup', clear ? { clear: true } : { ...f, headers: f.headers.filter((h) => h.name.trim()) });
+      await api.put('/platform/gst-lookup', clear ? { clear: true } : kind === 'sandbox' ? { kind, sandbox: sb } : { kind, ...f, headers: f.headers.filter((h) => h.name.trim()) });
+      setSb((x) => ({ ...x, apiKey: '', apiSecret: '' }));
       await qc.invalidateQueries({ queryKey: ['platform', 'gst-lookup'] });
       toast('success', clear ? 'GST lookup turned off' : 'GST lookup saved', clear ? undefined : 'Press Test with a real GSTIN to check it.');
     } catch (e) { toast('error', (e as Error).message); } finally { setBusy(''); }
@@ -59,6 +64,20 @@ export function GstLookupCard() {
             credits, then about ₹0.5–₹2 a lookup; each number is looked up once and kept for 30 days), then copy its API address and key here.
           </div>
         )}
+        <div className="segmented" style={{ alignSelf: 'flex-start' }}>
+          <button type="button" className={kind === 'sandbox' ? 'active' : ''} onClick={() => setKind('sandbox')}>Sandbox (sandbox.co.in)</button>
+          <button type="button" className={kind === 'custom' ? 'active' : ''} onClick={() => setKind('custom')}>Another provider</button>
+        </div>
+        {kind === 'sandbox' ? (
+          <div className="stack" style={{ gap: 10 }}>
+            <div className="small muted">From the Sandbox dashboard → API keys. The key and secret are kept on the server and never shown again; the sign-in token is renewed automatically.</div>
+            <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <Field label="API key"><input className="input mono" style={{ width: 300, maxWidth: '100%' }} autoComplete="off" value={sb.apiKey} onChange={(e) => setSb({ ...sb, apiKey: e.target.value.trim() })} placeholder={s?.sandbox ? `Saved (…${s.sandbox.keyEnd}), leave empty to keep` : 'key_live_…'} /></Field>
+              <Field label="API secret"><input className="input mono" type="password" style={{ width: 300, maxWidth: '100%' }} autoComplete="off" value={sb.apiSecret} onChange={(e) => setSb({ ...sb, apiSecret: e.target.value.trim() })} placeholder={s?.sandbox?.hasSecret ? 'Saved, leave empty to keep' : 'secret_live_…'} /></Field>
+              <Field label="Account"><select className="select" value={sb.env} onChange={(e) => setSb({ ...sb, env: e.target.value as 'live' | 'test' })}><option value="live">Live</option><option value="test">Test</option></select></Field>
+            </div>
+          </div>
+        ) : (<>
         <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <Field label="Method"><select className="select" value={f.method} onChange={(e) => setF({ ...f, method: e.target.value as 'GET' | 'POST' })}><option>GET</option><option>POST</option></select></Field>
           <Field label="Provider address" hint="Write {gstin} where the GST number goes, e.g. https://api.provider.in/gstin/{gstin}">
@@ -82,8 +101,9 @@ export function GstLookupCard() {
           ))}
           {f.headers.length < 6 && <button type="button" className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => setF({ ...f, headers: [...f.headers, { name: '', value: '' }] })}><Plus size={14} /> Add a header</button>}
         </div>
+        </>)}
         <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" disabled={!!busy || !f.url} onClick={() => void save()}>{busy === 'save' ? <Loader2 size={15} className="spin" /> : <Save size={15} />} Save</button>
+          <button className="btn btn-primary" disabled={!!busy || (kind === 'custom' ? !f.url : !((sb.apiKey && sb.apiSecret) || s?.sandbox))} onClick={() => void save()}>{busy === 'save' ? <Loader2 size={15} className="spin" /> : <Save size={15} />} Save</button>
           {s?.source === 'settings' && <button className="btn btn-ghost" disabled={!!busy} onClick={() => window.confirm('Turn off the GST lookup?') && void save(true)}><Trash2 size={15} /> Turn off</button>}
         </div>
         {s?.source && (

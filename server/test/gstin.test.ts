@@ -124,4 +124,31 @@ describe('other gentle checks', () => {
     expect((await owner.get('/api/shop/gstin/29AAGCB7383J1Z4?for=customer')).body).toMatchObject({ lookup: 'found', taxpayer: { legalName: 'BLUE DART EXPRESS LIMITED' } });
     expect((await owner.put('/api/platform/gst-lookup').send({ clear: true })).status).toBeGreaterThanOrEqual(401);
   });
+
+  it('Sandbox: key and secret only; signs in once, finds the company, and says when a number is not registered', async () => {
+    const admin = await login('admin@ledgerly.in', 'admin123');
+    const saved = await admin.put('/api/platform/gst-lookup').send({ kind: 'sandbox', sandbox: { apiKey: 'key_live_abc1234', apiSecret: 'secret_live_xyz', env: 'live' } });
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+    expect(saved.body).toMatchObject({ source: 'settings', kind: 'sandbox', sandbox: { env: 'live', keyEnd: '1234', hasSecret: true } });
+    expect(JSON.stringify(saved.body)).not.toMatch(/secret_live_xyz|key_live_abc/);
+    const calls: Array<{ url: string; headers: Record<string, string>; body?: string }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (u: string, init: RequestInit) => {
+      calls.push({ url: String(u), headers: init.headers as Record<string, string>, body: init.body as string | undefined });
+      const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (String(u).endsWith('/authenticate')) return json({ access_token: 'tok-1', code: 200 });
+      const g = JSON.parse(String(init.body)).gstin;
+      if (g === REAL) return json({ code: 200, data: { data: RECORD.taxpayerInfo, status_cd: '1' } });
+      return json({ code: 200, data: { status_cd: '0', error: { error_cd: 'FO8000', message: 'No records found for the provided GSTIN.' } } });
+    }));
+    const owner = await login('owner@shop.com', 'owner123');
+    await query("DELETE FROM gstin_lookups");
+    const found = (await owner.get(`/api/shop/gstin/${REAL}?for=customer`)).body;
+    expect(found).toMatchObject({ lookup: 'found', taxpayer: { legalName: 'UBER INDIA SYSTEMS PRIVATE LIMITED', status: 'Active' } });
+    const missing = (await owner.get('/api/shop/gstin/29AAGCB7383J1Z4?for=customer')).body;
+    expect(missing).toMatchObject({ lookup: 'not_found', check: { status: 'ok' } });
+    expect(calls.filter((c) => c.url.endsWith('/authenticate'))).toHaveLength(1); // the token is kept
+    const search = calls.find((c) => c.url.includes('/gstin/search'))!;
+    expect(search.url).toBe('https://api.sandbox.co.in/gst/compliance/public/gstin/search');
+    expect(search.headers).toMatchObject({ authorization: 'tok-1', 'x-api-key': 'key_live_abc1234' });
+  });
 });

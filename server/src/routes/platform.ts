@@ -185,17 +185,28 @@ const maskProvider = async () => {
   const [row] = await query('SELECT gst_lookup FROM platform_config WHERE id = 1');
   const p = row?.gst_lookup as LookupProvider | null;
   const env = !p?.url && !!config.gstLookup;
-  return { source: p?.url ? 'settings' : env ? 'env' : null, url: p?.url ?? '', method: p?.method ?? 'GET', headerNames: Object.keys(p?.headers ?? {}), body: p?.body ?? '' };
+  const set = !!(p?.url || p?.kind === 'sandbox');
+  return { source: set ? 'settings' : env ? 'env' : null, kind: p?.kind === 'sandbox' ? 'sandbox' : 'custom', url: p?.url ?? '', method: p?.method ?? 'GET', headerNames: Object.keys(p?.headers ?? {}), body: p?.body ?? '',
+    sandbox: p?.sandbox ? { env: p.sandbox.env, keyEnd: p.sandbox.apiKey.slice(-4), hasSecret: !!p.sandbox.apiSecret } : null };
 };
 platformRouter.get('/gst-lookup', h(async (_req, res) => res.json(await maskProvider())));
 platformRouter.put('/gst-lookup', h(async (req, res) => {
   const b = parse(z.object({
     clear: z.boolean().optional(),
+    kind: z.enum(['custom', 'sandbox']).default('custom'),
+    sandbox: z.object({ apiKey: z.string().trim().max(200).default(''), apiSecret: z.string().trim().max(300).default(''), env: z.enum(['live', 'test']).default('live') }).optional(),
     url: z.string().trim().max(500).default(''), method: z.enum(['GET', 'POST']).default('GET'), body: z.string().max(2000).default(''),
     headers: z.array(z.object({ name: z.string().trim().regex(/^[A-Za-z0-9-]{1,60}$/, 'Header names use letters, numbers and dashes'), value: z.string().max(500).default('') })).max(6).default([]),
   }), req.body);
   if (b.clear) await query('UPDATE platform_config SET gst_lookup = NULL WHERE id = 1');
-  else {
+  else if (b.kind === 'sandbox') {
+    // Sandbox (sandbox.co.in): key and secret; an empty field keeps the saved one.
+    const [row] = await query('SELECT gst_lookup FROM platform_config WHERE id = 1');
+    const old = (row?.gst_lookup?.kind === 'sandbox' ? row.gst_lookup.sandbox : null) as { apiKey: string; apiSecret: string } | null;
+    const apiKey = b.sandbox?.apiKey || old?.apiKey || ''; const apiSecret = b.sandbox?.apiSecret || old?.apiSecret || '';
+    if (!apiKey || !apiSecret) throw badRequest('Enter the Sandbox API key and API secret (Sandbox dashboard → API keys)');
+    await query('UPDATE platform_config SET gst_lookup = $1 WHERE id = 1', [JSON.stringify({ kind: 'sandbox', url: '', method: 'POST', headers: {}, body: '', sandbox: { apiKey, apiSecret, env: b.sandbox?.env ?? 'live' } })]);
+  } else {
     if (!/^https:\/\/[^\s]+$/.test(b.url)) throw badRequest('Enter the provider’s https:// address');
     if (!b.url.includes('{gstin}') && !b.body.includes('{gstin}')) throw badRequest('Put {gstin} where the GST number goes, in the address or the body');
     const [row] = await query('SELECT gst_lookup FROM platform_config WHERE id = 1');
@@ -204,7 +215,7 @@ platformRouter.put('/gst-lookup', h(async (req, res) => {
     await query('UPDATE platform_config SET gst_lookup = $1 WHERE id = 1', [JSON.stringify({ url: b.url, method: b.method, headers, body: b.body })]);
   }
   forgetProvider();
-  await tx((db) => audit(db, req, null, 'update', 'gst_lookup', 'settings', { cleared: !!b.clear, url: b.clear ? '' : b.url.replace(/[?#].*/, '') }));
+  await tx((db) => audit(db, req, null, 'update', 'gst_lookup', 'settings', { cleared: !!b.clear, kind: b.kind, url: b.clear ? '' : b.url.replace(/[?#].*/, '') }));
   res.json(await maskProvider());
 }));
 platformRouter.post('/gst-lookup/test', h(async (req, res) => {

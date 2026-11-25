@@ -10,6 +10,9 @@ import { useToast } from '@/context/ToastContext';
 import { Badge, PageHeader } from '@/components/ui';
 import { fmtDate, money } from '@/lib/format';
 import { daysUntil } from '@/lib/fy';
+import { LicenseCard } from '@/components/LicenseCard';
+import { LicenseIncludes, licenseOf } from '@/components/LicenseWelcome';
+import '@/styles/license.css';
 
 interface BillingInfo {
   planId: string; planName: string; licenseStart: string; licenseEnd: string; onlinePayments: boolean;
@@ -55,7 +58,7 @@ export default function Billing() {
         handler: async (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
           try {
             await api.post('/billing/razorpay/verify', { orderId: r.razorpay_order_id, paymentId: r.razorpay_payment_id, signature: r.razorpay_signature });
-            toast('success', 'Payment successful', 'Your license has been extended.');
+            toast('success', 'Payment successful', 'Your licence card is ready.');
             await refresh();
             qc.invalidateQueries({ queryKey: ['billing'] });
           } catch (e) {
@@ -86,8 +89,28 @@ export default function Billing() {
           <AlertTriangle size={18} /> Your license expired on {fmtDate(me.shop.licenseEnd)}. Renew to unlock your workspace — your data is safe.
         </div>
       )}
+      {/* The licence, as a card the business owns: plan edition, licensed-to name, number, dates and add-ons. */}
+      <section className="card card-body" style={{ marginBottom: 16 }}>
+        <div className="lic-panel">
+          <LicenseCard l={licenseOf(me)} />
+          <div className="stack" style={{ gap: 10 }}>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              {days < 0 ? <Badge tone="red">Expired on {fmtDate(me.shop.licenseEnd)}</Badge> : days <= 30 ? <Badge tone="amber">{days} days left</Badge> : <Badge tone="green"><CheckCircle2 size={12} /> Active · {days} days left</Badge>}
+            </div>
+            <div className="lic-facts">
+              <div><small>Edition</small><strong>Corpus360 {me.shop.planName}</strong></div>
+              <div><small>Licensed to</small><strong>{me.shop.name}</strong></div>
+              <div><small>Valid</small><strong>{fmtDate(me.shop.licenseStart)} – {fmtDate(me.shop.licenseEnd)}</strong></div>
+              <div><small>Seats</small><strong>{me.shop.limits.users} staff logins · {me.shop.limits.branches} {me.shop.limits.branches === 1 ? 'branch' : 'branches'}</strong></div>
+              <div><small>Add-ons</small><strong>{Object.keys(me.shop.features).length || 'None yet'}</strong></div>
+            </div>
+          </div>
+        </div>
+        <div className="divider" />
+        <LicenseIncludes l={licenseOf(me)} />
+      </section>
       {sales}
-      <div className="grid-3-1" style={{ alignItems: 'start' }}>
+      <div>
         <div className="stack">
           <div className="card">
             <div className="card-header"><div><h3>Choose a plan</h3><p>Renewal extends from your current expiry date</p></div></div>
@@ -127,14 +150,6 @@ export default function Billing() {
               </tbody>
             </table>
           </div>
-        </div>
-        <div className="card" style={{ padding: 20 }}>
-          <div className="small muted">Current plan</div>
-          <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--ink-900)', marginTop: 2 }}>{me.shop.planName}</div>
-          <div className="divider" />
-          <div className="row between small"><span className="muted">Valid from</span><strong>{fmtDate(me.shop.licenseStart)}</strong></div>
-          <div className="row between small" style={{ marginTop: 6 }}><span className="muted">Valid till</span><strong>{fmtDate(me.shop.licenseEnd)}</strong></div>
-          <div style={{ marginTop: 14 }}>{days < 0 ? <Badge tone="red">Expired</Badge> : days <= 30 ? <Badge tone="amber">{days} days left</Badge> : <Badge tone="green"><CheckCircle2 size={12} /> {days} days left</Badge>}</div>
         </div>
       </div>
     </div>

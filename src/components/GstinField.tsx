@@ -75,7 +75,7 @@ export function GstinField({ value, onChange, onFill, forWhat, label = 'GST numb
         )}
         {netErr && <div className="gstin-note warn"><AlertTriangle size={15} /> <span>Couldn’t check online ({netErr}). The number itself looks {local?.status === 'ok' ? 'right' : 'wrong'}.</span></div>}
         {shown && shown.check.status === 'ok' && (
-          <div className={`gstin-card ${t && inactive(t.status) ? 'bad' : ''}`}>
+          <div className={`gstin-card ${(t && inactive(t.status)) || shown.lookup === 'not_found' ? 'bad' : ''}`}>
             {t ? (
               <>
                 <div className="gstin-card-head">
@@ -91,9 +91,9 @@ export function GstinField({ value, onChange, onFill, forWhat, label = 'GST numb
               </>
             ) : (
               <>
-                <div className="gstin-card-head"><BadgeCheck size={16} /><strong>{shown.lookup === 'not_found' ? 'Not in the GST register' : 'Format is correct'}</strong></div>
+                <div className="gstin-card-head">{shown.lookup === 'not_found' ? <XCircle size={16} /> : <BadgeCheck size={16} />}<strong>{shown.lookup === 'not_found' ? 'This GST number is not correct' : 'Format is correct'}</strong></div>
                 <div className="small muted">{shown.check.state} · {shown.check.holder} · PAN {shown.check.pan}</div>
-                {shown.lookup === 'not_found' && <div className="small strong">The GST register has no such number. Check it with the customer.</div>}
+                {shown.lookup === 'not_found' && <div className="small strong">It isn’t in the GST register. Check the number with the customer, or bill them as unregistered.</div>}
                 {(shown.lookup === 'off' || shown.lookup === 'failed') && (
                   <>
                     <div className="small muted">{shown.lookup === 'off' ? 'State filled in. To get the registered name and address, look the number up on the GST portal (free), then type them below.' : 'The GST register couldn’t be reached just now. Try Validate again, or look it up on the GST portal.'}</div>
