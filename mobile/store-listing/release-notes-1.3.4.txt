@@ -1,0 +1,4 @@
+- Your licence as a card: plan, licence number, licensed-to name, validity and add-ons.
+- Choose a plan as licence cards.
+- GST number Validate fills the company name and address from the GST register, and says clearly when a number is not correct.
+- Offline saving for invoices, payments, customers and items, sent automatically when the internet is back.
