@@ -180,7 +180,7 @@ export default function Customers() {
                       </td>
                       <td className="num">
                         <div className="strong">{money(c.due)}</div>
-                        <div className="muted">{c.creditLimit > 0 && c.due > c.creditLimit ? <span style={{ color: 'var(--red-600)' }}>Over limit</span> : `${c.invoiceCount} invoices`}</div>
+                        <div className="muted">{c.creditLimit > 0 && c.due > c.creditLimit ? <span style={{ color: 'var(--red-600)' }}>Over limit</span> : `${c.invoiceCount} invoice${c.invoiceCount === 1 ? "" : "s"}`}</div>
                       </td>
                       <td className="num hide-split" style={{ whiteSpace: 'nowrap' }} onClick={(ev) => ev.stopPropagation()}>
                         {me.can('sales.write') && <button className="icon-btn" title="New invoice" onClick={() => navigate(`/app/sales/invoices/new?customer=${c.id}`)}><FileText size={15} /></button>}

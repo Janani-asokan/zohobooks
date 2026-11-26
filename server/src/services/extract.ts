@@ -172,7 +172,13 @@ Rules:
 - The shop using this app is the other side of the document; never return the shop's own details as the party.`;
 
 let client: Anthropic | null = null;
-export const aiEnabled = () => !!config.ai.apiKey;
+/**
+ * AI is on when a key is set and Anthropic hasn't just refused it. A refused key (revoked, mistyped, out of credit)
+ * switches the AI buttons off for 30 minutes instead of letting every shop hit an error; then it is tried again.
+ */
+let aiKeyRefusedAt = 0;
+export const markAiKeyRefused = () => { aiKeyRefusedAt = Date.now(); };
+export const aiEnabled = () => !!config.ai.apiKey && Date.now() - aiKeyRefusedAt > 30 * 60_000;
 
 async function aiExtract(bytes: Buffer, mime: UploadType, kind: ExtractKind, shop: { name: string; gstin: string }): Promise<Extracted> {
   const ai = (client ??= new Anthropic({ apiKey: config.ai.apiKey, timeout: 90_000, maxRetries: 1 }));

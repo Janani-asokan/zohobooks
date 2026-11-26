@@ -288,8 +288,8 @@ function Form({ existing }: { existing?: Invoice }) {
           {invFile && <div className="small muted" style={{ marginBottom: 12 }}><FileUp size={13} style={{ verticalAlign: -2 }} /> {invFile.file.name} will be attached to this invoice.</div>}
           <div className="form-grid">
             <Field label="Customer" required error={(touched ? errs.customer : '') || serverErr.customerId}>
-              <div className="row" style={{ gap: 8 }}>
-                <select className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => selectCustomer(e.target.value, undefined, true)} autoFocus={!existing && !remembered?.customerId} aria-label="Customer">
+              <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
+                <select style={{ flex: 1, minWidth: 0 }} className={`select ${touched && errs.customer ? 'invalid' : ''}`} value={customerId} onChange={(e) => selectCustomer(e.target.value, undefined, true)} autoFocus={!existing && !remembered?.customerId} aria-label="Customer">
                   <option value="">Select a customer…</option>
                   <optgroup label="Business (B2B)">{pickable(customers, customerId).filter((c) => c.type === 'Business').map((c) => <option key={c.id} value={c.id}>{c.companyName} · {c.customId}</option>)}</optgroup>
                   <optgroup label="Individuals">{pickable(customers, customerId).filter((c) => c.type === 'Individual').map((c) => <option key={c.id} value={c.id}>{c.name} · {c.customId}</option>)}</optgroup>

@@ -56,6 +56,9 @@ const queryClient = new QueryClient({
   },
 });
 
+// AI switched off on the server (refused key): every AI button re-checks and hides.
+window.addEventListener('c360:ai-off', () => { void queryClient.invalidateQueries({ queryKey: ['ai-status'] }); });
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

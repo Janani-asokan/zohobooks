@@ -36,8 +36,10 @@ export const addDays = (iso: string, days: number) => {
 
 export const uid = (p = '') => p + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
 
+/** Two letters for a badge: "Carrot (Ooty)" → "CO" (brackets and symbols are skipped). */
 export const initials = (name: string) =>
   name
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)

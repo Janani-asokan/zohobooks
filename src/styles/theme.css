@@ -202,7 +202,8 @@ a { color: var(--brand-600); }
 .palette { border-radius: var(--radius-lg); }
 .palette-item.hl { background: var(--brand-50); color: var(--brand-700); }
 .palette-item .pi-icon { color: var(--brand-500); }
-.bottom-nav { background: var(--surface-glass); backdrop-filter: blur(14px); border-top: 1px solid var(--border); }
+/* Solid: on phones the see-through bar let page text show behind its labels. */
+.bottom-nav { background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -4px 14px rgba(8, 30, 34, .06); }
 .bottom-nav .bn-fab { background: var(--accent-grad); border-radius: 50%; width: 46px; height: 46px; box-shadow: var(--shadow-rose); margin-top: -18px; animation: pulse-ring 2.4s ease-out infinite; }
 .bottom-nav a.active { color: var(--brand-600); }
 

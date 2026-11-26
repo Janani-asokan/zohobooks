@@ -65,7 +65,8 @@ const Ledger = IS_APP ? WebOnly : lazy(() => import('./pages/app/Ledger'));
 const AuditLog = IS_APP ? WebOnly : lazy(() => import('./pages/app/AuditLog'));
 const Organization = lazy(() => import('./pages/app/Organization'));
 const Team = IS_APP ? WebOnly : lazy(() => import('./pages/app/Team'));
-const Billing = IS_APP ? WebOnly : lazy(() => import('./pages/app/Billing'));
+// The phone app shows the licence card; plans are bought on the website.
+const Billing = IS_APP ? lazy(() => import('./pages/app/AppLicense')) : lazy(() => import('./pages/app/Billing'));
 const PrintSettings = lazy(() => import('./pages/app/PrintSettings'));
 const Support = lazy(() => import('./pages/app/Support'));
 const TransferNote = lazy(() => import('./pages/app/TransferNote'));

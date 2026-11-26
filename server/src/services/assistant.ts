@@ -1,3 +1,5 @@
+import { markAiKeyRefused } from './extract';
+import { sendMail } from '../mailer';
 /* AI helpers (only when an Anthropic API key is configured): the "Ask Corpus360" business assistant,
    which answers questions from the shop's own data through read-only tools, and item detail suggestions. */
 import Anthropic from '@anthropic-ai/sdk';
@@ -6,7 +8,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod/v4';
 import { todayISO, type UserCtx } from '../auth';
 import { config } from '../config';
-import { many, one, withTenant } from '../db';
+import { many, one, query, withTenant } from '../db';
 import { HttpError } from '../http';
 import { stockInsights, type StockInsights } from './stockInsights';
 import { meteredCall, meteredRunner } from './aiUsage';
@@ -222,7 +224,10 @@ export function aiError(e: unknown): never {
   if (e instanceof Anthropic.RateLimitError) throw new HttpError(429, 'The AI is busy right now. Try again in a minute.', 'ai_busy');
   if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
     console.error('[ai] API key rejected:', e.message);
-    throw new HttpError(503, 'The AI key on this server isn’t working. Ask the admin to check ANTHROPIC_API_KEY.', 'ai_key');
+    markAiKeyRefused();
+    void alertAiKey(e.message);
+    // Shop users see a plain message; the platform team gets the details by email.
+    throw new HttpError(503, 'The AI assistant is paused for a while. Our team has been told. Everything else works as usual.', 'ai_key');
   }
   console.error('[ai] request failed:', e instanceof Anthropic.APIError ? `${e.status} ${e.message}` : (e as Error).message);
   throw new HttpError(502, 'The AI couldn’t answer right now. Please try again.', 'ai_failed');
@@ -479,4 +484,23 @@ Pick the 3 to 5 most useful things to do today from the action refs (money to co
   if (!response.parsed_output) throw new HttpError(422, 'Couldn’t write the briefing right now.', 'ai_no_answer');
   const valid = new Set(input.refs.map((r) => r.ref));
   return { ...response.parsed_output, actions: response.parsed_output.actions.filter((a) => valid.has(a.ref)) };
+}
+
+/** Emails every super admin that the AI key was refused, at most once every 6 hours. */
+let lastKeyAlert = 0;
+async function alertAiKey(detail: string) {
+  if (Date.now() - lastKeyAlert < 6 * 3600_000) return;
+  lastKeyAlert = Date.now();
+  try {
+    const admins = await query<{ email: string }>('SELECT email FROM super_admins');
+    for (const a of admins) {
+      await sendMail({
+        kind: 'other', to: a.email, subject: 'Corpus360: the AI key was refused, AI features are paused',
+        text: ['Anthropic refused the AI key on the server, so the AI assistant, photo-to-bill and AI fill are switched off for shops (they come back on by themselves once the key works).', '',
+          `Anthropic said: ${detail}`, '',
+          'To fix: create a new key at https://console.anthropic.com (API keys), put it in /opt/corpus360/.env as ANTHROPIC_API_KEY=..., then run: corpus360-update --force',
+          'Also check the account has credit (Plans & billing).'].join('\n'),
+      });
+    }
+  } catch (err) { console.error('[ai] alert failed', err); }
 }

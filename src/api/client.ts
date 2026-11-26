@@ -71,6 +71,8 @@ async function request<T>(method: string, url: string, body?: Json, opts: Reques
   if (!res.ok) {
     const err = new ApiError(res.status, (data as any)?.error ?? `Request failed (${res.status})`, (data as any)?.code, (data as any)?.details);
     if (res.status === 401 || ['license_expired', 'workspace_inactive', 'password_change_required'].includes(err.code)) window.dispatchEvent(new CustomEvent('api:auth', { detail: err }));
+    // The server's AI key was refused: AI buttons hide until it works again (main.tsx re-reads /ai/status).
+    if (err.code === 'ai_key') window.dispatchEvent(new Event('c360:ai-off'));
     throw err;
   }
   if (IS_APP && method === 'GET' && !/\/(pdf|download|export)\b/.test(url)) void cachePut(url, data);

@@ -1,0 +1,3 @@
+- See your licence card in the app: plan, licence number, validity and everything included.
+- Clearer message when the AI assistant is paused; the AI buttons hide until it is back.
+- Bottom menu no longer shows page text behind it; small layout and wording fixes.
