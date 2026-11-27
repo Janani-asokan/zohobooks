@@ -15,9 +15,13 @@ import { saveLead } from '../services/salesLeads';
 export const publicRouter = Router();
 
 async function linkFor(token: string) {
-  if (!/^[0-9a-f]{36}$/.test(token)) throw notFound('Invoice');
+  // The full 36-character code, or the 24-character short code that SMS links carry (DLT allows 30 per variable).
+  if (!/^[0-9a-f]{36}$/.test(token) && !/^[0-9a-f]{24}$/.test(token)) throw notFound('Invoice');
   // A link the owner turned off stops working at once (NFR-04).
-  const [link] = await query('SELECT shop_id, invoice_id FROM public_links WHERE token = $1 AND revoked_at IS NULL', [token]);
+  const rows = token.length === 36
+    ? await query('SELECT shop_id, invoice_id FROM public_links WHERE token = $1 AND revoked_at IS NULL', [token])
+    : await query('SELECT shop_id, invoice_id FROM public_links WHERE left(token, 24) = $1 AND revoked_at IS NULL LIMIT 2', [token]);
+  const link = rows.length === 1 ? rows[0] : null;
   if (!link) throw notFound('Invoice');
   return link as { shop_id: string; invoice_id: string };
 }

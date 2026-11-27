@@ -57,12 +57,19 @@ export const FEATURE_LABELS: Record<string, string> = {
   support_read: 'WhatsApp read receipt',
   support_media: 'Open a photo or file sent on WhatsApp',
   gstin_lookup: 'Look up a GST number (legal name, address, status)',
+  sms_invoice: 'Send a bill by SMS',
+  sms_test: 'SMS test from Super admin',
 };
 
 const EMAIL_FEATURES = ['signup_code', 'sales_lead', 'sales_lead_ack', 'report', 'welcome', 'password_reset', 'password_reset_admin', 'workspace_ready', 'shop_closed', 'invoice',
   'payment_reminder', 'transfer_code', 'licence_expiry', 'warehouse_licence_alert', 'ai_credits_alert', 'test_email'];
 
 export const INTEGRATIONS: Integration[] = [
+  {
+    key: 'msg91', name: 'MSG91', what: 'Sends bills by SMS with the DLT-approved template', side: 'server', host: 'control.msg91.com',
+    settings: ['Super admin → Configuration → SMS'], features: ['sms_invoice', 'sms_test'], docs: 'https://docs.msg91.com/sms/send-sms',
+    note: 'Optional. Each SMS is charged by MSG91. Shops have a daily limit set with it.',
+  },
   {
     key: 'gstin', name: 'GSTIN lookup', what: 'Fills in the legal name and address when someone taps Validate next to a GST number', side: 'server', host: 'GSTIN_LOOKUP_URL',
     settings: ['GSTIN_LOOKUP_URL', 'GSTIN_LOOKUP_KEY', 'GSTIN_LOOKUP_KEY_HEADER'], features: ['gstin_lookup'],

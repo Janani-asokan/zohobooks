@@ -17,6 +17,7 @@ import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
 import { platformSupportRouter } from './platformSupport';
 import { platformLogsRouter } from './platformLogs';
 import { appsInfo, setAndroid } from '../services/appDownloads';
+import { DEFAULT_VARS, sendBillSms, smsSettings, type SmsSettings } from '../services/sms';
 import { fetchTaxpayer, forgetProvider, lookupProvider, type LookupProvider } from '../services/gstinLookup';
 import { checkGstin } from '../../../shared/gst';
 
@@ -226,6 +227,42 @@ platformRouter.post('/gst-lookup/test', h(async (req, res) => {
   try {
     const r = await fetchTaxpayer(gstin, p);
     res.json({ ok: !!r.taxpayer, status: r.status, taxpayer: r.taxpayer, reply: JSON.stringify(r.raw)?.slice(0, 1500) ?? '' });
+  } catch (e) { res.json({ ok: false, error: (e as Error).message }); }
+}));
+
+/**
+ * Bills by SMS (MSG91): auth key, the DLT-approved template's ID in MSG91, which MSG91 variable holds which value,
+ * on/off and the daily limit per shop. The key is never sent back to the browser.
+ */
+const smsView = async () => {
+  const [row] = await query('SELECT sms FROM platform_config WHERE id = 1');
+  const s = row?.sms as (SmsSettings | null);
+  return { configured: !!(s?.authKey && s.templateId), keyEnd: s?.authKey ? s.authKey.slice(-4) : '', templateId: s?.templateId ?? '', enabled: !!s?.enabled,
+    dailyPerShop: s?.dailyPerShop ?? 200, vars: { ...DEFAULT_VARS, ...(s?.vars ?? {}) } };
+};
+platformRouter.get('/sms', h(async (_req, res) => res.json(await smsView())));
+platformRouter.put('/sms', h(async (req, res) => {
+  const name = z.string().trim().regex(/^[A-Za-z0-9_]{1,40}$/, 'Use the variable name from the MSG91 template (letters, numbers, _)');
+  const b = parse(z.object({
+    authKey: z.string().trim().max(200).default(''), templateId: z.string().trim().max(100).default(''), enabled: z.boolean().default(false),
+    dailyPerShop: z.number().int().min(1).max(10000).default(200),
+    vars: z.object({ name, shop: name, bill: name, amount: name, code: name }).default(DEFAULT_VARS),
+  }), req.body);
+  const [row] = await query('SELECT sms FROM platform_config WHERE id = 1');
+  const authKey = b.authKey || (row?.sms?.authKey ?? '');
+  if (!authKey || !b.templateId) throw badRequest('Enter the MSG91 auth key and the template ID');
+  if (new Set(Object.values(b.vars)).size !== 5) throw badRequest('Each value needs its own MSG91 variable');
+  await query('UPDATE platform_config SET sms = $1 WHERE id = 1', [JSON.stringify({ authKey, templateId: b.templateId, enabled: b.enabled, dailyPerShop: b.dailyPerShop, vars: b.vars })]);
+  await tx((db) => audit(db, req, null, 'update', 'sms_settings', 'msg91', { enabled: b.enabled, templateId: b.templateId, dailyPerShop: b.dailyPerShop }));
+  res.json(await smsView());
+}));
+platformRouter.post('/sms/test', h(async (req, res) => {
+  const { phone } = parse(z.object({ phone: z.string().trim().max(20) }), req.body);
+  const s = await smsSettings();
+  if (!s) throw badRequest('Save the MSG91 settings first');
+  try {
+    const r = await sendBillSms({ phone, customer: 'Ravi Kumar', shop: 'Corpus360 test', bill: 'TEST-0001', amount: 707, linkToken: '0'.repeat(36) }, s, { test: true });
+    res.json({ ok: true, to: r.to, requestId: r.requestId });
   } catch (e) { res.json({ ok: false, error: (e as Error).message }); }
 }));
 

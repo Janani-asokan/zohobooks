@@ -12,6 +12,7 @@ import { authRouter } from './routes/auth';
 import { platformRouter } from './routes/platform';
 import { publicRouter } from './routes/public';
 import { idempotency } from './idempotency';
+import { smsRouter } from './routes/shop/sms';
 import { ANDROID_PATH, androidFile } from './services/appDownloads';
 import { catalogRouter } from './routes/shop/catalog';
 import { labelsRouter } from './routes/shop/labels';
@@ -123,7 +124,7 @@ export function createApp() {
   app.use('/api/public', publicRouter);
   app.use('/api/platform', platformRouter);
   app.use('/api/billing', requireShopUser({ allowExpired: true }), billingRouter);
-  app.use('/api/shop', requireShopUser(), idempotency, featureGate, aiContext, shopOutboundCtx, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, appDevicesRouter, supportRouter, licensesRouter, transfersRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, attendanceRouter, gstinRouter, briefingRouter, inventoryRouter, accountingRouter, adminRouter);
+  app.use('/api/shop', requireShopUser(), idempotency, featureGate, aiContext, shopOutboundCtx, auditWrites, featuresRouter, coreRouter, catalogRouter, labelsRouter, appDevicesRouter, supportRouter, licensesRouter, transfersRouter, salesRouter, moneyRouter, purchasingRouter, reportsRouter, filesRouter, challansRouter, offersRouter, dataRouter, fieldRouter, attendanceRouter, gstinRouter, smsRouter, briefingRouter, inventoryRouter, accountingRouter, adminRouter);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found', 'not_found')));
   app.use('/api', errorHandler);
 

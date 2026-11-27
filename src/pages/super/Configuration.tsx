@@ -11,6 +11,7 @@ import { fyLabel, fyRange } from '@/lib/fy';
 import { fmtDate } from '@/lib/format';
 import { AppDownloadsCard } from '@/components/super/AppDownloadsCard';
 import { GstLookupCard } from '@/components/super/GstLookupCard';
+import { SmsCard } from '@/components/super/SmsCard';
 
 const PREFIX_RE = /^[A-Z]{2,5}$/;
 
@@ -68,6 +69,7 @@ function ConfigForm({ config }: { config: PlatformConfig }) {
       <div className="stack">
         <EmailCheck />
         <GstLookupCard />
+        <SmsCard />
         <AppDownloadsCard />
 
         {/* ---------------- ID Generation ---------------- */}

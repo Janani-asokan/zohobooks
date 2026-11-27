@@ -1,8 +1,9 @@
+import { SendSmsDialog, useSmsStatus } from '@/components/SendSms';
 import { PendingStrip } from '@/components/PendingStrip';
 import { PUBLIC_ORIGIN } from '@/lib/platform';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy, Check, FileSpreadsheet, Sheet } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, Wallet, Trash2, FileX, Share2, MessageCircle, Mail, Link2, Bell, FileJson, Truck, Ban, Send, Receipt, Undo2, Loader2, Download, ExternalLink, BadgeCheck, Sparkles, Copy, Check, FileSpreadsheet, Sheet, MessageSquareText } from 'lucide-react';
 import { api, download, fieldErrors } from '@/api/client';
 import { SALES_KEYS, useBankAccounts, useBranches, useInvoice, useMut, useOrg, usePrintSettings } from '@/api/hooks';
 import { billPrint, billPrintName, sameBill, shopBill, preparePrint, printInvoice, printRoute, setBillPrinter, type BillPrinter, type PrintPaper, type Roll } from '@/lib/printInvoice';
@@ -76,6 +77,9 @@ export default function InvoiceView() {
   const [pdfBusy, setPdfBusy] = useState(false);
 
   const keys = SALES_KEYS;
+  // Bills by SMS (MSG91), when it is switched on for the platform.
+  const smsOn = useSmsStatus().data?.on ?? false;
+  const [smsOpen, setSmsOpen] = useState(false);
   const payMut = useMut((b: Record<string, unknown>) => api.post(`/shop/invoices/${id}/payments`, b), keys, { silentError: true });
   const delPay = useMut((pid: string) => api.del(`/shop/payments/${pid}`), keys, { success: 'Payment removed' });
   const renewLink = useMut(() => api.post<{ publicToken: string }>(`/shop/invoices/${id}/share-link/renew`, {}), keys, { success: 'Old link turned off. A new link is ready to share.' });
@@ -149,6 +153,7 @@ export default function InvoiceView() {
 
   return (
     <div className="page" style={{ maxWidth: 1240 }}>
+      {inv.status === 'Issued' && <SendSmsDialog invoiceId={inv.id} number={inv.number ?? ''} phone={inv.customer.phone} open={smsOpen} onClose={() => setSmsOpen(false)} />}
       <PendingStrip what={['change to this invoice', 'changes to this invoice']} match={(e) => e.url.includes(inv.id)} />
       <div className="row between no-print" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div className="row">
@@ -176,6 +181,7 @@ export default function InvoiceView() {
               {(close) => (
                 <>
                   <a className="dropdown-item" href={waLink(phone, whatsappText(inv, org))} target="_blank" rel="noreferrer" onClick={close}><MessageCircle size={16} /> Send on WhatsApp</a>
+                  {smsOn && canSell && <button type="button" className="dropdown-item" onClick={() => { close(); setSmsOpen(true); }}><MessageSquareText size={16} /> Send SMS</button>}
                   {inv.balance > 0 && (
                     <a className="dropdown-item" href={waLink(phone, whatsappText(inv, org, true))} target="_blank" rel="noreferrer" onClick={() => { close(); remind.mutate('whatsapp'); }}><Bell size={16} /> WhatsApp payment reminder</a>
                   )}

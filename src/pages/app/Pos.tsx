@@ -24,6 +24,7 @@ import { applyBillAdjustments, computeTotals, lineAmount, type BillDiscount } fr
 import { priceFor } from '@/components/LineItems';
 import { QuickBill, type ParsedBill } from '@/components/QuickBill';
 import { VoiceBar } from '@/components/VoiceBar';
+import { SendSmsButton } from '@/components/SendSms';
 import { speechEngine } from '@/lib/speech';
 import { useAiEnabled } from '@/components/Assistant';
 import { useScale } from '@/lib/scale';
@@ -797,6 +798,7 @@ export default function Pos() {
             {done && done.invoice.customer.phone && org && (
               <a className="btn btn-secondary" target="_blank" rel="noreferrer" href={waLink(done.invoice.customer.phone, `Thank you for shopping at ${org.companyName}! Bill ${done.invoice.number}: ${money(done.invoice.total)}. ${done.invoice.publicToken ? `${PUBLIC_ORIGIN}/share/${done.invoice.publicToken}` : ''}`)}><MessageCircle size={15} /> WhatsApp bill</a>
             )}
+            {done && done.invoice.number && <SendSmsButton invoiceId={done.invoice.id} number={done.invoice.number} phone={done.invoice.customer.phone} />}
             <Segmented value={receiptCfg.paper} onChange={setRoll} options={[{ value: '2in', label: '58mm' }, { value: '3in', label: '80mm' }]} />
             <button className="btn btn-secondary" onClick={() => printReceipt(receiptCfg)}><Printer size={15} /> Print receipt</button>
             <button className="btn btn-primary" onClick={reset} autoFocus><Plus size={15} /> New sale</button>
