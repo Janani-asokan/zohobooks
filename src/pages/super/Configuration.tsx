@@ -12,6 +12,7 @@ import { fmtDate } from '@/lib/format';
 import { AppDownloadsCard } from '@/components/super/AppDownloadsCard';
 import { GstLookupCard } from '@/components/super/GstLookupCard';
 import { SmsCard } from '@/components/super/SmsCard';
+import { GaSettingsCard } from '@/components/super/WebsiteTraffic';
 
 const PREFIX_RE = /^[A-Z]{2,5}$/;
 
@@ -70,6 +71,7 @@ function ConfigForm({ config }: { config: PlatformConfig }) {
         <EmailCheck />
         <GstLookupCard />
         <SmsCard />
+        <GaSettingsCard />
         <AppDownloadsCard />
 
         {/* ---------------- ID Generation ---------------- */}

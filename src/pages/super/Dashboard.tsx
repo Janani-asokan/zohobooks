@@ -8,6 +8,7 @@ import type { Shop } from '@/api/types';
 import { useToast } from '@/context/ToastContext';
 import { Badge, EmptyState, Field, Modal, PageHeader, Pagination, SearchInput, StatCard, Toggle, usePagination } from '@/components/ui';
 import { BarChart, MeterList } from '@/components/charts';
+import { WebsiteTrafficCard } from '@/components/super/WebsiteTraffic';
 import { addDays, EMAIL_RE, fmtDate, initials, money, moneyShort, todayISO } from '@/lib/format';
 import { daysUntil } from '@/lib/fy';
 import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
@@ -149,6 +150,8 @@ export default function SuperDashboard() {
           </div>
         </div>
       </div>
+
+      <WebsiteTrafficCard />
 
       <div className="card mt-16">
         <div className="card-header"><div><h3>Registered shop owners</h3><p>Workspaces, licenses and access</p></div></div>

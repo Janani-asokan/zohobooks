@@ -96,7 +96,8 @@ export function BarChart({ labels, series, format, height = 240 }: { labels: str
 }
 
 /** Single-series area/line chart with crosshair tooltip. */
-export function AreaChart({ labels, values, format, height = 220, name }: { labels: string[]; values: number[]; format: (n: number) => string; height?: number; name: string }) {
+/** tickEvery: draw only every nth label under the axis (counted back from the last), for long daily series. */
+export function AreaChart({ labels, values, format, height = 220, name, tickEvery = 1 }: { labels: string[]; values: number[]; format: (n: number) => string; height?: number; name: string; tickEvery?: number }) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 640;
   const H = height;
@@ -130,11 +131,11 @@ export function AreaChart({ labels, values, format, height = 220, name }: { labe
         </g>
         <path d={area} fill="url(#area-fill)" />
         <path d={line} fill="none" stroke={SERIES[0]} strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
-        {labels.map((l, i) => (
+        {labels.map((l, i) => ((labels.length - 1 - i) % tickEvery === 0 ? (
           <text key={l + i} x={x(i)} y={H - 8} textAnchor="middle">
             {l}
           </text>
-        ))}
+        ) : null))}
         {hover !== null && (
           <>
             <line x1={x(hover)} x2={x(hover)} y1={pad.t} y2={pad.t + ih} stroke="#a1a1aa" strokeDasharray="3 3" />

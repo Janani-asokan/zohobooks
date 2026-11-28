@@ -20,6 +20,7 @@ import { appsInfo, setAndroid } from '../services/appDownloads';
 import { DEFAULT_VARS, sendBillSms, smsSettings, type SmsSettings } from '../services/sms';
 import { fetchTaxpayer, forgetProvider, lookupProvider, type LookupProvider } from '../services/gstinLookup';
 import { checkGstin } from '../../../shared/gst';
+import { readKeyFile, resetGa, websiteTraffic, type GaSettings } from '../services/gaTraffic';
 
 /**
  * Super Admin API. Reads/writes only platform tables (shops, plans, config, tax slabs,
@@ -264,6 +265,43 @@ platformRouter.post('/sms/test', h(async (req, res) => {
     const r = await sendBillSms({ phone, customer: 'Ravi Kumar', shop: 'Corpus360 test', bill: 'TEST-0001', amount: 707, linkToken: '0'.repeat(36) }, s, { test: true });
     res.json({ ok: true, to: r.to, requestId: r.requestId });
   } catch (e) { res.json({ ok: false, error: (e as Error).message }); }
+}));
+
+/**
+ * Website traffic (Google Analytics Data API): the GA4 property ID and a service account's JSON key. Only the
+ * service account's email goes back to the browser, never the key.
+ */
+const gaView = async () => {
+  const [row] = await query('SELECT ga FROM platform_config WHERE id = 1');
+  const g = row?.ga as (GaSettings | null);
+  return { configured: !!(g?.propertyId && g.clientEmail && g.privateKey), propertyId: g?.propertyId ?? '', clientEmail: g?.clientEmail ?? '' };
+};
+platformRouter.get('/ga', h(async (_req, res) => res.json(await gaView())));
+platformRouter.put('/ga', h(async (req, res) => {
+  const b = parse(z.object({
+    propertyId: z.string().trim().regex(/^\d{5,15}$/, 'The property ID is a number, like 512345678 (Analytics → Admin → Property details), not the G-… ID'),
+    keyJson: z.string().trim().max(20_000).optional(),
+  }), req.body);
+  const [row] = await query('SELECT ga FROM platform_config WHERE id = 1');
+  const old = row?.ga as (GaSettings | null);
+  const key = b.keyJson ? readKeyFile(b.keyJson) : old?.privateKey ? { clientEmail: old.clientEmail, privateKey: old.privateKey } : null;
+  if (!key) throw badRequest('Add the service account’s JSON key file');
+  await query('UPDATE platform_config SET ga = $1 WHERE id = 1', [JSON.stringify({ propertyId: b.propertyId, ...key })]);
+  resetGa();
+  await tx((db) => audit(db, req, null, 'update', 'ga_settings', 'google_analytics', { propertyId: b.propertyId, clientEmail: key.clientEmail }));
+  res.json(await gaView());
+}));
+platformRouter.delete('/ga', h(async (req, res) => {
+  await query('UPDATE platform_config SET ga = NULL WHERE id = 1');
+  resetGa();
+  await tx((db) => audit(db, req, null, 'delete', 'ga_settings', 'google_analytics', {}));
+  res.json(await gaView());
+}));
+/** The dashboard card's numbers; { configured: false } until it's set up, { error } when Google says no. */
+platformRouter.get('/ga/traffic', h(async (req, res) => {
+  if (!(await gaView()).configured) return res.json({ configured: false });
+  try { res.json({ configured: true, ...(await websiteTraffic({ fresh: req.query.fresh === '1' })) }); }
+  catch (e) { res.json({ configured: true, error: (e as Error).message }); }
 }));
 
 /** Apps on the website: upload the Android APK and/or set its Play Store link. */

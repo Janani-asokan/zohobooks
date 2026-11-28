@@ -59,6 +59,9 @@ export const FEATURE_LABELS: Record<string, string> = {
   gstin_lookup: 'Look up a GST number (legal name, address, status)',
   sms_invoice: 'Send a bill by SMS',
   sms_test: 'SMS test from Super admin',
+  ga_token: 'Website traffic: sign in to Google',
+  ga_report: 'Website traffic report',
+  ga_realtime: 'Website visitors right now',
 };
 
 const EMAIL_FEATURES = ['signup_code', 'sales_lead', 'sales_lead_ack', 'report', 'welcome', 'password_reset', 'password_reset_admin', 'workspace_ready', 'shop_closed', 'invoice',
@@ -69,6 +72,11 @@ export const INTEGRATIONS: Integration[] = [
     key: 'msg91', name: 'MSG91', what: 'Sends bills by SMS with the DLT-approved template', side: 'server', host: 'control.msg91.com',
     settings: ['Super admin → Configuration → SMS'], features: ['sms_invoice', 'sms_test'], docs: 'https://docs.msg91.com/sms/send-sms',
     note: 'Optional. Each SMS is charged by MSG91. Shops have a daily limit set with it.',
+  },
+  {
+    key: 'google_analytics', name: 'Google Analytics', what: 'Counts website visits (browser tag) and shows them on the Super admin dashboard (Data API)', side: 'server', host: 'analyticsdata.googleapis.com',
+    settings: ['Super admin → Configuration → Website traffic'], features: ['ga_token', 'ga_report', 'ga_realtime'], docs: 'https://developers.google.com/analytics/devguides/reporting/data/v1',
+    note: 'Optional and free. The website tag (G-JRTYV5SF8Y) runs on the website only, never in the phone app.',
   },
   {
     key: 'gstin', name: 'GSTIN lookup', what: 'Fills in the legal name and address when someone taps Validate next to a GST number', side: 'server', host: 'GSTIN_LOOKUP_URL',
