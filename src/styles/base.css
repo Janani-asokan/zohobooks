@@ -413,3 +413,8 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .app-install { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
 .app-install figure { margin: 0; text-align: center; }
 .app-install-steps { padding-left: 18px; line-height: 1.6; margin: 0 0 10px; }
+
+/* "Continue with Google" (Google renders its own button inside) */
+.google-btn { width: 100%; }
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--ink-500); font-size: var(--fs-12); margin: 2px 0; }
+.or-line::before, .or-line::after { content: ''; flex: 1; height: 1px; background: var(--ink-100); }

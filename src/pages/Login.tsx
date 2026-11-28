@@ -14,13 +14,15 @@ import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { LANGS } from '@/i18n';
 import { AuthShell } from './AuthShell';
 import { OtpSignIn } from './OtpSignIn';
+import { GoogleButton, useGoogleSignIn } from '@/components/GoogleButton';
 import type { Me } from '@/api/types';
 
 /** The server says whether demo mode is on (simple demo passwords) and which logins to offer. */
 type DemoAccount = { label: string; email: string; password: string };
 
 export default function Login() {
-  const { me, loading: authLoading, login, loginWithOtp } = useAuth();
+  const { me, loading: authLoading, login, loginWithOtp, loginWithGoogle } = useAuth();
+  const google = useGoogleSignIn();
   const [mode, setMode] = useState<'email' | 'otp'>('email');
   const { t, lang, setLang } = usePrefs();
   const toast = useToast();
@@ -80,6 +82,16 @@ export default function Login() {
     if (m.kind === 'user') rememberLogin(m.user.email, m.user.name);
     toast('success', 'Welcome back!', m.kind === 'super' ? 'Signed in to the platform console.' : `Signed in to ${m.shop.name}.`);
     navigate(from && from.startsWith(homeFor(m)) ? from : homeFor(m), { replace: true });
+  };
+
+  const withGoogle = async (credential: string) => {
+    setError(''); setLoading(true);
+    try { signedIn(await loginWithGoogle(credential, remember)); }
+    catch (err) {
+      // No login with this Google email yet: go to sign-up with the name and email filled in.
+      if (err instanceof ApiError && err.code === 'google_no_account') navigate('/signup', { state: { google: { credential, ...(err.details as { email: string; name: string }) } } });
+      else setError(err instanceof ApiError ? err.message : 'Google sign-in failed. Please try again.');
+    } finally { setLoading(false); }
   };
 
   const forgotErr = !forgotEmail ? 'Email is required' : !EMAIL_RE.test(forgotEmail) ? 'Enter a valid email address' : '';
@@ -151,6 +163,8 @@ export default function Login() {
           {loading ? <><Loader2 size={18} className="spin" /> {t('login.signingIn')}</> : <>{t('login.submit')} <ArrowRight size={18} /></>}
         </button>
         {slowLogin && <p className="small muted" role="status" style={{ textAlign: 'center', margin: 0 }}>Signing in is taking longer than usual. Check your internet connection.</p>}
+        {(google.on || otpOn) && <div className="or-line">or</div>}
+        {google.on && <GoogleButton clientId={google.clientId} text="signin_with" onCredential={(c) => void withGoogle(c)} />}
         {otpOn && (
           <button type="button" className="btn btn-secondary btn-block" onClick={() => { setError(''); setMode('otp'); }}>
             <Smartphone size={17} /> Sign in with mobile OTP

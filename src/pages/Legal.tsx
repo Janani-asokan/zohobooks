@@ -83,6 +83,8 @@ export function Privacy() {
         <li><strong>Email delivery</strong> (Brevo or Resend) to send the emails above.</li>
         <li><strong>Razorpay</strong>, when you pay for a plan. Card and UPI details go straight to Razorpay; we never see them.</li>
         <li><strong>Google Analytics</strong>, on the website only (not in the phone app), to count visits and see which pages people use so we can improve them. It gets the kind of page you open (for example “invoices”), never the names, amounts or other details in your bills, and sets its own cookies in your browser. You can block it with your browser’s privacy settings or Google’s opt-out add-on.</li>
+        <li><strong>Google sign-in</strong>, only if you choose “Continue with Google” on the website: Google tells us your name and email address (and that Google has checked the email). We don’t get your Google password or anything else from your Google account.</li>
+        <li><strong>MSG91</strong>, to send SMS codes when you sign up or sign in with your mobile number, and bills by SMS when your shop sends them. It gets the mobile number and the message.</li>
         <li><strong>Anthropic (Claude)</strong>, only when someone uses an AI feature, such as the assistant or reading a supplier bill from a photo. The text or picture you give it is sent to answer that request and isn’t used to train their models.</li>
       </ul>
       <p>We share data with government or police only when the law requires it.</p>

@@ -13,6 +13,8 @@ interface AuthValue {
   login: (email: string, password: string, remember: boolean) => Promise<Me>;
   /** Sign in with the OTP sent by SMS to the login's mobile number. */
   loginWithOtp: (phone: string, otp: string, remember: boolean) => Promise<Me>;
+  /** Sign in with Google's ID token ("Continue with Google"). */
+  loginWithGoogle: (credential: string, remember: boolean) => Promise<Me>;
   logout: () => Promise<void>;
   refresh: () => Promise<unknown>;
   can: (p: Permission) => boolean;
@@ -71,8 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [qc, refetch]);
 
   const login = useCallback(
-    async (email: string, password: string, remember: boolean, otp?: { phone: string; otp: string }) => {
-      const { token, ...me } = otp
+    async (email: string, password: string, remember: boolean, otp?: { phone: string; otp: string }, google?: string) => {
+      const { token, ...me } = google
+        ? await api.post<Me & { token?: string }>('/auth/google', { credential: google, remember })
+        : otp
         ? await api.post<Me & { token?: string }>('/auth/otp/verify', { ...otp, remember })
         : await api.post<Me & { token?: string }>('/auth/login', { email, password, remember });
       // Phone app: the session is a bearer token kept on the phone.
@@ -80,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dropDataCache(qc);
       rememberMe(me);
       qc.setQueryData(['me'], me);
-      track('login', { method: otp ? 'mobile_otp' : 'email' });
+      track('login', { method: google ? 'google' : otp ? 'mobile_otp' : 'email' });
       return me;
     },
     [qc],
@@ -112,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading: isLoading,
       login: (email: string, password: string, remember: boolean) => login(email, password, remember),
       loginWithOtp: (phone: string, otp: string, remember: boolean) => login('', '', remember, { phone, otp }),
+      loginWithGoogle: (credential: string, remember: boolean) => login('', '', remember, undefined, credential),
       logout,
       refresh: refetch,
       switchOrg,

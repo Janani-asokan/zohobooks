@@ -64,9 +64,9 @@ export function createApp() {
         defaultSrc: ["'self'"],
         // wasm-unsafe-eval: voice billing's speech recogniser in the Windows app runs as WebAssembly in a worker.
         // The Windows app only (it says so in its user agent): its speech engine builds small functions at run time.
-        scriptSrc: ["'self'", "'wasm-unsafe-eval'", ...(desktop ? ["'unsafe-eval'"] : []), 'https://checkout.razorpay.com', 'https://www.googletagmanager.com'],
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'", ...(desktop ? ["'unsafe-eval'"] : []), 'https://checkout.razorpay.com', 'https://www.googletagmanager.com', 'https://accounts.google.com/gsi/client'],
         workerSrc: ["'self'", 'blob:'],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         // Map tiles for the field staff map (OpenStreetMap).
         imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.de',
@@ -74,8 +74,10 @@ export function createApp() {
         // The Corpus360 Print Helper on the shop's own PC (label printing straight to the printer).
         connectSrc: ["'self'", 'blob:', 'https://api.razorpay.com', 'https://lumberjack.razorpay.com', 'http://127.0.0.1:17361',
           // Google Analytics (website only; src/lib/analytics.ts).
-          'https://*.google-analytics.com', 'https://*.analytics.google.com', 'https://www.googletagmanager.com'],
-        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
+          'https://*.google-analytics.com', 'https://*.analytics.google.com', 'https://www.googletagmanager.com',
+          // Sign in with Google (Google Identity Services).
+          'https://accounts.google.com/gsi/'],
+        frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com', 'https://accounts.google.com/gsi/'],
         mediaSrc: ["'self'", 'blob:'],
         ...(https ? {} : { upgradeInsecureRequests: null }),
       },
@@ -84,6 +86,8 @@ export function createApp() {
     crossOriginEmbedderPolicy: false,
     // Map tile servers (OpenStreetMap) refuse requests without a referrer; send only our origin, never the path.
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    // Google sign-in's popup has to talk back to this page.
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   });
   const httpsHeaders = securityHeaders(true);
   const httpHeaders = securityHeaders(false);

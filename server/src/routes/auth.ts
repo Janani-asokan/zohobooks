@@ -9,6 +9,7 @@ import { config } from '../config';
 import { query, tx, withTenant } from '../db';
 import { badRequest, h, HttpError, parse } from '../http';
 import { otpSettings, sendLoginOtp, smsNumber, verifyLoginOtp } from '../services/sms';
+import { googleSettings, verifyGoogleCredential } from '../services/googleAuth';
 import { mailConfigured, sendMail } from '../mailer';
 import { provisionShop } from '../services/provision';
 import { BUSINESS_TEMPLATES } from '../../../shared/templates';
@@ -114,7 +115,7 @@ function canSignIn(p: Principal) {
     if (r.license_end < todayISO() && r.role !== 'Owner') throw new HttpError(402, 'This workspace’s license has expired. Ask the shop owner to renew.', 'license_expired');
   }
 }
-async function finishLogin(req: Request, res: import('express').Response, p: Principal, remember: boolean, method: 'password' | 'otp' = 'password') {
+async function finishLogin(req: Request, res: import('express').Response, p: Principal, remember: boolean, method: 'password' | 'otp' | 'google' = 'password') {
   const r = p.row;
   canSignIn(p);
   await query(`UPDATE ${table(p.type)} SET failed_attempts = 0, locked_until = NULL, last_login_at = now() WHERE id = $1`, [r.id]);
@@ -126,7 +127,7 @@ async function finishLogin(req: Request, res: import('express').Response, p: Pri
           kind: 'user', id: r.id, name: r.name, email: r.email, role: r.role as UserRole, shopId: r.shop_id, branchId: r.branch_id, mustChangePassword: r.must_change_password,
           permissions: await permissionsFor(r.shop_id, r.role as UserRole), homeShopId: r.shop_id,
         };
-  const how = method === 'otp' ? { method: 'mobile OTP' } : undefined;
+  const how = method === 'otp' ? { method: 'mobile OTP' } : method === 'google' ? { method: 'Google' } : undefined;
   if (p.type === 'user') await withTenant(r.shop_id, (db) => audit(db, req, r.shop_id, 'login', 'user', r.id, how));
   else await tx((db) => audit(db, req, null, 'login', 'super_admin', r.id, how));
   // The CorpusLite phone app keeps the session as a bearer token (it can't rely on cookies).
@@ -194,9 +195,40 @@ authRouter.post(
   }),
 );
 
+/* ---------- Sign in with Google (shop logins; super admins use their password) ---------- */
+
+/** The sign-in and sign-up pages show "Continue with Google" when it is switched on. The client ID is public. */
+authRouter.get('/google', h(async (_req, res) => {
+  const g = await googleSettings();
+  res.json(g?.enabled ? { on: true, clientId: g.clientId } : { on: false });
+}));
+
+async function googleUser(credential: string) {
+  const g = await googleSettings();
+  if (!g?.enabled) throw new HttpError(404, 'Google sign-in isn’t available. Use your email.', 'google_off');
+  return verifyGoogleCredential(credential, g.clientId);
+}
+
+authRouter.post(
+  '/google',
+  rateLimit('google', 30, 15 * 60_000),
+  h(async (req, res) => {
+    const b = parse(z.object({ credential: z.string().min(20).max(5000), remember: z.boolean().optional() }), req.body);
+    const gu = await googleUser(b.credential);
+    const p = await findPrincipal(gu.email);
+    if (p?.type === 'super') throw new HttpError(403, 'Super admins sign in with their email and password.', 'google_super');
+    // No login with this email yet: the page offers to create a shop with it (name and email filled in).
+    if (!p) throw new HttpError(404, `There’s no Corpus360 login for ${gu.email} yet.`, 'google_no_account', { email: gu.email, name: gu.name });
+    const r = p.row;
+    if (r.locked_until && new Date(r.locked_until) > new Date()) throw new HttpError(423, 'This login is locked after too many failed attempts. Try again later.', 'locked');
+    await finishLogin(req, res, p, b.remember ?? true, 'google');
+  }),
+);
+
 /* ---------- Self-service signup (landing page) ---------- */
 authRouter.get('/signup', h(async (_req, res) => {
-  res.json({ enabled: config.publicSignup, verifyEmail: signupVerifyOn(), businessTypes: BUSINESS_TEMPLATES.map((t) => ({ key: t.key, name: t.name })) });
+  const sms = !!(await otpSettings())?.enabled;
+  res.json({ enabled: config.publicSignup, verifyEmail: signupVerifyOn(), verifyPhone: sms, businessTypes: BUSINESS_TEMPLATES.map((t) => ({ key: t.key, name: t.name })) });
 }));
 
 const signupBody = z.object({
@@ -206,7 +238,10 @@ const signupBody = z.object({
   phone: z.string().trim().refine((v) => v.replace(/\D/g, '').length >= 10, 'Enter a valid 10-digit mobile number'),
   city: z.string().trim().max(80).default(''),
   businessType: z.string().max(40).optional(),
-  password: z.string().refine(isStrongPassword, PASSWORD_RULE),
+  /** Optional when signing up with Google (they can set one later with "Forgot password"). */
+  password: z.string().refine(isStrongPassword, PASSWORD_RULE).optional(),
+  /** Google's ID token from "Continue with Google": the email is then Google's, already verified. */
+  googleCredential: z.string().max(5000).optional(),
   /** Hidden field people never see: bots fill it in. */
   website: z.string().max(200).optional(),
 });
@@ -249,8 +284,19 @@ export const signupVerifyOn = () => config.signupVerify === 'on' || (config.sign
 const codeHash = (salt: string, id: string, code: string) =>
   crypto.createHash('sha256').update(`${salt}:${id}:${code}:${process.env.OTP_PEPPER ?? ''}`).digest('hex');
 
-/** Makes a new code for a pending sign-up (the old one stops working), stores its hash and emails it. */
-async function sendSignupCode(id: string, email: string, ownerName: string) {
+/** Sends a new code for a pending sign-up: by SMS (MSG91 makes and checks it) or by email (we make it, keep its hash). */
+async function sendSignupCode(r: { id: string; email: string; channel?: string; phone?: string; form?: SignupForm }) {
+  if (r.channel === 'sms') {
+    const set = await otpSettings();
+    if (!set?.enabled || !r.phone) throw new Error('SMS OTP is switched off');
+    await sendLoginOtp(r.phone, set, 'otp_signup');
+    await query(`UPDATE signup_verifications SET code_hash = 'msg91', attempts = 0, last_sent_at = now(), expires_at = now() + interval '10 minutes' WHERE id = $1`, [r.id]);
+    return;
+  }
+  const [row] = r.form ? [r] : await query('SELECT form FROM signup_verifications WHERE id = $1', [r.id]);
+  return sendEmailCode(r.id, r.email, (row.form as SignupForm).ownerName);
+}
+async function sendEmailCode(id: string, email: string, ownerName: string) {
   const code = String(crypto.randomInt(0, 10 ** SIGNUP_CODE.digits)).padStart(SIGNUP_CODE.digits, '0');
   const salt = crypto.randomBytes(8).toString('hex');
   await query(`UPDATE signup_verifications SET code_hash = $2, attempts = 0, last_sent_at = now(), expires_at = now() + make_interval(mins => $3) WHERE id = $1`,
@@ -265,8 +311,10 @@ async function sendSignupCode(id: string, email: string, ownerName: string) {
   });
 }
 
-const pendingPublic = (r: { id: string; email: string; last_sent_at: Date }) => ({
-  verify: true, signupId: r.id, email: maskEmail(r.email), expiresInMinutes: SIGNUP_CODE.ttlMinutes,
+const pendingPublic = (r: { id: string; email: string; last_sent_at: Date; channel?: string; phone?: string }) => ({
+  verify: true, signupId: r.id, email: maskEmail(r.email), channel: r.channel === 'sms' ? 'sms' as const : 'email' as const,
+  phone: r.channel === 'sms' && r.phone ? `+91 ${r.phone.slice(0, 2)}••• ••${r.phone.slice(7)}` : undefined,
+  expiresInMinutes: r.channel === 'sms' ? 10 : SIGNUP_CODE.ttlMinutes,
   resendInSeconds: Math.max(0, SIGNUP_CODE.resendSeconds - Math.floor((Date.now() - new Date(r.last_sent_at).getTime()) / 1000)),
 });
 
@@ -282,20 +330,32 @@ authRouter.post(
     if (!config.publicSignup) throw new HttpError(403, 'Sign-up is closed. Contact us to get an account.', 'signup_closed');
     const b = parse(signupBody, req.body);
     if (b.website) throw new HttpError(400, 'Could not create the account', 'rejected');
-    const email = b.email.toLowerCase();
+    const google = b.googleCredential ? await googleUser(b.googleCredential) : null;
+    if (!google && !b.password) throw badRequest(PASSWORD_RULE, { password: PASSWORD_RULE });
+    const email = google ? google.email : b.email.toLowerCase();
     if (await emailTaken(email)) throw new HttpError(409, 'An account with this email already exists. Sign in, or use “Forgot password”.', 'email_taken');
     if (b.businessType && !BUSINESS_TEMPLATES.some((t) => t.key === b.businessType)) throw new HttpError(400, 'Choose a business type from the list', 'bad_request');
-    const form: SignupForm = { shopName: b.shopName, ownerName: b.ownerName, email, phone: b.phone, city: b.city, businessType: b.businessType, passwordHash: await hashPassword(b.password) };
-    if (!signupVerifyOn()) return completeSignup(req, res, form);
+    const mobile = mobile10(b.phone);
+    const sms = await otpSettings();
+    const smsCheck = !!sms?.enabled;
+    if (smsCheck && !mobile) throw badRequest('Enter a 10-digit Indian mobile number.', { phone: 'Enter a 10-digit mobile number' });
+    if (smsCheck && mobile && (await query("SELECT 1 FROM users WHERE phone = $1 AND active", [mobile])).length) {
+      throw new HttpError(409, 'This mobile number is already on a Corpus360 login. Sign in instead, or use another number.', 'phone_taken', { phone: 'Already on a login' });
+    }
+    const form: SignupForm = { shopName: b.shopName, ownerName: b.ownerName, email, phone: b.phone, city: b.city, businessType: b.businessType,
+      passwordHash: await hashPassword(b.password ?? randomToken()) };
+    // One code to type: the mobile by SMS when OTP is on, else the email (unless Google has already verified it).
+    const channel = smsCheck ? 'sms' : signupVerifyOn() && !google ? 'email' : null;
+    if (!channel) return completeSignup(req, res, form);
 
-    const [{ n }] = await query(`SELECT coalesce(sum(sends), 0)::int AS n FROM signup_verifications WHERE lower(email) = $1 AND created_at > now() - interval '24 hours'`, [email]);
-    if (n >= SIGNUP_CODE.perDay) throw new HttpError(429, 'Too many codes sent to this email today. Try again tomorrow.', 'too_many_codes');
-    const [row] = await query(`INSERT INTO signup_verifications (email, form, code_hash, expires_at, ip) VALUES ($1, $2, '', now(), $3) RETURNING id, email, last_sent_at`,
-      [email, JSON.stringify(form), req.ip ?? '']);
-    try { await sendSignupCode(row.id, email, form.ownerName); }
+    const [{ n }] = await query(`SELECT coalesce(sum(sends), 0)::int AS n FROM signup_verifications WHERE (lower(email) = $1 OR ($2 <> '' AND phone = $2)) AND created_at > now() - interval '24 hours'`, [email, channel === 'sms' ? mobile : '']);
+    if (n >= SIGNUP_CODE.perDay) throw new HttpError(429, `Too many codes sent to this ${channel === 'sms' ? 'number' : 'email'} today. Try again tomorrow.`, 'too_many_codes');
+    const [row] = await query(`INSERT INTO signup_verifications (email, form, code_hash, expires_at, ip, channel, phone) VALUES ($1, $2, '', now(), $3, $4, $5) RETURNING id, email, last_sent_at, channel, phone`,
+      [email, JSON.stringify(form), req.ip ?? '', channel, channel === 'sms' ? mobile : '']);
+    try { await sendSignupCode(row); }
     catch (e) {
-      console.error(`[mail] Sign-up code to ${email} failed: ${(e as Error).message}`);
-      throw new HttpError(503, 'We couldn’t send the code to that email just now. Check the address and try again in a minute.', 'mail_failed');
+      console.error(`[signup] Code by ${channel} for ${email} failed: ${(e as Error).message}`);
+      throw new HttpError(503, channel === 'sms' ? 'We couldn’t send the SMS just now. Check the number and try again in a minute.' : 'We couldn’t send the code to that email just now. Check the address and try again in a minute.', 'mail_failed');
     }
     res.status(202).json(pendingPublic(row));
   }),
@@ -304,7 +364,7 @@ authRouter.post(
 const pendingRow = async (id: string) => {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return undefined;
   const [r] = await query('SELECT * FROM signup_verifications WHERE id = $1', [id]);
-  return r as undefined | { id: string; email: string; form: SignupForm; code_hash: string; attempts: number; sends: number; last_sent_at: Date; expires_at: Date; verified_at: Date | null };
+  return r as undefined | { id: string; email: string; form: SignupForm; code_hash: string; attempts: number; sends: number; last_sent_at: Date; expires_at: Date; verified_at: Date | null; channel: string; phone: string };
 };
 
 authRouter.post(
@@ -316,9 +376,16 @@ authRouter.post(
     if (!r || r.verified_at) throw new HttpError(404, 'This sign-up has expired. Fill in the form again.', 'signup_expired');
     if (r.attempts >= SIGNUP_CODE.maxAttempts) throw new HttpError(400, 'Too many wrong codes. Tap “Send a new code”.', 'code_locked', { code: 'Send a new code' });
     if (new Date(r.expires_at) < new Date()) throw new HttpError(400, 'This code has expired. Tap “Send a new code”.', 'code_expired', { code: 'Code expired' });
-    const [salt, want] = r.code_hash.split(':');
-    const got = codeHash(salt ?? '', r.id, b.code.replace(/\D/g, ''));
-    const ok = !!want && want.length === got.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(got));
+    let ok: boolean;
+    if (r.channel === 'sms') {
+      const set = await otpSettings();
+      if (!set) throw new HttpError(503, 'SMS codes are switched off. Fill in the form again.', 'signup_expired');
+      ok = /^\d{4,8}$/.test(b.code) && (await verifyLoginOtp(r.phone, b.code, set));
+    } else {
+      const [salt, want] = r.code_hash.split(':');
+      const got = codeHash(salt ?? '', r.id, b.code.replace(/\D/g, ''));
+      ok = !!want && want.length === got.length && crypto.timingSafeEqual(Buffer.from(want), Buffer.from(got));
+    }
     if (!ok) {
       // Saved before replying (not thrown inside a transaction), so wrong tries always count.
       await query('UPDATE signup_verifications SET attempts = attempts + 1 WHERE id = $1', [r.id]);
@@ -330,6 +397,9 @@ authRouter.post(
     const [claimed] = await query('UPDATE signup_verifications SET verified_at = now() WHERE id = $1 AND verified_at IS NULL RETURNING id', [r.id]);
     if (!claimed) throw new HttpError(409, 'This sign-up is already finished. Sign in instead.', 'signup_done');
     if (await emailTaken(r.email)) throw new HttpError(409, 'An account with this email already exists. Sign in, or use “Forgot password”.', 'email_taken');
+    if (r.channel === 'sms' && (await query('SELECT 1 FROM users WHERE phone = $1 AND active', [r.phone])).length) {
+      throw new HttpError(409, 'This mobile number is already on a Corpus360 login. Sign in instead.', 'phone_taken');
+    }
     await completeSignup(req, res, r.form);
   }),
 );
@@ -343,15 +413,15 @@ authRouter.post(
     if (!r || r.verified_at || new Date(r.expires_at).getTime() < Date.now() - 24 * 3600_000) throw new HttpError(404, 'This sign-up has expired. Fill in the form again.', 'signup_expired');
     const wait = SIGNUP_CODE.resendSeconds - Math.floor((Date.now() - new Date(r.last_sent_at).getTime()) / 1000);
     if (wait > 0) throw new HttpError(429, `Wait ${wait} seconds before asking for a new code.`, 'resend_wait', { resendInSeconds: wait });
-    const [{ n }] = await query(`SELECT coalesce(sum(sends), 0)::int AS n FROM signup_verifications WHERE lower(email) = $1 AND created_at > now() - interval '24 hours'`, [r.email]);
-    if (n >= SIGNUP_CODE.perDay) throw new HttpError(429, 'Too many codes sent to this email today. Try again tomorrow.', 'too_many_codes');
+    const [{ n }] = await query(`SELECT coalesce(sum(sends), 0)::int AS n FROM signup_verifications WHERE (lower(email) = $1 OR ($2 <> '' AND phone = $2)) AND created_at > now() - interval '24 hours'`, [r.email, r.phone ?? '']);
+    if (n >= SIGNUP_CODE.perDay) throw new HttpError(429, `Too many codes sent to this ${r.channel === 'sms' ? 'number' : 'email'} today. Try again tomorrow.`, 'too_many_codes');
     await query('UPDATE signup_verifications SET sends = sends + 1 WHERE id = $1', [r.id]);
-    try { await sendSignupCode(r.id, r.email, r.form.ownerName); }
+    try { await sendSignupCode(r); }
     catch (e) {
       console.error(`[mail] Sign-up code to ${r.email} failed: ${(e as Error).message}`);
       throw new HttpError(503, 'We couldn’t send the code just now. Try again in a minute.', 'mail_failed');
     }
-    const [fresh] = await query('SELECT id, email, last_sent_at FROM signup_verifications WHERE id = $1', [r.id]);
+    const [fresh] = await query('SELECT id, email, last_sent_at, channel, phone FROM signup_verifications WHERE id = $1', [r.id]);
     res.json(pendingPublic(fresh));
   }),
 );

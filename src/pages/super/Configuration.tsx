@@ -13,6 +13,7 @@ import { AppDownloadsCard } from '@/components/super/AppDownloadsCard';
 import { GstLookupCard } from '@/components/super/GstLookupCard';
 import { SmsCard } from '@/components/super/SmsCard';
 import { GaSettingsCard } from '@/components/super/WebsiteTraffic';
+import { GoogleSignInCard } from '@/components/super/GoogleSignInCard';
 
 const PREFIX_RE = /^[A-Z]{2,5}$/;
 
@@ -72,6 +73,7 @@ function ConfigForm({ config }: { config: PlatformConfig }) {
         <GstLookupCard />
         <SmsCard />
         <GaSettingsCard />
+        <GoogleSignInCard />
         <AppDownloadsCard />
 
         {/* ---------------- ID Generation ---------------- */}

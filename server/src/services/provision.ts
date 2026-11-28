@@ -11,6 +11,12 @@ import { templateByKey } from '../../../shared/templates';
 
 /** The owner's mobile for OTP sign-in: 10 digits, or empty when it isn't an Indian mobile. */
 const loginPhone = (p: string) => { const d = p.replace(/\D/g, '').slice(-10); return /^[6-9]\d{9}$/.test(d) ? d : ''; };
+/** One mobile per login (OTP sign-in must know whose account it opens): a number already on a login isn't reused. */
+async function freeLoginPhone(db: Db, p: string) {
+  const m = loginPhone(p);
+  if (!m) return '';
+  return (await db.query('SELECT 1 FROM users WHERE phone = $1 AND active', [m])).rows.length ? '' : m;
+}
 
 export interface NewShop {
   shopName: string;
@@ -61,7 +67,7 @@ export async function provisionShop(req: Request | null, s: NewShop) {
     await db.query("INSERT INTO counters (shop_id, key, value) VALUES ($1,'customer',1000)", [shop.id]);
     await db.query(
       `INSERT INTO users (shop_id, name, email, password_hash, role, branch_id, must_change_password, phone) VALUES ($1,$2,$3,$4,'Owner',$5,$6,$7)`,
-      [shop.id, s.ownerName, s.email.toLowerCase(), passwordHash, br.id, s.mustChangePassword ?? true, loginPhone(s.phone)],
+      [shop.id, s.ownerName, s.email.toLowerCase(), passwordHash, br.id, s.mustChangePassword ?? true, await freeLoginPhone(db, s.phone)],
     );
     const by = req?.ctx?.kind === 'super' ? req.ctx.email : 'system';
     const features = s.features ?? 'trial';

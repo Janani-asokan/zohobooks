@@ -62,6 +62,8 @@ export const FEATURE_LABELS: Record<string, string> = {
   otp_send: 'Sign-in OTP by SMS',
   otp_test: 'Sign-in OTP test from Super admin',
   otp_verify: 'Check a sign-in OTP',
+  otp_signup: 'Sign-up mobile check by SMS',
+  google_keys: 'Google sign-in: Google’s signing keys',
   ga_token: 'Website traffic: sign in to Google',
   ga_report: 'Website traffic report',
   ga_realtime: 'Website visitors right now',
@@ -73,8 +75,13 @@ const EMAIL_FEATURES = ['signup_code', 'sales_lead', 'sales_lead_ack', 'report',
 export const INTEGRATIONS: Integration[] = [
   {
     key: 'msg91', name: 'MSG91', what: 'Sends bills by SMS and sign-in OTPs, each with its DLT-approved template', side: 'server', host: 'control.msg91.com',
-    settings: ['Super admin → Configuration → SMS'], features: ['sms_invoice', 'sms_test', 'otp_send', 'otp_test', 'otp_verify'], docs: 'https://docs.msg91.com/sms/send-sms',
+    settings: ['Super admin → Configuration → SMS'], features: ['sms_invoice', 'sms_test', 'otp_send', 'otp_test', 'otp_verify', 'otp_signup'], docs: 'https://docs.msg91.com/sms/send-sms',
     note: 'Optional. Each SMS is charged by MSG91. Shops have a daily limit set with it.',
+  },
+  {
+    key: 'google_signin', name: 'Sign in with Google', what: 'Checks Google’s signature on “Continue with Google” sign-ins and sign-ups', side: 'server', host: 'www.googleapis.com',
+    settings: ['Super admin → Configuration → Google sign-in'], features: ['google_keys'], docs: 'https://developers.google.com/identity/gsi/web/guides/verify-google-id-token',
+    note: 'Optional and free. Website only; the phone and Windows apps use email, password or mobile OTP.',
   },
   {
     key: 'google_analytics', name: 'Google Analytics', what: 'Counts website visits (browser tag) and shows them on the Super admin dashboard (Data API)', side: 'server', host: 'analyticsdata.googleapis.com',

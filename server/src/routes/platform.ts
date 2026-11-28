@@ -320,6 +320,22 @@ platformRouter.post('/sms/otp-test', h(async (req, res) => {
   catch (e) { res.json({ ok: false, error: (e as Error).message }); }
 }));
 
+/** Sign in with Google: the OAuth client ID (public) and on/off. */
+platformRouter.get('/google-auth', h(async (_req, res) => {
+  const [row] = await query('SELECT google_auth FROM platform_config WHERE id = 1');
+  res.json({ clientId: row?.google_auth?.clientId ?? '', enabled: !!row?.google_auth?.enabled });
+}));
+platformRouter.put('/google-auth', h(async (req, res) => {
+  const b = parse(z.object({
+    clientId: z.string().trim().max(200).refine((v) => !v || /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(v), 'Paste the Client ID ending in .apps.googleusercontent.com'),
+    enabled: z.boolean().default(false),
+  }), req.body);
+  if (b.enabled && !b.clientId) throw badRequest('Add the Client ID before switching it on');
+  await query('UPDATE platform_config SET google_auth = $1 WHERE id = 1', [b.clientId ? JSON.stringify(b) : null]);
+  await tx((db) => audit(db, req, null, 'update', 'google_auth', 'google', b));
+  res.json(b);
+}));
+
 /** Apps on the website: upload the Android APK and/or set its Play Store link. */
 platformRouter.get('/app-downloads', h(async (_req, res) => res.json(await appsInfo())));
 platformRouter.put('/app-downloads/android', h(async (req, res) => {
