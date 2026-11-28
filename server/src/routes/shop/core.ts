@@ -277,7 +277,22 @@ coreRouter.put(
 );
 
 /* ---------- Staff (logins with roles) ---------- */
-const serializeUser = (u: any) => ({ id: u.id, name: u.name, email: u.email, role: u.role, branchId: u.branch_id, active: u.active, mustChangePassword: u.must_change_password, lastLoginAt: u.last_login_at });
+const serializeUser = (u: any) => ({ id: u.id, name: u.name, email: u.email, phone: u.phone ?? '', role: u.role, branchId: u.branch_id, active: u.active, mustChangePassword: u.must_change_password, lastLoginAt: u.last_login_at });
+
+/** A login's mobile for OTP sign-in: empty, or a 10-digit Indian mobile (stored as 10 digits). */
+const loginPhone = z.string().trim().max(20).default('').transform((v, ctx) => {
+  if (!v) return '';
+  const d = v.replace(/\D/g, '');
+  const ten = d.length === 12 && d.startsWith('91') ? d.slice(2) : d.length === 11 && d.startsWith('0') ? d.slice(1) : d;
+  if (!/^[6-9]\d{9}$/.test(ten)) { ctx.addIssue({ code: 'custom', message: 'Enter a 10-digit mobile number' }); return z.NEVER; }
+  return ten;
+});
+/** One mobile, one login: OTP sign-in has to know whose account it opens. */
+async function phoneFree(phone: string, exceptId?: string) {
+  if (!phone) return;
+  const [dup] = await query("SELECT 1 FROM users WHERE phone = $1 AND active AND id <> coalesce($2::uuid, '00000000-0000-0000-0000-000000000000')", [phone, exceptId ?? null]);
+  if (dup) throw new HttpError(409, 'This mobile number is already on another login', 'conflict', { phone: 'Already on another login' });
+}
 
 coreRouter.get('/staff', perm('admin'), T(async (db, _req, c) => {
   const own = (await many(db, 'SELECT * FROM users WHERE shop_id = $1 ORDER BY (role = \'Owner\') DESC, created_at', [c.shopId])).map(serializeUser);
@@ -298,9 +313,11 @@ coreRouter.post(
         role: z.enum(STAFF_ROLES),
         branchId: z.string().uuid().nullable(),
         password: z.string().refine(isStrongPassword, PASSWORD_RULE),
+        phone: loginPhone,
       }),
       req.body,
     );
+    await phoneFree(b.phone);
     const lim = await planLimits(db, c.shopId);
     const n = await one(db, 'SELECT count(*)::int AS n FROM users WHERE shop_id = $1 AND active', [c.shopId]);
     if (n.n >= lim.max_users) throw new HttpError(402, `Your ${lim.name} plan allows ${lim.max_users} users. Upgrade to add more staff.`, 'plan_limit');
@@ -309,8 +326,8 @@ coreRouter.post(
     if (b.branchId) await requireRow(db, 'branches', c.shopId, b.branchId, 'Branch');
     const u = await one(
       db,
-      'INSERT INTO users (shop_id, name, email, password_hash, role, branch_id, must_change_password) VALUES ($1,$2,lower($3),$4,$5,$6,true) RETURNING *',
-      [c.shopId, b.name, b.email, await hashPassword(b.password), b.role, b.branchId],
+      'INSERT INTO users (shop_id, name, email, password_hash, role, branch_id, must_change_password, phone) VALUES ($1,$2,lower($3),$4,$5,$6,true,$7) RETURNING *',
+      [c.shopId, b.name, b.email, await hashPassword(b.password), b.role, b.branchId, b.phone],
     );
     await audit(db, req, c.shopId, 'invite', 'user', u.id, { email: b.email, role: b.role });
     return serializeUser(u);
@@ -321,10 +338,12 @@ coreRouter.patch(
   '/staff/:id',
   perm('admin'),
   T(async (db, req, c) => {
-    const b = parse(z.object({ name: z.string().trim().min(1).max(120).optional(), role: z.enum(STAFF_ROLES).optional(), branchId: z.string().uuid().nullable().optional(), active: z.boolean().optional(), password: z.string().refine(isStrongPassword, PASSWORD_RULE).optional() }), req.body);
+    const b = parse(z.object({ name: z.string().trim().min(1).max(120).optional(), role: z.enum(STAFF_ROLES).optional(), branchId: z.string().uuid().nullable().optional(), active: z.boolean().optional(), password: z.string().refine(isStrongPassword, PASSWORD_RULE).optional(), phone: loginPhone.optional() }), req.body);
     const u = await one(db, 'SELECT * FROM users WHERE shop_id = $1 AND id = $2', [c.shopId, req.params.id]);
     if (!u) throw notFound('Staff member');
-    if (u.role === 'Owner') throw badRequest('The owner account can’t be changed here');
+    // The owner's mobile (for OTP sign-in) can be changed here; nothing else about the owner can.
+    if (u.role === 'Owner' && Object.keys(b).some((k) => k !== 'phone' && (b as Record<string, unknown>)[k] !== undefined)) throw badRequest('The owner account can’t be changed here');
+    if (b.phone !== undefined) await phoneFree(b.phone, u.id);
     if (b.branchId) await requireRow(db, 'branches', c.shopId, b.branchId, 'Branch');
     if (b.active) {
       const lim = await planLimits(db, c.shopId);
@@ -334,9 +353,10 @@ coreRouter.patch(
     const row = await one(
       db,
       `UPDATE users SET name = coalesce($3, name), role = coalesce($4, role), branch_id = CASE WHEN $5::boolean THEN $6::uuid ELSE branch_id END,
-              active = coalesce($7, active), password_hash = coalesce($8, password_hash), must_change_password = (must_change_password OR $8 IS NOT NULL)
+              active = coalesce($7, active), password_hash = coalesce($8, password_hash), must_change_password = (must_change_password OR $8 IS NOT NULL),
+              phone = coalesce($9, phone)
         WHERE shop_id = $1 AND id = $2 RETURNING *`,
-      [c.shopId, u.id, b.name ?? null, b.role ?? null, b.branchId !== undefined, b.branchId ?? null, b.active ?? null, b.password ? await hashPassword(b.password) : null],
+      [c.shopId, u.id, b.name ?? null, b.role ?? null, b.branchId !== undefined, b.branchId ?? null, b.active ?? null, b.password ? await hashPassword(b.password) : null, b.phone ?? null],
     );
     if (b.active === false || b.password || b.role) await query("DELETE FROM sessions WHERE principal_type = 'user' AND principal_id = $1", [u.id]);
     await audit(db, req, c.shopId, 'update', 'user', u.id, { role: b.role, active: b.active, passwordReset: !!b.password });

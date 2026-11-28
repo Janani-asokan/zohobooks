@@ -27,7 +27,8 @@ export default function Team() {
   const staff = useStaff().data ?? [];
   const branches = useBranches().data ?? [];
   const [staffModal, setStaffModal] = useState<{ id?: string } | null>(null);
-  const [form, setForm] = useState({ name: '', email: '', role: 'Sales Staff' as StaffRole, branchId: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', role: 'Sales Staff' as StaffRole, branchId: '', password: '', phone: '' });
+  const [editOwner, setEditOwner] = useState(false);
   const [branchModal, setBranchModal] = useState<{ id?: string } | null>(null);
   const [branch, setBranch] = useState({ name: '', address: '', phone: '' });
   const [touched, setTouched] = useState(false);
@@ -43,9 +44,10 @@ export default function Team() {
 
   const bName = (id: string | null) => branches.find((b) => b.id === id)?.name ?? '—';
   const staffErr = {
-    name: !form.name.trim() ? 'Name is required' : '',
+    name: !editOwner && !form.name.trim() ? 'Name is required' : '',
     email: !staffModal?.id && !EMAIL_RE.test(form.email) ? 'Valid email required' : '',
     password: !staffModal?.id && !isStrongPassword(form.password) ? PASSWORD_RULE : '',
+    phone: form.phone && !/^(\+?91|0)?[6-9]\d{9}$/.test(form.phone.replace(/[\s-]/g, '')) ? 'Enter a 10-digit mobile number' : '',
   };
   const err = (k: keyof typeof staffErr) => (touched ? staffErr[k] : '') || serverErr[k] || '';
   const activeUsers = staff.filter((s) => s.active).length;
@@ -55,7 +57,8 @@ export default function Team() {
     setServerErr({});
     if (Object.values(staffErr).some(Boolean)) return;
     if (staffModal?.id) {
-      patchStaff.mutate({ id: staffModal.id, b: { name: form.name, role: form.role, branchId: form.branchId || null } }, { onSuccess: () => { toast('success', 'Staff updated'); setStaffModal(null); } });
+      const b = editOwner ? { phone: form.phone } : { name: form.name, role: form.role, branchId: form.branchId || null, phone: form.phone };
+      patchStaff.mutate({ id: staffModal.id, b }, { onSuccess: () => { toast('success', editOwner ? 'Mobile number saved' : 'Staff updated'); setStaffModal(null); } });
     } else {
       createStaff.mutate({ ...form, branchId: form.branchId || null }, {
         onSuccess: (u) => { setStaffModal(null); setCredentials({ email: u.email, password: form.password }); },
@@ -75,7 +78,7 @@ export default function Team() {
         actions={tab === 'branches' ? (
           <button className="btn btn-primary" disabled={branches.length >= me.shop.limits.branches} title={branches.length >= me.shop.limits.branches ? 'Limit reached for this account' : undefined} onClick={() => { setBranch({ name: '', address: '', phone: '' }); setTouched(false); setBranchModal({}); }}><Plus size={16} /> New Branch</button>
         ) : tab === 'staff' ? (
-          <button className="btn btn-primary" disabled={activeUsers >= me.shop.limits.users} title={activeUsers >= me.shop.limits.users ? 'Limit reached for this account' : undefined} onClick={() => { setForm({ name: '', email: '', role: 'Sales Staff', branchId: branches[0]?.id ?? '', password: genPassword() }); setTouched(false); setServerErr({}); setStaffModal({}); }}><Plus size={16} /> Add Staff</button>
+          <button className="btn btn-primary" disabled={activeUsers >= me.shop.limits.users} title={activeUsers >= me.shop.limits.users ? 'Limit reached for this account' : undefined} onClick={() => { setForm({ name: '', email: '', role: 'Sales Staff', branchId: branches[0]?.id ?? '', password: genPassword(), phone: '' }); setEditOwner(false); setTouched(false); setServerErr({}); setStaffModal({}); }}><Plus size={16} /> Add Staff</button>
         ) : null} />
       <div className="tabs">
         <button className={tab === 'staff' ? 'active' : ''} onClick={() => setTab('staff')}><Users size={15} /> Staff <span className="count">{staff.length}</span></button>
@@ -91,7 +94,7 @@ export default function Team() {
             <tbody>
               {staff.map((s) => (
                 <tr key={s.id}>
-                  <td><div className="name-cell"><span className="avatar">{initials(s.name)}</span><div><div className="title">{s.name}{s.id === me.user.id && <span className="muted"> (you)</span>}</div><div className="sub">{s.email}</div></div></div></td>
+                  <td><div className="name-cell"><span className="avatar">{initials(s.name)}</span><div><div className="title">{s.name}{s.id === me.user.id && <span className="muted"> (you)</span>}</div><div className="sub">{s.email}{s.phone ? ` · ${s.phone}` : ''}</div></div></div></td>
                   <td>{s.role === 'Owner' ? <Badge tone="violet" plain>Owner</Badge> : (
                     <select className="select" style={{ height: 32, width: 150 }} value={s.role} onChange={(e) => patchStaff.mutate({ id: s.id, b: { role: e.target.value } }, { onSuccess: () => toast('success', 'Role updated', `${s.name} → ${e.target.value}. They’ll be asked to sign in again.`) })} aria-label={`Role for ${s.name}`}>
                       {(s.role === 'Collector' ? STAFF_ROLES : HIRABLE_ROLES).map((r) => <option key={r}>{r}</option>)}
@@ -101,11 +104,9 @@ export default function Team() {
                   <td className="muted">{s.lastLoginAt ? new Date(s.lastLoginAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Never'}{s.mustChangePassword && <div><Badge tone="amber" plain>Temp password</Badge></div>}</td>
                   <td>{s.role === 'Owner' ? <span className="small muted">Full access</span> : <Toggle size="sm" tone="success" checked={s.active} onChange={(v) => patchStaff.mutate({ id: s.id, b: { active: v } }, { onSuccess: () => toast(v ? 'success' : 'info', v ? 'Access restored' : 'Access suspended — signed out', s.name) })} label={<span className="small">{s.active ? 'Active' : 'Suspended'}</span>} />}</td>
                   <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                    {s.role !== 'Owner' && (
-                      <>
-                        <button className="icon-btn" title="Reset password" onClick={() => resetPassword(s)}><KeyRound size={15} /></button>
-                        <button className="icon-btn" title="Edit" onClick={() => { setForm({ name: s.name, email: s.email, role: s.role as StaffRole, branchId: s.branchId ?? '', password: '' }); setTouched(false); setServerErr({}); setStaffModal({ id: s.id }); }}><Pencil size={15} /></button>
-                      </>
+                    {s.role !== 'Owner' && <button className="icon-btn" title="Reset password" onClick={() => resetPassword(s)}><KeyRound size={15} /></button>}
+                    {!s.linked && (s.role !== 'Owner' || s.id === me.user.id) && (
+                      <button className="icon-btn" title={s.role === 'Owner' ? 'Mobile number for OTP sign-in' : 'Edit'} onClick={() => { setForm({ name: s.name, email: s.email, role: (s.role === 'Owner' ? 'Manager' : s.role) as StaffRole, branchId: s.branchId ?? '', password: '', phone: s.phone ?? '' }); setEditOwner(s.role === 'Owner'); setTouched(false); setServerErr({}); setStaffModal({ id: s.id }); }}><Pencil size={15} /></button>
                     )}
                   </td>
                 </tr>
@@ -138,13 +139,17 @@ export default function Team() {
       )}
 
 
-      <Modal open={!!staffModal} onClose={() => setStaffModal(null)} title={staffModal?.id ? 'Edit staff member' : 'Add staff member'} subtitle={staffModal?.id ? undefined : 'They’ll sign in with this email and must choose a new password the first time.'}
+      <Modal open={!!staffModal} onClose={() => setStaffModal(null)} title={editOwner ? 'Your mobile number' : staffModal?.id ? 'Edit staff member' : 'Add staff member'} subtitle={staffModal?.id ? undefined : 'They’ll sign in with this email and must choose a new password the first time.'}
         footer={<><button className="btn btn-secondary" onClick={() => setStaffModal(null)}>Cancel</button><button className="btn btn-primary" disabled={createStaff.isPending || patchStaff.isPending} onClick={saveStaff}>{createStaff.isPending && <Loader2 size={15} className="spin" />} {staffModal?.id ? 'Save' : 'Create login'}</button></>}>
         <div className="form-grid">
+          {editOwner ? (
+            <Field label="Mobile number" error={err('phone')} hint="Used to sign in with an OTP by SMS. Leave empty to turn it off for you." className="span-all"><input className={`input ${err('phone') ? 'invalid' : ''}`} inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="98765 43210" autoFocus /></Field>
+          ) : <>
           <Field label="Full name" required error={err('name')}><input className={`input ${err('name') ? 'invalid' : ''}`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
           <Field label="Email" required error={err('email')}><input className={`input ${err('email') ? 'invalid' : ''}`} value={form.email} disabled={!!staffModal?.id} onChange={(e) => setForm({ ...form, email: e.target.value.trim() })} /></Field>
           <Field label="Role" hint={`${ROLE_PERMISSIONS[form.role].length} of ${Object.keys(PERMISSIONS).length} permissions — see the Roles tab`}><select className="select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as StaffRole })}>{HIRABLE_ROLES.map((r) => <option key={r}>{r}</option>)}</select></Field>
           <Field label="Branch"><select className="select" value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
+          <Field label="Mobile number" error={err('phone')} hint="Optional · lets them sign in with an OTP by SMS"><input className={`input ${err('phone') ? 'invalid' : ''}`} inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="98765 43210" /></Field>
           {!staffModal?.id && (
             <Field label="Temporary password" required error={err('password')} className="span-all">
               <div className="input-group trail-pad">
@@ -153,6 +158,7 @@ export default function Team() {
               </div>
             </Field>
           )}
+          </>}
         </div>
       </Modal>
 

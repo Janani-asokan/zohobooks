@@ -153,7 +153,7 @@ export interface Expense { id: string; date: string; category: string; descripti
 export interface BankAccount { id: string; name: string; bank: string; accountNo: string; type: 'Bank' | 'Cash' | 'Card'; openingBalance: number; balance: number }
 export interface BankTxn { id: string; accountId: string; date: string; description: string; amount: number; category: string; refType: string; refId: string | null }
 
-export interface StaffUser { id: string; name: string; email: string; role: UserRole; branchId: string | null; active: boolean; mustChangePassword: boolean; lastLoginAt: string | null; linked?: boolean }
+export interface StaffUser { id: string; name: string; email: string; phone?: string; role: UserRole; branchId: string | null; active: boolean; mustChangePassword: boolean; lastLoginAt: string | null; linked?: boolean }
 export interface AuditEntry { id: number; actor: string; actorType?: string; action: string; entity: string; entityId: string; details: Record<string, unknown>; ip: string; at: string }
 export interface Notification { kind: string; tone: 'red' | 'amber' | 'blue'; text: string; link: string }
 

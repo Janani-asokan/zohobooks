@@ -18,7 +18,7 @@ export async function runAccountDeletions(): Promise<number> {
            AND NOT EXISTS (SELECT 1 FROM user_shops us JOIN shops s ON s.id = us.shop_id
                             WHERE us.user_id = u.id AND us.shop_id <> $1 AND s.active)`, [id])).rows;
       for (const u of users) {
-        await db.query(`UPDATE users SET name = 'Deleted user', email = $2, password_hash = $3, active = false, deleted_at = now() WHERE id = $1`,
+        await db.query(`UPDATE users SET name = 'Deleted user', email = $2, phone = '', password_hash = $3, active = false, deleted_at = now() WHERE id = $1`,
           [u.id, deletedEmail(u.id), await hashPassword(randomToken())]);
       }
       await db.query(`UPDATE shops SET owner_name = 'Deleted', email = '', phone = '', personal_data_erased_at = now() WHERE id = $1`, [id]);

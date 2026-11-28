@@ -17,7 +17,7 @@ import { isStrongPassword, PASSWORD_RULE } from '../../../shared/permissions';
 import { platformSupportRouter } from './platformSupport';
 import { platformLogsRouter } from './platformLogs';
 import { appsInfo, setAndroid } from '../services/appDownloads';
-import { DEFAULT_VARS, sendBillSms, smsSettings, type SmsSettings } from '../services/sms';
+import { DEFAULT_VARS, otpSettings, sendBillSms, sendLoginOtp, smsNumber, smsSettings, type SmsSettings } from '../services/sms';
 import { fetchTaxpayer, forgetProvider, lookupProvider, type LookupProvider } from '../services/gstinLookup';
 import { checkGstin } from '../../../shared/gst';
 import { readKeyFile, resetGa, websiteTraffic, type GaSettings } from '../services/gaTraffic';
@@ -239,7 +239,8 @@ const smsView = async () => {
   const [row] = await query('SELECT sms FROM platform_config WHERE id = 1');
   const s = row?.sms as (SmsSettings | null);
   return { configured: !!(s?.authKey && s.templateId), keyEnd: s?.authKey ? s.authKey.slice(-4) : '', templateId: s?.templateId ?? '', enabled: !!s?.enabled,
-    dailyPerShop: s?.dailyPerShop ?? 200, vars: { ...DEFAULT_VARS, ...(s?.vars ?? {}) } };
+    dailyPerShop: s?.dailyPerShop ?? 200, vars: { ...DEFAULT_VARS, ...(s?.vars ?? {}) },
+    otpConfigured: !!(s?.authKey && s.otpTemplateId), otpTemplateId: s?.otpTemplateId ?? '', otpEnabled: !!s?.otpEnabled };
 };
 platformRouter.get('/sms', h(async (_req, res) => res.json(await smsView())));
 platformRouter.put('/sms', h(async (req, res) => {
@@ -248,13 +249,17 @@ platformRouter.put('/sms', h(async (req, res) => {
     authKey: z.string().trim().max(200).default(''), templateId: z.string().trim().max(100).default(''), enabled: z.boolean().default(false),
     dailyPerShop: z.number().int().min(1).max(10000).default(200),
     vars: z.object({ name, shop: name, bill: name, amount: name, code: name }).default(DEFAULT_VARS),
+    otpTemplateId: z.string().trim().max(100).default(''), otpEnabled: z.boolean().default(false),
   }), req.body);
   const [row] = await query('SELECT sms FROM platform_config WHERE id = 1');
   const authKey = b.authKey || (row?.sms?.authKey ?? '');
-  if (!authKey || !b.templateId) throw badRequest('Enter the MSG91 auth key and the template ID');
+  if (!authKey) throw badRequest('Enter the MSG91 auth key');
+  if (!b.templateId && !b.otpTemplateId) throw badRequest('Enter the bill template ID, the OTP template ID, or both');
+  if (b.enabled && !b.templateId) throw badRequest('Add the bill template ID before switching on bills by SMS');
+  if (b.otpEnabled && !b.otpTemplateId) throw badRequest('Add the OTP template ID before switching on sign-in by OTP');
   if (new Set(Object.values(b.vars)).size !== 5) throw badRequest('Each value needs its own MSG91 variable');
-  await query('UPDATE platform_config SET sms = $1 WHERE id = 1', [JSON.stringify({ authKey, templateId: b.templateId, enabled: b.enabled, dailyPerShop: b.dailyPerShop, vars: b.vars })]);
-  await tx((db) => audit(db, req, null, 'update', 'sms_settings', 'msg91', { enabled: b.enabled, templateId: b.templateId, dailyPerShop: b.dailyPerShop }));
+  await query('UPDATE platform_config SET sms = $1 WHERE id = 1', [JSON.stringify({ authKey, templateId: b.templateId, enabled: b.enabled, dailyPerShop: b.dailyPerShop, vars: b.vars, otpTemplateId: b.otpTemplateId, otpEnabled: b.otpEnabled })]);
+  await tx((db) => audit(db, req, null, 'update', 'sms_settings', 'msg91', { enabled: b.enabled, templateId: b.templateId, dailyPerShop: b.dailyPerShop, otpTemplateId: b.otpTemplateId, otpEnabled: b.otpEnabled }));
   res.json(await smsView());
 }));
 platformRouter.post('/sms/test', h(async (req, res) => {
@@ -302,6 +307,17 @@ platformRouter.get('/ga/traffic', h(async (req, res) => {
   if (!(await gaView()).configured) return res.json({ configured: false });
   try { res.json({ configured: true, ...(await websiteTraffic({ fresh: req.query.fresh === '1' })) }); }
   catch (e) { res.json({ configured: true, error: (e as Error).message }); }
+}));
+
+/** Sends a real sign-in OTP to the super admin's phone, to check the OTP template before switching it on. */
+platformRouter.post('/sms/otp-test', h(async (req, res) => {
+  const { phone } = parse(z.object({ phone: z.string().trim().max(20) }), req.body);
+  const s = await otpSettings();
+  if (!s) throw badRequest('Save the MSG91 auth key and the OTP template ID first');
+  const to = smsNumber(phone);
+  if (!to) throw badRequest('Enter a 10-digit Indian mobile number.');
+  try { await sendLoginOtp(to.slice(2), s, 'otp_test'); res.json({ ok: true, to }); }
+  catch (e) { res.json({ ok: false, error: (e as Error).message }); }
 }));
 
 /** Apps on the website: upload the Android APK and/or set its Play Store link. */

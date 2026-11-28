@@ -7,7 +7,8 @@ import { burnPasswordCheck, permissionsFor, resolveUserCtx, clearSessionCookie, 
 import { audit } from '../audit';
 import { config } from '../config';
 import { query, tx, withTenant } from '../db';
-import { h, HttpError, parse } from '../http';
+import { badRequest, h, HttpError, parse } from '../http';
+import { otpSettings, sendLoginOtp, smsNumber, verifyLoginOtp } from '../services/sms';
 import { mailConfigured, sendMail } from '../mailer';
 import { provisionShop } from '../services/provision';
 import { BUSINESS_TEMPLATES } from '../../../shared/templates';
@@ -99,25 +100,97 @@ authRouter.post(
       const left = config.lockout.maxAttempts - attempts;
       throw new HttpError(401, left <= 2 ? `${INVALID}. ${left} attempt${left > 1 ? 's' : ''} left before lock-out.` : INVALID, 'invalid_credentials');
     }
-    if (p.type === 'user') {
-      if (!r.active) throw new HttpError(403, 'Your account has been suspended. Contact your shop owner.', 'user_inactive');
-      if (!r.shop_active) throw new HttpError(403, 'This workspace has been deactivated. Contact your service provider.', 'workspace_inactive');
-      // The owner may still sign in after expiry so they can renew; staff cannot.
-      if (r.license_end < todayISO() && r.role !== 'Owner') throw new HttpError(402, 'This workspace’s license has expired. Ask the shop owner to renew.', 'license_expired');
-    }
-    await query(`UPDATE ${table(p.type)} SET failed_attempts = 0, locked_until = NULL, last_login_at = now() WHERE id = $1`, [r.id]);
-    const token = await createSession(res, req, p.type, r.id, body.remember ?? true);
-    req.ctx =
-      p.type === 'super'
-        ? { kind: 'super', id: r.id, name: r.name, email: r.email, mustChangePassword: !!r.must_change_password }
-        : {
-            kind: 'user', id: r.id, name: r.name, email: r.email, role: r.role as UserRole, shopId: r.shop_id, branchId: r.branch_id, mustChangePassword: r.must_change_password,
-            permissions: await permissionsFor(r.shop_id, r.role as UserRole), homeShopId: r.shop_id,
-          };
-    if (p.type === 'user') await withTenant(r.shop_id, (db) => audit(db, req, r.shop_id, 'login', 'user', r.id));
-    else await tx((db) => audit(db, req, null, 'login', 'super_admin', r.id));
-    // The CorpusLite phone app keeps the session as a bearer token (it can't rely on cookies).
-    res.json({ ...(await mePayload(req)), ...(req.headers['x-client'] === 'corpuslite' ? { token } : {}) });
+    await finishLogin(req, res, p, body.remember ?? true);
+  }),
+);
+
+/** Who may sign in (active login, active workspace, licence), then the session and the /me answer. */
+function canSignIn(p: Principal) {
+  const r = p.row;
+  if (p.type === 'user') {
+    if (!r.active) throw new HttpError(403, 'Your account has been suspended. Contact your shop owner.', 'user_inactive');
+    if (!r.shop_active) throw new HttpError(403, 'This workspace has been deactivated. Contact your service provider.', 'workspace_inactive');
+    // The owner may still sign in after expiry so they can renew; staff cannot.
+    if (r.license_end < todayISO() && r.role !== 'Owner') throw new HttpError(402, 'This workspace’s license has expired. Ask the shop owner to renew.', 'license_expired');
+  }
+}
+async function finishLogin(req: Request, res: import('express').Response, p: Principal, remember: boolean, method: 'password' | 'otp' = 'password') {
+  const r = p.row;
+  canSignIn(p);
+  await query(`UPDATE ${table(p.type)} SET failed_attempts = 0, locked_until = NULL, last_login_at = now() WHERE id = $1`, [r.id]);
+  const token = await createSession(res, req, p.type, r.id, remember);
+  req.ctx =
+    p.type === 'super'
+      ? { kind: 'super', id: r.id, name: r.name, email: r.email, mustChangePassword: !!r.must_change_password }
+      : {
+          kind: 'user', id: r.id, name: r.name, email: r.email, role: r.role as UserRole, shopId: r.shop_id, branchId: r.branch_id, mustChangePassword: r.must_change_password,
+          permissions: await permissionsFor(r.shop_id, r.role as UserRole), homeShopId: r.shop_id,
+        };
+  const how = method === 'otp' ? { method: 'mobile OTP' } : undefined;
+  if (p.type === 'user') await withTenant(r.shop_id, (db) => audit(db, req, r.shop_id, 'login', 'user', r.id, how));
+  else await tx((db) => audit(db, req, null, 'login', 'super_admin', r.id, how));
+  // The CorpusLite phone app keeps the session as a bearer token (it can't rely on cookies).
+  res.json({ ...(await mePayload(req)), ...(req.headers['x-client'] === 'corpuslite' ? { token } : {}) });
+}
+
+/* ---------- Sign in with a mobile OTP (shop logins only; super admins use their password) ---------- */
+
+const OTP_SENDS_PER_HOUR = 5;
+const OTP_TRIES = 5;
+const OTP_GAP_S = 30;
+const mobile10 = (v: string) => { const n = smsNumber(v); return n ? n.slice(2) : null; };
+const OTP_SENT = 'If this number is on a Corpus360 login, an OTP is on its way. It’s valid for 10 minutes.';
+
+/** The sign-in page shows "Sign in with mobile OTP" only when the super admin has switched it on. */
+authRouter.get('/otp', h(async (_req, res) => res.json({ on: !!(await otpSettings())?.enabled })));
+
+authRouter.post(
+  '/otp/send',
+  rateLimit('otp-send', 10, 15 * 60_000),
+  h(async (req, res) => {
+    const { phone } = parse(z.object({ phone: z.string().trim().max(20) }), req.body);
+    const set = await otpSettings();
+    if (!set?.enabled) throw new HttpError(404, 'Sign-in by OTP isn’t available. Sign in with your email.', 'otp_off');
+    const m = mobile10(phone);
+    if (!m) throw badRequest('Enter your 10-digit mobile number.', { phone: 'Enter a 10-digit mobile number' });
+    const users = await query("SELECT id FROM users WHERE phone = $1 AND active AND email NOT LIKE '%@deleted.invalid'", [m]);
+    if (users.length > 1) throw new HttpError(409, 'This mobile number is on more than one login. Sign in with your email and password.', 'otp_ambiguous');
+    // Same answer whether or not the number is on a login, so the form can't be used to find out who uses Corpus360.
+    if (users.length === 0) return res.json({ sent: true, message: OTP_SENT, wait: OTP_GAP_S });
+    const [row] = await query(
+      `INSERT INTO login_otps (mobile) VALUES ($1)
+       ON CONFLICT (mobile) DO UPDATE SET sends = CASE WHEN login_otps.window_start < now() - interval '1 hour' THEN 0 ELSE login_otps.sends END,
+              window_start = CASE WHEN login_otps.window_start < now() - interval '1 hour' THEN now() ELSE login_otps.window_start END
+       RETURNING sends, extract(epoch FROM now() - sent_at)::int AS ago, (xmax = 0) AS fresh`, [m]);
+    if (!row.fresh && row.ago < OTP_GAP_S) throw new HttpError(429, `Wait ${OTP_GAP_S - row.ago} seconds before asking for another OTP.`, 'rate_limited');
+    if (row.sends >= OTP_SENDS_PER_HOUR) throw new HttpError(429, 'Too many OTPs for this number. Try again in an hour, or sign in with your email.', 'rate_limited');
+    await sendLoginOtp(m, set);
+    await query('UPDATE login_otps SET sends = sends + 1, tries = 0, sent_at = now() WHERE mobile = $1', [m]);
+    res.json({ sent: true, message: OTP_SENT, wait: OTP_GAP_S });
+  }),
+);
+
+authRouter.post(
+  '/otp/verify',
+  rateLimit('otp-verify', 20, 15 * 60_000),
+  h(async (req, res) => {
+    const b = parse(z.object({ phone: z.string().trim().max(20), otp: z.string().trim().regex(/^\d{4,8}$/, 'Enter the code from the SMS'), remember: z.boolean().optional() }), req.body);
+    const set = await otpSettings();
+    if (!set?.enabled) throw new HttpError(404, 'Sign-in by OTP isn’t available. Sign in with your email.', 'otp_off');
+    const m = mobile10(b.phone);
+    if (!m) throw badRequest('Enter your 10-digit mobile number.');
+    const WRONG = new HttpError(401, 'That code isn’t right or has expired. Check the SMS, or tap Resend.', 'invalid_otp');
+    const [o] = await query('SELECT tries, sent_at > now() - interval \'10 minutes\' AS live FROM login_otps WHERE mobile = $1', [m]);
+    if (!o || !o.live) throw WRONG;
+    if (o.tries >= OTP_TRIES) throw new HttpError(429, 'Too many wrong codes. Tap Resend for a new OTP.', 'rate_limited');
+    await query('UPDATE login_otps SET tries = tries + 1 WHERE mobile = $1', [m]);
+    const users = await query("SELECT u.*, s.active AS shop_active, s.license_end FROM users u JOIN shops s ON s.id = u.shop_id WHERE u.phone = $1 AND u.active AND u.email NOT LIKE '%@deleted.invalid'", [m]);
+    if (users.length !== 1) throw WRONG;
+    const r = users[0];
+    if (r.locked_until && new Date(r.locked_until) > new Date()) throw new HttpError(423, 'This login is locked after too many failed attempts. Try again later.', 'locked');
+    if (!(await verifyLoginOtp(m, b.otp, set))) throw WRONG;
+    await query('DELETE FROM login_otps WHERE mobile = $1', [m]);
+    await finishLogin(req, res, { type: 'user', row: r }, b.remember ?? true, 'otp');
   }),
 );
 
@@ -471,7 +544,7 @@ authRouter.post(
     if (body.scope === 'me') {
       if (ctx.role === 'Owner') throw new HttpError(400, 'An owner can’t delete only their login: close the shop instead, or make someone else the owner first.', 'owner_must_close');
       await tx(async (db) => {
-        await db.query(`UPDATE users SET name = 'Deleted user', email = $2, password_hash = $3, active = false, deleted_at = now(),
+        await db.query(`UPDATE users SET name = 'Deleted user', email = $2, phone = '', password_hash = $3, active = false, deleted_at = now(),
                           must_change_password = false, failed_attempts = 0, locked_until = NULL WHERE id = $1`,
           [u.id, deletedEmail(u.id), await hashPassword(randomToken())]);
         await db.query("DELETE FROM sessions WHERE principal_type = 'user' AND principal_id = $1", [u.id]);

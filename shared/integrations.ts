@@ -59,6 +59,9 @@ export const FEATURE_LABELS: Record<string, string> = {
   gstin_lookup: 'Look up a GST number (legal name, address, status)',
   sms_invoice: 'Send a bill by SMS',
   sms_test: 'SMS test from Super admin',
+  otp_send: 'Sign-in OTP by SMS',
+  otp_test: 'Sign-in OTP test from Super admin',
+  otp_verify: 'Check a sign-in OTP',
   ga_token: 'Website traffic: sign in to Google',
   ga_report: 'Website traffic report',
   ga_realtime: 'Website visitors right now',
@@ -69,8 +72,8 @@ const EMAIL_FEATURES = ['signup_code', 'sales_lead', 'sales_lead_ack', 'report',
 
 export const INTEGRATIONS: Integration[] = [
   {
-    key: 'msg91', name: 'MSG91', what: 'Sends bills by SMS with the DLT-approved template', side: 'server', host: 'control.msg91.com',
-    settings: ['Super admin → Configuration → SMS'], features: ['sms_invoice', 'sms_test'], docs: 'https://docs.msg91.com/sms/send-sms',
+    key: 'msg91', name: 'MSG91', what: 'Sends bills by SMS and sign-in OTPs, each with its DLT-approved template', side: 'server', host: 'control.msg91.com',
+    settings: ['Super admin → Configuration → SMS'], features: ['sms_invoice', 'sms_test', 'otp_send', 'otp_test', 'otp_verify'], docs: 'https://docs.msg91.com/sms/send-sms',
     note: 'Optional. Each SMS is charged by MSG91. Shops have a daily limit set with it.',
   },
   {

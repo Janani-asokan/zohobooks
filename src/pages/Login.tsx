@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { AlertCircle, ArrowRight, Loader2, Mail, KeyRound, Languages } from 'lucide-react';
+import { AlertCircle, ArrowRight, Loader2, Mail, KeyRound, Languages, Smartphone } from 'lucide-react';
 import { homeFor, useAuth } from '@/context/AuthContext';
 import { usePrefs } from '@/context/PrefsContext';
 import { useToast } from '@/context/ToastContext';
@@ -13,12 +13,15 @@ import { forgetLogin, lastLogin, rememberLogin } from '@/lib/lastLogin';
 import { FullPageSpinner } from '@/components/ProtectedRoute';
 import { LANGS } from '@/i18n';
 import { AuthShell } from './AuthShell';
+import { OtpSignIn } from './OtpSignIn';
+import type { Me } from '@/api/types';
 
 /** The server says whether demo mode is on (simple demo passwords) and which logins to offer. */
 type DemoAccount = { label: string; email: string; password: string };
 
 export default function Login() {
-  const { me, loading: authLoading, login } = useAuth();
+  const { me, loading: authLoading, login, loginWithOtp } = useAuth();
+  const [mode, setMode] = useState<'email' | 'otp'>('email');
   const { t, lang, setLang } = usePrefs();
   const toast = useToast();
   const navigate = useNavigate();
@@ -46,6 +49,7 @@ export default function Login() {
   const [devLink, setDevLink] = useState('');
   const demo = useQuery({ queryKey: ['authDemo'], queryFn: () => api.get<{ enabled: boolean; accounts: DemoAccount[] }>('/auth/demo'), staleTime: Infinity, retry: false });
   const demoAccounts = demo.data?.enabled ? demo.data.accounts : [];
+  const otpOn = useQuery({ queryKey: ['authOtp'], queryFn: () => api.get<{ on: boolean }>('/auth/otp'), staleTime: 5 * 60_000, retry: false }).data?.on ?? false;
 
   if (authLoading) return <FullPageSpinner />;
   if (me) return <Navigate to={from && from.startsWith(homeFor(me)) ? from : homeFor(me)} replace />;
@@ -70,6 +74,12 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const signedIn = (m: Me) => {
+    if (m.kind === 'user') rememberLogin(m.user.email, m.user.name);
+    toast('success', 'Welcome back!', m.kind === 'super' ? 'Signed in to the platform console.' : `Signed in to ${m.shop.name}.`);
+    navigate(from && from.startsWith(homeFor(m)) ? from : homeFor(m), { replace: true });
   };
 
   const forgotErr = !forgotEmail ? 'Email is required' : !EMAIL_RE.test(forgotEmail) ? 'Enter a valid email address' : '';
@@ -103,8 +113,11 @@ export default function Login() {
         </label>
       </div>
       <h1>{t('login.title')}</h1>
-      <p className="lead">{t('login.lead')}</p>
+      <p className="lead">{mode === 'otp' && otpOn ? 'We’ll send a 6-digit code by SMS to the mobile number on your login.' : t('login.lead')}</p>
 
+      {mode === 'otp' && otpOn ? (
+        <OtpSignIn remember={remember} onUseEmail={() => setMode('email')} onSignedIn={async (p, o, r) => { const m = await loginWithOtp(p, o, r); signedIn(m); return m; }} />
+      ) : (
       <form className="login-form" onSubmit={submit} noValidate>
         <Field label={t('login.email')} required error={touched.email ? emailErr : ''}>
           <div className="input-group">
@@ -138,8 +151,14 @@ export default function Login() {
           {loading ? <><Loader2 size={18} className="spin" /> {t('login.signingIn')}</> : <>{t('login.submit')} <ArrowRight size={18} /></>}
         </button>
         {slowLogin && <p className="small muted" role="status" style={{ textAlign: 'center', margin: 0 }}>Signing in is taking longer than usual. Check your internet connection.</p>}
+        {otpOn && (
+          <button type="button" className="btn btn-secondary btn-block" onClick={() => { setError(''); setMode('otp'); }}>
+            <Smartphone size={17} /> Sign in with mobile OTP
+          </button>
+        )}
         <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>New to Corpus360? <Link to="/signup" style={{ fontWeight: 600 }}>Create your shop, free</Link></p>
       </form>
+      )}
 
       {demoAccounts.length > 0 && (
       <div className="demo-creds">

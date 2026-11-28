@@ -14,6 +14,8 @@ import { trackedFetch } from './outbound';
 
 export interface SmsSettings {
   authKey: string; templateId: string; enabled: boolean; dailyPerShop: number;
+  /** Sign-in OTP: the DLT-approved template in MSG91 → OTP → Templates ("##OTP## is your OTP to log in …"). */
+  otpTemplateId?: string; otpEnabled?: boolean;
   vars: { name: string; shop: string; bill: string; amount: string; code: string };
 }
 export const DEFAULT_VARS: SmsSettings['vars'] = { name: 'var1', shop: 'var2', bill: 'var3', amount: 'var4', code: 'var5' };
@@ -21,6 +23,12 @@ export const DEFAULT_VARS: SmsSettings['vars'] = { name: 'var1', shop: 'var2', b
 export async function smsSettings(): Promise<SmsSettings | null> {
   const [r] = await query<{ sms: SmsSettings | null }>('SELECT sms FROM platform_config WHERE id = 1');
   return r?.sms?.authKey && r.sms.templateId ? { ...r.sms, vars: { ...DEFAULT_VARS, ...r.sms.vars } } : null;
+}
+/** The MSG91 key and OTP template, when sign-in by OTP is set up (it doesn't need the bill template). */
+export async function otpSettings(): Promise<{ authKey: string; templateId: string; enabled: boolean } | null> {
+  const [r] = await query<{ sms: SmsSettings | null }>('SELECT sms FROM platform_config WHERE id = 1');
+  const s = r?.sms;
+  return s?.authKey && s.otpTemplateId ? { authKey: s.authKey, templateId: s.otpTemplateId, enabled: !!s.otpEnabled } : null;
 }
 export const smsOn = async () => !!(await smsSettings())?.enabled;
 
@@ -66,4 +74,29 @@ export async function smsSentToday(db: Db, shopId: string) {
   const r = await one<{ n: number }>(db, `SELECT count(*)::int AS n FROM audit_log WHERE shop_id = $1 AND action = 'sms_sent'
       AND at >= (date_trunc('day', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`, [shopId]);
   return r?.n ?? 0;
+}
+
+/* ---------- Sign-in OTP (MSG91 OTP API: MSG91 makes the code, sends it with the OTP template, and checks it) ---------- */
+
+type Msg91Reply = { type?: string; message?: string; request_id?: string } | null;
+
+/** Sends a 6-digit code, valid 10 minutes, to a 10-digit mobile. */
+export async function sendLoginOtp(mobile10: string, set: { authKey: string; templateId: string }, feature = 'otp_send') {
+  const url = `https://control.msg91.com/api/v5/otp?${new URLSearchParams({ template_id: set.templateId, mobile: `91${mobile10}`, otp_length: '6', otp_expiry: '10' })}`;
+  const res = await trackedFetch('msg91', feature, url, {
+    method: 'POST', headers: { authkey: set.authKey, 'content-type': 'application/json', accept: 'application/json' }, body: '{}', signal: AbortSignal.timeout(15_000),
+  });
+  const body = await res.json().catch(() => null) as Msg91Reply;
+  if (!res.ok || body?.type !== 'success') throw new HttpError(502, `MSG91 didn’t send the OTP: ${body?.message || `HTTP ${res.status}`}`, 'sms_failed');
+  return body.request_id ?? '';
+}
+
+/** True when the code is right. A wrong, expired or already-used code is false; an MSG91 outage throws. */
+export async function verifyLoginOtp(mobile10: string, otp: string, set: { authKey: string }) {
+  const url = `https://control.msg91.com/api/v5/otp/verify?${new URLSearchParams({ otp, mobile: `91${mobile10}` })}`;
+  const res = await trackedFetch('msg91', 'otp_verify', url, { method: 'GET', headers: { authkey: set.authKey, accept: 'application/json' }, signal: AbortSignal.timeout(15_000) });
+  const body = await res.json().catch(() => null) as Msg91Reply;
+  if (body?.type === 'success' && /verified/i.test(body.message ?? '') && !/already/i.test(body.message ?? '')) return true;
+  if (!res.ok && res.status >= 500) throw new HttpError(502, 'The OTP service isn’t answering. Try again, or sign in with your email.', 'sms_failed');
+  return false;
 }

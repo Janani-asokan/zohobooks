@@ -6,7 +6,7 @@ import { Badge, Field, Toggle } from '@/components/ui';
 import { useToast } from '@/context/ToastContext';
 
 type Vars = { name: string; shop: string; bill: string; amount: string; code: string };
-interface SmsView { configured: boolean; keyEnd: string; templateId: string; enabled: boolean; dailyPerShop: number; vars: Vars }
+interface SmsView { configured: boolean; keyEnd: string; templateId: string; enabled: boolean; dailyPerShop: number; vars: Vars; otpConfigured: boolean; otpTemplateId: string; otpEnabled: boolean }
 const VAR_LABELS: Array<[keyof Vars, string, string]> = [
   ['name', 'Customer name', 'Ravi Kumar'], ['shop', 'Shop name', 'Aravind Computer Store'], ['bill', 'Bill number', 'INV-2026-27-0019'],
   ['amount', 'Amount', '707.00'], ['code', 'Link code (after /share/)', '24 letters and numbers'],
@@ -20,16 +20,22 @@ export function SmsCard() {
   const q = useQuery({ queryKey: ['platform', 'sms'], queryFn: () => api.get<SmsView>('/platform/sms') });
   const qc = useQueryClient();
   const toast = useToast();
-  const [f, setF] = useState({ authKey: '', templateId: '', enabled: false, dailyPerShop: 200, vars: { name: 'var1', shop: 'var2', bill: 'var3', amount: 'var4', code: 'var5' } as Vars });
+  const [f, setF] = useState({ authKey: '', templateId: '', enabled: false, dailyPerShop: 200, vars: { name: 'var1', shop: 'var2', bill: 'var3', amount: 'var4', code: 'var5' } as Vars, otpTemplateId: '', otpEnabled: false });
+  const [otpPhone, setOtpPhone] = useState('');
+  const [otpTest, setOtpTest] = useState<{ ok: boolean; error?: string; to?: string } | null>(null);
   const [busy, setBusy] = useState('');
   const [phone, setPhone] = useState('');
   const [test, setTest] = useState<{ ok: boolean; error?: string; to?: string } | null>(null);
   const s = q.data;
-  useEffect(() => { if (s) setF((x) => ({ ...x, templateId: s.templateId, enabled: s.enabled, dailyPerShop: s.dailyPerShop, vars: s.vars })); }, [s]);
+  useEffect(() => { if (s) setF((x) => ({ ...x, templateId: s.templateId, enabled: s.enabled, dailyPerShop: s.dailyPerShop, vars: s.vars, otpTemplateId: s.otpTemplateId, otpEnabled: s.otpEnabled })); }, [s]);
   const save = async () => {
     setBusy('save');
-    try { await api.put('/platform/sms', f); await qc.invalidateQueries({ queryKey: ['platform', 'sms'] }); setF((x) => ({ ...x, authKey: '' })); toast('success', 'SMS settings saved', f.enabled ? 'Shops can now send bills by SMS.' : 'Switched off for shops until you turn it on.'); }
+    try { await api.put('/platform/sms', f); await qc.invalidateQueries({ queryKey: ['platform', 'sms'] }); setF((x) => ({ ...x, authKey: '' })); toast('success', 'SMS settings saved', [f.enabled ? 'Bills by SMS: on.' : 'Bills by SMS: off.', f.otpEnabled ? 'Sign-in by OTP: on.' : 'Sign-in by OTP: off.'].join(' ')); }
     catch (e) { toast('error', (e as Error).message); } finally { setBusy(''); }
+  };
+  const runOtpTest = async () => {
+    setBusy('otp'); setOtpTest(null);
+    try { setOtpTest(await api.post('/platform/sms/otp-test', { phone: otpPhone })); } catch (e) { setOtpTest({ ok: false, error: (e as Error).message }); } finally { setBusy(''); }
   };
   const runTest = async () => {
     setBusy('test'); setTest(null);
@@ -40,15 +46,15 @@ export function SmsCard() {
       <div className="card-header">
         <div className="row" style={{ gap: 14 }}>
           <span className="stat-icon tone-sage"><MessageSquareText size={19} /></span>
-          <div><h3>SMS (MSG91)</h3><p>Shops send bills by SMS: the customer gets the amount and a link to view and download the bill.</p></div>
+          <div><h3>SMS (MSG91)</h3><p>Sign-in OTPs, and bills by SMS (the customer gets the amount and a link to the bill). Each needs its own DLT-approved template.</p></div>
         </div>
-        {s && <Badge tone={s.enabled ? 'green' : s.configured ? 'amber' : 'gray'}>{s.enabled ? 'On for shops' : s.configured ? 'Set up, switched off' : 'Not set up'}</Badge>}
+        {s && <Badge tone={s.enabled || s.otpEnabled ? 'green' : s.configured || s.otpConfigured ? 'amber' : 'gray'}>{[s.enabled && 'Bills on', s.otpEnabled && 'OTP sign-in on'].filter(Boolean).join(' · ') || (s.configured || s.otpConfigured ? 'Set up, switched off' : 'Not set up')}</Badge>}
       </div>
       <div className="card-body stack" style={{ gap: 12 }}>
         <div className="small muted">1. Get the DLT template approved. 2. In MSG91 → SMS → Templates, add the same text with its DLT template ID; MSG91 names the variables (##var1## …). 3. Paste MSG91’s auth key (MSG91 → Authkey) and the MSG91 template ID here, match the variables, test, then switch it on.</div>
         <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <Field label="MSG91 auth key"><input className="input mono" type="password" autoComplete="off" style={{ width: 300, maxWidth: '100%' }} value={f.authKey} onChange={(e) => setF({ ...f, authKey: e.target.value.trim() })} placeholder={s?.keyEnd ? `Saved (…${s.keyEnd}), leave empty to keep` : 'Auth key'} /></Field>
-          <Field label="MSG91 template ID"><input className="input mono" style={{ width: 260, maxWidth: '100%' }} value={f.templateId} onChange={(e) => setF({ ...f, templateId: e.target.value.trim() })} placeholder="e.g. 6745ab…" /></Field>
+          <Field label="Bill template ID (MSG91 → SMS → Templates)"><input className="input mono" style={{ width: 260, maxWidth: '100%' }} value={f.templateId} onChange={(e) => setF({ ...f, templateId: e.target.value.trim() })} placeholder="e.g. 6745ab…" /></Field>
           <Field label="SMS per shop per day"><input className="input" type="number" min={1} max={10000} style={{ width: 120 }} value={f.dailyPerShop} onChange={(e) => setF({ ...f, dailyPerShop: Math.max(1, Number(e.target.value) || 1) })} /></Field>
         </div>
         <div className="small strong">Which MSG91 variable holds which value (in the order of the DLT template)</div>
@@ -58,13 +64,28 @@ export function SmsCard() {
           ))}
         </div>
         <Toggle checked={f.enabled} onChange={(v) => setF({ ...f, enabled: v })} label="Shops can send bills by SMS" />
-        <div><button className="btn btn-primary" disabled={!!busy || !f.templateId || (!f.authKey && !s?.keyEnd)} onClick={() => void save()}>{busy === 'save' ? <Loader2 size={15} className="spin" /> : <Save size={15} />} Save</button></div>
+        <div className="divider" />
+        <div className="small strong">Sign in with mobile OTP</div>
+        <div className="small muted">The DLT-approved OTP template from MSG91 → OTP → Templates (“##OTP## is your OTP to log in to Corpus360Lite…”). Shop logins with a mobile number (owners start with their sign-up number; staff numbers are added in Settings → Team) can then sign in with a 6-digit code instead of their password. Super admins always use their password.</div>
+        <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <Field label="OTP template ID (MSG91 → OTP → Templates)"><input className="input mono" style={{ width: 300, maxWidth: '100%' }} value={f.otpTemplateId} onChange={(e) => setF({ ...f, otpTemplateId: e.target.value.trim() })} placeholder="e.g. 6b08fb…" /></Field>
+        </div>
+        <Toggle checked={f.otpEnabled} onChange={(v) => setF({ ...f, otpEnabled: v })} label="Show “Sign in with mobile OTP” on the sign-in page" />
+        <div><button className="btn btn-primary" disabled={!!busy || (!f.templateId && !f.otpTemplateId) || (!f.authKey && !s?.keyEnd)} onClick={() => void save()}>{busy === 'save' ? <Loader2 size={15} className="spin" /> : <Save size={15} />} Save</button></div>
         {s?.configured && (
           <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <Field label="Send a test SMS to"><input className="input" inputMode="tel" style={{ width: 200 }} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" /></Field>
+            <Field label="Send a test bill SMS to"><input className="input" inputMode="tel" style={{ width: 200 }} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98765 43210" /></Field>
             <button className="btn btn-secondary" disabled={!phone || !!busy} onClick={() => void runTest()}>{busy === 'test' ? <Loader2 size={15} className="spin" /> : <Send size={15} />} Send test</button>
           </div>
         )}
+        {s?.otpConfigured && (
+          <div className="row" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <Field label="Send a test OTP to"><input className="input" inputMode="tel" style={{ width: 200 }} value={otpPhone} onChange={(e) => setOtpPhone(e.target.value)} placeholder="98765 43210" /></Field>
+            <button className="btn btn-secondary" disabled={!otpPhone || !!busy} onClick={() => void runOtpTest()}>{busy === 'otp' ? <Loader2 size={15} className="spin" /> : <Send size={15} />} Send test OTP</button>
+          </div>
+        )}
+        {otpTest && (otpTest.ok ? <div className="small" style={{ color: 'var(--green-700, #2f6b45)' }}>MSG91 sent an OTP to +{otpTest.to}. It should arrive within a minute. If it doesn’t, MSG91 → OTP → Logs shows why.</div>
+          : <div className="small" style={{ color: 'var(--red-600, #b3261e)' }}>{otpTest.error}</div>)}
         {test && (test.ok ? <div className="small" style={{ color: 'var(--green-700, #2f6b45)' }}>MSG91 accepted it for +{test.to}. It should arrive in a minute (the link in a test SMS doesn’t open a real bill). If it doesn’t, MSG91 → Reports shows why: usually the template isn’t DLT-approved yet, the text or variables don’t match, or the sender ID isn’t linked.</div>
           : <div className="small" style={{ color: 'var(--red-600, #b3261e)' }}>{test.error}</div>)}
       </div>
