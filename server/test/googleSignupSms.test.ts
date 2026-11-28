@@ -93,3 +93,19 @@ describe('sign-up confirms the mobile by SMS when OTP is on', () => {
     expect((await post(request.agent(app), '/api/auth/signup', { ...form, email: 'again@shop.in', phone: '9700022233', password: 'Strong123' })).status).toBe(409);
   });
 });
+
+describe('no "set your own password" after Google', () => {
+  it('drops the temporary password and the forced change when a new staff login signs in with Google', async () => {
+    const owner = await login('owner@shop.com', 'owner123');
+    const made = await owner.post('/api/shop/staff').send({ name: 'Janani', email: 'janani.staff@gmail.com', role: 'Sales Staff', branchId: null, password: 'TempPass123' });
+    expect(made.status, JSON.stringify(made.body)).toBe(200);
+    expect(made.body.mustChangePassword).toBe(true);
+    const a = request.agent(app);
+    const r = await post(a, '/api/auth/google', { credential: idToken({ email: 'janani.staff@gmail.com', name: 'Janani' }) });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.user.mustChangePassword).toBe(false);
+    expect((await a.get('/api/auth/me')).body.user.mustChangePassword).toBe(false);
+    // The temporary password the owner saw no longer opens the login.
+    expect((await post(request.agent(app), '/api/auth/login', { email: 'janani.staff@gmail.com', password: 'TempPass123' })).status).toBe(401);
+  });
+});

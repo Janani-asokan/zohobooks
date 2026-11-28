@@ -119,6 +119,12 @@ async function finishLogin(req: Request, res: import('express').Response, p: Pri
   const r = p.row;
   canSignIn(p);
   await query(`UPDATE ${table(p.type)} SET failed_attempts = 0, locked_until = NULL, last_login_at = now() WHERE id = $1`, [r.id]);
+  // Google or a mobile OTP proves who this is, so no "set your own password" step. A temporary password the owner
+  // handed out stops working (replaced by a random one nobody knows); "Forgot password" sets a real one any time.
+  if (method !== 'password' && p.type === 'user' && r.must_change_password) {
+    await query('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1', [r.id, await hashPassword(randomToken())]);
+    r.must_change_password = false;
+  }
   const token = await createSession(res, req, p.type, r.id, remember);
   req.ctx =
     p.type === 'super'
