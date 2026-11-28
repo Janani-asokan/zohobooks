@@ -1,0 +1,7 @@
+<en-US>
+• Sign in with your mobile number: get a 6-digit code by SMS, no password needed
+• New shops confirm their mobile number with an SMS code
+• Staff who sign in with a code no longer have to set a password first
+• Send bills by SMS (when your shop has it switched on)
+• Smoother sign-in and small fixes
+</en-US>
