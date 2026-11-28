@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { trackPage } from './lib/analytics';
 import { FullPageSpinner, ProtectedRoute } from './components/ProtectedRoute';
 import { hasSignedInBefore, homeFor, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
@@ -95,6 +96,8 @@ function RootRedirect() {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
+  useEffect(() => { trackPage(pathname); }, [pathname]);
   return (
     <Suspense fallback={<FullPageSpinner />}>
       <Routes>

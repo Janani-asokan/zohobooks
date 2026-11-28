@@ -1,3 +1,4 @@
+import { track } from '@/lib/analytics';
 import { EmailFix } from '@/components/EmailFix';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -73,6 +74,7 @@ export default function Signup() {
   };
 
   const finish = async ({ token, ...m }: Me & { token?: string }) => {
+    track('sign_up', { method: 'email' });
     // Phone app: the session is a bearer token kept on the phone (no cookies); on the web the cookie is already set.
     if (IS_APP) { setAppToken(token ?? null); await cacheClear(); }
     await refresh(); // load who we are

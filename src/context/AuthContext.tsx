@@ -5,6 +5,7 @@ import { api, ApiError } from '@/api/client';
 import type { Me } from '@/api/types';
 import type { Permission } from '../../shared/permissions';
 import { IS_APP, cacheClear, setAppToken } from '@/lib/platform';
+import { track } from '@/lib/analytics';
 
 interface AuthValue {
   me: Me | null;
@@ -75,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dropDataCache(qc);
       rememberMe(me);
       qc.setQueryData(['me'], me);
+      track('login', { method: 'email' });
       return me;
     },
     [qc],

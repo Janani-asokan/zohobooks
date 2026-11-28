@@ -64,14 +64,17 @@ export function createApp() {
         defaultSrc: ["'self'"],
         // wasm-unsafe-eval: voice billing's speech recogniser in the Windows app runs as WebAssembly in a worker.
         // The Windows app only (it says so in its user agent): its speech engine builds small functions at run time.
-        scriptSrc: ["'self'", "'wasm-unsafe-eval'", ...(desktop ? ["'unsafe-eval'"] : []), 'https://checkout.razorpay.com'],
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'", ...(desktop ? ["'unsafe-eval'"] : []), 'https://checkout.razorpay.com', 'https://www.googletagmanager.com'],
         workerSrc: ["'self'", 'blob:'],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         // Map tiles for the field staff map (OpenStreetMap).
-        imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.de'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://tile.openstreetmap.de',
+          'https://*.google-analytics.com', 'https://www.googletagmanager.com'],
         // The Corpus360 Print Helper on the shop's own PC (label printing straight to the printer).
-        connectSrc: ["'self'", 'blob:', 'https://api.razorpay.com', 'https://lumberjack.razorpay.com', 'http://127.0.0.1:17361'],
+        connectSrc: ["'self'", 'blob:', 'https://api.razorpay.com', 'https://lumberjack.razorpay.com', 'http://127.0.0.1:17361',
+          // Google Analytics (website only; src/lib/analytics.ts).
+          'https://*.google-analytics.com', 'https://*.analytics.google.com', 'https://www.googletagmanager.com'],
         frameSrc: ["'self'", 'https://api.razorpay.com', 'https://checkout.razorpay.com'],
         mediaSrc: ["'self'", 'blob:'],
         ...(https ? {} : { upgradeInsecureRequests: null }),

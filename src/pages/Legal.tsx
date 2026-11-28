@@ -11,7 +11,7 @@ import { SHOP_RESTORE_DAYS } from '../../shared/accountDeletion';
  * Public pages the Play Store listing links to: privacy policy, terms and how to delete an account. They open without
  * signing in, on the website and in the app.
  */
-const UPDATED = '21 November 2026';
+const UPDATED = '28 November 2026';
 
 function useContact() {
   return useQuery({ queryKey: ['public', 'contact'], queryFn: () => api.get<{ phone: string; email: string; whatsapp?: string }>('/public/contact'), staleTime: 300_000, retry: false });
@@ -82,6 +82,7 @@ export function Privacy() {
         <li><strong>Our hosting provider</strong>, where the servers and database run.</li>
         <li><strong>Email delivery</strong> (Brevo or Resend) to send the emails above.</li>
         <li><strong>Razorpay</strong>, when you pay for a plan. Card and UPI details go straight to Razorpay; we never see them.</li>
+        <li><strong>Google Analytics</strong>, on the website only (not in the phone app), to count visits and see which pages people use so we can improve them. It gets the kind of page you open (for example “invoices”), never the names, amounts or other details in your bills, and sets its own cookies in your browser. You can block it with your browser’s privacy settings or Google’s opt-out add-on.</li>
         <li><strong>Anthropic (Claude)</strong>, only when someone uses an AI feature, such as the assistant or reading a supplier bill from a photo. The text or picture you give it is sent to answer that request and isn’t used to train their models.</li>
       </ul>
       <p>We share data with government or police only when the law requires it.</p>

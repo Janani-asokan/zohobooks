@@ -1,3 +1,4 @@
+import { track } from '@/lib/analytics';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -45,6 +46,7 @@ export function SalesPanel({ source, shop, compact }: {
       const page = typeof window !== 'undefined' ? window.location.pathname : '';
       if (shop) await api.post('/billing/sales-lead', { phone: f.phone, message: f.message, page });
       else await api.post('/public/sales-leads', { ...f, source, page });
+      track('generate_lead', { source: shop ? 'shop' : source });
       setDone(true);
     } catch (x) {
       setErr((x as ApiError).message);
