@@ -65,7 +65,7 @@ export function SmsCard() {
             <button className="btn btn-secondary" disabled={!phone || !!busy} onClick={() => void runTest()}>{busy === 'test' ? <Loader2 size={15} className="spin" /> : <Send size={15} />} Send test</button>
           </div>
         )}
-        {test && (test.ok ? <div className="small" style={{ color: 'var(--green-700, #2f6b45)' }}>Sent to +{test.to}. It should arrive in a minute (the link in a test SMS doesn’t open a real bill).</div>
+        {test && (test.ok ? <div className="small" style={{ color: 'var(--green-700, #2f6b45)' }}>MSG91 accepted it for +{test.to}. It should arrive in a minute (the link in a test SMS doesn’t open a real bill). If it doesn’t, MSG91 → Reports shows why: usually the template isn’t DLT-approved yet, the text or variables don’t match, or the sender ID isn’t linked.</div>
           : <div className="small" style={{ color: 'var(--red-600, #b3261e)' }}>{test.error}</div>)}
       </div>
     </section>
